@@ -24,6 +24,7 @@
 - 增强 MongoDB 连接器：强制要求库名，缩短超时，禁用重试，确保快速失败。
 - 统一所有连接器的错误处理：全部返回 error，无忽略；所有查询 defer rows.Close()。
 - 改进日志输出：通过 `connector/logf` 从 context 注入 logger，每个 DSN 独立日志文件。
+- 优化更新SKILL.md
 
 ### Fixed
 - 修复管道死锁：`captureText` / `captureJSON` 使用 goroutine 异步读取 pipe，解决报告无法输出问题。
@@ -34,7 +35,7 @@
 
 ---
 
-## [v0.0.1] - 2026-04-15 (初始版本)
+## [v0.0.1] - 2026-05-15 (初始版本)
 
 ### Added
 - 首批数据库支持：MySQL、PostgreSQL、SQLite、ClickHouse、Redis、MongoDB、Qdrant、Elasticsearch。
