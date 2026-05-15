@@ -5,12 +5,16 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
-	"time"  
+	"time"
 
 	_ "github.com/glebarez/go-sqlite"
 	"dbexplain/dsn"
 	"dbexplain/schema"
 )
+
+func init() {
+	Register("sqlite", func() Connector { return sqliteConnector{} })
+}
 
 type sqliteConnector struct{}
 
@@ -18,14 +22,14 @@ func (sqliteConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instanc
 	path := d.SQLitePath()
 	db, err := sql.Open("sqlite", path)
 	if err != nil {
-		return nil, fmt.Errorf("sqlite open: %w", err)
+		return nil, schema.NewDBError(d.Redacted(), "", "", "open", err)
 	}
 	defer db.Close()
 
 	pingCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 	if err := db.PingContext(pingCtx); err != nil {
-		return nil, fmt.Errorf("sqlite ping: %w", err)
+		return nil, schema.NewDBError(d.Redacted(), "", "", "ping", err)
 	}
 
 	inst := &schema.Instance{DSN: d.Redacted(), Kind: "sqlite", Label: d.Label}
@@ -33,7 +37,7 @@ func (sqliteConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instanc
 
 	rows, err := db.QueryContext(ctx, `SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name`)
 	if err != nil {
-		return nil, err
+		return nil, schema.NewDBError(d.Redacted(), "", "", "list tables", err)
 	}
 	defer rows.Close()
 
@@ -46,22 +50,27 @@ func (sqliteConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instanc
 	}
 	rows.Close()
 
-	for _, tn := range tableNames {
+	total := len(tableNames)
+	for i, tn := range tableNames {
+		logf(ctx, "[sqlite] 采集表 %d/%d: %s", i+1, total, tn)
 		t := &schema.Table{Name: tn}
-		fillSQLiteTable(ctx, db, t)
+		fillSQLiteTable(ctx, db, t, d.Redacted())
 		database.Tables = append(database.Tables, t)
 	}
 	inst.Databases = append(inst.Databases, database)
 	return inst, nil
 }
 
-func fillSQLiteTable(ctx context.Context, db *sql.DB, t *schema.Table) {
+func fillSQLiteTable(ctx context.Context, db *sql.DB, t *schema.Table, redactedDSN string) {
 	// columns
 	colRows, err := db.QueryContext(ctx, fmt.Sprintf("PRAGMA table_info('%s')", strings.ReplaceAll(t.Name, "'", "''")))
 	if err != nil {
+		logf(ctx, "[sqlite] columns error %s: %v", t.Name, err)
 		return
 	}
 	defer colRows.Close()
+
+	var colsWithoutComment []*schema.Column
 	for colRows.Next() {
 		var cid int
 		var dflt sql.NullString
@@ -76,11 +85,27 @@ func fillSQLiteTable(ctx context.Context, db *sql.DB, t *schema.Table) {
 			c.Default = dflt.String
 		}
 		t.Columns = append(t.Columns, c)
+		if c.Comment == "" {
+			colsWithoutComment = append(colsWithoutComment, c)
+		}
 	}
 	colRows.Close()
 
 	// row count
 	db.QueryRowContext(ctx, fmt.Sprintf(`SELECT COUNT(*) FROM "%s"`, strings.ReplaceAll(t.Name, `"`, `""`))).Scan(&t.RowCount)
+
+	// 推断注释
+	if len(colsWithoutComment) > 0 && t.RowCount > 0 {
+		if sample, err := fetchSQLiteSampleRow(ctx, db, t.Name); err == nil {
+			for _, c := range colsWithoutComment {
+				if val, ok := sample[c.Name]; ok {
+					c.Comment = schema.InferComment(c.Name, c.Type, val)
+				}
+			}
+		} else {
+			logf(ctx, "[sqlite] sample row failed for %s: %v", t.Name, err)
+		}
+	}
 
 	// indexes
 	idxRows, err := db.QueryContext(ctx, fmt.Sprintf("PRAGMA index_list('%s')", strings.ReplaceAll(t.Name, "'", "''")))
@@ -94,7 +119,6 @@ func fillSQLiteTable(ctx context.Context, db *sql.DB, t *schema.Table) {
 				continue
 			}
 			idx.Unique = unique == 1
-			// get columns
 			icols, err := db.QueryContext(ctx, fmt.Sprintf("PRAGMA index_info('%s')", strings.ReplaceAll(idx.Name, "'", "''")))
 			if err == nil {
 				for icols.Next() {
@@ -134,4 +158,37 @@ func fillSQLiteTable(ctx context.Context, db *sql.DB, t *schema.Table) {
 			fk.RefColumns = append(fk.RefColumns, to)
 		}
 	}
+}
+
+func fetchSQLiteSampleRow(ctx context.Context, db *sql.DB, table string) (map[string]string, error) {
+	query := fmt.Sprintf(`SELECT * FROM "%s" LIMIT 1`, table)
+	rows, err := db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	if !rows.Next() {
+		return nil, fmt.Errorf("no rows")
+	}
+	columns, err := rows.Columns()
+	if err != nil {
+		return nil, err
+	}
+	values := make([]interface{}, len(columns))
+	for i := range values {
+		values[i] = new(interface{})
+	}
+	if err := rows.Scan(values...); err != nil {
+		return nil, err
+	}
+	result := make(map[string]string)
+	for i, col := range columns {
+		val := *(values[i].(*interface{}))
+		if val == nil {
+			result[col] = "NULL"
+		} else {
+			result[col] = fmt.Sprintf("%v", val)
+		}
+	}
+	return result, nil
 }

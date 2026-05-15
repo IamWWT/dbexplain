@@ -12,31 +12,35 @@ import (
 	"dbexplain/schema"
 )
 
+func init() {
+	Register("mysql", func() Connector { return mysqlConnector{} })
+}
+
 type mysqlConnector struct{}
 
 func (mysqlConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instance, error) {
 	connStr := buildMySQLDSN(d)
 	db, err := sql.Open("mysql", connStr)
 	if err != nil {
-		return nil, fmt.Errorf("mysql open: %w", err)
+		return nil, schema.NewDBError(d.Redacted(), "", "", "open", err)
 	}
 	defer db.Close()
 
-	// 使用 context 控制 Ping 超时
 	pingCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	if err := db.PingContext(pingCtx); err != nil {
-		return nil, fmt.Errorf("mysql ping: %w", err)
+		return nil, schema.NewDBError(d.Redacted(), "", "", "ping", err)
 	}
 
 	inst := &schema.Instance{DSN: d.Redacted(), Kind: "mysql", Label: d.Label}
+
 	var dbNames []string
 	if d.DBName != "" {
 		dbNames = []string{d.DBName}
 	} else {
 		rows, err := db.QueryContext(ctx, "SHOW DATABASES")
 		if err != nil {
-			return nil, err
+			return nil, schema.NewDBError(d.Redacted(), "", "", "list databases", err)
 		}
 		defer rows.Close()
 		for rows.Next() {
@@ -50,16 +54,18 @@ func (mysqlConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instance
 	}
 
 	for _, dbName := range dbNames {
-		database, err := collectMySQLDB(ctx, db, dbName)
+		logf(ctx, "[mysql] collecting database %s", dbName)
+		database, err := collectMySQLDB(ctx, db, dbName, d.Redacted())
 		if err != nil {
-			return nil, fmt.Errorf("db %s: %w", dbName, err)
+			logf(ctx, "error in db %s: %v", dbName, err)
+			continue
 		}
 		inst.Databases = append(inst.Databases, database)
 	}
 	return inst, nil
 }
 
-func collectMySQLDB(ctx context.Context, db *sql.DB, dbName string) (*schema.Database, error) {
+func collectMySQLDB(ctx context.Context, db *sql.DB, dbName, redactedDSN string) (*schema.Database, error) {
 	database := &schema.Database{Name: dbName}
 	rows, err := db.QueryContext(ctx, `
 		SELECT TABLE_NAME, COALESCE(TABLE_ROWS,0), COALESCE(DATA_LENGTH+INDEX_LENGTH,0),
@@ -68,7 +74,7 @@ func collectMySQLDB(ctx context.Context, db *sql.DB, dbName string) (*schema.Dat
 		WHERE TABLE_SCHEMA=? AND TABLE_TYPE='BASE TABLE'
 		ORDER BY TABLE_NAME`, dbName)
 	if err != nil {
-		return nil, err
+		return nil, schema.NewDBError(redactedDSN, dbName, "", "query tables", err)
 	}
 	defer rows.Close()
 
@@ -82,8 +88,10 @@ func collectMySQLDB(ctx context.Context, db *sql.DB, dbName string) (*schema.Dat
 	}
 	rows.Close()
 
-	for _, t := range tables {
-		if err := fillMySQLTable(ctx, db, dbName, t); err != nil {
+	total := len(tables)
+	for i, t := range tables {
+		logf(ctx, "[%s] 采集表 %d/%d: %s", dbName, i+1, total, t.Name)
+		if err := fillMySQLTable(ctx, db, dbName, t, redactedDSN); err != nil {
 			return nil, err
 		}
 	}
@@ -91,7 +99,7 @@ func collectMySQLDB(ctx context.Context, db *sql.DB, dbName string) (*schema.Dat
 	return database, nil
 }
 
-func fillMySQLTable(ctx context.Context, db *sql.DB, dbName string, t *schema.Table) error {
+func fillMySQLTable(ctx context.Context, db *sql.DB, dbName string, t *schema.Table, redactedDSN string) error {
 	// columns
 	colRows, err := db.QueryContext(ctx, `
 		SELECT COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, COLUMN_KEY,
@@ -100,9 +108,11 @@ func fillMySQLTable(ctx context.Context, db *sql.DB, dbName string, t *schema.Ta
 		WHERE TABLE_SCHEMA=? AND TABLE_NAME=?
 		ORDER BY ORDINAL_POSITION`, dbName, t.Name)
 	if err != nil {
-		return fmt.Errorf("columns: %w", err)
+		return schema.NewDBError(redactedDSN, dbName, t.Name, "query columns", err)
 	}
 	defer colRows.Close()
+
+	var colsWithoutComment []*schema.Column
 	for colRows.Next() {
 		c := &schema.Column{}
 		var nullable, key, extra string
@@ -114,8 +124,24 @@ func fillMySQLTable(ctx context.Context, db *sql.DB, dbName string, t *schema.Ta
 		c.IsUnique = key == "UNI"
 		c.IsIndex = key == "MUL"
 		t.Columns = append(t.Columns, c)
+		if c.Comment == "" {
+			colsWithoutComment = append(colsWithoutComment, c)
+		}
 	}
 	colRows.Close()
+
+	// 对无注释的列，取首行数据推断
+	if len(colsWithoutComment) > 0 && t.RowCount > 0 {
+		if sample, err := fetchMySQLSampleRow(ctx, db, dbName, t.Name); err == nil {
+			for _, c := range colsWithoutComment {
+				if val, ok := sample[c.Name]; ok {
+					c.Comment = schema.InferComment(c.Name, c.Type, val)
+				}
+			}
+		} else {
+			logf(ctx, "[mysql] sample row failed for %s.%s: %v", dbName, t.Name, err)
+		}
+	}
 
 	// indexes
 	idxQuery := "SHOW INDEX FROM " + quoteMySQL(t.Name) + " WHERE Key_name != 'PRIMARY'"
@@ -194,6 +220,40 @@ func fillMySQLTable(ctx context.Context, db *sql.DB, dbName string, t *schema.Ta
 		}
 	}
 	return nil
+}
+
+// fetchMySQLSampleRow 获取表的第一行数据，返回 map[column]value
+func fetchMySQLSampleRow(ctx context.Context, db *sql.DB, dbName, table string) (map[string]string, error) {
+	query := fmt.Sprintf("SELECT * FROM %s.%s LIMIT 1", quoteMySQL(dbName), quoteMySQL(table))
+	rows, err := db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	if !rows.Next() {
+		return nil, fmt.Errorf("no rows")
+	}
+	columns, err := rows.Columns()
+	if err != nil {
+		return nil, err
+	}
+	values := make([]interface{}, len(columns))
+	for i := range values {
+		values[i] = new(interface{})
+	}
+	if err := rows.Scan(values...); err != nil {
+		return nil, err
+	}
+	result := make(map[string]string)
+	for i, col := range columns {
+		val := *(values[i].(*interface{}))
+		if val == nil {
+			result[col] = "NULL"
+		} else {
+			result[col] = fmt.Sprintf("%v", val)
+		}
+	}
+	return result, nil
 }
 
 func buildMySQLDSN(d *dsn.DSN) string {

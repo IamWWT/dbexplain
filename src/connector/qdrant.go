@@ -2,7 +2,6 @@ package connector
 
 import (
 	"context"
-	"fmt"
 	"strconv"
 	"time"
 
@@ -11,6 +10,10 @@ import (
 	"dbexplain/dsn"
 	"dbexplain/schema"
 )
+
+func init() {
+	Register("qdrant", func() Connector { return qdrantConnector{} })
+}
 
 type qdrantConnector struct{}
 
@@ -32,34 +35,33 @@ func (qdrantConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instanc
 	}
 	client, err := qdrant.NewClient(cfg)
 	if err != nil {
-		return nil, fmt.Errorf("qdrant connect: %w", err)
+		return nil, schema.NewDBError(d.Redacted(), "", "", "connect", err)
 	}
 	defer client.Close()
 
-	// 健康检查使用外部上下文，并加短超时
 	healthCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	if _, err := client.HealthCheck(healthCtx); err != nil {
-		return nil, fmt.Errorf("qdrant health: %w", err)
+		return nil, schema.NewDBError(d.Redacted(), "", "", "health check", err)
 	}
 
 	inst := &schema.Instance{DSN: d.Redacted(), Kind: "qdrant", Label: d.Label}
 
-	// 列出集合
 	listCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	collections, err := client.ListCollections(listCtx)
 	if err != nil {
-		return nil, fmt.Errorf("list collections: %w", err)
+		return nil, schema.NewDBError(d.Redacted(), "", "", "list collections", err)
 	}
 
 	database := &schema.Database{Name: "default"}
-	for _, collName := range collections {
+	total := len(collections)
+	for i, collName := range collections {
+		logf(ctx, "[qdrant] 采集集合 %d/%d: %s", i+1, total, collName)
 		t := &schema.Table{
 			Name:    collName,
 			Comment: "vector collection",
 		}
-		// 获取集合信息（独立超时）
 		infoCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		info, err := client.GetCollectionInfo(infoCtx, collName)
 		cancel()

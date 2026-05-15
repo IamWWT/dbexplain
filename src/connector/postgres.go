@@ -5,12 +5,17 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
-	"time"     
+	"time"
 
 	_ "github.com/lib/pq"
 	"dbexplain/dsn"
 	"dbexplain/schema"
 )
+
+func init() {
+	Register("postgres", func() Connector { return postgresConnector{} })
+	Register("gaussdb", func() Connector { return postgresConnector{} })
+}
 
 type postgresConnector struct{}
 
@@ -18,14 +23,14 @@ func (postgresConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Insta
 	connStr := buildPGDSN(d)
 	db, err := sql.Open("postgres", connStr)
 	if err != nil {
-		return nil, fmt.Errorf("postgres open: %w", err)
+		return nil, schema.NewDBError(d.Redacted(), "", "", "open", err)
 	}
 	defer db.Close()
 
 	pingCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	if err := db.PingContext(pingCtx); err != nil {
-		return nil, fmt.Errorf("postgres ping: %w", err)
+		return nil, schema.NewDBError(d.Redacted(), "", "", "ping", err)
 	}
 
 	inst := &schema.Instance{DSN: d.Redacted(), Kind: "postgres", Label: d.Label}
@@ -36,7 +41,7 @@ func (postgresConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Insta
 	} else {
 		rows, err := db.QueryContext(ctx, `SELECT datname FROM pg_database WHERE NOT datistemplate AND datallowconn ORDER BY datname`)
 		if err != nil {
-			return nil, err
+			return nil, schema.NewDBError(d.Redacted(), "", "", "list databases", err)
 		}
 		defer rows.Close()
 		for rows.Next() {
@@ -48,16 +53,18 @@ func (postgresConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Insta
 	}
 
 	for _, dbName := range dbNames {
-		database, err := collectPGDB(ctx, db, dbName)
+		logf(ctx, "[postgres] collecting database %s", dbName)
+		database, err := collectPGDB(ctx, db, dbName, d.Redacted())
 		if err != nil {
-			return nil, fmt.Errorf("db %s: %w", dbName, err)
+			logf(ctx, "error in db %s: %v", dbName, err)
+			continue
 		}
 		inst.Databases = append(inst.Databases, database)
 	}
 	return inst, nil
 }
 
-func collectPGDB(ctx context.Context, db *sql.DB, dbName string) (*schema.Database, error) {
+func collectPGDB(ctx context.Context, db *sql.DB, dbName, redactedDSN string) (*schema.Database, error) {
 	database := &schema.Database{Name: dbName}
 	rows, err := db.QueryContext(ctx, `
 		SELECT tablename,
@@ -65,7 +72,7 @@ func collectPGDB(ctx context.Context, db *sql.DB, dbName string) (*schema.Databa
 		       COALESCE(obj_description(quote_ident(tablename)::regclass,'pg_class'),'')
 		FROM pg_tables WHERE schemaname='public' ORDER BY tablename`)
 	if err != nil {
-		return nil, err
+		return nil, schema.NewDBError(redactedDSN, dbName, "", "query tables", err)
 	}
 	defer rows.Close()
 
@@ -80,14 +87,16 @@ func collectPGDB(ctx context.Context, db *sql.DB, dbName string) (*schema.Databa
 	}
 	rows.Close()
 
-	for _, t := range tables {
-		fillPGTable(ctx, db, t)
+	total := len(tables)
+	for i, t := range tables {
+		logf(ctx, "[%s] 采集表 %d/%d: %s", dbName, i+1, total, t.Name)
+		fillPGTable(ctx, db, t, redactedDSN)
 	}
 	database.Tables = tables
 	return database, nil
 }
 
-func fillPGTable(ctx context.Context, db *sql.DB, t *schema.Table) {
+func fillPGTable(ctx context.Context, db *sql.DB, t *schema.Table, redactedDSN string) {
 	// columns
 	colRows, err := db.QueryContext(ctx, `
 		SELECT a.attname,
@@ -103,9 +112,12 @@ func fillPGTable(ctx context.Context, db *sql.DB, t *schema.Table) {
 		WHERE a.attrelid=$1::regclass AND a.attnum>0 AND NOT a.attisdropped
 		ORDER BY a.attnum`, "public."+t.Name)
 	if err != nil {
+		logf(ctx, "[postgres] columns error %s: %v", t.Name, err)
 		return
 	}
 	defer colRows.Close()
+
+	var colsWithoutComment []*schema.Column
 	for colRows.Next() {
 		c := &schema.Column{}
 		var constraints string
@@ -115,8 +127,25 @@ func fillPGTable(ctx context.Context, db *sql.DB, t *schema.Table) {
 		c.IsPrimary = strings.Contains(constraints, "p")
 		c.IsUnique = strings.Contains(constraints, "u")
 		t.Columns = append(t.Columns, c)
+		if c.Comment == "" {
+			colsWithoutComment = append(colsWithoutComment, c)
+		}
 	}
 	colRows.Close()
+
+	// 无注释推断
+	if len(colsWithoutComment) > 0 {
+		sample, err := fetchPGSampleRow(ctx, db, t.Name, redactedDSN)
+		if err == nil {
+			for _, c := range colsWithoutComment {
+				if val, ok := sample[c.Name]; ok {
+					c.Comment = schema.InferComment(c.Name, c.Type, val)
+				}
+			}
+		} else {
+			logf(ctx, "[postgres] sample row failed for %s: %v", t.Name, err)
+		}
+	}
 
 	// indexes
 	idxRows, err := db.QueryContext(ctx, `
@@ -168,6 +197,39 @@ func fillPGTable(ctx context.Context, db *sql.DB, t *schema.Table) {
 			fk.RefColumns = append(fk.RefColumns, refCol)
 		}
 	}
+}
+
+func fetchPGSampleRow(ctx context.Context, db *sql.DB, table, redactedDSN string) (map[string]string, error) {
+	query := fmt.Sprintf(`SELECT * FROM public."%s" LIMIT 1`, table)
+	rows, err := db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	if !rows.Next() {
+		return nil, fmt.Errorf("no rows")
+	}
+	columns, err := rows.Columns()
+	if err != nil {
+		return nil, err
+	}
+	values := make([]interface{}, len(columns))
+	for i := range values {
+		values[i] = new(interface{})
+	}
+	if err := rows.Scan(values...); err != nil {
+		return nil, err
+	}
+	result := make(map[string]string)
+	for i, col := range columns {
+		val := *(values[i].(*interface{}))
+		if val == nil {
+			result[col] = "NULL"
+		} else {
+			result[col] = fmt.Sprintf("%v", val)
+		}
+	}
+	return result, nil
 }
 
 func buildPGDSN(d *dsn.DSN) string {

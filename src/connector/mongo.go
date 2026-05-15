@@ -14,6 +14,10 @@ import (
 	"dbexplain/schema"
 )
 
+func init() {
+	Register("mongodb", func() Connector { return mongoConnector{} })
+}
+
 type mongoConnector struct{}
 
 func (mongoConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instance, error) {
@@ -23,16 +27,15 @@ func (mongoConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instance
 
 	logf(ctx, "[mongo] connect start: %s", d.Redacted())
 
-	// 使用 CSOT 统一超时，禁止重试，避免驱动内部循环卡死
 	clientOpts := options.Client().
 		ApplyURI(d.Raw).
-		SetTimeout(10 * time.Second). // 覆盖所有操作的超时
+		SetTimeout(10 * time.Second).
 		SetRetryReads(false).
 		SetRetryWrites(false)
 
 	client, err := mongo.Connect(ctx, clientOpts)
 	if err != nil {
-		return nil, fmt.Errorf("mongo connect: %w", err)
+		return nil, schema.NewDBError(d.Redacted(), "", "", "connect", err)
 	}
 	defer func() {
 		disCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
@@ -42,30 +45,29 @@ func (mongoConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instance
 		}
 	}()
 
-	// Ping 使用独立超时（从外部 ctx 派生，受 CSOT 和外部双重保护）
 	pingCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	logf(ctx, "[mongo] ping...")
 	if err := client.Ping(pingCtx, readpref.Primary()); err != nil {
-		return nil, fmt.Errorf("mongo ping: %w", err)
+		return nil, schema.NewDBError(d.Redacted(), d.DBName, "", "ping", err)
 	}
 	logf(ctx, "[mongo] ping ok")
 
 	db := client.Database(d.DBName)
 
-	// 列出集合
 	colCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	logf(ctx, "[mongo] list collections: %s", d.DBName)
 	collections, err := db.ListCollectionNames(colCtx, bson.D{})
 	if err != nil {
-		return nil, fmt.Errorf("list collections for db %s: %w", d.DBName, err)
+		return nil, schema.NewDBError(d.Redacted(), d.DBName, "", "list collections", err)
 	}
 	logf(ctx, "[mongo] collections found: db=%s count=%d", d.DBName, len(collections))
 
 	database := &schema.Database{Name: d.DBName}
-	for _, collName := range collections {
-		logf(ctx, "[mongo] collection stats: %s.%s", d.DBName, collName)
+	total := len(collections)
+	for i, collName := range collections {
+		logf(ctx, "[mongo] 采集集合 %d/%d: %s", i+1, total, collName)
 		table := collectMongoCollectionMeta(ctx, db, collName)
 		database.Tables = append(database.Tables, table)
 	}
@@ -80,7 +82,6 @@ func (mongoConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instance
 	return inst, nil
 }
 
-// collectMongoCollectionMeta 只获取近似文档数，不采样任何文档，确保零风险
 func collectMongoCollectionMeta(ctx context.Context, db *mongo.Database, collName string) *schema.Table {
 	t := &schema.Table{
 		Name:   collName,
@@ -89,7 +90,6 @@ func collectMongoCollectionMeta(ctx context.Context, db *mongo.Database, collNam
 
 	coll := db.Collection(collName)
 
-	// 获取近似文档数（独立超时）
 	estCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	if n, err := coll.EstimatedDocumentCount(estCtx); err != nil {
@@ -98,7 +98,6 @@ func collectMongoCollectionMeta(ctx context.Context, db *mongo.Database, collNam
 		t.RowCount = n
 	}
 
-	// 仅添加虚拟主键列，不做任何文档采样
 	t.Columns = append(t.Columns, &schema.Column{
 		Name:    "_id",
 		Type:    "objectId",

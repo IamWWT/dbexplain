@@ -1,6 +1,10 @@
 #!/bin/bash
 set -e
 
+# 目标输出目录（相对于 src 的上级目录）
+TOOLS_DIR="../db-relationship-explainer/tools"
+mkdir -p "$TOOLS_DIR"
+
 PLATFORMS=(
   "linux/amd64"
   "linux/arm64"
@@ -12,10 +16,11 @@ PLATFORMS=(
 for platform in "${PLATFORMS[@]}"; do
   GOOS="${platform%/*}"
   GOARCH="${platform#*/}"
-  out="dbexplain-${GOOS}-${GOARCH}"
+  base="dbexplain-${GOOS}-${GOARCH}"
+  out="$TOOLS_DIR/$base"
   [ "$GOOS" = "windows" ] && out+=".exe"
   
-  echo "Building $out (GOOS=$GOOS GOARCH=$GOARCH)..."
+  echo "Building $base (GOOS=$GOOS GOARCH=$GOARCH)..."
   CGO_ENABLED=0 GOOS=$GOOS GOARCH=$GOARCH go build -ldflags="-s -w" -o "$out" .
   
   # 校验架构正确性
@@ -26,3 +31,5 @@ for platform in "${PLATFORMS[@]}"; do
   }
   echo "Success: $out"
 done
+
+echo "All binaries built into $TOOLS_DIR"

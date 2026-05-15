@@ -14,6 +14,11 @@ import (
 	"dbexplain/schema"
 )
 
+func init() {
+	Register("elasticsearch", func() Connector { return esConnector{} })
+	Register("es", func() Connector { return esConnector{} })
+}
+
 type esConnector struct{}
 
 func (esConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instance, error) {
@@ -27,25 +32,23 @@ func (esConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instance, e
 	}
 	client, err := elasticsearch.NewClient(cfg)
 	if err != nil {
-		return nil, fmt.Errorf("es client: %w", err)
+		return nil, schema.NewDBError(d.Redacted(), "", "", "create client", err)
 	}
 
-	// 健康检查
 	infoCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	res, err := client.Info(client.Info.WithContext(infoCtx))
 	if err != nil {
-		return nil, fmt.Errorf("es info: %w", err)
+		return nil, schema.NewDBError(d.Redacted(), "", "", "info", err)
 	}
 	defer res.Body.Close()
 	if res.IsError() {
 		body, _ := io.ReadAll(res.Body)
-		return nil, fmt.Errorf("es unhealthy: %s", string(body))
+		return nil, schema.NewDBError(d.Redacted(), "", "", "unhealthy", fmt.Errorf(string(body)))
 	}
 
 	inst := &schema.Instance{DSN: d.Redacted(), Kind: "elasticsearch", Label: d.Label}
 
-	// 获取所有索引
 	catCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	res, err = client.Cat.Indices(
@@ -53,25 +56,28 @@ func (esConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instance, e
 		client.Cat.Indices.WithFormat("json"),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("cat indices: %w", err)
+		return nil, schema.NewDBError(d.Redacted(), "", "", "cat indices", err)
 	}
 	defer res.Body.Close()
 	var indices []map[string]interface{}
 	if err := json.NewDecoder(res.Body).Decode(&indices); err != nil {
-		return nil, fmt.Errorf("parse indices: %w", err)
+		return nil, schema.NewDBError(d.Redacted(), "", "", "parse indices", err)
 	}
 
 	database := &schema.Database{Name: "elasticsearch"}
+	total := len(indices)
+	count := 0
 	for _, idx := range indices {
-		indexName := idx["index"].(string)
-		if strings.HasPrefix(indexName, ".") {
+		indexName, ok := idx["index"].(string)
+		if !ok || strings.HasPrefix(indexName, ".") {
 			continue
 		}
+		count++
+		logf(ctx, "[es] 采集索引 %d/%d: %s", count, total, indexName)
 		t := &schema.Table{
 			Name:   indexName,
 			Engine: "elasticsearch",
 		}
-		// 获取映射
 		mapping, err := getESMapping(ctx, client, indexName)
 		if err == nil {
 			for field, props := range mapping {
