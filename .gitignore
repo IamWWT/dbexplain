@@ -1,0 +1,16 @@
+# 环境变量文件（含密码）
+.env
+src/.env
+
+# 编译产物
+src/dbexplain
+db-relationship-explainer/tools/dbexplain-*
+
+# 日志
+logs/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
