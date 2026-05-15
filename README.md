@@ -6,21 +6,25 @@
 - 🧩 分析跨库、跨实例的表关系（显式外键 + 命名推断）
 - 🗺️ 生成聚类关系图与问题诊断
 - 📄 支持终端美化输出和 JSON 格式
+- 📁 各数据库采集日志独立写入 `logs/` 目录
 
-无需安装任何数据库客户端或驱动——所有逻辑编译进单个二进制文件，可运行在 **Linux/macOS/Windows（x86_64/arm64）** 上，**只读安全**。
+无需安装任何数据库客户端或驱动——所有逻辑编译进单个二进制文件，可运行在 **Linux / macOS / Windows（x86_64 / arm64）** 上，**只读安全**。
 
 ---
 
 ## 支持的数据库
 
-| 数据库      | 连接方式             | 备注                             |
-|-------------|----------------------|----------------------------------|
-| MySQL       | `mysql://`           | 通过系统表 + SHOW 命令            |
-| PostgreSQL  | `postgres://`        | 通过 pg_catalog                  |
-| GaussDB     | `gaussdb://`         | 兼容 PostgreSQL 协议，自动适配    |
-| SQLite      | `sqlite://`          | 纯 Go 驱动，无 CGO               |
-| ClickHouse  | `clickhouse://`      | 纯 HTTP 接口，无需驱动            |
-| Redis       | `redis://`           | 通过 SCAN 推断键模式与结构        |
+| 数据库         | 连接方式           | 备注                                   |
+|----------------|--------------------|----------------------------------------|
+| MySQL          | `mysql://`         | 通过系统表 + SHOW 命令                  |
+| PostgreSQL     | `postgres://`      | 通过 pg_catalog，支持 pgvector          |
+| GaussDB        | `gaussdb://`       | 兼容 PostgreSQL 协议，自动适配           |
+| SQLite         | `sqlite://`        | 纯 Go 驱动，无 CGO                     |
+| ClickHouse     | `clickhouse://`    | 纯 HTTP 接口，无需驱动                  |
+| Redis          | `redis://`         | 通过 SCAN 推断键模式与结构               |
+| Qdrant         | `qdrant://`        | 向量数据库，获取集合与点数量             |
+| Elasticsearch  | `elasticsearch://` | 获取索引映射与字段信息                   |
+| MongoDB        | `mongodb://`       | 元数据采集，只显示集合与近似文档数       |
 
 > 新增数据库只需实现一个 `Connector` 接口，轻松扩展。
 
@@ -28,18 +32,31 @@
 
 ## 快速开始
 
-### 1. 下载或编译
+### 1. 下载预编译二进制
 
-从 [Releases](https://github.com/yourrepo/dbexplain/releases) 下载对应平台的二进制文件，或自行编译：
+从 [GitHub Releases](https://github.com/IamWWT/understand_dbs_skills/releases) 下载对应平台的最新版本，解压后直接运行。
 
 ```bash
-git clone https://github.com/yourrepo/dbexplain.git
-cd dbexplain
+# 示例：下载 Linux amd64 版本
+wget https://github.com/IamWWT/understand_dbs_skills/releases/download/v1.0.0/dbexplain-linux-amd64
+chmod +x dbexplain-linux-amd64
+./dbexplain-linux-amd64 -env
+```
+
+### 2. 从源码编译
+
+```bash
+git clone https://github.com/IamWWT/understand_dbs_skills.git
+cd understand_dbs_skills/src
 go mod tidy
 bash build.sh   # 生成多平台二进制到当前目录
 ```
 
-### 2. 运行
+---
+
+## 使用方法
+
+### 运行
 
 ```bash
 ./dbexplain -dsn "mysql://user:pass@localhost:3306/shop?label=shop-db"
@@ -52,7 +69,7 @@ bash build.sh   # 生成多平台二进制到当前目录
 - 表聚类（如 `orders* cluster`）
 - 潜在问题（缺主键、未索引外键等）
 
-### 3. 同时分析多个数据库
+### 同时分析多个数据库
 
 ```bash
 ./dbexplain \
@@ -61,7 +78,7 @@ bash build.sh   # 生成多平台二进制到当前目录
   -dsn "redis://:foobared@cache:6379/0?label=session-cache"
 ```
 
-### 4. 使用配置文件或 `.env`
+### 使用配置文件或 `.env`
 
 **JSON 配置文件** (`dbs.json`)：
 ```json
@@ -79,10 +96,11 @@ DB2=redis://:password@localhost:6379/0?label=cache
 ```
 运行：`./dbexplain -env`
 
-### 5. 输出选项
+### 输出选项
 
 - `-o report.md`：将结果写入文件
 - `-json`：输出 JSON 格式，便于程序消费
+- `-timeout 30s`：设置每个 DSN 的采集超时（默认 20s）
 
 ---
 
@@ -91,16 +109,19 @@ DB2=redis://:password@localhost:6379/0?label=cache
 统一采用 URL 格式：
 
 ```
-scheme://[user[:password]@]host[:port][/dbname][?label=alias]
+scheme://[user[:password]@]host[:port][/dbname][?label=alias&其他参数]
 ```
 
 示例：
 - MySQL：`mysql://root:123@127.0.0.1:3306/mydb?label=本地库`
-- PostgreSQL：`postgres://postgres:pass@localhost:5432/testdb`
+- PostgreSQL / pgvector：`postgres://postgres:pass@localhost:5432/testdb`
 - GaussDB：`gaussdb://user:pass@host:25308/db`
 - SQLite：`sqlite:///./data.db`
 - ClickHouse：`clickhouse://default:@localhost:8123/default`
 - Redis：`redis://:foobared@localhost:6379/0`
+- Qdrant：`qdrant://:api-key@localhost:6334?label=qdrant-test`
+- Elasticsearch：`elasticsearch://elastic:pass@localhost:9200?label=es`
+- MongoDB：`mongodb://user:pass@localhost:27017/mydb?authSource=admin&label=mongo`
 
 密码在输出中自动脱敏。
 
@@ -146,36 +167,37 @@ scheme://[user[:password]@]host[:port][/dbname][?label=alias]
 
 ## 安全性
 
-- **只读操作**：所有 SQL 均为 `SELECT`、`SHOW`、`PRAGMA` 或 Redis 的 `INFO`/`SCAN`/`GET` 等。**绝不会执行写、改、删操作**。
+- **只读操作**：所有 SQL 均为 `SELECT`、`SHOW`、`PRAGMA` 或 Redis 的 `INFO`/`SCAN`/`GET`、MongoDB 的 `ListCollections`/`EstimatedDocumentCount` 等。**绝不会执行写、改、删操作**。
 - **SQL 注入防护**：所有查询均使用参数化，标识符严格转义。
-- **超时控制**：每个连接有独立的超时（默认 30s），避免挂起。
+- **超时控制**：每个连接有独立的超时（可配置），避免挂起。
 - **密码脱敏**：输出、日志中的 DSN 均隐藏密码。
+- **日志分离**：每个数据库的采集日志写入 `logs/<label>.log`，终端只显示最终报告。
 
 ---
 
 ## 扩展新数据库
 
-1. 在 `connector/` 下新建文件（如 `hbase.go`）
+1. 在 `src/connector/` 下新建文件（如 `hbase.go`）
 2. 实现 `Connector` 接口：
    ```go
    type Connector interface {
-       Collect(d *dsn.DSN) (*schema.Instance, error)
+       Collect(ctx context.Context, d *dsn.DSN) (*schema.Instance, error)
    }
    ```
-3. 在 `connector/connector.go` 的 `switch` 中注册新类型
+3. 在 `src/connector/connector.go` 的 `switch` 中注册新类型
 4. 重新编译
 
 支持任何提供只读元数据查询能力的存储系统。
 
 ---
 
-## 作为 Skill 集成到 Claude / AI 助手
+## 作为 Skill 集成到 AI 助手
 
 本项目完全适配 **Claude Code Skill** 体系：
 
 1. 将编译后的二进制放入 `tools/` 目录
 2. 编写 `SKILL.md` 定义触发词和指令
-3. Claude 即可直接调用该工具理解数据库结构
+3. AI 助手即可直接调用该工具理解数据库结构
 
 示例 `SKILL.md`：
 ```markdown
@@ -192,7 +214,7 @@ tools:
 
 ## 开发
 
-- 语言：Go 1.21+
+- 语言：Go 1.26+
 - 依赖：仅标准库 + 数据库驱动（编译后静态链接）
 - 构建：`CGO_ENABLED=0 go build -ldflags="-s -w"`
 
@@ -204,4 +226,5 @@ tools:
 
 ## License
 
-MIT © 2025 dbexplain contributors
+MIT © 2025 WWT
+ 
