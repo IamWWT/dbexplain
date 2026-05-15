@@ -2,10 +2,6 @@
 .env
 src/.env
 
-# 编译产物
-src/dbexplain
-db-relationship-explainer/tools/dbexplain-*
-
 # 日志
 logs/
 
@@ -14,3 +10,7 @@ logs/
 .vscode/
 *.swp
 *.swo
+# 编译的二进制文件（Git 不追踪，通过 Release 发布）
+db-relationship-explainer/tools/dbexplain-*
+src/dbexplain
+src/dbexplain-*
