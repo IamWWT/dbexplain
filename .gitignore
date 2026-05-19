@@ -2,6 +2,7 @@
 .env
 src/.env
 
+
 # 日志
 logs/
 
@@ -14,3 +15,5 @@ logs/
 db-relationship-explainer/tools/dbexplain-*
 src/dbexplain
 src/dbexplain-*
+.deepseek
+.claude
