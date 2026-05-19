@@ -14,7 +14,7 @@
 - 单元测试覆盖：新增 `dsn/dsn_test.go`（ParseDSN + Redacted，25 用例）和 `schema/infer_test.go`（InferComment，30+ 用例）。
 - CI/CD 流水线：`.github/workflows/ci.yml`（go build / go vet / go test）。
 - 项目宪法 (`CONSTITUTION.md`) 和记忆文件 (`MEMORY.md`)。
-- Skill 一键安装/卸载脚本 (`db-relationship-explainer/install_skill_for_all_platform.sh`, `uninstall_skill_for_all_platform.sh`)：交互式安装到全局目录（`~/.claude/skills`、`~/.deepseek/skills`、`~/.agents/skills`、`~/.aixcoding/skills`）或项目本地目录，自动检测平台并选择对应二进制，支持全平台 symlink 共享安装。内置 `--verify` 闭环验证、`--update` 在线升级（保留 `.env`），安装/卸载全程 `.env` 凭据安全提示。
+- Skill 一键安装/卸载脚本 (`db-relationship-explainer/install_skill_for_all_platform.sh`, `uninstall_skill_for_all_platform.sh`)：交互式安装到全局目录（`~/.claude/skills`、`~/.deepseek/skills`、`~/.agents/skills`、`~/.aixcoding/skills`）或项目本地目录，自动检测平台并选择对应二进制，支持全平台 symlink 共享安装。内置 `--verify` [dir] 闭环验证、`--update` [dir] 在线升级（支持自定义目录，保留 `.env`），安装/卸载全程 `.env` 凭据安全提示。
 
 ### Fixed
 - 修复 ClickHouse `fetchCHSampleRow` 和 `queryRows` 双重追加 `FORMAT JSONCompact` 导致采样查询语法错误。

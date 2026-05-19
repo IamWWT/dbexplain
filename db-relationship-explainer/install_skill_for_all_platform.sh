@@ -287,8 +287,11 @@ verify_installation() {
   local dirs_to_check=()
 
   if [ -n "$1" ] && [ "$1" != "--verify" ]; then
-    # Specific directory provided
+    # Specific directory provided as $1 (legacy path)
     dirs_to_check=("$1")
+  elif [ -n "${2:-}" ]; then
+    # Custom dir passed as $2 (with --verify flag as $1)
+    dirs_to_check=("$2")
   elif [ "$1" = "--verify" ]; then
     # Check common locations
     dirs_to_check=(
@@ -401,50 +404,72 @@ find_installations() {
   printf '%s\n' "${dirs[@]}"
 }
 
+update_single_dir() {
+  local real_dir
+  real_dir="$(readlink -f "$1" 2>/dev/null || echo "$1")"
+
+  # Validate: must contain SKILL.md or tools/ to be a skill dir
+  if [ ! -f "${real_dir}/SKILL.md" ] && [ ! -d "${real_dir}/tools" ]; then
+    warn "Not a skill installation directory: $1 (SKILL.md or tools/ not found)"
+    return 1
+  fi
+
+  local short
+  short="$(echo "$1" | sed "s|$HOME|~|")"
+  _step "Updating ${short} ..."
+
+  mkdir -p "${real_dir}/tools"
+
+  cp "$SKILL_MD" "${real_dir}/SKILL.md"
+  echo -e "      ${GREEN}✓${NC} SKILL.md"
+
+  if [ -f "$ENV_EXAMPLE" ]; then
+    cp "$ENV_EXAMPLE" "${real_dir}/.env.example"
+    echo -e "      ${GREEN}✓${NC} .env.example"
+  fi
+
+  if [ -f "${real_dir}/.env" ]; then
+    echo -e "      ${YELLOW}○${NC} .env (preserved, unchanged)"
+  fi
+
+  cp "$BINARY_SRC_PATH" "${real_dir}/tools/${BINARY_SRC}"
+  chmod +x "${real_dir}/tools/${BINARY_SRC}"
+  echo -e "      ${GREEN}✓${NC} ${BINARY_SRC}"
+  return 0
+}
+
 update_installations() {
   local dirs=()
-  IFS=$'\n' read -r -d '' -a dirs < <(find_installations && printf '\0')
+  local custom_dir="${1:-}"
+
+  if [ -n "$custom_dir" ]; then
+    # Expand ~
+    custom_dir="${custom_dir/#\~/$HOME}"
+    dirs=("${custom_dir}/${SKILL_NAME}")
+  else
+    IFS=$'\n' read -r -d '' -a dirs < <(find_installations && printf '\0')
+  fi
 
   if [ "${#dirs[@]}" -eq 0 ]; then
     warn "No existing installations found. Run without --update to install."
     exit 0
   fi
 
-  header "Updating ${#dirs[@]} installation(s)"
+  if [ -n "$custom_dir" ]; then
+    header "Updating custom installation"
+  else
+    header "Updating ${#dirs[@]} installation(s)"
+  fi
 
+  local updated=0
   for dir in "${dirs[@]}"; do
-    local real_dir
-    real_dir="$(readlink -f "$dir" 2>/dev/null || echo "$dir")"
-
-    local short
-    short="$(echo "$dir" | sed "s|$HOME|~|")"
-    _step "Updating ${short} ..."
-
-    mkdir -p "${real_dir}/tools"
-
-    # Overwrite SKILL.md (new version)
-    cp "$SKILL_MD" "${real_dir}/SKILL.md"
-    echo -e "      ${GREEN}✓${NC} SKILL.md"
-
-    # Overwrite .env.example (new template)
-    if [ -f "$ENV_EXAMPLE" ]; then
-      cp "$ENV_EXAMPLE" "${real_dir}/.env.example"
-      echo -e "      ${GREEN}✓${NC} .env.example"
+    if update_single_dir "$dir"; then
+      ((updated++))
     fi
-
-    # Preserve .env — only mention it exists
-    if [ -f "${real_dir}/.env" ]; then
-      echo -e "      ${YELLOW}○${NC} .env (preserved, unchanged)"
-    fi
-
-    # Overwrite binary
-    cp "$BINARY_SRC_PATH" "${real_dir}/tools/${BINARY_SRC}"
-    chmod +x "${real_dir}/tools/${BINARY_SRC}"
-    echo -e "      ${GREEN}✓${NC} ${BINARY_SRC}"
   done
 
   echo ""
-  info "Updated ${#dirs[@]} installation(s)."
+  info "Updated ${updated} installation(s)."
   echo ""
   echo -e "  Run ${BOLD}bash install_skill_for_all_platform.sh --verify${NC} to confirm."
 }
@@ -456,16 +481,19 @@ show_help() {
   echo ""
   echo "Usage:"
   echo "  bash install_skill_for_all_platform.sh              Interactive install"
-  echo "  bash install_skill_for_all_platform.sh --update     Update SKILL.md + binary in all found installations"
-  echo "  bash install_skill_for_all_platform.sh --verify     Verify existing install(s)"
-  echo "  bash install_skill_for_all_platform.sh --help       This help"
+  echo "  bash install_skill_for_all_platform.sh --update            Update all found installations"
+  echo "  bash install_skill_for_all_platform.sh --update <dir>      Update a specific installation directory"
+  echo "  bash install_skill_for_all_platform.sh --verify            Verify all found install(s)"
+  echo "  bash install_skill_for_all_platform.sh --verify <dir>      Verify a specific installation"
+  echo "  bash install_skill_for_all_platform.sh --help              This help"
   echo ""
   echo "The script auto-detects your OS and architecture, then interactively"
   echo "asks where to install the skill: globally (~/.claude/skills, etc.),"
   echo "per-project, or a custom directory."
   echo ""
-  echo "--update overwrites SKILL.md and the binary in every found"
-  echo "installation. The .env file is always preserved."
+  echo "--update scans standard locations (global + project-local) by default."
+  echo "Add a directory path to update a custom installation instead."
+  echo "The .env file is always preserved."
 }
 
 # ─── Main ────────────────────────────────────────────────────
@@ -484,12 +512,12 @@ main() {
       ;;
     --update)
       run_preflight
-      update_installations
+      update_installations "${2:-}"
       exit 0
       ;;
     --verify)
       run_preflight
-      verify_installation "--verify"
+      verify_installation "--verify" "${2:-}"
       exit 0
       ;;
     "")

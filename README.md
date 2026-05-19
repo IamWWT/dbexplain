@@ -317,7 +317,8 @@ bash install_skill_for_all_platform.sh --verify
 当 SKILL.md 或二进制有新版本时，一条命令更新所有已安装位置，`.env` 文件不会被覆盖：
 
 ```bash
-bash install_skill_for_all_platform.sh --update
+bash install_skill_for_all_platform.sh --update              # 扫描标准位置，全部更新
+bash install_skill_for_all_platform.sh --update /path/to/skills  # 更新指定目录
 ```
 
 ### 卸载
