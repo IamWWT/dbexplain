@@ -18,3 +18,5 @@ src/dbexplain
 src/dbexplain-*
 .deepseek
 .claude
+.claude.resume
+release-wechat.md

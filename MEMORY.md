@@ -15,6 +15,8 @@
 | 关系分析 + 聚类 + 问题检测 | `src/analyze/analyze.go` |
 | 终端美化 + JSON 输出 | `src/render/render.go` |
 | 构建脚本 | `src/build.sh` |
+| Skill 安装脚本 | `db-relationship-explainer/install_skill_for_all_platform.sh` |
+| Skill 卸载脚本 | `db-relationship-explainer/uninstall_skill_for_all_platform.sh` |
 | CHANGELOG | `CHANGELOG.md` |
 | 项目宪法 | `CONSTITUTION.md` |
 | Issue 追踪 | `issues.json` |

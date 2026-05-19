@@ -4,6 +4,48 @@
 
 ---
 
+## 🚀 一键安装（推荐）
+
+项目提供了交互式安装脚本，自动检测当前平台并安装对应的二进制文件：
+
+```bash
+cd db-relationship-explainer
+bash install_skill_for_all_platform.sh
+```
+
+运行后交互选择安装目标：
+
+| 选项 | 说明 |
+|------|------|
+| `[1] All platforms` | 安装到 `~/.agents/skills` 并 symlink 到其他平台（推荐） |
+| `[2]` ~ `[5]` 单个平台 | 仅安装到 Claude Code / DeepSeek / AixCoding / Agents 之一 |
+| `[6] All project platforms` | 安装到当前项目的 `.claude/.deepseek/.aixcoding/.agents/skills` |
+| `[7] Custom directory` | 指定任意目录 |
+
+安装完成后，使用 `--verify` 进行闭环验证：
+
+```bash
+bash install_skill_for_all_platform.sh --verify
+```
+
+**更新**（SKILL.md 或二进制有新版本时，`.env` 保留）：
+
+```bash
+bash install_skill_for_all_platform.sh --update    # 更新所有已安装位置的 SKILL.md + 二进制
+```
+
+**卸载**：
+
+```bash
+bash uninstall_skill_for_all_platform.sh           # 交互选择要移除的安装
+bash uninstall_skill_for_all_platform.sh --list    # 列出所有已安装位置
+bash uninstall_skill_for_all_platform.sh --all     # 移除全部安装
+```
+
+验证项包括：SKILL.md 存在性与格式检查、二进制文件存在与可执行权限、`--version` 烟雾测试。
+
+---
+
 ## 📦 Skill 包含哪些文件
 
 在项目根目录的 `db-relationship-explainer/` 下：
@@ -56,6 +98,8 @@ db-relationship-explainer/
 ## 🖥️ 各平台部署步骤
 
 ### 1. Claude Code（Anthropic 官方）
+
+**推荐使用一键安装脚本**（见上方）。以下为手动部署步骤供参考。
 
 #### 方式一：用户级（全局可用）
 

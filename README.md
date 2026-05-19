@@ -284,11 +284,59 @@ DB11=qdrant://:my-api-key@127.0.0.1:6334?label=my-qdrant
 
 ## 作为 Skill 集成到 AI 助手
 
-本项目完全适配 **Claude Code Skill** 体系，详细部署步骤见 [`docs/DEPLOY_SKILLS.md`](docs/DEPLOY_SKILLS.md)。
+本项目完全适配 **Claude Code Skill** 体系，兼容 DeepSeek、AixCoding、Agents 等多个 AI 平台。`db-relationship-explainer/` 目录提供了完整的 Skill 定义、预编译二进制和**一键安装/卸载脚本**。
+
+### 一键安装
+
+```bash
+cd db-relationship-explainer
+bash install_skill_for_all_platform.sh
+```
+
+交互选择安装目标：全部平台（symlink 共享）、单个平台、项目本地目录、或自定义路径。脚本自动检测当前 OS/Arch 并选择对应二进制。
+
+**前置条件与边界处理**：
+
+| 场景 | 行为 |
+|------|------|
+| `tools/` 缺少当前平台的二进制 | 报错退出，列出已有二进制，提示到 GitHub Releases 下载并指明放置路径 `tools/` 后重试 |
+| 源目录无 `.env` 文件 | 静默跳过，仅复制 `.env.example` 模板 |
+| 源目录有 `.env` 文件 | 交互询问是否复制（含密码泄露风险提示），确认后 `chmod 600` |
+| `.env.example` 不存在 | 静默跳过 |
+
+安装完成后闭环验证：
+
+```bash
+bash install_skill_for_all_platform.sh --verify
+```
+
+![Skill 安装管理界面](docs/assets/skill_install_mgr.png)
+
+### 更新 Skill
+
+当 SKILL.md 或二进制有新版本时，一条命令更新所有已安装位置，`.env` 文件不会被覆盖：
+
+```bash
+bash install_skill_for_all_platform.sh --update
+```
+
+### 卸载
+
+```bash
+bash uninstall_skill_for_all_platform.sh           # 交互选择要移除的安装
+bash uninstall_skill_for_all_platform.sh --list    # 列出所有已安装位置
+bash uninstall_skill_for_all_platform.sh --all     # 移除全部安装
+```
+
+> 卸载前会检测 `.env` 文件并弹出凭据警告，确认后 `.env` 随目录一并删除。如需保留数据库连接配置，请先备份 `.env`。
+
+### 手动部署
 
 1. 将编译后的二进制放入 `tools/` 目录
 2. 编写 `SKILL.md` 定义触发词和指令
 3. AI 助手即可直接调用该工具理解数据库结构
+
+> 详细部署步骤、各平台集成方式和 `.env` 配置说明见 [`docs/DEPLOY_SKILLS.md`](docs/DEPLOY_SKILLS.md)。
 
 ---
 
