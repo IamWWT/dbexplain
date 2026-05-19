@@ -1,5 +1,40 @@
 # Changelog
 
+## [v0.0.3] - 2026-05-19
+
+### Added
+- Redis 集群模式支持：通过 `?cluster=true` DSN 参数启用，使用 `ForEachMaster` 扫描所有分片，聚合各分片 keyspace 统计。
+- Elasticsearch HTTPS 支持：新增 `elasticsearchs://` scheme 和 `?tls=true` 参数启用 TLS（`InsecureSkipVerify`）。
+- DSN 过滤功能：新增 `-include` / `-exclude` CLI 参数，支持按数据库类型、标签、实例编号（如 `DB1,DB3`）过滤采集范围。
+- DSN 结构体扩展：新增 `Cluster`、`TLS`、`SSLMode` 字段。
+- `--version` 命令行参数，通过 `-ldflags -X main.version` 在编译时注入版本号。
+- PostgreSQL 多 schema 支持：自动采集所有非系统 schema（`pg_namespace`），非 public 表名以 `schema.table` 格式展示。
+- PostgreSQL SSL 支持：通过 DSN `?sslmode=<mode>` 参数配置 SSL 模式（`disable`/`require`/`verify-ca`/`verify-full`）。
+- PostgreSQL 表行数统计：联表 `pg_stat_user_tables` 获取 `n_live_tup`，`pg_total_relation_size` 获取表体积。
+- 单元测试覆盖：新增 `dsn/dsn_test.go`（ParseDSN + Redacted，25 用例）和 `schema/infer_test.go`（InferComment，30+ 用例）。
+- CI/CD 流水线：`.github/workflows/ci.yml`（go build / go vet / go test）。
+- 项目宪法 (`CONSTITUTION.md`) 和记忆文件 (`MEMORY.md`)。
+
+### Fixed
+- 修复 ClickHouse `fetchCHSampleRow` 和 `queryRows` 双重追加 `FORMAT JSONCompact` 导致采样查询语法错误。
+- 修复 `go vet` 警告：`elasticsearch.go` 非恒定格式字符串。
+- 修复 `main.go` 两处错误日志泄漏明文密码（改为 `parsed.Redacted()` 脱敏输出）。
+- 修复 `render.go` JSON 输出缺少完整 schema 元数据（列、索引、外键、引擎、分区键等），改用 `json.MarshalIndent` 序列化。
+- 修复 `mysql.go` 和 `postgres.go` 4 处索引/主键/外键查询静默吞错（`if err == nil { ... }` 无 else 分支）。
+- 修复所有 DSN 采集失败时无明确警告提示。
+- 修复 `fillMySQLTable` 列查询失败导致整个数据库被跳过（对齐 postgres 的 log-and-continue 策略）。
+- 修复 `schema/infer.go` 中 `Contains("ip")` 误匹配 "description" 等词为 IP 地址。
+- 修复 `fetchMySQLSampleRow` / `fetchPGSampleRow` 中 `[]byte` 值被格式化为 `[97 105 ...]` 字节数组而非可读字符串。
+
+### Changed
+- 更新 `docs/CLICKHOUSE.md`：修正双重 FORMAT bug 的错误归因分析。
+- 更新 `docs/REDIS.md`：新增集群模式使用文档。
+- 更新 `docs/ELASTICSEARCH.md`：新增 HTTPS/TLS 使用文档。
+- 更新 `SKILL.md`：新增 `--version`、Redis 集群、ES TLS、PostgreSQL SSL/Schema 参数文档。
+- 新增 `issues.json` 追踪所有已知问题（21 条，20 closed，1 pending-evaluation）。
+
+---
+
 ## [v0.0.2] - 2026-05-16
 
 ### Added

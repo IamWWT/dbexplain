@@ -1,0 +1,234 @@
+{
+  "issues": [
+    {
+      "id": "ISSUE-001",
+      "title": "ClickHouse fetchCHSampleRow 和 queryRows 双重追加 FORMAT JSONCompact 导致采样查询失败",
+      "status": "closed",
+      "closed": "2026-05-19",
+      "priority": "high",
+      "category": "bug",
+      "description": "fetchCHSampleRow (line 151) 在查询后追加 ' FORMAT JSONCompact'，queryRows (line 194) 也追加 ' FORMAT JSONCompact'，导致实际 SQL 为 'SELECT ... LIMIT 1 FORMAT JSONCompact FORMAT JSONCompact'，ClickHouse 报 SYNTAX_ERROR。修复：从 fetchCHSampleRow 移除多余的 FORMAT 追加，统一由 queryRows 负责。",
+      "file": "src/connector/clickhouse.go",
+      "created": "2026-05-19"
+    },
+    {
+      "id": "ISSUE-002",
+      "title": "Redis 集群模式支持",
+      "status": "closed",
+      "closed": "2026-05-19",
+      "priority": "high",
+      "category": "feature",
+      "description": "添加 Redis Cluster 支持。通过 ?cluster=true DSN 参数启用。使用 NewClusterClient 创建客户端，UniversalClient 接口统一单机/集群操作，ForEachMaster 扫描所有分片，集群模式跳过 SELECT dbIndex（仅 db0），聚合 INFO keyspace 统计数据。",
+      "file": "src/connector/redis.go",
+      "created": "2026-05-19"
+    },
+    {
+      "id": "ISSUE-003",
+      "title": "Elasticsearch 硬编码 HTTP，不支持 HTTPS",
+      "status": "closed",
+      "closed": "2026-05-19",
+      "priority": "medium",
+      "category": "feature",
+      "description": "ES 连接器硬编码 http:// 协议。需支持 elasticsearchs:// scheme 和 ?tls=true 参数启用 HTTPS，配置 InsecureSkipVerify（诊断工具可接受）。",
+      "file": "src/connector/elasticsearch.go",
+      "created": "2026-05-19"
+    },
+    {
+      "id": "ISSUE-004",
+      "title": "analyze/infer.go 与 schema/infer.go 重复且未被调用",
+      "status": "pending-evaluation",
+      "priority": "low",
+      "category": "debt",
+      "description": "analyze.InferComment 与 schema.InferComment 字节级完全相同，全局零调用（所有 connector 使用 schema.InferComment）。保留原因：analyze 包作为分析引擎未来可能独立使用自己的推断逻辑。待评估后可删除或利用。",
+      "file": "src/analyze/infer.go",
+      "created": "2026-05-19"
+    },
+    {
+      "id": "ISSUE-005",
+      "title": "新增 -include/-exclude CLI 参数实现 DSN 过滤",
+      "status": "closed",
+      "closed": "2026-05-19",
+      "priority": "medium",
+      "category": "feature",
+      "description": "添加 -include 和 -exclude CLI 参数，支持按数据库类型(kind)、标签(label)、实例编号(DB1, DB2)过滤 DSN。逗号分隔多值。include 优先级高于 exclude。解析失败的 DSN 不参与过滤。",
+      "file": "src/main.go",
+      "created": "2026-05-19"
+    },
+    {
+      "id": "ISSUE-006",
+      "title": "PostgreSQL 连接器缺少表行数统计",
+      "status": "closed",
+      "closed": "2026-05-19",
+      "priority": "low",
+      "category": "bug",
+      "description": "collectPGDB 未查询表行数。MySQL 使用 information_schema.TABLES.Table_rows，PostgreSQL 需从 pg_stat_user_tables.n_live_tup 或 pg_class.reltuples 获取。目前为已知限制。",
+      "file": "src/connector/postgres.go",
+      "created": "2026-05-19"
+    },
+    {
+      "id": "ISSUE-007",
+      "title": "PostgreSQL SSL 模式硬编码为 disable",
+      "status": "closed",
+      "closed": "2026-05-19",
+      "priority": "medium",
+      "category": "bug",
+      "description": "buildPGDSN 硬编码 sslmode=disable，无法连接启用 SSL 的 PostgreSQL 实例。应支持 ?sslmode=require 或类似参数。",
+      "file": "src/connector/postgres.go",
+      "created": "2026-05-19"
+    },
+    {
+      "id": "ISSUE-008",
+      "title": "PostgreSQL 仅采集 public Schema 下的表",
+      "status": "closed",
+      "closed": "2026-05-19",
+      "priority": "medium",
+      "category": "feature",
+      "description": "collectPGDB 查询条件硬编码 schemaname='public'，忽略其他 schema（如 auth、logs 等）。应支持指定 schema 或自动采集所有非系统 schema。",
+      "file": "src/connector/postgres.go",
+      "created": "2026-05-19"
+    },
+    {
+      "id": "ISSUE-009",
+      "title": "Redis 集群模式文档标记为不支持",
+      "status": "closed",
+      "closed": "2026-05-19",
+      "priority": "medium",
+      "category": "docs",
+      "description": "docs/REDIS.md 2.5 节声明集群模式不支持。待 ISSUE-002 实现后更新文档。",
+      "file": "docs/REDIS.md",
+      "created": "2026-05-19"
+    },
+    {
+      "id": "ISSUE-010",
+      "title": "Elasticsearch HTTP-only 文档限制",
+      "status": "closed",
+      "closed": "2026-05-19",
+      "priority": "low",
+      "category": "docs",
+      "description": "docs/ELASTICSEARCH.md 1.1 节和 2.1 节记录了 HTTP-only 限制。待 ISSUE-003 实现后更新文档。",
+      "file": "docs/ELASTICSEARCH.md",
+      "created": "2026-05-19"
+    },
+    {
+      "id": "ISSUE-011",
+      "title": "缺少测试覆盖",
+      "status": "closed",
+      "closed": "2026-05-19",
+      "priority": "medium",
+      "category": "debt",
+      "description": "项目中无任何 *_test.go 文件。所有包（connector、dsn、schema、analyze、render）均无测试。建议优先为 DSN 解析和字段推断添加单元测试。",
+      "file": "src/",
+      "created": "2026-05-19"
+    },
+    {
+      "id": "ISSUE-012",
+      "title": "缺少 CI/CD 流水线",
+      "status": "closed",
+      "closed": "2026-05-19",
+      "priority": "low",
+      "category": "debt",
+      "description": "无 CI 配置文件（无 .github/workflows/、无 Makefile）。构建需手动执行 build.sh。建议至少添加 go build、go vet 和交叉编译检查。",
+      "file": "N/A",
+      "created": "2026-05-19"
+    },
+    {
+      "id": "ISSUE-013",
+      "title": ".gitignore 有未提交的修改",
+      "status": "closed",
+      "closed": "2026-05-19",
+      "priority": "low",
+      "category": "chore",
+      "description": "git status 显示 .gitignore 被修改（新增 .deepseek 和 .claude 条目），尚未提交。",
+      "file": ".gitignore",
+      "created": "2026-05-19"
+    },
+    {
+      "id": "ISSUE-014",
+      "title": "JSON 输出缺少完整 schema 信息（列、索引、外键等）",
+      "status": "closed",
+      "closed": "2026-05-19",
+      "priority": "high",
+      "category": "bug",
+      "description": "PrintJSON 输出的 JSON 仅包含 table_count，缺少 columns(name/type/nullable/default/comment/is_primary/is_unique/is_index)、indexes(name/columns/unique/type)、foreign_keys(name/columns/ref_table/ref_columns)、engine、partition_key、order_by_key、key_pattern、data_type 等完整表结构元数据。AI Agent 消费方无法从 JSON 获取表结构信息。修复：重写 render.go PrintJSON，使用 json.MarshalIndent 序列化完整 schema。",
+      "file": "src/render/render.go",
+      "created": "2026-05-19"
+    },
+    {
+      "id": "ISSUE-015",
+      "title": "main.go 错误日志泄漏明文密码",
+      "status": "closed",
+      "closed": "2026-05-19",
+      "priority": "high",
+      "category": "bug",
+      "description": "两处日志直接输出 rawDSN 导致密码以明文写入日志文件：(1) DSN 解析失败时 log.Printf(\"invalid DSN %s: %v\", rawDSN, err)；(2) 采集失败时 logger.Printf(\"skip %s: %v\", rawDSN, err)。修复：使用 parsed.Redacted() 脱敏，解析失败时只输出错误信息不含 DSN。",
+      "file": "src/main.go",
+      "created": "2026-05-19"
+    },
+    {
+      "id": "ISSUE-016",
+      "title": "postgres.go 和 mysql.go 中索引/主键/外键查询静默吞错",
+      "status": "closed",
+      "closed": "2026-05-19",
+      "priority": "medium",
+      "category": "bug",
+      "description": "三个位置使用 if err == nil { ... } 模式，查询失败时静默丢弃错误，排错困难：(1) postgres.go 索引查询 (line 154)；(2) mysql.go 索引查询 (line 149)；(3) mysql.go 主键查询 (line 177)；(4) mysql.go 外键查询 (line 204)。修复：全部添加 else { logf(ctx, ...) } 分支输出错误信息。",
+      "file": "src/connector/postgres.go, src/connector/mysql.go",
+      "created": "2026-05-19"
+    },
+    {
+      "id": "ISSUE-017",
+      "title": "所有 DSN 采集失败时无明确警告",
+      "status": "closed",
+      "closed": "2026-05-19",
+      "priority": "medium",
+      "category": "bug",
+      "description": "wg.Wait() 后 instances 为空时无任何提示，用户只能看到空报告。修复：在 wg.Wait() 后添加判断，instances 为空时输出警告提示用户检查日志目录。",
+      "file": "src/main.go",
+      "created": "2026-05-19"
+    },
+    {
+      "id": "ISSUE-018",
+      "title": "缺少 --version 命令行参数",
+      "status": "closed",
+      "closed": "2026-05-19",
+      "priority": "low",
+      "category": "feature",
+      "description": "二进制文件没有 --version 或 -v 参数输出版本号。用户和 AI Agent 无法在运行时确认当前版本。建议从编译时注入的 VERSION 变量或 build.sh 中的 ldflags 获取。",
+      "file": "src/main.go",
+      "created": "2026-05-19"
+    },
+    {
+      "id": "ISSUE-019",
+      "title": "SKILL.md 未同步 v0.0.3 新增能力",
+      "status": "closed",
+      "closed": "2026-05-19",
+      "priority": "low",
+      "category": "docs",
+      "description": "SKILL.md 已添加 -include/-exclude 文档，但可能需要回顾确认所有 v0.0.3 新增能力（Redis cluster 支持、ES HTTPS 支持、DSN 过滤）是否都已记录到 SKILL.md 的 AI Agent 使用指南中。",
+      "file": "db-relationship-explainer/SKILL.md",
+      "created": "2026-05-19"
+    },
+    {
+      "id": "ISSUE-020",
+      "title": "InferComment 中 IP 检测过于宽泛导致误匹配",
+      "status": "closed",
+      "closed": "2026-05-19",
+      "priority": "low",
+      "category": "bug",
+      "description": "schema/infer.go 中使用 strings.Contains(name, \"ip\") 检测 IP 地址列，但 \"description\" 等词包含子串 \"ip\"，导致误判为 IP 地址。修复：使用更精确的边界匹配（HasPrefix ip_、HasSuffix _ip、Contains _ip_、name==ip）。",
+      "file": "src/schema/infer.go",
+      "created": "2026-05-19"
+    },
+    {
+      "id": "ISSUE-021",
+      "title": "采样行值中 []byte 被格式化为字节数组而非字符串",
+      "status": "closed",
+      "closed": "2026-05-19",
+      "priority": "medium",
+      "category": "bug",
+      "description": "MySQL 驱动返回 []byte 类型时，fetchMySQLSampleRow 和 fetchPGSampleRow 使用 fmt.Sprintf(\"%v\", val) 将其格式化为 [97 105 111 112 115 ...] 字节数组而非可读字符串。修复：在值转换时优先判断 []byte 并使用 string(b) 转换。",
+      "file": "src/connector/mysql.go, src/connector/postgres.go",
+      "created": "2026-05-19"
+    }
+  ]
+}

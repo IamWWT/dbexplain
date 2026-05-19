@@ -2,6 +2,7 @@ package connector
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -22,13 +23,31 @@ func init() {
 type esConnector struct{}
 
 func (esConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instance, error) {
+	host := d.Host
+	if host == "" {
+		host = "127.0.0.1"
+	}
+	port := d.Port
+	if port == "" {
+		port = "9200"
+	}
+
+	scheme := "http"
+	transport := &http.Transport{
+		MaxIdleConnsPerHost: 2,
+	}
+	if d.TLS {
+		scheme = "https"
+		transport.TLSClientConfig = &tls.Config{
+			InsecureSkipVerify: true, // 诊断工具可接受
+		}
+	}
+
 	cfg := elasticsearch.Config{
-		Addresses: []string{fmt.Sprintf("http://%s:%s", d.Host, d.Port)},
+		Addresses: []string{fmt.Sprintf("%s://%s:%s", scheme, host, port)},
 		Username:  d.User,
 		Password:  d.Password,
-		Transport: &http.Transport{
-			MaxIdleConnsPerHost: 2,
-		},
+		Transport: transport,
 	}
 	client, err := elasticsearch.NewClient(cfg)
 	if err != nil {
@@ -44,7 +63,7 @@ func (esConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instance, e
 	defer res.Body.Close()
 	if res.IsError() {
 		body, _ := io.ReadAll(res.Body)
-		return nil, schema.NewDBError(d.Redacted(), "", "", "unhealthy", fmt.Errorf(string(body)))
+		return nil, schema.NewDBError(d.Redacted(), "", "", "unhealthy", fmt.Errorf("%s", string(body)))
 	}
 
 	inst := &schema.Instance{DSN: d.Redacted(), Kind: "elasticsearch", Label: d.Label}

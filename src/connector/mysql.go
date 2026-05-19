@@ -91,15 +91,13 @@ func collectMySQLDB(ctx context.Context, db *sql.DB, dbName, redactedDSN string)
 	total := len(tables)
 	for i, t := range tables {
 		logf(ctx, "[%s] 采集表 %d/%d: %s", dbName, i+1, total, t.Name)
-		if err := fillMySQLTable(ctx, db, dbName, t, redactedDSN); err != nil {
-			return nil, err
-		}
+		fillMySQLTable(ctx, db, dbName, t, redactedDSN)
 	}
 	database.Tables = tables
 	return database, nil
 }
 
-func fillMySQLTable(ctx context.Context, db *sql.DB, dbName string, t *schema.Table, redactedDSN string) error {
+func fillMySQLTable(ctx context.Context, db *sql.DB, dbName string, t *schema.Table, redactedDSN string) {
 	// columns
 	colRows, err := db.QueryContext(ctx, `
 		SELECT COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, COLUMN_KEY,
@@ -108,7 +106,8 @@ func fillMySQLTable(ctx context.Context, db *sql.DB, dbName string, t *schema.Ta
 		WHERE TABLE_SCHEMA=? AND TABLE_NAME=?
 		ORDER BY ORDINAL_POSITION`, dbName, t.Name)
 	if err != nil {
-		return schema.NewDBError(redactedDSN, dbName, t.Name, "query columns", err)
+		logf(ctx, "[mysql] columns error %s.%s: %v", dbName, t.Name, err)
+		return
 	}
 	defer colRows.Close()
 
@@ -169,6 +168,8 @@ func fillMySQLTable(ctx context.Context, db *sql.DB, dbName string, t *schema.Ta
 		for _, idx := range idxMap {
 			t.Indexes = append(t.Indexes, idx)
 		}
+	} else {
+		logf(ctx, "[mysql] index query failed for %s: %v", t.Name, err)
 	}
 
 	// primary key
@@ -188,6 +189,8 @@ func fillMySQLTable(ctx context.Context, db *sql.DB, dbName string, t *schema.Ta
 		if len(pk.Columns) > 0 {
 			t.Indexes = append(t.Indexes, pk)
 		}
+	} else {
+		logf(ctx, "[mysql] PK query failed for %s: %v", t.Name, err)
 	}
 
 	// foreign keys
@@ -218,8 +221,9 @@ func fillMySQLTable(ctx context.Context, db *sql.DB, dbName string, t *schema.Ta
 			fk.Columns = append(fk.Columns, col)
 			fk.RefColumns = append(fk.RefColumns, refCol)
 		}
+	} else {
+		logf(ctx, "[mysql] FK query failed for %s: %v", t.Name, err)
 	}
-	return nil
 }
 
 // fetchMySQLSampleRow 获取表的第一行数据，返回 map[column]value
@@ -249,6 +253,8 @@ func fetchMySQLSampleRow(ctx context.Context, db *sql.DB, dbName, table string) 
 		val := *(values[i].(*interface{}))
 		if val == nil {
 			result[col] = "NULL"
+		} else if b, ok := val.([]byte); ok {
+			result[col] = string(b)
 		} else {
 			result[col] = fmt.Sprintf("%v", val)
 		}

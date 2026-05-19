@@ -66,37 +66,83 @@ func (postgresConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Insta
 
 func collectPGDB(ctx context.Context, db *sql.DB, dbName, redactedDSN string) (*schema.Database, error) {
 	database := &schema.Database{Name: dbName}
-	rows, err := db.QueryContext(ctx, `
-		SELECT tablename,
-		       pg_size_pretty(pg_total_relation_size(quote_ident(tablename))),
-		       COALESCE(obj_description(quote_ident(tablename)::regclass,'pg_class'),'')
-		FROM pg_tables WHERE schemaname='public' ORDER BY tablename`)
+
+	// 查询所有非系统 schema
+	schemaRows, err := db.QueryContext(ctx, `
+		SELECT nspname FROM pg_namespace
+		WHERE nspname NOT LIKE 'pg_%' AND nspname != 'information_schema'
+		ORDER BY nspname`)
 	if err != nil {
-		return nil, schema.NewDBError(redactedDSN, dbName, "", "query tables", err)
+		return nil, schema.NewDBError(redactedDSN, dbName, "", "query schemas", err)
 	}
-	defer rows.Close()
+	defer schemaRows.Close()
+
+	var schemas []string
+	for schemaRows.Next() {
+		var s string
+		if err := schemaRows.Scan(&s); err == nil {
+			schemas = append(schemas, s)
+		}
+	}
+	schemaRows.Close()
+	if len(schemas) == 0 {
+		schemas = []string{"public"}
+	}
 
 	var tables []*schema.Table
-	for rows.Next() {
-		t := &schema.Table{}
-		var size string
-		if err := rows.Scan(&t.Name, &size, &t.Comment); err != nil {
+	for _, schemaName := range schemas {
+		tRows, err := db.QueryContext(ctx, `
+			SELECT t.tablename,
+			       COALESCE(s.n_live_tup, 0),
+			       COALESCE(pg_total_relation_size(quote_ident(t.schemaname) || '.' || quote_ident(t.tablename)), 0),
+			       COALESCE(obj_description((quote_ident(t.schemaname) || '.' || quote_ident(t.tablename))::regclass, 'pg_class'), '')
+			FROM pg_tables t
+			LEFT JOIN pg_stat_user_tables s
+				ON s.schemaname = t.schemaname AND s.relname = t.tablename
+			WHERE t.schemaname = $1
+			ORDER BY t.tablename`, schemaName)
+		if err != nil {
+			logf(ctx, "[postgres] query tables in schema %s: %v", schemaName, err)
 			continue
 		}
-		tables = append(tables, t)
+		for tRows.Next() {
+			t := &schema.Table{}
+			if err := tRows.Scan(&t.Name, &t.RowCount, &t.SizeBytes, &t.Comment); err != nil {
+				continue
+			}
+			// 非 public schema 的表名加上 schema 前缀，保证跨 schema 唯一
+			if schemaName != "public" {
+				t.Name = schemaName + "." + t.Name
+			}
+			tables = append(tables, t)
+		}
+		tRows.Close()
 	}
-	rows.Close()
 
 	total := len(tables)
 	for i, t := range tables {
+		schemaName, baseName := parsePGTableName(t.Name)
 		logf(ctx, "[%s] 采集表 %d/%d: %s", dbName, i+1, total, t.Name)
-		fillPGTable(ctx, db, t, redactedDSN)
+		fillPGTable(ctx, db, schemaName, baseName, t, redactedDSN)
 	}
 	database.Tables = tables
 	return database, nil
 }
 
-func fillPGTable(ctx context.Context, db *sql.DB, t *schema.Table, redactedDSN string) {
+// parsePGTableName 拆解 "schema.table" 或 "table" 为 schema 和表名
+func parsePGTableName(name string) (schema, table string) {
+	if idx := strings.LastIndex(name, "."); idx >= 0 {
+		return name[:idx], name[idx+1:]
+	}
+	return "public", name
+}
+
+// quotePGIdent 为 PostgreSQL 标识符加上双引号转义
+func quotePGIdent(name string) string {
+	return `"` + strings.ReplaceAll(name, `"`, `""`) + `"`
+}
+
+func fillPGTable(ctx context.Context, db *sql.DB, schemaName, baseName string, t *schema.Table, redactedDSN string) {
 	// columns
 	colRows, err := db.QueryContext(ctx, `
 		SELECT a.attname,
@@ -110,7 +156,7 @@ func fillPGTable(ctx context.Context, db *sql.DB, t *schema.Table, redactedDSN s
 		FROM pg_attribute a
 		LEFT JOIN pg_attrdef d ON d.adrelid=a.attrelid AND d.adnum=a.attnum
 		WHERE a.attrelid=$1::regclass AND a.attnum>0 AND NOT a.attisdropped
-		ORDER BY a.attnum`, "public."+t.Name)
+		ORDER BY a.attnum`, schemaName+"."+baseName)
 	if err != nil {
 		logf(ctx, "[postgres] columns error %s: %v", t.Name, err)
 		return
@@ -135,7 +181,7 @@ func fillPGTable(ctx context.Context, db *sql.DB, t *schema.Table, redactedDSN s
 
 	// 无注释推断
 	if len(colsWithoutComment) > 0 {
-		sample, err := fetchPGSampleRow(ctx, db, t.Name, redactedDSN)
+		sample, err := fetchPGSampleRow(ctx, db, schemaName, baseName)
 		if err == nil {
 			for _, c := range colsWithoutComment {
 				if val, ok := sample[c.Name]; ok {
@@ -150,7 +196,7 @@ func fillPGTable(ctx context.Context, db *sql.DB, t *schema.Table, redactedDSN s
 	// indexes
 	idxRows, err := db.QueryContext(ctx, `
 		SELECT indexname, indexdef FROM pg_indexes
-		WHERE schemaname='public' AND tablename=$1`, t.Name)
+		WHERE schemaname=$2 AND tablename=$1`, baseName, schemaName)
 	if err == nil {
 		defer idxRows.Close()
 		for idxRows.Next() {
@@ -168,6 +214,8 @@ func fillPGTable(ctx context.Context, db *sql.DB, t *schema.Table, redactedDSN s
 			}
 			t.Indexes = append(t.Indexes, idx)
 		}
+	} else {
+		logf(ctx, "[postgres] index query failed for %s: %v", t.Name, err)
 	}
 
 	// foreign keys
@@ -178,7 +226,7 @@ func fillPGTable(ctx context.Context, db *sql.DB, t *schema.Table, redactedDSN s
 		JOIN pg_class c2 ON c2.oid=c.confrelid
 		JOIN pg_attribute a ON a.attrelid=c.conrelid AND a.attnum=ANY(c.conkey)
 		JOIN pg_attribute a2 ON a2.attrelid=c.confrelid AND a2.attnum=ANY(c.confkey)
-		WHERE c.contype='f' AND c1.relname=$1`, t.Name)
+		WHERE c.contype='f' AND c1.relname=$1`, baseName)
 	if err == nil {
 		defer fkRows.Close()
 		fkMap := map[string]*schema.ForeignKey{}
@@ -196,11 +244,13 @@ func fillPGTable(ctx context.Context, db *sql.DB, t *schema.Table, redactedDSN s
 			fk.Columns = append(fk.Columns, col)
 			fk.RefColumns = append(fk.RefColumns, refCol)
 		}
+	} else {
+		logf(ctx, "[postgres] FK query failed for %s: %v", t.Name, err)
 	}
 }
 
-func fetchPGSampleRow(ctx context.Context, db *sql.DB, table, redactedDSN string) (map[string]string, error) {
-	query := fmt.Sprintf(`SELECT * FROM public."%s" LIMIT 1`, table)
+func fetchPGSampleRow(ctx context.Context, db *sql.DB, schemaName, table string) (map[string]string, error) {
+	query := fmt.Sprintf(`SELECT * FROM %s.%s LIMIT 1`, quotePGIdent(schemaName), quotePGIdent(table))
 	rows, err := db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
@@ -225,6 +275,8 @@ func fetchPGSampleRow(ctx context.Context, db *sql.DB, table, redactedDSN string
 		val := *(values[i].(*interface{}))
 		if val == nil {
 			result[col] = "NULL"
+		} else if b, ok := val.([]byte); ok {
+			result[col] = string(b)
 		} else {
 			result[col] = fmt.Sprintf("%v", val)
 		}
@@ -245,6 +297,10 @@ func buildPGDSN(d *dsn.DSN) string {
 	if dbname == "" {
 		dbname = d.User
 	}
-	return fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable connect_timeout=5",
-		host, port, d.User, d.Password, dbname)
+	sslmode := d.SSLMode
+	if sslmode == "" {
+		sslmode = "disable"
+	}
+	return fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s connect_timeout=5",
+		host, port, d.User, d.Password, dbname, sslmode)
 }

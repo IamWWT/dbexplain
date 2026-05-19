@@ -1,0 +1,33 @@
+{
+  "instances": [
+    {"label":"video-redis","kind":"redis","databases":[{"name":"db0","table_count":1}]},
+    {"label":"aiops-sqlite","kind":"sqlite","databases":[{"name":"/home/wwt/Downloads/aigc/proj/agents/aiops/intent-apparatus/data/rules.db","table_count":14}]},
+    {"label":"aiops-mysql","kind":"mysql","databases":[{"name":"testdb","table_count":2}]},
+    {"label":"openim-redis","kind":"redis","databases":[{"name":"db0","table_count":46}]},
+    {"label":"video-pg","kind":"postgres","databases":[{"name":"videomon","table_count":5}]},
+    {"label":"aiops-clickhouse","kind":"clickhouse","databases":[{"name":"ai_obs","table_count":6},{"name":"default","table_count":0}]}
+  ],
+  "refs": [
+    {"from":"video-pg/videomon.abnormal_events(camera_id)","to":"video-pg/videomon.cameras(id)","inferred":false,"confidence":100},
+    {"from":"video-pg/videomon.alert_logs(event_id)","to":"video-pg/videomon.abnormal_events(id)","inferred":false,"confidence":100},
+    {"from":"video-pg/videomon.video_descriptions(camera_id)","to":"video-pg/videomon.cameras(id)","inferred":false,"confidence":100},
+    {"from":"aiops-sqlite//home/wwt/Downloads/aigc/proj/agents/aiops/intent-apparatus/data/rules.db.conversation_steps(intent_id)","to":"aiops-sqlite//home/wwt/Downloads/aigc/proj/agents/aiops/intent-apparatus/data/rules.db.intents(intent_id)","inferred":true,"confidence":85},
+    {"from":"aiops-sqlite//home/wwt/Downloads/aigc/proj/agents/aiops/intent-apparatus/data/rules.db.failure_log(session_id)","to":"aiops-sqlite//home/wwt/Downloads/aigc/proj/agents/aiops/intent-apparatus/data/rules.db.sessions(session_id)","inferred":true,"confidence":85},
+    {"from":"aiops-sqlite//home/wwt/Downloads/aigc/proj/agents/aiops/intent-apparatus/data/rules.db.hit_logs(rule_id)","to":"aiops-sqlite//home/wwt/Downloads/aigc/proj/agents/aiops/intent-apparatus/data/rules.db.rules(rule_id)","inferred":true,"confidence":85},
+    {"from":"aiops-sqlite//home/wwt/Downloads/aigc/proj/agents/aiops/intent-apparatus/data/rules.db.hit_logs(session_id)","to":"aiops-sqlite//home/wwt/Downloads/aigc/proj/agents/aiops/intent-apparatus/data/rules.db.sessions(session_id)","inferred":true,"confidence":85},
+    {"from":"aiops-sqlite//home/wwt/Downloads/aigc/proj/agents/aiops/intent-apparatus/data/rules.db.rule_versions(rule_id)","to":"aiops-sqlite//home/wwt/Downloads/aigc/proj/agents/aiops/intent-apparatus/data/rules.db.rules(rule_id)","inferred":true,"confidence":85},
+    {"from":"aiops-sqlite//home/wwt/Downloads/aigc/proj/agents/aiops/intent-apparatus/data/rules.db.slot_templates(intent_id)","to":"aiops-sqlite//home/wwt/Downloads/aigc/proj/agents/aiops/intent-apparatus/data/rules.db.intents(intent_id)","inferred":true,"confidence":85}
+  ],
+  "issues": [
+    {"severity":"info","table":"aiops-sqlite//home/wwt/Downloads/aigc/proj/agents/aiops/intent-apparatus/data/rules.db/column_docs","message":"no timestamp column — audit trail gap"},
+    {"severity":"info","table":"aiops-sqlite//home/wwt/Downloads/aigc/proj/agents/aiops/intent-apparatus/data/rules.db/conversation_steps","message":"no timestamp column — audit trail gap"},
+    {"severity":"info","table":"aiops-sqlite//home/wwt/Downloads/aigc/proj/agents/aiops/intent-apparatus/data/rules.db/domain_tags","message":"no timestamp column — audit trail gap"},
+    {"severity":"info","table":"aiops-sqlite//home/wwt/Downloads/aigc/proj/agents/aiops/intent-apparatus/data/rules.db/roles","message":"no timestamp column — audit trail gap"},
+    {"severity":"info","table":"aiops-sqlite//home/wwt/Downloads/aigc/proj/agents/aiops/intent-apparatus/data/rules.db/slot_templates","message":"no timestamp column — audit trail gap"},
+    {"severity":"info","table":"aiops-mysql/testdb/iplist","message":"no timestamp column — audit trail gap"},
+    {"severity":"info","table":"aiops-mysql/testdb/port","message":"no timestamp column — audit trail gap"},
+    {"severity":"warn","table":"video-pg/videomon/abnormal_events","message":"FK column \"camera_id\" has no index — full scan risk"},
+    {"severity":"warn","table":"video-pg/videomon/alert_logs","message":"FK column \"event_id\" has no index — full scan risk"},
+    {"severity":"warn","table":"video-pg/videomon/video_descriptions","message":"FK column \"camera_id\" has no index — full scan risk"}
+  ]
+}

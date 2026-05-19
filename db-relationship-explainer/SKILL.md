@@ -8,7 +8,7 @@ tools:
   - path: tools/dbexplain-{platform}
     description: |
       静态编译的数据库探查二进制。接受 DSN 列表或 .env 文件，输出 Markdown 格式报告。
-      参数：-dsn, -env, -config, -json, -o, -timeout。密码自动脱敏。
+      参数：-dsn, -env, -config, -include, -exclude, -json, -o, -timeout, -version。密码自动脱敏。
 trigger:
   - "解释表结构"
   - "分析数据库关系"
@@ -53,7 +53,18 @@ trigger:
 - `-json`：输出 JSON 格式，便于程序消费。
 - `-o <文件名>`：将报告写入指定文件。
 - `-timeout <时长>`：设置每个 DSN 的采集超时（默认 20s）。
-- 可组合使用，如 `-env -json -o report.json`。
+- `-include <过滤条件>`：仅采集匹配的数据库，按**类型**(如 `mysql,redis`)、**标签**(如 `aiops-mysql`)、**实例编号**(如 `DB1,DB3`)过滤，逗号分隔。
+- `-exclude <过滤条件>`：排除匹配的数据库，支持同样的匹配维度。与 `-include` 同时使用时，`-include` 优先。
+- `--version`：输出版本号并退出，用于确认工具版本。
+- 可组合使用，如 `-env -include mysql,redis -json -o report.json`。
+
+### DSN 高级参数
+- **Redis 集群**：在 Redis DSN 中追加 `?cluster=true` 启用集群模式。工具自动扫描所有分片并聚合统计信息，集群模式仅支持 db0。
+  - 示例：`redis://:password@host:7000/0?cluster=true&label=集群缓存`
+- **Elasticsearch TLS**：使用 `elasticsearchs://` 协议前缀或 `?tls=true` 参数启用 HTTPS 连接。
+  - 示例：`elasticsearchs://user:pass@host:9200?label=安全ES` 或 `elasticsearch://host:9200?tls=true`
+- **PostgreSQL SSL**：在 PostgreSQL DSN 中通过 `?sslmode=<模式>` 指定 SSL 模式，支持 `disable`（默认）、`require`、`verify-ca`、`verify-full`。
+  - 示例：`postgres://user:pass@host:5432/db?sslmode=require`
 
 ## Agent 执行流程
 1. 识别用户意图，选择合适调用方式。
@@ -65,4 +76,5 @@ trigger:
 - 密码中的特殊字符（如 `!`）在命令行中需用**单引号**包裹整个 DSN，在 `.env` 文件中则无需转义。
 - 工具运行时会在 stderr 显示进度信息（“采集中… 完成”），不影响最终报告。
 - 分析 MongoDB 时，DSN 中必须包含数据库名和 `authSource` 参数（详见 `docs/MONGO.md`）。
-- 如需支持其他平台，请将命令中的二进制名称替换为对应的 `dbexplain-{os}-{arch}` 文件。 
+- 如需支持其他平台，请将命令中的二进制名称替换为对应的 `dbexplain-{os}-{arch}` 文件。
+- PostgreSQL 连接器自动采集所有非系统 schema（排除 `pg_*` 和 `information_schema`）。`public` schema 下的表名不带前缀，其他 schema 的表名格式为 `schema.table`。

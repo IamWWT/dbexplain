@@ -113,9 +113,14 @@ skip redis://...: connect: dial tcp x.x.x.x:6379: i/o timeout
 
 ### 2.5 集群模式 (Cluster) 支持
 
-- 当前实现基于单机客户端 (`redis.NewClient`)，不支持 Redis Cluster。  
-- 如需采集 Cluster 数据，可暂时连接单节点（集群节点兼容部分命令），或修改源码增加 `NewClusterClient` 逻辑。  
-- 集群环境中 `SCAN` 需要在每个 master 节点分别执行，工具会显示正确结果但仅覆盖连接的节点。
+v0.0.3 起已支持 Redis Cluster。使用方法：
+
+- **启用集群模式**：在 DSN 中添加 `?cluster=true` 参数，如 `redis://:password@host:6379/0?label=mycluster&cluster=true`
+- **工作原理**：自动使用 `NewClusterClient` 创建客户端，通过 `ForEachMaster` 在所有分片上执行 SCAN，聚合各分片的 keyspace 统计数据。
+- **注意事项**：
+  - 集群模式仅支持 db0，DSN 中指定的其他数据库编号会被忽略并输出警告。
+  - 扫描上限（maxScanKeys）在所有分片间共享，避免单次扫描开销过大。
+  - 单机模式完全向后兼容，不加 `?cluster=true` 即为原有单机行为。
 
 ---
 

@@ -90,10 +90,9 @@ if err == nil {
 }
 ```
 
-- **采样查询**：`SELECT * FROM <db>.<table> LIMIT 1` 再加 `FORMAT JSONCompact`。  
-- **已知问题**：ClickHouse 在 `LIMIT 1` 后直接跟 `FORMAT JSONCompact` 会引发语法错误（`SYNTAX_ERROR`），因为 ClickHouse 在 `LIMIT` 后期待设置子句而非输出格式。当前实现会导致采样失败（日志记录 `sample row failed`），但不会影响其他数据，列注释将回退为空。  
-- **解决方案**：可将 `FORMAT JSONCompact` 移到 `LIMIT` 前，或使用 `SELECT * FROM ... LIMIT 1 FORMAT JSONCompact`。此为已知改进点，当前代码暂未修复。  
-- **安全性**：即使查询失败，也仅影响注释推断，不会导致采集中断。
+- **采样查询**：`SELECT * FROM <db>.<table> LIMIT 1`，由 `queryRows` 统一追加 `FORMAT JSONCompact`。
+- **v0.0.3 已修复**：此前 `fetchCHSampleRow` 和 `queryRows` 各自追加了一次 `FORMAT JSONCompact`，导致实际 SQL 为 `SELECT ... LIMIT 1 FORMAT JSONCompact FORMAT JSONCompact` 的语法错误。修复方式：移除 `fetchCHSampleRow` 中多余的 FORMAT 追加，仅由 `queryRows` 统一追加。
+- **安全性**：采样失败仅影响注释推断，不会导致采集中断。
 
 ### 1.6 错误处理与进度日志
 
@@ -130,8 +129,8 @@ clickhouse connect: clickhouse HTTP 401: Authentication failed
 
 ### 2.3 采样行失败导致注释为空
 
-- 当前实现存在 SQL 语法顺序错误（`LIMIT 1 FORMAT JSONCompact` 应写为 `SELECT ... FORMAT JSONCompact LIMIT 1`），导致采样查询返回 400 错误。  
-- **暂时解决方案**：可手动修改 `fetchCHSampleRow` 函数，调整格式顺序，或关闭注释推断（注释掉相关代码）。  
+- **v0.0.3 已修复**：此前因 `fetchCHSampleRow` 和 `queryRows` 重复追加 `FORMAT JSONCompact` 导致语法错误。已移除重复的格式化子句。
+- 若采样仍失败，可能是权限不足（需 `SELECT` 权限）或表为空（无数据行）。
 - 此问题不影响列类型、主键、排序键等关键信息的采集。
 
 ### 2.4 ClickHouse 版本兼容性

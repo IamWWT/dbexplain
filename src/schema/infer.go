@@ -22,7 +22,7 @@ func InferComment(colName, colType, sampleValue string) string {
 		return "电子邮箱"
 	case strings.Contains(name, "phone") || strings.Contains(name, "mobile"):
 		return "电话号码"
-	case strings.Contains(name, "ip"):
+	case strings.HasPrefix(name, "ip_") || strings.HasSuffix(name, "_ip") || strings.Contains(name, "_ip_") || name == "ip":
 		return "IP 地址"
 	case strings.Contains(name, "url"):
 		return "URL"

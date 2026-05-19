@@ -148,7 +148,7 @@ func fillCHTable(ctx context.Context, cli *chHTTP, dbName string, t *schema.Tabl
 
 func fetchCHSampleRow(ctx context.Context, cli *chHTTP, dbName, table string) (map[string]string, error) {
 	query := fmt.Sprintf("SELECT * FROM %s.%s LIMIT 1", escCH(dbName), escCH(table))
-	rows, err := cli.queryRows(ctx, query+" FORMAT JSONCompact")
+	rows, err := cli.queryRows(ctx, query)
 	if err != nil {
 		return nil, err
 	}

@@ -1,0 +1,46 @@
+
+▸ Instances (1)
+  aiops-mysql                     mysql  1 db(s), 2 tables
+
+▸ aiops-mysql  /  testdb
+
+  iplist [InnoDB] ~12 rows 16.0KB
+────────────────────────────────────────────────────────────────────────
+  name         type          flags         comment
+  ───────────  ────────────  ────────────  ────────────────────
+  ID           int           PK            标识符
+  envlabel     varchar(100)  NN            产品环境标识
+  product      varchar(100)  NN            产品标识
+  subproduct   varchar(100)                示例: [97 105 111 112 115 …
+  hostip       varchar(100)                IP 地址
+  bmcip        varchar(100)                IP 地址
+  device_type  varchar(20)                 类型
+  arch         varchar(20)                 示例: [88 56 54]
+  card         varchar(50)                 显卡型号
+  cardtype     varchar(30)                 类型
+  cardnumber   int                         示例: 1
+  datacenter   varchar(20)                 示例: [120 97]
+  dcloc        varchar(20)                 示例: [119 116 104 111 109…
+  owner        varchar(100)                机器所属
+  isreg        tinyint(1)    NN            1表示纳入监控，0表示不予监控
+
+  port [InnoDB] ~30 rows 16.0KB
+────────────────────────────────────────────────────────────────────────
+  name         type          flags         comment
+  ───────────  ────────────  ────────────  ────────────────────
+  ID           int           PK            标识符
+  port         varchar(100)  NN            示例: [57 52 48 48]
+  service      varchar(50)   NN            示例: [110 111 100 101 101…
+  protocol     varchar(100)                协议
+  description  varchar(100)                IP 地址
+  isreg        tinyint(1)                  1表示注册到consul,0表示不注册
+
+▸ Relationships  (0 explicit FK, 0 inferred)
+  no relationships found
+
+▸ Clusters (2)
+
+▸ Issues (2)
+  ℹ aiops-mysql/testdb/iplist  no timestamp column — audit trail gap
+  ℹ aiops-mysql/testdb/port  no timestamp column — audit trail gap
+

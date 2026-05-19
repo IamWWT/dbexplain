@@ -1,6 +1,7 @@
 package render
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -262,36 +263,176 @@ func fmtInt(n int64) string {
 }
 
 func PrintJSON(result *analyze.Result) {
-	fmt.Println("{")
-	fmt.Println(`  "instances": [`)
-	for ii, inst := range result.Universe.Instances {
-		fmt.Printf(`    {"label":%q,"kind":%q,"databases":[`, inst.Label, inst.Kind)
-		for di, db := range inst.Databases {
-			fmt.Printf(`{"name":%q,"table_count":%d}`, db.Name, len(db.Tables))
-			if di < len(inst.Databases)-1 { fmt.Print(",") }
+	// 使用 json.MarshalIndent 输出完整结构化数据（含列、索引、外键等元数据）
+	out, err := json.MarshalIndent(buildJSONResult(result), "", "  ")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "json marshal error: %v\n", err)
+		return
+	}
+	fmt.Println(string(out))
+}
+
+// ── JSON 序列化辅助类型 ──
+
+type jsonResult struct {
+	Instances []jsonInstance `json:"instances"`
+	Refs      []jsonRef      `json:"refs"`
+	Groups    []jsonGroup    `json:"groups,omitempty"`
+	Issues    []jsonIssue    `json:"issues"`
+}
+
+type jsonInstance struct {
+	Label     string       `json:"label"`
+	Kind      string       `json:"kind"`
+	Databases []jsonDB     `json:"databases"`
+}
+
+type jsonDB struct {
+	Name       string      `json:"name"`
+	TableCount int         `json:"table_count"`
+	Tables     []jsonTable `json:"tables"`
+}
+
+type jsonTable struct {
+	Name         string       `json:"name"`
+	Comment      string       `json:"comment,omitempty"`
+	Engine       string       `json:"engine,omitempty"`
+	RowCount     int64        `json:"row_count,omitempty"`
+	SizeBytes    int64        `json:"size_bytes,omitempty"`
+	Columns      []jsonColumn `json:"columns,omitempty"`
+	Indexes      []jsonIndex  `json:"indexes,omitempty"`
+	ForeignKeys  []jsonFK     `json:"foreign_keys,omitempty"`
+	PartitionKey string       `json:"partition_key,omitempty"`
+	OrderByKey   string       `json:"order_by_key,omitempty"`
+	KeyPattern   string       `json:"key_pattern,omitempty"`
+	DataType     string       `json:"data_type,omitempty"`
+}
+
+type jsonColumn struct {
+	Name           string `json:"name"`
+	Type           string `json:"type"`
+	Nullable       bool   `json:"nullable"`
+	Default        string `json:"default,omitempty"`
+	Comment        string `json:"comment,omitempty"`
+	IsPrimary      bool   `json:"is_primary,omitempty"`
+	IsUnique       bool   `json:"is_unique,omitempty"`
+	IsIndex        bool   `json:"is_index,omitempty"`
+	IsSortKey      bool   `json:"is_sort_key,omitempty"`
+	IsPartitionKey bool   `json:"is_partition_key,omitempty"`
+}
+
+type jsonIndex struct {
+	Name    string   `json:"name"`
+	Columns []string `json:"columns"`
+	Unique  bool     `json:"unique,omitempty"`
+	Type    string   `json:"type,omitempty"`
+}
+
+type jsonFK struct {
+	Name        string   `json:"name,omitempty"`
+	Columns     []string `json:"columns"`
+	RefInstance string   `json:"ref_instance,omitempty"`
+	RefDB       string   `json:"ref_db,omitempty"`
+	RefTable    string   `json:"ref_table"`
+	RefColumns  []string `json:"ref_columns"`
+}
+
+type jsonRef struct {
+	From       string `json:"from"`
+	To         string `json:"to"`
+	Inferred   bool   `json:"inferred"`
+	Confidence int    `json:"confidence"`
+}
+
+type jsonGroup struct {
+	Name   string        `json:"name"`
+	Tables []jsonGroupTbl `json:"tables"`
+}
+
+type jsonGroupTbl struct {
+	Instance string `json:"instance"`
+	DB       string `json:"db"`
+	Table    string `json:"table"`
+}
+
+type jsonIssue struct {
+	Severity string `json:"severity"`
+	Table    string `json:"table"`
+	Message  string `json:"message"`
+}
+
+func buildJSONResult(r *analyze.Result) *jsonResult {
+	jr := &jsonResult{}
+
+	for _, inst := range r.Universe.Instances {
+		ji := jsonInstance{Label: inst.Label, Kind: inst.Kind}
+		for _, db := range inst.Databases {
+			jd := jsonDB{Name: db.Name, TableCount: len(db.Tables)}
+			for _, t := range db.Tables {
+				jt := jsonTable{
+					Name:         t.Name,
+					Comment:      t.Comment,
+					Engine:       t.Engine,
+					RowCount:     t.RowCount,
+					SizeBytes:    t.SizeBytes,
+					PartitionKey: t.PartitionKey,
+					OrderByKey:   t.OrderByKey,
+					KeyPattern:   t.KeyPattern,
+					DataType:     t.DataType,
+				}
+				for _, c := range t.Columns {
+					jt.Columns = append(jt.Columns, jsonColumn{
+						Name: c.Name, Type: c.Type,
+						Nullable: c.Nullable, Default: c.Default,
+						Comment: c.Comment,
+						IsPrimary: c.IsPrimary, IsUnique: c.IsUnique,
+						IsIndex: c.IsIndex, IsSortKey: c.IsSortKey,
+						IsPartitionKey: c.IsPartitionKey,
+					})
+				}
+				for _, idx := range t.Indexes {
+					jt.Indexes = append(jt.Indexes, jsonIndex{
+						Name: idx.Name, Columns: idx.Columns,
+						Unique: idx.Unique, Type: idx.Type,
+					})
+				}
+				for _, fk := range t.ForeignKeys {
+					jt.ForeignKeys = append(jt.ForeignKeys, jsonFK{
+						Name: fk.Name, Columns: fk.Columns,
+						RefInstance: fk.RefInstance, RefDB: fk.RefDB,
+						RefTable: fk.RefTable, RefColumns: fk.RefColumns,
+					})
+				}
+				jd.Tables = append(jd.Tables, jt)
+			}
+			ji.Databases = append(ji.Databases, jd)
 		}
-		fmt.Print("]}")
-		if ii < len(result.Universe.Instances)-1 { fmt.Print(",") }
-		fmt.Println()
+		jr.Instances = append(jr.Instances, ji)
 	}
-	fmt.Println("  ],")
-	fmt.Println(`  "refs": [`)
-	for i, r := range result.Refs {
-		from := qualify(r.FromInstance, r.FromDB, r.FromTable, r.FromCol)
-		to := qualify(r.ToInstance, r.ToDB, r.ToTable, r.ToCol)
-		fmt.Printf(`    {"from":%q,"to":%q,"inferred":%v,"confidence":%d}`,
-			from, to, r.Inferred, r.Confidence)
-		if i < len(result.Refs)-1 { fmt.Print(",") }
-		fmt.Println()
+
+	for _, ref := range r.Refs {
+		jr.Refs = append(jr.Refs, jsonRef{
+			From: qualify(ref.FromInstance, ref.FromDB, ref.FromTable, ref.FromCol),
+			To:   qualify(ref.ToInstance, ref.ToDB, ref.ToTable, ref.ToCol),
+			Inferred: ref.Inferred, Confidence: ref.Confidence,
+		})
 	}
-	fmt.Println("  ],")
-	fmt.Println(`  "issues": [`)
-	for i, iss := range result.Issues {
-		tbl := iss.Table.Instance + "/" + iss.Table.DB + "/" + iss.Table.Table
-		fmt.Printf(`    {"severity":%q,"table":%q,"message":%q}`, iss.Severity, tbl, iss.Message)
-		if i < len(result.Issues)-1 { fmt.Print(",") }
-		fmt.Println()
+
+	for _, g := range r.Groups {
+		jg := jsonGroup{Name: g.Name}
+		for _, qt := range g.Tables {
+			jg.Tables = append(jg.Tables, jsonGroupTbl{qt.Instance, qt.DB, qt.Table})
+		}
+		jr.Groups = append(jr.Groups, jg)
 	}
-	fmt.Println("  ]")
-	fmt.Println("}")
+
+	for _, iss := range r.Issues {
+		jr.Issues = append(jr.Issues, jsonIssue{
+			Severity: iss.Severity,
+			Table:    iss.Table.Instance + "/" + iss.Table.DB + "/" + iss.Table.Table,
+			Message:  iss.Message,
+		})
+	}
+
+	return jr
 }

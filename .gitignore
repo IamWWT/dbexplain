@@ -13,6 +13,7 @@ logs/
 *.swo
 # 编译的二进制文件（Git 不追踪，通过 Release 发布）
 db-relationship-explainer/tools/dbexplain-*
+db-relationship-explainer/logs/
 src/dbexplain
 src/dbexplain-*
 .deepseek

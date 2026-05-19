@@ -15,6 +15,9 @@ type DSN struct {
 	Port     string
 	DBName   string
 	Label    string
+	Cluster  bool // ?cluster=true (Redis Cluster)
+	TLS      bool // ?tls=true (ES/Redis HTTPS)
+	SSLMode  string // ?sslmode=require|disable (PostgreSQL)
 }
 
 // ParseDSN accepts: scheme://[user[:pass]@]host[:port][/dbname][?label=alias]
@@ -38,12 +41,18 @@ func ParseDSN(raw string) (*DSN, error) {
 	case "clickhouse", "ch":
 		d.Kind = "clickhouse"
 	case "redis", "rediss":
+		if scheme == "rediss" {
+			d.TLS = true
+		}
 		d.Kind = "redis"
 	case "mongodb":
 		d.Kind = "mongodb"
 	case "qdrant":
 		d.Kind = "qdrant"
-	case "elasticsearch", "es":
+	case "elasticsearch", "es", "elasticsearchs":
+		if scheme == "elasticsearchs" {
+			d.TLS = true
+		}
 		d.Kind = "elasticsearch"
 	default:
 		return nil, fmt.Errorf("unsupported scheme %q", scheme)
@@ -61,6 +70,15 @@ func ParseDSN(raw string) (*DSN, error) {
 		d.Label = v
 	} else {
 		d.Label = labelFrom(d)
+	}
+	if v := u.Query().Get("cluster"); v == "true" || v == "1" {
+		d.Cluster = true
+	}
+	if v := u.Query().Get("tls"); v == "true" || v == "1" {
+		d.TLS = true
+	}
+	if v := u.Query().Get("sslmode"); v != "" {
+		d.SSLMode = v
 	}
 	return d, nil
 }

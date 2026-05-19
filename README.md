@@ -5,9 +5,11 @@
 - 🔍 自动导出表结构、列信息、索引、外键
 - 🧩 分析跨库、跨实例的表关系（显式外键 + 命名推断）
 - 🗺️ 生成聚类关系图与问题诊断
-- 📄 支持终端美化输出和 JSON 格式
+- 📄 支持终端美化输出和 JSON 格式（含完整列/索引/外键元数据）
 - 📁 各数据库采集日志独立写入 `logs/` 目录
 - 🧠 对无注释字段自动推断语义（首行数据 + 规则引擎）
+- 🏷️ 支持 `-include`/`-exclude` 按类型、标签、实例编号过滤 DSN
+- 🔐 PostgreSQL 多 Schema 自动采集、SSL 可配置、行数统计
 - ⚡ 实时进度输出，避免大库等待焦虑
 
 无需安装任何数据库客户端或驱动——所有逻辑编译进单个二进制文件，可运行在 **Linux / macOS / Windows（x86_64 / arm64）** 上，**只读安全**。
@@ -19,13 +21,13 @@
 | 数据库         | 连接方式           | 备注                                                         |
 |----------------|--------------------|--------------------------------------------------------------|
 | MySQL          | `mysql://`         | 系统表 + SHOW，支持字段注释推断                              |
-| PostgreSQL     | `postgres://`      | pg_catalog，支持 pgvector                                     |
+| PostgreSQL     | `postgres://`      | pg_catalog，多 Schema 采集，行数统计，SSL 可配（?sslmode=）    |
 | GaussDB        | `gaussdb://`       | 兼容 PostgreSQL 协议，自动适配                               |
 | SQLite         | `sqlite://`        | 纯 Go 驱动，无 CGO                                           |
 | ClickHouse     | `clickhouse://`    | HTTP 接口，支持 MergeTree 排序键/分区键                      |
-| Redis          | `redis://`         | 流式扫描键模式，自动识别无 TTL、大 key 等风险                |
+| Redis          | `redis://`         | 流式扫描键模式，自动识别无 TTL、大 key，支持集群（?cluster=true） |
 | Qdrant         | `qdrant://`        | 向量数据库，获取集合与点数量                                 |
-| Elasticsearch  | `elasticsearch://` | 获取索引映射与字段信息                                       |
+| Elasticsearch  | `elasticsearch://` | 获取索引映射，支持 HTTPS（`elasticsearchs://` 或 `?tls=true`） |
 | MongoDB        | `mongodb://`       | 元数据采集，仅获取集合与近似文档数，零数据风险               |
 
 > 新增数据库只需实现一个 `Connector` 接口并调用 `Register`，无需修改核心代码。  
@@ -47,7 +49,7 @@
 
 ```bash
 # 示例：下载 Linux amd64 版本
-wget https://github.com/IamWWT/understand_dbs_skills/releases/download/v0.0.2/dbexplain-linux-amd64
+wget https://github.com/IamWWT/understand_dbs_skills/releases/download/v0.0.3/dbexplain-linux-amd64
 chmod +x dbexplain-linux-amd64
 ./dbexplain-linux-amd64 -env
 ```
@@ -101,44 +103,118 @@ bash build.sh   # 生成多平台二进制到当前目录
 ```
 运行：`./dbexplain -config dbs.json`
 
-**`.env` 文件**（推荐）：
+**`.env` 文件**（推荐，自动脱敏密码）：
 ```ini
-DB1=mysql://user:pass@localhost:3306/shop
-DB3=redis://:password@localhost:6379/0?label=cache
-DB5=postgres://user:pass@localhost:5432/warehouse
+DB1=mysql://user:pass@localhost:3306/shop?label=my-mysql
+DB3=redis://:password@localhost:6379/0?label=my-redis
+DB5=postgres://user:pass@localhost:5432/warehouse?sslmode=disable&label=my-pg
 ```
-> `.env` 中 `DB` 编号无需连续或从 1 开始，程序会自动按数字升序读取。  
-运行：`./dbexplain -env`
+> `.env` 中 `DB` 编号无需连续或从 1 开始，程序会自动按数字升序读取。
+> 运行：`./dbexplain -env`
+> 完整的各数据库 `.env` 配置模板和参数说明见上方 [DSN 详解与配置模板](#dsn-详解与配置模板)。`src/.env.example` 也提供了可直接复用的示例。
 
 ### 输出选项
 
 - `-o report.md`：将结果写入文件
 - `-json`：输出 JSON 格式，便于程序消费
 - `-timeout 30s`：设置每个 DSN 的采集超时（默认 20s）
+- `-include` / `-exclude`：按类型、标签、实例编号过滤 DSN（逗号分隔）
+- `--version`：输出版本号并退出
 - `-h`：查看所有参数说明
 
 ---
 
-## DSN 格式
+## DSN 详解与配置模板
 
-统一采用 URL 格式：
+### DSN 格式
+
+所有数据库统一采用 URL 格式：
 
 ```
-scheme://[user[:password]@]host[:port][/dbname][?label=alias&其他参数]
+scheme://[用户[:密码]@]主机[:端口][/库名][?label=别名&其他参数...]
 ```
 
-示例：
-- MySQL：`mysql://root:123@127.0.0.1:3306/mydb?label=本地库`
-- PostgreSQL / pgvector：`postgres://postgres:pass@localhost:5432/testdb`
-- GaussDB：`gaussdb://user:pass@host:25308/db`
-- SQLite：`sqlite:///绝对路径/data.db`
-- ClickHouse：`clickhouse://default:@localhost:8123/default`
-- Redis：`redis://:foobared@localhost:6379/0`
-- Qdrant：`qdrant://:api-key@localhost:6334?label=qdrant-test`
-- Elasticsearch：`elasticsearch://elastic:pass@localhost:9200?label=es`
-- MongoDB：`mongodb://user:pass@localhost:27017/mydb?authSource=admin&label=mongo`
+### 参数速查表
 
-密码在输出和日志中自动脱敏。
+| 参数 | 类型 | 适用数据库 | 说明 |
+|------|------|-----------|------|
+| `label` | string | 全部 | 实例别名，决定日志文件名 (`logs/<label>.log`) 和报告中显示的实例名 |
+| `cluster` | bool | Redis | `?cluster=true` 启用 Redis Cluster 模式，自动扫描所有分片、聚合统计 |
+| `tls` | bool | ES, Redis | `?tls=true` 启用 TLS/HTTPS 加密连接。ES 也可用 `elasticsearchs://` 协议前缀 |
+| `sslmode` | string | PostgreSQL | SSL 连接模式，可选值：`disable`（默认）、`require`、`verify-ca`、`verify-full` |
+| `authSource` | string | MongoDB | 认证数据库名，即用户创建所在的库（如 `admin`、`openim_v3`） |
+
+### 各数据库 .env 配置模板
+
+以下模板可直接复制到 `db-relationship-explainer/.env` 文件，修改实际地址和密码即可使用。
+**编号可任意，无需连续**，程序会自动按数字升序加载。
+
+```ini
+# ────────── MySQL ──────────
+# 格式: mysql://用户:密码@主机:端口/库名?label=别名
+# 必填: 库名。程序自动采集该库（或全部非系统库，如果不指定库名）
+DB1=mysql://root:password@127.0.0.1:3306/mydb?label=my-mysql
+
+# ────────── PostgreSQL ──────────
+# 格式: postgres://用户:密码@主机:端口/库名?label=别名&sslmode=disable
+# 必填: 库名（可选，不填则采集所有非系统库）
+# sslmode: disable | require | verify-ca | verify-full（默认 disable）
+# 程序自动采集所有非系统 schema（pg_catalog / information_schema 除外）
+DB2=postgres://postgres:password@127.0.0.1:5432/mydb?label=my-pg&sslmode=disable
+
+# ────────── GaussDB ──────────
+# 格式: gaussdb://用户:密码@主机:端口/库名?label=别名
+# 与 PostgreSQL 协议兼容，使用相同的连接器
+DB3=gaussdb://user:password@192.168.0.1:25308/mydb?label=my-gauss
+
+# ────────── ClickHouse ──────────
+# 格式: clickhouse://用户:密码@主机:端口/库名?label=别名
+# 默认端口 8123（HTTP），无需指定库名时可省略
+DB4=clickhouse://default:password@127.0.0.1:8123/default?label=my-clickhouse
+
+# ────────── SQLite ──────────
+# 格式: sqlite:///绝对路径?label=别名
+# 密码和用户留空，路径必须为绝对路径
+DB5=sqlite:///home/user/data/app.db?label=my-sqlite
+
+# ────────── Redis（单机）──────────
+# 格式: redis://:密码@主机:端口/数据库编号?label=别名
+# 数据库编号默认为 0，密码为空时写 redis://host:port/0 即可
+DB6=redis://:password@127.0.0.1:6379/0?label=my-redis
+
+# ────────── Redis（集群）──────────
+# 格式: redis://:密码@任意节点:端口/0?cluster=true&label=别名
+# 集群模式仅支持 db0，自动扫描所有分片
+DB7=redis://:password@10.0.0.1:7000/0?cluster=true&label=my-redis-cluster
+
+# ────────── Elasticsearch（HTTP）──────────
+# 格式: elasticsearch://用户:密码@主机:端口?label=别名
+# 默认端口 9200
+DB8=elasticsearch://elastic:password@127.0.0.1:9200?label=my-es
+
+# ────────── Elasticsearch（HTTPS / TLS）──────────
+# 方式一：使用 elasticsearchs:// 协议前缀
+DB9=elasticsearchs://elastic:password@127.0.0.1:9200?label=my-es-secure
+# 方式二：使用 elasticsearch:// 并追加 ?tls=true
+# DB9=elasticsearch://elastic:password@127.0.0.1:9200?label=my-es-secure&tls=true
+
+# ────────── MongoDB ──────────
+# 格式: mongodb://用户:密码@主机:端口/库名?authSource=认证库&label=别名
+# 必填: 库名 和 authSource（用户创建所在的数据库名）
+DB10=mongodb://admin:password@127.0.0.1:27017/mydb?authSource=admin&label=my-mongo
+
+# ────────── Qdrant ──────────
+# 格式: qdrant://:api密钥@主机:端口?label=别名
+# 默认端口 6334，用户名为空（Qdrant 只用 API Key 认证）
+DB11=qdrant://:my-api-key@127.0.0.1:6334?label=my-qdrant
+```
+
+### 特殊字符注意事项
+
+- **密码含 `!`**：`.env` 文件中无需转义，直接写即可。命令行中需用**单引号**包裹整个 DSN。
+- **密码含 `@`**：需 URL 编码为 `%40`（如 `pass@word` → `pass%40word`）。
+- **密码含 `#`**：需 URL 编码为 `%23`（如 `Pwd1Open2%23IMD`）。
+- **密码在输出和日志中自动脱敏**（替换为 `***`），无需担心泄露。
 
 ---
 
@@ -242,14 +318,16 @@ A: 参见 [`docs/`](docs/) 目录下对应数据库的专题文档。
 
 - 语言：Go 1.26+
 - 依赖：仅标准库 + 数据库驱动（编译后静态链接）
-- 构建：`CGO_ENABLED=0 go build -ldflags="-s -w"`
+- 构建：`CGO_ENABLED=0 go build -ldflags="-s -w -X main.version=v0.0.3"`
+- 测试：`go test ./...`（DSN 解析 + 字段推断已覆盖）
+- CI/CD：`.github/workflows/ci.yml`（push/PR 触发 go build/vet/test）
 
 提交 PR 前请确保：
 - 新连接器为只读且安全转义
-- 通过 `go vet` 和 `golint`
+- 通过 `go vet` 和 `go test ./...`
 
 ---
 
 ## License
 
-MIT © 2026 WWT 
+Apache 2.0 © 2025-2026 WWT 

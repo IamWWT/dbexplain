@@ -24,7 +24,7 @@ res, err := client.Info(client.Info.WithContext(infoCtx))
 - **超时控制**：所有与 ES 的交互均通过独立的 `context.WithTimeout` 派生子上下文，确保单次操作不会无限挂起。  
 - **连接复用**：`MaxIdleConnsPerHost` 设为 2，避免在采集多个索引时耗尽文件描述符。  
 - **健康检查**：使用 `client.Info` 获取集群信息，若返回错误或状态码异常，则终止采集并输出错误。  
-- **强制 HTTP**：当前实现固定使用 HTTP 协议，若 ES 集群启用 HTTPS 需修改代码或通过反向代理适配。
+- **TLS 支持**：通过 DSN scheme `elasticsearchs://` 或参数 `?tls=true` 启用 HTTPS。TLS 证书验证默认跳过（`InsecureSkipVerify`），适合内网诊断场景。
 
 ### 1.2 索引列表获取与过滤
 
@@ -97,7 +97,7 @@ skip es://...: es info: dial tcp x.x.x.x:9200: i/o timeout
 **可能原因与解决方案**：
 - **网络不可达**：确认主机和端口正确，防火墙开放 9200 端口。  
 - **认证信息错误**：检查用户名、密码是否正确，ES 8+ 默认启用安全。  
-- **HTTPS 要求**：许多 ES 集群启用 HTTPS 和自签名证书。当前工具硬编码 HTTP，需修改连接地址为 `https://` 并配置证书跳过验证（或使用反向代理转为 HTTP）。  
+- **HTTPS 要求**：许多 ES 集群启用 HTTPS 和自签名证书。使用 `elasticsearchs://` scheme 或 `?tls=true` 参数启用 HTTPS（证书验证默认跳过，适合内网诊断）。  
 - **超时调整**：可适当增大 Info 的超时（代码中为 5 秒），或通过 `-timeout` 延长全局采集时间。
 
 ### 2.2 索引数量极大导致采集时间过长

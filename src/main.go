@@ -25,6 +25,13 @@ import (
 	"dbexplain/schema"
 )
 
+var version = "dev"
+
+type dsnEntry struct {
+	raw    string // DSN string
+	envKey string // e.g. "DB1" if from .env, "" otherwise
+}
+
 func main() {
 	_ = godotenv.Load()
 
@@ -32,20 +39,41 @@ func main() {
 	flag.Func("dsn", "...", func(s string) error { dsnFlags = append(dsnFlags, s); return nil })
 	configFile := flag.String("config", "", "JSON config file with array of DSNs")
 	useEnv := flag.Bool("env", false, "use .env file (prefix DB1=, DB2=...)")
+	includeFilter := flag.String("include", "", "comma-separated kinds/labels/env-keys to include (e.g. mysql,redis or DB1,DB3)")
+	excludeFilter := flag.String("exclude", "", "comma-separated kinds/labels/env-keys to exclude (e.g. mongodb,qdrant or DB5)")
 	jsonOut := flag.Bool("json", false, "output JSON")
 	outputFile := flag.String("o", "", "write output to file")
 	perDSNTimeout := flag.Duration("timeout", 20*time.Second, "per-DSN collect timeout")
+	showVersion := flag.Bool("version", false, "print version and exit")
 	flag.Parse()
 
-	dsns := dsnFlags
+	if *showVersion {
+		fmt.Println("dbexplain", version)
+		return
+	}
+
+	var entries []dsnEntry
+	for _, raw := range dsnFlags {
+		entries = append(entries, dsnEntry{raw: raw})
+	}
 	if *useEnv {
-		dsns = append(dsns, loadFromEnv()...)
+		entries = append(entries, loadFromEnv()...)
 	}
 	if *configFile != "" {
-		dsns = append(dsns, loadFromConfig(*configFile)...)
+		for _, raw := range loadFromConfig(*configFile) {
+			entries = append(entries, dsnEntry{raw: raw})
+		}
 	}
-	if len(dsns) == 0 {
-		log.Fatal("no DSNs provided. Use -dsn, -env, or -config")
+
+	// 过滤
+	entries = filterDSNs(entries, *includeFilter, *excludeFilter)
+	if len(entries) == 0 {
+		log.Fatal("no DSNs provided (or all filtered out). Use -dsn, -env, or -config")
+	}
+
+	var dsns []string
+	for _, e := range entries {
+		dsns = append(dsns, e.raw)
 	}
 
 	logDir := "./logs"
@@ -70,7 +98,7 @@ func main() {
 			defer wg.Done()
 			parsed, err := dsn.ParseDSN(rawDSN)
 			if err != nil {
-				log.Printf("invalid DSN %s: %v", rawDSN, err)
+				log.Printf("invalid DSN: %v (DSN redacted)", err)
 				return
 			}
 			label := parsed.Label
@@ -96,7 +124,7 @@ func main() {
 			elapsed := time.Since(start)
 
 			if err != nil {
-				logger.Printf("skip %s: %v", rawDSN, err)
+				logger.Printf("skip %s: %v", parsed.Redacted(), err)
 				return
 			}
 
@@ -110,7 +138,11 @@ func main() {
 	}
 
 	wg.Wait()
-	fmt.Fprintf(os.Stderr, "全部采集完成，总耗时 %v\n", time.Since(startAll))
+	if len(instances) == 0 {
+		fmt.Fprintf(os.Stderr, "⚠ 所有 DSN 采集均失败，报告为空。请检查日志: %s\n", logDir)
+	} else {
+		fmt.Fprintf(os.Stderr, "全部采集完成，总耗时 %v\n", time.Since(startAll))
+	}
 
 	universe := &schema.Universe{Instances: instances}
 	result := analyze.Analyze(universe)
@@ -141,13 +173,86 @@ func totalTables(inst *schema.Instance) int {
 	return total
 }
 
-func loadFromEnv() []string {
-	var dsns []string
-	type entry struct {
-		idx int
-		val string
+// ── DSN 过滤 ──
+
+func filterDSNs(entries []dsnEntry, include, exclude string) []dsnEntry {
+	if include == "" && exclude == "" {
+		return entries
 	}
-	var entries []entry
+
+	includeSet := parseFilterSet(include)
+	excludeSet := parseFilterSet(exclude)
+
+	var filtered []dsnEntry
+	for _, e := range entries {
+		// 解析失败的 DSN 保留（到采集阶段报错）
+		parsed, err := dsn.ParseDSN(e.raw)
+		if err != nil {
+			filtered = append(filtered, e)
+			continue
+		}
+
+		// include 优先：匹配 include 的 DSN 不会被 exclude 移除
+		if len(includeSet) > 0 && matchesDSNFilter(parsed, e.envKey, includeSet) {
+			filtered = append(filtered, e)
+			continue
+		}
+
+		if len(includeSet) > 0 {
+			// 有 include 但不匹配，跳过
+			log.Printf("skipping %s (did not match include filter)", e.raw)
+			continue
+		}
+
+		if len(excludeSet) > 0 && matchesDSNFilter(parsed, e.envKey, excludeSet) {
+			log.Printf("excluding %s (matched exclude filter)", e.raw)
+			continue
+		}
+
+		filtered = append(filtered, e)
+	}
+	return filtered
+}
+
+func parseFilterSet(csv string) map[string]bool {
+	set := make(map[string]bool)
+	if csv == "" {
+		return set
+	}
+	for _, item := range strings.Split(csv, ",") {
+		item = strings.TrimSpace(item)
+		if item != "" {
+			set[strings.ToLower(item)] = true
+		}
+	}
+	return set
+}
+
+// matchesDSNFilter 检查 DSN 是否匹配过滤集合
+// 匹配维度：数据库类型(kind)、标签(label)、环境变量键(envKey, 如 DB1)
+func matchesDSNFilter(d *dsn.DSN, envKey string, filterSet map[string]bool) bool {
+	if filterSet[strings.ToLower(d.Kind)] {
+		return true
+	}
+	if filterSet[strings.ToLower(d.Label)] {
+		return true
+	}
+	if envKey != "" && filterSet[strings.ToLower(envKey)] {
+		return true
+	}
+	return false
+}
+
+// ── 环境变量加载 ──
+
+type envEntry struct {
+	idx int
+	key string
+	val string
+}
+
+func loadFromEnv() []dsnEntry {
+	var entries []envEntry
 
 	for _, env := range os.Environ() {
 		eqIdx := strings.Index(env, "=")
@@ -165,17 +270,18 @@ func loadFromEnv() []string {
 		if err != nil || idx <= 0 {
 			continue
 		}
-		entries = append(entries, entry{idx, val})
+		entries = append(entries, envEntry{idx, key, val})
 	}
 
 	sort.Slice(entries, func(i, j int) bool {
 		return entries[i].idx < entries[j].idx
 	})
 
+	var result []dsnEntry
 	for _, e := range entries {
-		dsns = append(dsns, e.val)
+		result = append(result, dsnEntry{raw: e.val, envKey: e.key})
 	}
-	return dsns
+	return result
 }
 
 func loadFromConfig(filename string) []string {
@@ -189,6 +295,8 @@ func loadFromConfig(filename string) []string {
 	}
 	return dsnList
 }
+
+// ── 输出捕获 ──
 
 func captureText(result *analyze.Result) string {
 	old := os.Stdout

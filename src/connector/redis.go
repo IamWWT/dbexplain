@@ -28,7 +28,7 @@ const (
 	getRangeLen   = 512  // string 值截取长度
 )
 
-func (redisConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instance, error) {
+func newRedisClient(d *dsn.DSN) (redis.UniversalClient, bool, error) {
 	host := d.Host
 	if host == "" {
 		host = "127.0.0.1"
@@ -37,13 +37,29 @@ func (redisConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instance
 	if port == "" {
 		port = "6379"
 	}
-	dbIdx := 0
-	if d.DBName != "" {
-		dbIdx, _ = strconv.Atoi(d.DBName)
+	addr := fmt.Sprintf("%s:%s", host, port)
+
+	if d.Cluster {
+		rdb := redis.NewClusterClient(&redis.ClusterOptions{
+			Addrs:       []string{addr},
+			Password:    d.Password,
+			DialTimeout: 5 * time.Second,
+			ReadTimeout: 5 * time.Second,
+			PoolSize:    10,
+			MaxRetries:  1,
+		})
+		return rdb, true, nil
 	}
 
+	dbIdx := 0
+	if d.DBName != "" {
+		parsed, err := strconv.Atoi(d.DBName)
+		if err == nil {
+			dbIdx = parsed
+		}
+	}
 	rdb := redis.NewClient(&redis.Options{
-		Addr:        fmt.Sprintf("%s:%s", host, port),
+		Addr:        addr,
 		Password:    d.Password,
 		DB:          dbIdx,
 		DialTimeout: 5 * time.Second,
@@ -51,7 +67,19 @@ func (redisConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instance
 		PoolSize:    10,
 		MaxRetries:  1,
 	})
+	return rdb, false, nil
+}
+
+func (redisConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instance, error) {
+	rdb, isCluster, err := newRedisClient(d)
+	if err != nil {
+		return nil, schema.NewDBError(d.Redacted(), "", "", "create client", err)
+	}
 	defer rdb.Close()
+
+	if isCluster && d.DBName != "" && d.DBName != "0" {
+		logf(ctx, "[redis] WARNING: cluster mode only supports db0, ignoring requested DB %s", d.DBName)
+	}
 
 	pingCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
@@ -60,15 +88,22 @@ func (redisConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instance
 	}
 
 	// 获取基础信息
-	info, _ := rdb.Info(ctx, "server", "keyspace", "memory").Result()
-	infoMap := parseRedisInfo(info)
-
 	inst := &schema.Instance{DSN: d.Redacted(), Kind: "redis", Label: d.Label}
-	dbEntry := &schema.Database{Name: fmt.Sprintf("db%d", dbIdx)}
+
+	dbName := "db0"
+	dbIdx := 0
+	if !isCluster && d.DBName != "" {
+		dbIdx, _ = strconv.Atoi(d.DBName)
+	}
+	dbName = fmt.Sprintf("db%d", dbIdx)
+	dbEntry := &schema.Database{Name: dbName}
+
+	// 聚合 INFO
+	infoMap := aggregateInfo(ctx, rdb, isCluster)
 
 	// ── 流式扫描并聚合 key 模式 ──
-	logf(ctx, "[redis] start scanning keys...")
-	families := streamScanAndGroup(ctx, rdb)
+	logf(ctx, "[redis] start scanning keys (cluster=%v)...", isCluster)
+	families := streamScanAndGroup(ctx, rdb, isCluster)
 	logf(ctx, "[redis] scan finished, %d unique patterns", len(families))
 
 	// ── 批量分析每个模式 ──
@@ -79,15 +114,73 @@ func (redisConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instance
 	}
 
 	// 服务器概览
-	summary := &schema.Table{
+	summary := buildServerSummary(infoMap, dbIdx, isCluster)
+	dbEntry.Tables = append([]*schema.Table{summary}, dbEntry.Tables...)
+	inst.Databases = append(inst.Databases, dbEntry)
+	return inst, nil
+}
+
+// aggregateInfo 获取 Redis 服务器信息。集群模式下聚合各分片 keyspace 数据。
+func aggregateInfo(ctx context.Context, rdb redis.UniversalClient, isCluster bool) map[string]string {
+	info, err := rdb.Info(ctx, "server", "keyspace", "memory").Result()
+	if err != nil {
+		logf(ctx, "[redis] INFO failed: %v", err)
+		return map[string]string{}
+	}
+	infoMap := parseRedisInfo(info)
+
+	if isCluster {
+		// 聚合各分片的 keyspace
+		if clusterClient, ok := rdb.(*redis.ClusterClient); ok {
+			totalKeys := int64(0)
+			_ = clusterClient.ForEachMaster(ctx, func(mCtx context.Context, master *redis.Client) error {
+				ksInfo, err := master.Info(mCtx, "keyspace").Result()
+				if err != nil {
+					return nil
+				}
+				for _, line := range strings.Split(ksInfo, "\n") {
+					line = strings.TrimSpace(line)
+					if strings.HasPrefix(line, "#") || line == "" {
+						continue
+					}
+					parts := strings.SplitN(line, ":", 2)
+					if len(parts) != 2 {
+						continue
+					}
+					// keyspace 格式: db0:keys=123,expires=45,avg_ttl=678
+					stats := strings.Split(parts[1], ",")
+					for _, stat := range stats {
+						kv := strings.SplitN(stat, "=", 2)
+						if len(kv) == 2 && kv[0] == "keys" {
+							n, _ := strconv.ParseInt(kv[1], 10, 64)
+							totalKeys += n
+						}
+					}
+				}
+				return nil
+			})
+			infoMap["cluster_total_keys"] = strconv.FormatInt(totalKeys, 10)
+		}
+	}
+	return infoMap
+}
+
+// buildServerSummary 构建服务器概览表
+func buildServerSummary(infoMap map[string]string, dbIdx int, isCluster bool) *schema.Table {
+	if isCluster {
+		totalKeys := infoMap["cluster_total_keys"]
+		return &schema.Table{
+			Name: "_server_info",
+			Comment: fmt.Sprintf("Redis Cluster | version=%s | memory=%s | total_keys=%s",
+				infoMap["redis_version"], infoMap["used_memory_human"], totalKeys),
+		}
+	}
+	return &schema.Table{
 		Name: "_server_info",
 		Comment: fmt.Sprintf("Redis %s | memory=%s | total_keys=%s",
 			infoMap["redis_version"], infoMap["used_memory_human"],
 			infoMap["db"+strconv.Itoa(dbIdx)]),
 	}
-	dbEntry.Tables = append([]*schema.Table{summary}, dbEntry.Tables...)
-	inst.Databases = append(inst.Databases, dbEntry)
-	return inst, nil
 }
 
 // ── 流式分组（边扫描边聚合，不存储全部 key） ──
@@ -99,32 +192,61 @@ type familyAgg struct {
 	Example string
 }
 
-func streamScanAndGroup(ctx context.Context, rdb *redis.Client) []familyAgg {
+func streamScanAndGroup(ctx context.Context, rdb redis.UniversalClient, isCluster bool) []familyAgg {
 	aggregates := map[string]*familyAgg{}
-	iter := rdb.Scan(ctx, 0, "*", scanBatchSize).Iterator()
 	totalScanned := 0
-	for iter.Next(ctx) {
-		key := iter.Val()
-		pat := normalize(key)
-		if agg, exists := aggregates[pat]; exists {
-			agg.Count++
-		} else {
-			aggregates[pat] = &familyAgg{
-				Pattern: pat,
-				Count:   1,
-				Example: key,
+
+	if isCluster {
+		// 集群模式：遍历所有主节点分别 SCAN
+		if clusterClient, ok := rdb.(*redis.ClusterClient); ok {
+			_ = clusterClient.ForEachMaster(ctx, func(mCtx context.Context, master *redis.Client) error {
+				iter := master.Scan(mCtx, 0, "*", scanBatchSize).Iterator()
+				for iter.Next(mCtx) {
+					if totalScanned >= maxScanKeys {
+						return nil
+					}
+					key := iter.Val()
+					pat := normalize(key)
+					if agg, exists := aggregates[pat]; exists {
+						agg.Count++
+					} else {
+						aggregates[pat] = &familyAgg{
+							Pattern: pat,
+							Count:   1,
+							Example: key,
+						}
+					}
+					totalScanned++
+					if totalScanned%100 == 0 {
+						logf(ctx, "[redis] scanned %d keys across cluster, %d patterns so far", totalScanned, len(aggregates))
+					}
+				}
+				return iter.Err()
+			})
+		}
+	} else {
+		// 单机模式：直接 SCAN
+		iter := rdb.Scan(ctx, 0, "*", scanBatchSize).Iterator()
+		for iter.Next(ctx) {
+			key := iter.Val()
+			pat := normalize(key)
+			if agg, exists := aggregates[pat]; exists {
+				agg.Count++
+			} else {
+				aggregates[pat] = &familyAgg{
+					Pattern: pat,
+					Count:   1,
+					Example: key,
+				}
+			}
+			totalScanned++
+			if totalScanned%100 == 0 {
+				logf(ctx, "[redis] scanned %d keys, %d patterns so far", totalScanned, len(aggregates))
+			}
+			if totalScanned >= maxScanKeys {
+				break
 			}
 		}
-		totalScanned++
-		if totalScanned%100 == 0 {
-			logf(ctx, "[redis] scanned %d keys, %d patterns so far", totalScanned, len(aggregates))
-		}
-		if totalScanned >= maxScanKeys {
-			break
-		}
-	}
-	if err := iter.Err(); err != nil {
-		logf(ctx, "[redis] scan error: %v", err)
 	}
 
 	// 按 key 数量排序
@@ -138,7 +260,7 @@ func streamScanAndGroup(ctx context.Context, rdb *redis.Client) []familyAgg {
 
 // ── 构建表信息（含 pipeline 批量检测与风险标记） ──
 
-func buildFamilyTable(ctx context.Context, rdb *redis.Client, fam familyAgg) *schema.Table {
+func buildFamilyTable(ctx context.Context, rdb redis.UniversalClient, fam familyAgg) *schema.Table {
 	t := &schema.Table{
 		Name:       fam.Pattern,
 		KeyPattern: fam.Pattern,
@@ -221,7 +343,7 @@ func buildFamilyTable(ctx context.Context, rdb *redis.Client, fam familyAgg) *sc
 		if scard > 10000 {
 			risks = append(risks, fmt.Sprintf("large set (%d members)", scard))
 		}
-		
+
 	case "stream":
 		fields := sampleStream(ctx, rdb, fam.Example, streamSample)
 		for f, typ := range fields {
@@ -237,11 +359,10 @@ func buildFamilyTable(ctx context.Context, rdb *redis.Client, fam familyAgg) *sc
 			}
 		}
 	}
-	
 
 	// 通用风险：无 TTL 但 key 名称暗示应有过期
 	if ttlDuration <= 0 && isSecuritySensitive(fam.Pattern) {
-		risks = append(risks, "no TTL on security‑sensitive key")
+		risks = append(risks, "no TTL on security-sensitive key")
 	}
 	if ttlDuration > 0 && ttlDuration > 30*24*time.Hour {
 		risks = append(risks, fmt.Sprintf("very long TTL (%s)", ttlDuration))
@@ -253,7 +374,7 @@ func buildFamilyTable(ctx context.Context, rdb *redis.Client, fam familyAgg) *sc
 		comment += fmt.Sprintf(", avg memory=%.1fKB", float64(memBytes)/1024)
 	}
 	if len(risks) > 0 {
-		comment += " | ⚠️ " + strings.Join(risks, "; ")
+		comment += " | " + strings.Join(risks, "; ")
 	}
 	t.Comment = comment
 
@@ -262,7 +383,7 @@ func buildFamilyTable(ctx context.Context, rdb *redis.Client, fam familyAgg) *sc
 
 // ── 安全采样函数 ──
 
-func sampleHash(ctx context.Context, rdb *redis.Client, key string, count int) map[string]string {
+func sampleHash(ctx context.Context, rdb redis.UniversalClient, key string, count int) map[string]string {
 	result := make(map[string]string)
 	iter := rdb.HScan(ctx, key, 0, "*", int64(count)).Iterator()
 	for iter.Next(ctx) {
@@ -276,7 +397,7 @@ func sampleHash(ctx context.Context, rdb *redis.Client, key string, count int) m
 	return result
 }
 
-func sampleString(ctx context.Context, rdb *redis.Client, key string, maxLen int) string {
+func sampleString(ctx context.Context, rdb redis.UniversalClient, key string, maxLen int) string {
 	val, err := rdb.GetRange(ctx, key, 0, int64(maxLen-1)).Result()
 	if err != nil {
 		return ""
@@ -284,7 +405,7 @@ func sampleString(ctx context.Context, rdb *redis.Client, key string, maxLen int
 	return val
 }
 
-func sampleStream(ctx context.Context, rdb *redis.Client, key string, count int) map[string]string {
+func sampleStream(ctx context.Context, rdb redis.UniversalClient, key string, count int) map[string]string {
 	fields := make(map[string]string)
 	msgs, err := rdb.XRangeN(ctx, key, "-", "+", int64(count)).Result()
 	if err != nil {
