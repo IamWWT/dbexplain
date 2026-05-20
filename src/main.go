@@ -10,6 +10,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -17,6 +18,8 @@ import (
 	"time"
 
 	"github.com/joho/godotenv"
+	"golang.org/x/text/encoding/simplifiedchinese"
+	"golang.org/x/text/transform"
 
 	"dbexplain/analyze"
 	"dbexplain/capabilities"
@@ -226,14 +229,27 @@ func main() {
 	}
 
 	if *outputFile != "" {
-		// 文件输出：捕获后写入（无 ANSI 转义码，UTF-8 BOM）
+		// 文件输出：捕获后写入（无 ANSI 转义码）
 		var out string
 		if *jsonOut {
 			out = captureJSON(result)
 		} else {
 			out = captureText(result, *humanOut)
 		}
-		data := append([]byte("\xEF\xBB\xBF"), []byte(out)...)
+		var data []byte
+		if runtime.GOOS == "windows" {
+			// Windows: 转为 GBK 编码，CMD 和记事本均正确显示
+			gbk, err := toGBK(out)
+			if err != nil {
+				log.Printf("gbk conversion failed, falling back to UTF-8: %v", err)
+				data = append([]byte("\xEF\xBB\xBF"), []byte(out)...)
+			} else {
+				data = gbk
+			}
+		} else {
+			// Unix/macOS: UTF-8 + BOM（兼容各类编辑器）
+			data = append([]byte("\xEF\xBB\xBF"), []byte(out)...)
+		}
 		if err := os.WriteFile(*outputFile, data, 0644); err != nil {
 			log.Fatal(err)
 		}
@@ -436,6 +452,13 @@ func writeJSON(path string, v any) {
 	if err := os.WriteFile(path, data, 0644); err != nil {
 		log.Printf("write %s: %v", path, err)
 	}
+}
+
+// toGBK converts a UTF-8 string to GBK encoding for Windows compatibility.
+// CMD's `type` command and legacy tools use the system code page (CP936/GBK).
+func toGBK(s string) ([]byte, error) {
+	reader := transform.NewReader(strings.NewReader(s), simplifiedchinese.GBK.NewEncoder())
+	return io.ReadAll(reader)
 }
 
 // ── 输出捕获 ──

@@ -39,7 +39,7 @@ func InferComment(colName, colType, sampleValue string) string {
 	}
 	if sampleValue != "" {
 		if len(sampleValue) > 20 {
-			return "示例: " + sampleValue[:20] + "…"
+			return "示例: " + sampleValue[:20] + "..."
 		}
 		return "示例: " + sampleValue
 	}
