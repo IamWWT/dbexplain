@@ -295,6 +295,8 @@ bash install_skill_for_all_platform.sh
 
 交互选择安装目标：全部平台（symlink 共享）、单个平台、项目本地目录、或自定义路径。脚本自动检测当前 OS/Arch 并选择对应二进制。
 
+> **Windows 用户**：请在 Git Bash 或 MSYS2 终端中运行该脚本，CMD/PowerShell 不支持 Bash 语法。
+
 **前置条件与边界处理**：
 
 | 场景 | 行为 |

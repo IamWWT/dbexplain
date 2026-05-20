@@ -155,7 +155,9 @@ func main() {
 	}
 
 	if *outputFile != "" {
-		if err := os.WriteFile(*outputFile, []byte(out), 0644); err != nil {
+		// Prepend UTF-8 BOM so Windows Notepad/CMD recognizes the encoding
+		data := append([]byte("\xEF\xBB\xBF"), []byte(out)...)
+		if err := os.WriteFile(*outputFile, data, 0644); err != nil {
 			log.Fatal(err)
 		}
 		fmt.Println("Report written to", *outputFile)
