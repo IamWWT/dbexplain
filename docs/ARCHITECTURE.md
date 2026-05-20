@@ -1,0 +1,357 @@
+# dbexplain Architecture Vision
+
+## 1. 项目定位
+
+`dbexplain` 正式定义为 **Database Context Compiler**（数据库上下文编译器），而非"数据库分析工具"。
+
+这个重新定义意味着：
+
+| 旧定义 | 新定义 |
+|--------|--------|
+| 数据库分析工具 | Database Context Compiler |
+| 输出报告给人看 | 输出 IR 给 AI 消费 |
+| 按数据库类型组织 | 按通用图原语组织 |
+| report-first | graph-first |
+
+长期战略目标：
+
+```
+成为 AI Runtime 的 Database Ground Truth Layer
+```
+
+即：为 AI Agent 提供真实、确定性的数据库上下文信息层，而非用 LLM 替代 ground truth。
+
+---
+
+## 2. 核心哲学
+
+### 唯一原则
+
+```
+dbexplain 保持 deterministic
+LLM 在外部消费 IR 做推理
+```
+
+这意味着：
+- dbexplain **只输出可证实的事实**
+- 语义理解、总结、推理全部交给外部的 LLM
+- dbexplain 的职责是成为 LLM 的"眼睛"，而非"大脑"
+
+### 输出边界
+
+| 允许（Deterministic Facts） | 禁止（AI Semantic） |
+|---|---|
+| 外键关系（DDL 声明） | "这是订单系统" |
+| 列名、类型、可空性 | "status 表示支付状态" |
+| 索引结构 | AI 关系猜测 |
+| 命名推断的关系（_id 模式匹配） | LLM 生成的总结 |
+| Redis 键 TTL 统计 | embedding-first 分析 |
+
+---
+
+## 3. 目标架构
+
+### 目录结构
+
+```
+cmd/
+internal/
+  connectors/       # 仅负责：连接数据库
+  capabilities/     # 声明数据库能力枚举
+  extractors/       # 按 capability 工作，提取元数据
+  analyzers/        # 通用分析（relation inference, clustering）
+  diagnostics/      # 统一诊断层（从 connector 中抽离）
+  graph/            # 图模型（Node, Column, Edge）
+  ir/               # IR v1 定义和序列化
+  renderers/        # Markdown / JSON / HTML 输出
+  cache/            # Schema fingerprint + delta scan
+  diff/             # Schema diff (未来)
+```
+
+### Capability Architecture（核心架构升级）
+
+当前架构（反模式）：
+
+```go
+if mysql { ... }
+if postgres { ... }
+if redis { ... }
+```
+
+目标架构（Capability-driven）：
+
+```go
+type Capability string
+
+const (
+    CapForeignKey   Capability = "foreign_key"
+    CapSampling     Capability = "sampling"
+    CapTTL          Capability = "ttl"
+    CapPartition    Capability = "partition"
+    CapVector       Capability = "vector"
+    CapRowCount     Capability = "row_count"
+    CapIndex        Capability = "index"
+)
+
+// Connector 声明自己支持哪些能力
+type Connector interface {
+    Collect(ctx, dsn) (*Instance, error)
+    Capabilities() []Capability
+}
+
+// Extractor 按能力工作
+if Has(c, CapForeignKey) {
+    run FKExtractor(c)
+}
+```
+
+**关键收益**：新增数据库类型不需要修改 pipeline。只需实现 Connector + 声明已有 Capabilities。
+
+---
+
+## 4. IR v1 设计（最高优先级）
+
+Internal Representation (IR) 是项目最重要的资产。设计为通用图原语，独立于数据库类型。
+
+### Node
+
+```json
+{
+  "id": "mysql.prod.orders",
+  "kind": "table",
+  "engine": "mysql",
+  "name": "orders",
+  "metadata": {
+    "row_count": 42000,
+    "size_bytes": 1572864
+  }
+}
+```
+
+### Column
+
+```json
+{
+  "id": "mysql.prod.orders.user_id",
+  "kind": "column",
+  "data_type": "bigint",
+  "nullable": false,
+  "is_primary": false,
+  "is_unique": false,
+  "comment": "用户标识符"
+}
+```
+
+### Edge
+
+```json
+{
+  "source": "mysql.prod.orders.user_id",
+  "target": "mysql.prod.users.id",
+  "edge_type": "declared_fk",
+  "confidence": 100
+}
+```
+
+### Edge Types
+
+| Type | 含义 | 来源 |
+|------|------|------|
+| `declared_fk` | DDL 声明的外键 | 显式 FK 约束 |
+| `inferred_ref` | 命名推测的引用 | `*_id` → `*` 模式匹配 |
+| `index_edge` | 索引关系 | 索引列 |
+| `cluster_edge` | 聚类关系 | 多表共享引用链 |
+
+### 设计原则
+
+- **不允许** AI semantic 进入 IR
+- **长期兼容** — IR 格式可持续演进，但 v1 必须稳定
+- **类型无关** — 同一个 IR 表示 MySQL、PostgreSQL、Redis、MongoDB 的结构
+
+---
+
+## 5. Context Compression
+
+AI Agent 最大的瓶颈是 context window。需要输出多层上下文，让 Agent 按需加载。
+
+### 输出层次
+
+#### 1. `summary.json` — 快速概览
+
+```json
+{
+  "total_tables": 500,
+  "total_instances": 9,
+  "core_tables": ["orders", "users", "payments"],
+  "largest_tables": [
+    {"name": "logs", "rows": 12000000}
+  ],
+  "highly_connected_tables": [
+    {"name": "users", "degree": 23}
+  ],
+  "hot_tables": []
+}
+```
+
+#### 2. `topology.json` — 拓扑结构
+
+```json
+{
+  "subgraphs": [
+    {"name": "order-flow", "tables": ["orders", "payments", "shipments"]}
+  ],
+  "isolated_tables": ["config_cache"],
+  "cycles": []
+}
+```
+
+#### 3. `diagnostics.json` — 问题清单
+
+```json
+{
+  "missing_pk": [],
+  "unindexed_fk": [
+    {"table": "orders", "column": "user_id"}
+  ],
+  "redis_no_ttl": [
+    {"key_pattern": "session:{hex}"}
+  ]
+}
+```
+
+#### 4. `retrieval_chunks/` — 单表上下文
+
+```
+chunks/orders.md
+chunks/users.md
+chunks/payments.md
+```
+
+每份文件包含单个"核心表"的完整上下文，供 Agent retrieval 使用。
+
+### Importance Ranking
+
+全部使用 deterministic 算法计算：
+
+| 维度 | 计算方法 |
+|------|----------|
+| graph_degree | 图出度 + 入度 |
+| fk_centrality | 被外键引用的次数 |
+| row_count | 量化的表大小 |
+| index_density | 索引数 / 列数 |
+| join_frequency | pg_stat_statements / query_log (未来) |
+| write_intensity | keyspace stats (未来) |
+
+输出：
+
+```json
+{
+  "table": "orders",
+  "importance": 0.98,
+  "factors": {
+    "graph_degree": 0.8,
+    "fk_centrality": 0.95,
+    "row_count": 0.9
+  }
+}
+```
+
+---
+
+## 6. 增量扫描
+
+企业库全量扫描不可行。必须支持 delta scan。
+
+### Schema Fingerprint
+
+```go
+type TableFingerprint struct {
+    Name      string
+    Columns   string // hash of column names + types
+    Indexes   string // hash of index definitions
+    FKs       string // hash of FK definitions
+    ScannedAt time.Time
+}
+```
+
+两次扫描相同 fingerprint = 跳过。
+
+---
+
+## 7. Query-Aware Metadata（Operational Semantics）
+
+不依赖 AI 推理，而是采集真实的**行为事实**：
+
+| 数据库 | 数据来源 | 提取信息 |
+|--------|----------|----------|
+| PostgreSQL | `pg_stat_statements` | join 频率、查询模式 |
+| MySQL | `performance_schema` | 查询统计 |
+| ClickHouse | `system.query_log` | 查询日志 |
+| Redis | keyspace stats | 读写比例 |
+
+提取结果不属于"AI 推理"，而是**可观测的行为事实**。对 LLM 推理极为重要。
+
+---
+
+## 8. 产品拆分
+
+### 1. CLI Product（当前已有）
+
+- 定位：数据库巡检工具
+- 用户：DBA / 后端 / 运维
+- 输出：Markdown + Diagnostics
+
+### 2. IR Product（未来核心）
+
+- 定位：AI Agent Context Compiler
+- 输出：Graph + Summary + Retrieval Chunks + Diagnostics + Topology
+- 消费方：AI Agent
+
+---
+
+## 9. 明确不做
+
+这些方向与 deterministic 哲学冲突，明确排除：
+
+1. **AI 总结** — 不做"这是订单系统"类总结
+2. **业务语义推测** — 不做"status 表示支付状态"类猜测
+3. **AI 关系猜测** — 不做 LLM-based relation inference
+4. **Embedding-first** — 先做 deterministic graph，不做向量化优先级
+
+---
+
+## 10. 发展路线
+
+### Phase 1（立刻 — v0.1.x）
+
+- [ ] IR v1 定义：Node / Column / Edge schema
+- [ ] Graph model：内部统一图模型
+- [ ] Capability system：从 `if mysql` 重构为 `if Has(CapFK)`
+- [ ] Deterministic diagnostics 抽离到统一层
+- [ ] IR 序列化为 JSON 输出
+
+### Phase 2（v0.2.x）
+
+- [ ] Context Compression：summary / topology / diagnostics JSON
+- [ ] Importance Ranking（deterministic 算法）
+- [ ] Retrieval Chunks：单表上下文文件
+- [ ] Delta Scan：Schema fingerprint + 增量更新
+
+### Phase 3（v0.3.x）
+
+- [ ] Query-Aware Metadata：pg_stat_statements / query_log
+- [ ] Operational Graph：基于真实查询的关系图
+
+### Phase 4（v0.4.x+）
+
+- [ ] LLM Ecosystem Integration：Claude Code / Cursor / OpenHands / Aider
+- [ ] 企业级 diff / lineage / governance
+- [ ] Cloud scan orchestration
+
+---
+
+## 修订记录
+
+| 日期 | 版本 | 说明 |
+|------|------|------|
+| 2026-05-20 | v1 | 初始架构愿景，基于架构评审建议 |

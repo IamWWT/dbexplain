@@ -1,5 +1,12 @@
 # dbexplain 项目记忆
 
+## 项目定位
+
+`dbexplain` = **Database Context Compiler**（数据库上下文编译器）。
+为 AI Agent 提供确定性、可证实的数据库结构信息层。
+
+核心哲学：**dbexplain 只输出 deterministic facts，LLM 在外部消费 IR 做推理**。
+
 ## 快速定位
 
 | 需求 | 路径 |
@@ -19,6 +26,7 @@
 | Skill 卸载脚本 | `db-relationship-explainer/uninstall_skill_for_all_platform.sh` |
 | CHANGELOG | `CHANGELOG.md` |
 | 项目宪法 | `CONSTITUTION.md` |
+| 架构愿景 | `docs/ARCHITECTURE.md` |
 | Issue 追踪 | `issues.json` |
 
 ## 构建命令
@@ -65,7 +73,7 @@ scheme://[user[:pass]@]host[:port][/dbname][?label=别名&其他参数]
 
 ## 已知限制与待办
 
-所有已知问题跟踪在 `issues.json`（21 条，20 closed，1 pending-evaluation）。
+所有已知问题跟踪在 `issues.json`（24 条，21 closed，1 pending-evaluation，1 wontfix）。
 
 | ID | 问题 | 文件 | 状态 |
 |----|------|------|------|
@@ -107,3 +115,16 @@ scheme://[user[:pass]@]host[:port][/dbname][?label=别名&其他参数]
 - Agent **禁止**查看、读取、编辑 `.env` 文件
 - 密码通过 `DSN.Redacted()` 自动脱敏显示
 - 工具仅执行只读操作，详见 CONSTITUTION.md
+
+## 架构路线图
+
+详见 `docs/ARCHITECTURE.md`。概要：
+
+| Phase | 版本 | 目标 |
+|-------|------|------|
+| 1 | v0.1.x | IR v1 定义 + Capability System + Graph Model + 统一诊断层 |
+| 2 | v0.2.x | Context Compression + Importance Ranking + Retrieval Chunks + Delta Scan |
+| 3 | v0.3.x | Query-Aware Metadata + Operational Graph |
+| 4 | v0.4.x+ | LLM Ecosystem Integration + 企业特性 |
+
+当前阶段：**Phase 0**（v0.0.3 — 稳定已有功能，修复 bug，完善文档）

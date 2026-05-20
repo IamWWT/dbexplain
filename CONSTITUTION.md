@@ -2,7 +2,9 @@
 
 ## 项目定位
 
-`dbexplain` 是一个**零依赖、静态编译**的命令行工具，用于探索和分析数据库结构。它只读连接各种数据库，提取元数据（表、列、索引、外键），推断关系，生成报告。
+`dbexplain` 是一个 **Database Context Compiler**（数据库上下文编译器），为 AI Agent 提供**确定性、可证实**的数据库结构信息层。
+
+核心哲学：**dbexplain 只输出 deterministic facts，LLM 在外部消费 IR 做推理**。
 
 ### 消费方
 
@@ -12,6 +14,10 @@
 ### 核心交付物
 
 一个**单文件静态二进制**，无运行时依赖（无 CGO、无 libc 版本依赖、无外部进程），可跨 5 平台直接运行。
+
+最终交付物包括：
+- **CLI Product**：Markdown + Diagnostics（DBA/运维向）
+- **IR Product**：Graph + Summary + Retrieval Chunks + Topology（AI Agent 向）
 
 ---
 
@@ -65,6 +71,27 @@
 - 导出符号使用英文命名
 - 密码自动脱敏：`DSN.Redacted()` 将 `:password@` 替换为 `:***@`
 
+### 8. Deterministic Only（确定性输出）
+
+- 工具**绝对不输出** AI 推断、业务语义猜测、LLM 生成的总结
+- 只输出**可证实的事实**：DDL 声明的外键、列名/类型/可空性、索引结构、命名模式匹配的结果
+- 语义理解、上下文总结、业务推理全部交给外部 LLM
+- 命名推断的关系必须标注 `inferred=true` 和置信度，与显式 FK 明确区分
+
+### 9. Graph First（图优先）
+
+- 所有数据库对象内部统一建模为**通用图原语**：Node（表/集合）、Column（列/字段）、Edge（关系/引用）
+- 终端 Markdown、JSON、HTML 输出**仅是渲染层**
+- 内部分析 pipeline 操作图模型，不操作渲染格式
+- 图模型**独立于数据库类型**——MySQL、PostgreSQL、Redis、MongoDB 共用同一套图原语
+
+### 10. Capability Architecture（能力驱动架构）
+
+- Connector 声明其支持的 Capability 集合（如 `CapForeignKey`、`CapTTL`、`CapPartition`）
+- Extractor 按 Capability 工作，不按数据库类型分支
+- 新增数据库类型**不需要修改 pipeline**——只需实现 Connector + 声明已有 Capabilities
+- 禁止出现 `if mysql { ... } else if postgres { ... }` 的 pipeline 分支
+
 ---
 
 ## 构建与发布
@@ -81,3 +108,4 @@
 | 日期 | 版本 | 说明 |
 |------|------|------|
 | 2026-05-19 | v1 | 初始宪法，基于 v0.0.2 代码库提取 |
+| 2026-05-20 | v2 | 项目重新定义为 Database Context Compiler；新增第 8-10 条：Deterministic Only、Graph First、Capability Architecture |
