@@ -34,7 +34,7 @@ var (
 	blue   = func(s string) string { return color("94", s) }
 )
 
-func section(title string) { fmt.Printf("\n%s\n", bold(cyan("▸ "+title))) }
+func section(title string) { fmt.Printf("\n%s\n", bold(cyan("> "+title))) }
 func hr()                  { fmt.Println(dim(strings.Repeat("─", 72))) }
 
 func Print(result *analyze.Result) {
@@ -87,10 +87,10 @@ func Print(result *analyze.Result) {
 	if len(result.Issues) > 0 {
 		section(fmt.Sprintf("Issues (%d)", len(result.Issues)))
 		for _, iss := range result.Issues {
-			icon := "⚠"
+			icon := "[!]"
 			col := yellow
 			if iss.Severity == "info" {
-				icon = "ℹ"
+				icon = "[i]"
 				col = blue
 			}
 			fmt.Printf("  %s %s  %s\n",
@@ -181,11 +181,11 @@ func printTable(inst *schema.Instance, db *schema.Database, t *schema.Table) {
 
 func printRefs(refs []*schema.Ref) {
 	for _, r := range refs {
-		arrow := "──FK──▶"
+		arrow := "──FK──>"
 		col := green
 		conf := ""
 		if r.Inferred {
-			arrow = "~~?~~~▶"
+			arrow = "~~?~~~>"
 			col = dim
 			conf = fmt.Sprintf(" (inferred, %d%%)", r.Confidence)
 		}
