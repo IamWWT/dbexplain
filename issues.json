@@ -244,10 +244,11 @@
     {
       "id": "ISSUE-023",
       "title": "缺少统一的全局数据库健康度画像",
-      "status": "pending-evaluation",
+      "status": "closed",
+      "closed": "2026-05-20",
       "priority": "low",
       "category": "improvement",
-      "description": "工具功能分散在不同模块：字段推断在 schema/、风险诊断内嵌在连接器（如 Redis 大 key 检测在 redis.go）、聚类分析在 analyze/、渲染在 render/。缺少一个统一的全局健康度评分或画像来整合所有分析结果，使其从功能清单升级为一体化的数据库治理解决方案。考虑：新增健康度评分模块，按实例/表/关系维度汇总风险并给出全局评分。",
+      "description": "工具功能分散在不同模块：字段推断在 schema/、风险诊断内嵌在连接器（如 Redis 大 key 检测在 redis.go）、聚类分析在 analyze/、渲染在 render/。已拆分为具体可执行的 Phase 1/2 任务：ISSUE-028（统一诊断层）覆盖诊断抽离，ISSUE-030（Importance Ranking）覆盖确定性评分系统。详见 docs/ARCHITECTURE.md。",
       "file": "src/analyze/, src/connector/redis.go",
       "created": "2026-05-20"
     },
@@ -259,6 +260,96 @@
       "category": "improvement",
       "description": "Redacted() 将密码替换为 ***，相同密码的多个实例脱敏后完全一致，用户难以区分。但 label 参数已解决此问题——DSN 中设置 ?label=别名 即可唯一标识实例。建议在文档和 --manual 中强调 label 的使用场景。",
       "file": "src/dsn/dsn.go",
+      "created": "2026-05-20"
+    },
+    {
+      "id": "ISSUE-025",
+      "title": "[Phase 1] 定义 dbexplain IR v1 Schema",
+      "status": "open",
+      "priority": "high",
+      "category": "feature",
+      "description": "定义通用 IR (Internal Representation) v1，独立于数据库类型。核心原语：Node (id/kind/engine/name/metadata)、Column (id/kind/data_type/nullable/is_primary/...)、Edge (source/target/edge_type/confidence)。IR 是项目最重要的长期兼容资产。产出：src/ir/types.go + JSON Schema 文档。详见 docs/ARCHITECTURE.md §4。",
+      "file": "src/ir/ (新建)",
+      "created": "2026-05-20"
+    },
+    {
+      "id": "ISSUE-026",
+      "title": "[Phase 1] 实现内部统一图模型",
+      "status": "open",
+      "priority": "high",
+      "category": "feature",
+      "description": "在 IR 基础上实现内部统一图模型（src/graph/）。所有数据库对象（表/集合/键模式）内部建模为图节点和边。Markdown/JSON 输出仅是渲染层。提供：AddNode/AddEdge/GetSubgraphs/GetIsolated 等图操作方法。详见 docs/ARCHITECTURE.md §6。",
+      "file": "src/graph/ (新建)",
+      "created": "2026-05-20"
+    },
+    {
+      "id": "ISSUE-027",
+      "title": "[Phase 1] 建立 Capability Architecture",
+      "status": "open",
+      "priority": "high",
+      "category": "feature",
+      "description": "定义 Capability 枚举（CapForeignKey、CapSampling、CapTTL、CapPartition、CapVector、CapRowCount、CapIndex）。每个 Connector 声明其 Capabilities()。Extractor 按 Capability 工作而非按数据库类型分支。消除 pipeline 中的 if mysql/if postgres/if redis 分支。新增数据库类型不需要修改 pipeline。详见 docs/ARCHITECTURE.md §3 和 CONSTITUTION.md §10。",
+      "file": "src/capabilities/ (新建), src/extractors/ (新建), src/connector/*.go",
+      "created": "2026-05-20"
+    },
+    {
+      "id": "ISSUE-028",
+      "title": "[Phase 1] 统一诊断层",
+      "status": "open",
+      "priority": "medium",
+      "category": "feature",
+      "description": "将风险诊断从连接器中抽离到统一的 diagnostics 包。Redis 大 key 检测、无 TTL 检测目前内嵌在 redis.go；FK 无索引、无主键、宽表检测目前在 analyze.go。统一为 diagnostics 层，按 Capability 触发，所有诊断结果归一化输出。详见 docs/ARCHITECTURE.md §5.3 和 CONSTITUTION.md §8。",
+      "file": "src/diagnostics/ (新建), src/connector/redis.go, src/analyze/analyze.go",
+      "created": "2026-05-20"
+    },
+    {
+      "id": "ISSUE-029",
+      "title": "[Phase 2] Context Compression 多层上下文输出",
+      "status": "open",
+      "priority": "medium",
+      "category": "feature",
+      "description": "实现多层上下文输出：summary.json（核心表、最大表、高连接表、热表）、topology.json（子图、孤立表、环路）、diagnostics.json（缺主键、未索引FK、Redis无TTL）、retrieval_chunks/（单表上下文 Markdown 文件，供 Agent retrieval 使用）。详见 docs/ARCHITECTURE.md §5。",
+      "file": "src/render/ 或 src/ir/",
+      "created": "2026-05-20"
+    },
+    {
+      "id": "ISSUE-030",
+      "title": "[Phase 2] Importance Ranking（确定性表重要性评分）",
+      "status": "open",
+      "priority": "medium",
+      "category": "feature",
+      "description": "实现确定性重要性评分算法，不依赖 AI。维度：图出入度、FK 被引次数、行数、索引密度。输出 importance_score (0-1) 及各因子分解。用于 Agent context window 优先加载。详见 docs/ARCHITECTURE.md §5。",
+      "file": "src/analyze/ (扩展)",
+      "created": "2026-05-20"
+    },
+    {
+      "id": "ISSUE-031",
+      "title": "[Phase 2] Delta Scan 增量扫描",
+      "status": "open",
+      "priority": "medium",
+      "category": "feature",
+      "description": "实现增量扫描支持。表指纹（列名+类型 hash、索引定义 hash、FK 定义 hash）、元数据版本、last_scan_at 时间戳。两次扫描相同指纹时跳过。解决企业库全量扫描不可行问题。详见 docs/ARCHITECTURE.md §6。",
+      "file": "src/cache/ (新建)",
+      "created": "2026-05-20"
+    },
+    {
+      "id": "ISSUE-032",
+      "title": "[Phase 3] Query-Aware Metadata（操作语义层）",
+      "status": "open",
+      "priority": "low",
+      "category": "feature",
+      "description": "采集真实查询行为事实（非 AI 推理）。PostgreSQL: pg_stat_statements；MySQL: performance_schema；ClickHouse: system.query_log；Redis: keyspace stats。提取 join 频率、热表、写入强度、真实依赖关系。这些是可观测的行为事实，不是 AI 推测。详见 docs/ARCHITECTURE.md §7。",
+      "file": "src/connector/postgres.go, mysql.go, clickhouse.go, redis.go (扩展)",
+      "created": "2026-05-20"
+    },
+    {
+      "id": "ISSUE-033",
+      "title": "[Phase 4] LLM Ecosystem Integration",
+      "status": "open",
+      "priority": "low",
+      "category": "feature",
+      "description": "与主流 AI Agent 生态集成：Claude Code Skill（已有）、Cursor 集成、OpenHands 集成、Aider 集成。提供标准化的 Agent Context 输出格式，让各平台 AI Agent 无缝消费 IR。",
+      "file": "db-relationship-explainer/SKILL.md (扩展)",
       "created": "2026-05-20"
     }
   ]
