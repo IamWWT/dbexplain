@@ -274,6 +274,7 @@ for each table:
 | 键模式聚类 | 替换 `normalize()` | `connector/redis.go` |
 | 指纹哈希 | 替换 `sha256Hex()` → MD5/Blake3 | `cache/cache.go` |
 | 诊断规则 | 新增/删除 `Rule` 条目 | `diagnostics/diagnostics.go` |
+| 操作语义采集 | 替换各 `collectXOperationalStats()` | `connector/postgres.go`, `mysql.go` 等 |
 
 ---
 
@@ -289,3 +290,11 @@ for each table:
 | `sort` | 确定性排序（确保 hash 可重复） |
 | `strings` | 列名匹配、模式处理 |
 | `regexp` | Redis key 正则规范化 |
+
+---
+
+## 版本状态
+
+| 版本 | 算法数量 | 说明 |
+|------|---------|------|
+| v0.0.4 | 7 | 命名推断、图聚类、字段推断、重要性评分、键模式聚类、Schema 指纹、诊断规则 — 全部已实现 |

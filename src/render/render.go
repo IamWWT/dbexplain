@@ -10,7 +10,9 @@ import (
 	"dbexplain/schema"
 )
 
-var noColor = !isTerminal() || os.Getenv("NO_COLOR") != ""
+func noColor() bool {
+	return !isTerminal() || os.Getenv("NO_COLOR") != ""
+}
 
 func isTerminal() bool {
 	fi, err := os.Stdout.Stat()
@@ -18,7 +20,7 @@ func isTerminal() bool {
 }
 
 func color(code, s string) string {
-	if noColor {
+	if noColor() {
 		return s
 	}
 	return "\033[" + code + "m" + s + "\033[0m"
@@ -35,9 +37,9 @@ var (
 )
 
 func section(title string) { fmt.Printf("\n%s\n", bold(cyan("> "+title))) }
-func hr()                  { fmt.Println(dim(strings.Repeat("─", 72))) }
+func hr()                  { fmt.Println(dim(strings.Repeat("-", 72))) }
 
-func Print(result *analyze.Result) {
+func Print(result *analyze.Result, human bool) {
 	u := result.Universe
 
 	section(fmt.Sprintf("Instances (%d)", len(u.Instances)))
@@ -55,9 +57,9 @@ func Print(result *analyze.Result) {
 
 	for _, inst := range u.Instances {
 		for _, db := range inst.Databases {
-			section(fmt.Sprintf("%s  /  %s", inst.Label, bold(db.Name)))
+			section(formatDBContext(inst, db, human))
 			for _, t := range db.Tables {
-				printTable(inst, db, t)
+				printTable(inst, db, t, human)
 			}
 		}
 	}
@@ -79,7 +81,7 @@ func Print(result *analyze.Result) {
 			}
 			fmt.Printf("  %s\n", bold(g.Name))
 			for _, qt := range g.Tables {
-				fmt.Printf("    • %s\n", dim(qt.Instance+"/"+qt.DB+"/"+qt.Table))
+				fmt.Printf("    * %s\n", dim(qt.Instance+"/"+qt.DB+"/"+qt.Table))
 			}
 		}
 	}
@@ -103,7 +105,32 @@ func Print(result *analyze.Result) {
 	fmt.Println()
 }
 
-func printTable(inst *schema.Instance, db *schema.Database, t *schema.Table) {
+// formatDBContext builds the section header for a database context.
+// Uses human-friendly labels when human mode is on; compact format for AI.
+func formatDBContext(inst *schema.Instance, db *schema.Database, human bool) string {
+	if human || inst.Kind == "" {
+		return fmt.Sprintf("[instance=%s] [database=%s] kind=%s", inst.Label, bold(db.Name), inst.Kind)
+	}
+	return fmt.Sprintf("%s  /  %s", inst.Label, bold(db.Name))
+}
+
+// tableLabel returns the type-specific label for a table based on its parent instance kind.
+func tableLabel(inst *schema.Instance, name string) string {
+	switch inst.Kind {
+	case "redis":
+		return fmt.Sprintf("pattern=%s", name)
+	case "mongodb":
+		return fmt.Sprintf("collection=%s", name)
+	case "elasticsearch":
+		return fmt.Sprintf("index=%s", name)
+	case "qdrant":
+		return fmt.Sprintf("collection=%s", name)
+	default:
+		return fmt.Sprintf("table=%s", name)
+	}
+}
+
+func printTable(inst *schema.Instance, db *schema.Database, t *schema.Table, human bool) {
 	size := ""
 	if t.SizeBytes > 0 {
 		size = " " + fmtSize(t.SizeBytes)
@@ -120,9 +147,16 @@ func printTable(inst *schema.Instance, db *schema.Database, t *schema.Table) {
 	if t.Comment != "" {
 		cmt = "  " + dim(t.Comment)
 	}
-	fmt.Printf("\n  %s%s%s%s%s%s\n",
-		bold(t.Name), dim(engine), dim(rows), dim(size), cmt, dim(keyPatternStr(t)),
-	)
+	if human {
+		label := tableLabel(inst, t.Name)
+		fmt.Printf("\n  [%s]%s%s%s%s%s\n",
+			bold(label), dim(engine), dim(rows), dim(size), cmt, dim(keyPatternStr(t)),
+		)
+	} else {
+		fmt.Printf("\n  %s%s%s%s%s%s\n",
+			bold(t.Name), dim(engine), dim(rows), dim(size), cmt, dim(keyPatternStr(t)),
+		)
+	}
 	hr()
 
 	if len(t.Columns) == 0 {
@@ -141,8 +175,8 @@ func printTable(inst *schema.Instance, db *schema.Database, t *schema.Table) {
 	fmt.Printf("  %s  %s  %s  %s\n",
 		bold(pad("name", w0)), bold(pad("type", w1)), bold(pad("flags", 12)), bold("comment"))
 	fmt.Printf("  %s  %s  %s  %s\n",
-		dim(strings.Repeat("─", w0)), dim(strings.Repeat("─", w1)),
-		dim(strings.Repeat("─", 12)), dim(strings.Repeat("─", 20)))
+		dim(strings.Repeat("-", w0)), dim(strings.Repeat("-", w1)),
+		dim(strings.Repeat("-", 12)), dim(strings.Repeat("-", 20)))
 
 	for _, c := range t.Columns {
 		flags := buildFlags(c)
@@ -181,7 +215,7 @@ func printTable(inst *schema.Instance, db *schema.Database, t *schema.Table) {
 
 func printRefs(refs []*schema.Ref) {
 	for _, r := range refs {
-		arrow := "──FK──>"
+		arrow := "--FK-->"
 		col := green
 		conf := ""
 		if r.Inferred {
@@ -239,7 +273,7 @@ func pad(s string, n int) string {
 
 func truncate(s string, n int) string {
 	if len(s) <= n { return s }
-	return s[:n-1] + "…"
+	return s[:n-1] + "..."
 }
 
 func fmtSize(b int64) string {

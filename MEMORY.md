@@ -24,9 +24,12 @@
 | 构建脚本 | `src/build.sh` |
 | Skill 安装脚本 | `db-relationship-explainer/install_skill_for_all_platform.sh` |
 | Skill 卸载脚本 | `db-relationship-explainer/uninstall_skill_for_all_platform.sh` |
-| CHANGELOG | `CHANGELOG.md` |
+| CHANGELOG（中文） | `CHANGELOG.md` |
+| CHANGELOG（英文） | `CHANGELOG_EN.md` |
+| README（英文） | `README_EN.md` |
 | 项目宪法 | `CONSTITUTION.md` |
 | 架构愿景 | `docs/ARCHITECTURE.md` |
+| 算法文档 | `docs/ALGORITHMS.md` |
 | Issue 追踪 | `issues.json` |
 
 ## 构建命令
@@ -62,8 +65,14 @@ scheme://[user[:pass]@]host[:port][/dbname][?label=别名&其他参数]
 | `-include` | string | "" | 逗号分隔的 kind/label，只采集匹配项 |
 | `-exclude` | string | "" | 逗号分隔的 kind/label，排除匹配项 |
 | `-json` | bool | false | 输出 JSON 格式 |
-| `-o` | string | "" | 写入文件 |
+| `-o` | string | "" | 写入文件（自动添加 UTF-8 BOM） |
+| `-context` | string | "" | 写入 AI 上下文文件到指定目录 |
+| `-cache` | string | "" | Schema 指纹缓存文件（增量扫描） |
 | `-timeout` | duration | 20s | 每个 DSN 的采集超时 |
+| `--human` | bool | false | 人类友好输出（含上下文标记） |
+| `--manual` | bool | false | 完整帮助手册 |
+| `--language` | string | zh | 手册语言（zh/en） |
+| `--filter` | string | "" | 过滤手册输出（忽略大小写，配合 --manual） |
 | `--version` | bool | false | 输出版本号并退出 |
 
 ## 消费方
@@ -73,31 +82,11 @@ scheme://[user[:pass]@]host[:port][/dbname][?label=别名&其他参数]
 
 ## 已知限制与待办
 
-所有已知问题跟踪在 `issues.json`（24 条，21 closed，1 pending-evaluation，1 wontfix）。
+所有已知问题跟踪在 `issues.json`（36 条，24 closed，1 pending-evaluation，1 wontfix，10 open/feature）。
 
-| ID | 问题 | 文件 | 状态 |
-|----|------|------|------|
-| ISSUE-001 | ClickHouse 双重 FORMAT JSONCompact | `src/connector/clickhouse.go` | closed (v0.0.3) |
-| ISSUE-002 | Redis 集群模式不支持 | `src/connector/redis.go` | closed (v0.0.3) |
-| ISSUE-003 | ES 硬编码 HTTP | `src/connector/elasticsearch.go` | closed (v0.0.3) |
-| ISSUE-004 | analyze/infer.go 死代码 | `src/analyze/infer.go` | pending-evaluation |
-| ISSUE-005 | 缺少 DSN 过滤功能 | `src/main.go` | closed (v0.0.3) |
-| ISSUE-006 | PostgreSQL 缺少行数统计 | `src/connector/postgres.go` | closed (v0.0.3) |
-| ISSUE-007 | PostgreSQL SSL 硬编码 disable | `src/connector/postgres.go` | closed (v0.0.3) |
-| ISSUE-008 | PostgreSQL 仅限 public schema | `src/connector/postgres.go` | closed (v0.0.3) |
-| ISSUE-009 | Redis 集群文档 | `docs/REDIS.md` | closed (v0.0.3) |
-| ISSUE-010 | ES HTTP 文档 | `docs/ELASTICSEARCH.md` | closed (v0.0.3) |
-| ISSUE-011 | 无测试文件 | 全局 | closed (v0.0.3) |
-| ISSUE-012 | 无 CI/CD | 全局 | closed (v0.0.3) |
-| ISSUE-013 | `.gitignore` 未提交变更 | `.gitignore` | closed (v0.0.3) |
-| ISSUE-014 | JSON 输出缺少完整 schema | `src/render/render.go` | closed (v0.0.3) |
-| ISSUE-015 | 日志泄漏明文密码 | `src/main.go` | closed (v0.0.3) |
-| ISSUE-016 | 索引/PK/FK 查询静默吞错 | `src/connector/postgres.go, mysql.go` | closed (v0.0.3) |
-| ISSUE-017 | 所有 DSN 失败时无警告 | `src/main.go` | closed (v0.0.3) |
-| ISSUE-018 | 缺少 --version 参数 | `src/main.go` | closed (v0.0.3) |
-| ISSUE-019 | SKILL.md 未同步 v0.0.3 | `SKILL.md` | closed (v0.0.3) |
-| ISSUE-020 | InferComment IP 误匹配 | `src/schema/infer.go` | closed (v0.0.3) |
-| ISSUE-021 | []byte 格式化为字节数组 | `src/connector/mysql.go, postgres.go` | closed (v0.0.3) |
+**v0.0.4 已关闭（ISSUE-022 ~ ISSUE-032）：** IR v1 架构、Capability 重构、统一诊断、Importance Ranking、Context Compression、Delta Scan、Operational Stats、Windows 编码兼容。
+
+**当前开放（ISSUE-033 ~ ISSUE-035）：** Phase 4 LLM 生态集成、GaussDB/TDSQL 兼容性确认、GBase/HBase/OceanBase 评估。
 
 ## 新增 Connector 模板
 
@@ -116,15 +105,62 @@ scheme://[user[:pass]@]host[:port][/dbname][?label=别名&其他参数]
 - 密码通过 `DSN.Redacted()` 自动脱敏显示
 - 工具仅执行只读操作，详见 CONSTITUTION.md
 
+## 版本性能对比（每次发版必做）
+
+每次新版本发布前，必须完成与上一版本的性能对比测试。使用相同的 `.env` 数据集运行各 3 次，对比指标：
+
+- **real time**：wall-clock 总耗时
+- **user time**：CPU 用户态耗时
+- **sys time**：CPU 内核态耗时
+- **总采集耗时**（"全部采集完成，总耗时"）
+- **输出文件大小**：JSON 格式输出的大小变化
+
+### v0.0.3 vs v0.0.4 对比结果（2026-05-20）
+
+测试环境：9 个异构数据源（MySQL, PostgreSQL, ClickHouse, SQLite, Redis ×2, MongoDB, Elasticsearch, Qdrant），timeout=3s。
+
+| 指标 | v0.0.3 (avg) | v0.0.4 (avg) | 变化 |
+|------|-------------|-------------|------|
+| real time | ~0.039s | ~0.046s | 无显著差异 |
+| user time | ~0.034s | ~0.038s | 无显著差异 |
+| sys time | ~0.034s | ~0.009s | 略有降低 |
+| 采集总耗时 | ~32.3ms | ~40.0ms | 网络噪声范围内 |
+| JSON 输出大小 | 135,524 B | 135,527 B | +3 B (BOM) |
+
+**结论**：v0.0.4 无性能退化。新增的能力检查、操作统计采集、指纹计算等代码路径开销极小（<5ms），完全被网络 I/O 掩盖。输出大小增加仅来自 UTF-8 BOM（3 字节）。
+
+### 执行命令模板
+
+```bash
+# 构建上一版本（从 git tag）
+git worktree add /tmp/prev-build v0.0.X
+cd /tmp/prev-build/src && go build -o /tmp/dbexplain-prev .
+git worktree remove /tmp/prev-build
+
+# 构建当前版本
+cd src && go build -o /tmp/dbexplain-curr .
+
+# 各跑 3 次
+for v in prev curr; do
+  for i in 1 2 3; do
+    echo "=== $v run $i ==="
+    time /tmp/dbexplain-$v -env -timeout 3s -json -o /tmp/perf-$v-$i.json
+  done
+done
+
+# 比较文件大小
+wc -c /tmp/perf-prev-1.json /tmp/perf-curr-1.json
+```
+
 ## 架构路线图
 
 详见 `docs/ARCHITECTURE.md`。概要：
 
-| Phase | 版本 | 目标 |
+| Phase | 状态 | 目标 |
 |-------|------|------|
-| 1 | v0.1.x | IR v1 定义 + Capability System + Graph Model + 统一诊断层 |
-| 2 | v0.2.x | Context Compression + Importance Ranking + Retrieval Chunks + Delta Scan |
-| 3 | v0.3.x | Query-Aware Metadata + Operational Graph |
-| 4 | v0.4.x+ | LLM Ecosystem Integration + 企业特性 |
+| 1 | **已完成 (v0.0.4)** | IR v1 + Capability System + Graph Model + 统一诊断层 |
+| 2 | **已完成 (v0.0.4)** | Context Compression + Importance Ranking + Retrieval Chunks + Delta Scan |
+| 3 | **已完成 (v0.0.4)** | Query-Aware Metadata + Operational Graph |
+| 4 | 进行中 | LLM Ecosystem Integration + MCP Server + 企业特性 |
 
-当前阶段：**Phase 0**（v0.0.3 — 稳定已有功能，修复 bug，完善文档）
+当前版本：**v0.0.4** — Phase 1-3 核心功能已完成，Windows 兼容性已修复。

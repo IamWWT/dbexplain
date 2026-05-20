@@ -369,6 +369,16 @@
       "description": "GaussDB(PG兼容)和TDSQL(MySQL兼容)的操作语义表结构可能与原生PG/MySQL不同。需有实际环境用户确认： GaussDB — pg_stat_user_tables字段名/计数器语义是否一致、pg_stat_statements扩展是否存在、是否有WDR替代方案； TDSQL — performance_schema.table_io_waits_summary_by_table在分布式版本是否反映全局统计、events_statements_summary_by_digest在分片查询下的行为。兜底机制已设计：查询失败时跳过该数据源并记录日志，因子权重自动重新归一化。",
       "file": "src/connector/postgres.go, src/connector/mysql.go",
       "created": "2026-05-20"
+    },
+    {
+      "id": "ISSUE-035",
+      "title": "评估 GBase/HBase 支持必要性, OceanBase 列入待支持列表",
+      "status": "open",
+      "priority": "medium",
+      "category": "compat",
+      "description": "待评估 GBase (南大通用，国产数据库) 和 HBase (Hadoop生态，宽表/LSM) 是否需要接入 dbexplain。OceanBase (蚂蚁集团，MySQL兼容OLTP) 列入待支持列表，可通过MySQL兼容协议浅层接入(表/列/索引/FK)，需调研是否有特有元数据表(如增量编译、分布式事务信息)。",
+      "file": "待定",
+      "created": "2026-05-20"
     }
   ]
 }

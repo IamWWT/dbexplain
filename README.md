@@ -4,7 +4,7 @@
 
 `dbexplain` 是一个**零依赖、静态编译**的命令行工具。给定数据库连接串，自动提取表结构、列、索引、外键，输出确定性、可证实的关系信息——不包含任何 AI 推理或语义猜测。
 
-AI 时代的数据库"地面真相层"。
+AI 时代数据库的“真值基座”。
 
 ---
 
@@ -38,7 +38,7 @@ AI 时代的数据库"地面真相层"。
 
 ```bash
 # 下载预编译二进制
-wget https://github.com/IamWWT/understand_dbs_skills/releases/download/v0.0.3/dbexplain-linux-amd64
+wget https://github.com/IamWWT/understand_dbs_skills/releases/download/v0.0.4/dbexplain-linux-amd64
 chmod +x dbexplain-linux-amd64
 
 # 创建 .env 文件
@@ -82,8 +82,30 @@ EOF
 ./dbexplain -env -o report.md
 ./dbexplain -env -json -o report.json
 
+# 从 JSON 配置文件加载 DSN 数组
+./dbexplain -config dbs.json
+
+# 生成 AI 上下文文件（适合喂给 Agent）
+./dbexplain -env --context ./context
+# → context/summary.json      全局摘要（实例列表、表排行、重要性评分）
+# → context/topology.json      关系拓扑图（跨库引用、集群）
+# → context/diagnostics.json   问题诊断清单（严重度、表、消息）
+# → context/chunks/*.md        每表单独的检索友好 Markdown
+
+# 增量变更检测（配合 cron 定时任务）
+./dbexplain -env --cache schema_cache.json
+# 首次：生成 schema_cache.json（指纹快照）
+# 后续：对比差异 → 输出 schema_cache_delta.json（added/removed/changed）
+
+# 人类友好格式（带 [table=] [pattern=] 上下文标记）
+./dbexplain -env --human
+
 # 自定义超时（默认 20s）
 ./dbexplain -env -timeout 60s
+
+# 按关键字查找手册内容
+./dbexplain --manual --filter redis
+./dbexplain --manual --language en --filter "SSL mode"
 ```
 
 ### 参数速查
@@ -100,6 +122,95 @@ EOF
 | `-timeout <duration>` | 每 DSN 超时（默认 20s） |
 | `--version` | 输出版本号 |
 | `--manual` | 完整帮助手册（`--language en` 英文） |
+| `--filter <keyword>` | 过滤 `--manual` 输出（忽略大小写） |
+| `--human` | 人类友好输出（含上下文标记） |
+| `--context <dir>` | 写入 AI 上下文文件到目录（summary.json / topology.json / diagnostics.json / chunks/） |
+| `--cache <file>` | Schema 指纹缓存。首次生成快照，后续输出 `<file>_delta.json` 增量差异 |
+| `--language zh|en` | 手册语言（默认 zh） |
+
+---
+
+## 使用场景
+
+### 给 AI Agent 用
+
+```bash
+# 输出 JSON 供程序或 AI Agent 解析
+./dbexplain -env -json -o report.json
+
+# 生成 AI 上下文文件（适合嵌入 Agent 提示词）
+./dbexplain -env --context ./context
+# 生成: summary.json / topology.json / diagnostics.json / chunks/*.md
+
+# 增量变更检测（配合 cron 定时任务）
+./dbexplain -env --cache schema_cache.json
+# 首次运行生成缓存，后续运行输出 schema_cache_delta.json
+```
+
+### 给人看
+
+```bash
+# 终端直接渲染（默认文本格式，含颜色高亮）
+./dbexplain -env
+
+# 人类友好格式（带 [table=] [pattern=] 上下文标记）
+./dbexplain -env --human
+
+# 写入 Markdown 文件（带 UTF-8 BOM，兼容 Windows 记事本）
+./dbexplain -env --human -o report.md
+
+# 查找手册内容
+./dbexplain --manual --filter redis
+```
+
+### 不同数据库用法
+
+**MySQL**
+```bash
+./dbexplain -dsn 'mysql://root:pwd@127.0.0.1:3306/shop?label=shop-db'
+```
+
+**PostgreSQL**
+```bash
+./dbexplain -dsn 'postgres://user:pwd@127.0.0.1:5432/warehouse?label=my-pg&sslmode=disable'
+```
+
+**Redis（集群）**
+```bash
+./dbexplain -dsn 'redis://:pwd@10.0.0.1:7000/0?cluster=true&label=my-cluster'
+```
+
+**ClickHouse**
+```bash
+./dbexplain -dsn 'clickhouse://default:pwd@127.0.0.1:8123/default?label=my-ch'
+```
+
+**SQLite**
+```bash
+./dbexplain -dsn 'sqlite:///home/user/data/app.db?label=local-db'
+```
+
+**MongoDB**
+```bash
+./dbexplain -dsn 'mongodb://admin:pwd@127.0.0.1:27017/mydb?authSource=admin&label=my-mongo'
+```
+
+**Elasticsearch（HTTPS）**
+```bash
+./dbexplain -dsn 'elasticsearchs://elastic:pwd@127.0.0.1:9200?label=my-es'
+```
+
+**Qdrant**
+```bash
+./dbexplain -dsn 'qdrant://:api-key@127.0.0.1:6334?label=my-qdrant'
+```
+
+**GaussDB**
+```bash
+./dbexplain -dsn 'gaussdb://user:pwd@192.168.0.1:25308/mydb?label=my-gauss'
+```
+
+> 更多数据库细节: `./dbexplain --manual [--filter <关键字>]`
 
 ---
 
@@ -189,6 +300,7 @@ DB9=qdrant://:api-key@127.0.0.1:6334?label=my-qdrant
 
 - 密码在输出和日志中自动脱敏
 - 每 DSN 独立日志（`logs/<label>.log`）
+- 过滤跳过记录写入 `logs/filter.log`，不污染终端输出
 - 参数化查询防注入
 - Redis 采样上限：2000 键、5 字段、512 字节、10 条流消息
 
@@ -232,7 +344,7 @@ bash uninstall_skill_for_all_platform.sh
 ## 开发
 
 - **语言**：Go 1.26+
-- **构建**：`CGO_ENABLED=0 go build -ldflags="-s -w -X main.version=v0.0.3"`
+- **构建**：`CGO_ENABLED=0 go build -ldflags="-s -w -X main.version=v0.0.4"`
 - **测试**：`go test ./...`（DSN 解析 + 字段推断）
 - **交叉编译**：`bash build.sh`（linux/darwin/windows × amd64/arm64）
 
@@ -252,7 +364,9 @@ bash uninstall_skill_for_all_platform.sh
 | [`docs/ELASTICSEARCH.md`](docs/ELASTICSEARCH.md) | Elasticsearch 索引映射、HTTPS |
 | [`docs/DEPLOY_SKILLS.md`](docs/DEPLOY_SKILLS.md) | Skill 部署指南 |
 | [`docs/DEPLOY_SRC.md`](docs/DEPLOY_SRC.md) | 源码编译部署 |
-| [`CHANGELOG.md`](CHANGELOG.md) | 版本变更记录 |
+| [`CHANGELOG.md`](CHANGELOG.md) | 版本变更记录（中文） |
+| [`CHANGELOG_EN.md`](CHANGELOG_EN.md) | 版本变更记录（英文） |
+| [`README_EN.md`](README_EN.md) | English README |
 | [`issues.json`](issues.json) | 问题跟踪 |
 
 ---

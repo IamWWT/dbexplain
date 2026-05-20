@@ -298,8 +298,14 @@ type TableFingerprint struct {
 ### 1. CLI Product（当前已有）
 
 - 定位：数据库巡检工具
-- 用户：DBA / 后端 / 运维
-- 输出：Markdown + Diagnostics
+- 用户：DBA / 后端 / 运维 / AI Agent
+- 输出：Markdown + Diagnostics + JSON
+- 交互特性：
+  - `-h` 7 组分栏帮助（数据源/过滤/输出控制/显示格式/AI 上下文/性能/帮助），中英双语
+  - `--manual` 完整手册约 600 行，`--filter <关键字>` 按行过滤快速查找
+  - `--human` 上下文标记输出（`[table=]`/`[pattern=]`/`[database=]` 等按数据库类型自适应）
+  - `-o` 文件输出自动添加 UTF-8 BOM（Windows 兼容）
+  - 终端直接渲染含 ANSI 颜色高亮
 
 ### 2. IR Product（未来核心）
 
@@ -309,7 +315,42 @@ type TableFingerprint struct {
 
 ---
 
-## 9. 明确不做
+## 9. 安全性
+
+作为工具与外部系统之间的边界层，安全性是架构的硬约束，不是可选特性。
+
+### 第一要义：密码绝不泄漏
+
+**任何代码路径都不得将数据库密码写入标准输出、标准错误、日志文件或任何持久化存储。**
+
+| 路径 | 要求 |
+|------|------|
+| DSN 解析 | `DSN.Redacted()` 在所有日志/输出中替代原始 DSN |
+| 错误消息 | 过滤 DSN 时的 skip 消息必须使用脱敏后的 DSN |
+| 日志文件 | `logs/<label>.log` 中不得出现原始密码 |
+| JSON 输出 | 永不包含连接字符串 |
+| 终端输出 | 所有 DSN 回显均经过 `Redacted()` |
+
+**正确示例：**
+```go
+// 正确：使用脱敏后的 DSN
+log.Printf("skipping %s (not matched by include filter)", parsed.Redacted())
+
+// 错误：直接使用原始 DSN（密码泄漏！）
+log.Printf("skipping %s (not matched by include filter)", e.raw)
+```
+
+### 其他安全原则
+
+- **只读操作**：所有 Connector 仅执行 `SELECT`/`SHOW`/`SCAN`/`PRAGMA` 等只读操作
+- **参数化查询**：使用参数化查询或标准 API，防止 SQL/命令注入
+- **采样上限**：Redis 限制 2000 键、5 字段、512 字节、10 条流消息
+- **元数据优先**：MongoDB 使用 `EstimatedDocumentCount`，不做全表扫描
+- **独立隔离**：每实例独立日志文件，单实例 panic 不影响其他实例采集
+
+---
+
+## 10. 明确不做
 
 这些方向与 deterministic 哲学冲突，明确排除：
 
@@ -320,31 +361,34 @@ type TableFingerprint struct {
 
 ---
 
-## 10. 发展路线
+## 11. 发展路线
 
-### Phase 1（立刻 — v0.1.x）
+### Phase 1（已完成 — v0.0.4）
 
-- [ ] IR v1 定义：Node / Column / Edge schema
-- [ ] Graph model：内部统一图模型
-- [ ] Capability system：从 `if mysql` 重构为 `if Has(CapFK)`
-- [ ] Deterministic diagnostics 抽离到统一层
-- [ ] IR 序列化为 JSON 输出
+- [x] IR v1 定义：Node / Column / Edge schema
+- [x] Graph model：内部统一图模型
+- [x] Capability system：从 `if mysql` 重构为 `if Has(CapFK)`
+- [x] Deterministic diagnostics 抽离到统一层
+- [x] IR 序列化为 JSON 输出
 
-### Phase 2（v0.2.x）
+### Phase 2（已完成 — v0.0.4）
 
-- [ ] Context Compression：summary / topology / diagnostics JSON
-- [ ] Importance Ranking（deterministic 算法）
-- [ ] Retrieval Chunks：单表上下文文件
-- [ ] Delta Scan：Schema fingerprint + 增量更新
+- [x] Context Compression：summary / topology / diagnostics JSON
+- [x] Importance Ranking（deterministic 算法）
+- [x] Retrieval Chunks：单表上下文文件
+- [x] Delta Scan：Schema fingerprint + 增量更新
 
-### Phase 3（v0.3.x）
+### Phase 3（已完成 — v0.0.4）
 
-- [ ] Query-Aware Metadata：pg_stat_statements / query_log
-- [ ] Operational Graph：基于真实查询的关系图
+- [x] Query-Aware Metadata：pg_stat_user_tables / query_log / INFO stats
+- [x] Operational Graph：基于真实查询的关系图
+- [x] 兜底机制：不可用数据源静默跳过，因子权重自动重新归一化
 
-### Phase 4（v0.4.x+）
+### Phase 4（进行中 — v0.0.4+）
 
-- [ ] LLM Ecosystem Integration：Claude Code / Cursor / OpenHands / Aider
+- [x] Claude Code Skill 集成 (已有)
+- [ ] MCP Server（战略级）
+- [ ] Cursor / OpenHands / Aider 集成
 - [ ] 企业级 diff / lineage / governance
 - [ ] Cloud scan orchestration
 
@@ -354,4 +398,6 @@ type TableFingerprint struct {
 
 | 日期 | 版本 | 说明 |
 |------|------|------|
+| 2026-05-20 | v3 | 新增安全性章节，密码防泄漏为第一要义 |
+| 2026-05-20 | v2 | Phase 1-3 已完成，更新路线图状态 |
 | 2026-05-20 | v1 | 初始架构愿景，基于架构评审建议 |

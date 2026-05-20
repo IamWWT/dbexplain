@@ -28,15 +28,42 @@ import (
 	"dbexplain/schema"
 )
 
-var version = "dev"
+var version = "v0.0.4"
 
 type dsnEntry struct {
 	raw    string // DSN string
 	envKey string // e.g. "DB1" if from .env, "" otherwise
 }
 
+func preScanLanguage() string {
+	for i := 0; i < len(os.Args); i++ {
+		if os.Args[i] == "--language" && i+1 < len(os.Args) {
+			return os.Args[i+1]
+		}
+	}
+	return "zh"
+}
+
+func hasHelpFlag() bool {
+	for _, a := range os.Args[1:] {
+		if a == "-h" || a == "--help" {
+			return true
+		}
+	}
+	return false
+}
+
 func main() {
 	_ = godotenv.Load()
+
+	userLang := preScanLanguage()
+
+	// Intercept -h/--help before flag.Parse for localized output
+	if hasHelpFlag() {
+		printHelp(userLang)
+		return
+	}
+	flag.Usage = func() { printHelp(userLang) }
 
 	var dsnFlags []string
 	flag.Func("dsn", "...", func(s string) error { dsnFlags = append(dsnFlags, s); return nil })
@@ -45,13 +72,15 @@ func main() {
 	includeFilter := flag.String("include", "", "comma-separated kinds/labels/env-keys to include (e.g. mysql,redis or DB1,DB3)")
 	excludeFilter := flag.String("exclude", "", "comma-separated kinds/labels/env-keys to exclude (e.g. mongodb,qdrant or DB5)")
 	jsonOut := flag.Bool("json", false, "output JSON")
+	humanOut := flag.Bool("human", false, "human-friendly output with context markers and visual separators")
 	contextDir := flag.String("context", "", "write AI context files to directory (summary.json, topology.json, diagnostics.json, chunks/)")
 	cacheFile := flag.String("cache", "", "fingerprint cache file for delta scan (.json)")
 	outputFile := flag.String("o", "", "write output to file")
 	perDSNTimeout := flag.Duration("timeout", 20*time.Second, "per-DSN collect timeout")
 	showVersion := flag.Bool("version", false, "print version and exit")
 	showManual := flag.Bool("manual", false, "print comprehensive manual and exit")
-	language := flag.String("language", "zh", "manual language: zh (Chinese) or en (English)")
+	language := flag.String("language", userLang, "manual language: zh (Chinese) or en (English)")
+	filterFlag := flag.String("filter", "", "filter --manual output by keyword (case-insensitive)")
 	flag.Parse()
 
 	if *showVersion {
@@ -59,7 +88,7 @@ func main() {
 		return
 	}
 	if *showManual {
-		printManual(*language)
+		printManual(*language, *filterFlag)
 		return
 	}
 
@@ -76,8 +105,13 @@ func main() {
 		}
 	}
 
+	logDir := "./logs"
+	if err := os.MkdirAll(logDir, 0755); err != nil {
+		log.Fatalf("create log dir: %v", err)
+	}
+
 	// 过滤
-	entries = filterDSNs(entries, *includeFilter, *excludeFilter)
+	entries = filterDSNs(entries, *includeFilter, *excludeFilter, logDir)
 	if len(entries) == 0 {
 		log.Fatal("no DSNs provided (or all filtered out). Use -dsn, -env, or -config")
 	}
@@ -85,11 +119,6 @@ func main() {
 	var dsns []string
 	for _, e := range entries {
 		dsns = append(dsns, e.raw)
-	}
-
-	logDir := "./logs"
-	if err := os.MkdirAll(logDir, 0755); err != nil {
-		log.Fatalf("create log dir: %v", err)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -196,22 +225,25 @@ func main() {
 		writeContext(*contextDir, result)
 	}
 
-	var out string
-	if *jsonOut {
-		out = captureJSON(result)
-	} else {
-		out = captureText(result)
-	}
-
 	if *outputFile != "" {
-		// Prepend UTF-8 BOM so Windows Notepad/CMD recognizes the encoding
+		// 文件输出：捕获后写入（无 ANSI 转义码，UTF-8 BOM）
+		var out string
+		if *jsonOut {
+			out = captureJSON(result)
+		} else {
+			out = captureText(result, *humanOut)
+		}
 		data := append([]byte("\xEF\xBB\xBF"), []byte(out)...)
 		if err := os.WriteFile(*outputFile, data, 0644); err != nil {
 			log.Fatal(err)
 		}
 		fmt.Println("Report written to", *outputFile)
+	} else if *jsonOut {
+		// 终端 JSON：直接输出
+		render.PrintJSON(result)
 	} else {
-		fmt.Print(out)
+		// 终端文本：直接渲染（保留颜色高亮）
+		render.Print(result, *humanOut)
 	}
 }
 
@@ -226,13 +258,25 @@ func totalTables(inst *schema.Instance) int {
 
 // ── DSN 过滤 ──
 
-func filterDSNs(entries []dsnEntry, include, exclude string) []dsnEntry {
+func filterDSNs(entries []dsnEntry, include, exclude string, logDir string) []dsnEntry {
 	if include == "" && exclude == "" {
 		return entries
 	}
 
 	includeSet := parseFilterSet(include)
 	excludeSet := parseFilterSet(exclude)
+
+	// 打开过滤日志文件，记录所有被跳过的 DSN
+	filterLog, err := os.OpenFile(filepath.Join(logDir, "filter.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		filterLog = nil
+	} else {
+		defer filterLog.Close()
+	}
+	filterLogger := log.New(filterLog, "", log.LstdFlags)
+	if filterLog == nil {
+		filterLogger = log.Default() // fallback: 文件打不开就用 stderr
+	}
 
 	var filtered []dsnEntry
 	for _, e := range entries {
@@ -251,12 +295,12 @@ func filterDSNs(entries []dsnEntry, include, exclude string) []dsnEntry {
 
 		if len(includeSet) > 0 {
 			// 有 include 但不匹配，跳过
-			log.Printf("skipping %s (did not match include filter)", e.raw)
+			filterLogger.Printf("skipping %s (did not match include filter)", parsed.Redacted())
 			continue
 		}
 
 		if len(excludeSet) > 0 && matchesDSNFilter(parsed, e.envKey, excludeSet) {
-			log.Printf("excluding %s (matched exclude filter)", e.raw)
+			filterLogger.Printf("excluding %s (matched exclude filter)", parsed.Redacted())
 			continue
 		}
 
@@ -396,7 +440,7 @@ func writeJSON(path string, v any) {
 
 // ── 输出捕获 ──
 
-func captureText(result *analyze.Result) string {
+func captureText(result *analyze.Result, human bool) string {
 	old := os.Stdout
 	r, w, _ := os.Pipe()
 	os.Stdout = w
@@ -408,7 +452,7 @@ func captureText(result *analyze.Result) string {
 		close(done)
 	}()
 
-	render.Print(result)
+	render.Print(result, human)
 	w.Close()
 	os.Stdout = old
 	<-done
@@ -448,7 +492,184 @@ func (lt langText) Get(lang string) string {
 	return lt.ZH
 }
 
-func printManual(lang string) {
+// printHelp prints a concise flag summary (like -h/--help) in the given language.
+func printHelp(lang string) {
+	p := func(zh, en string) string {
+		if lang == "en" {
+			return en
+		}
+		return zh
+	}
+	out := os.Stderr
+
+	fmt.Fprint(out, p(
+		"dbexplain — 数据库上下文编译器\n\n"+
+			"用法: dbexplain [参数]\n\n",
+		"dbexplain — Database Context Compiler\n\n"+
+			"Usage: dbexplain [options]\n\n",
+	))
+
+	// Group 1: Input Sources
+	fmt.Fprint(out, p(
+		"数据源 (Input Sources):\n"+
+			"  -dsn string        数据库连接串，可重复使用\n"+
+			"  -env               从 .env 文件加载 DSN (DB1=, DB2=, ...)\n"+
+			"  -config file       从 JSON 文件读取 DSN 数组\n\n",
+		"Input Sources:\n"+
+			"  -dsn string        Database connection string, repeatable\n"+
+			"  -env               Load DSNs from .env file (DB1=, DB2=, ...)\n"+
+			"  -config file       Read DSN array from JSON file\n\n",
+	))
+
+	// Group 2: Filtering
+	fmt.Fprint(out, p(
+		"过滤 (Filtering):\n"+
+			"  -include filter    仅包含匹配的 DSN (按类型/标签/编号，逗号分隔)\n"+
+			"  -exclude filter    排除匹配的 DSN\n\n",
+		"Filtering:\n"+
+			"  -include filter    Only include matching DSNs (by kind/label/key, comma-sep)\n"+
+			"  -exclude filter    Exclude matching DSNs\n\n",
+	))
+
+	// Group 3: Output Control
+	fmt.Fprint(out, p(
+		"输出控制 (Output Control):\n"+
+			"  -o file            将输出写入文件 (自动添加 UTF-8 BOM)\n\n",
+		"Output Control:\n"+
+			"  -o file            Write output to file (auto UTF-8 BOM)\n\n",
+	))
+
+	// Group 4: Display Format
+	fmt.Fprint(out, p(
+		"显示格式 (Display Format):\n"+
+			"  -json              输出 JSON 格式\n"+
+			"  --human            人类友好输出 (带上下文标记和视觉分隔)\n\n",
+		"Display Format:\n"+
+			"  -json              Output JSON format\n"+
+			"  --human            Human-friendly output with context markers\n\n",
+	))
+
+	// Group 5: AI Context
+	fmt.Fprint(out, p(
+		"AI 上下文 (AI Context):\n"+
+			"  --context dir      写入 AI 上下文文件 (summary.json/topology.json/chunks/)\n"+
+			"  --cache file       Schema 指纹缓存，用于增量变更检测\n\n",
+		"AI Context:\n"+
+			"  --context dir      Write AI context files (summary.json/topology.json/chunks/)\n"+
+			"  --cache file       Schema fingerprint cache for delta detection\n\n",
+	))
+
+	// Group 6: Performance
+	fmt.Fprint(out, p(
+		"性能 (Performance):\n"+
+			"  -timeout duration  每 DSN 采集超时 (默认 20s, 例: 30s / 1m)\n\n",
+		"Performance:\n"+
+			"  -timeout duration  Per-DSN collect timeout (default 20s, e.g. 30s/1m)\n\n",
+	))
+
+	// Group 7: Help
+	fmt.Fprint(out, p(
+		"帮助 (Help):\n"+
+			"  -h, --help         打印此参数列表并退出\n"+
+			"  --manual           打印完整手册并退出\n"+
+			"  --language zh|en   手册语言 (默认 zh)\n"+
+			"  --filter keyword   过滤手册输出 (配合 --manual 使用)\n"+
+			"  --version          输出版本号并退出\n\n",
+		"Help:\n"+
+			"  -h, --help         Print this option list and exit\n"+
+			"  --manual           Print comprehensive manual and exit\n"+
+			"  --language zh|en   Manual language (default zh)\n"+
+			"  --filter keyword   Filter manual output (use with --manual)\n"+
+			"  --version          Print version and exit\n\n",
+	))
+
+	// Footer
+	fmt.Fprint(out, p(
+		"完整手册: dbexplain --manual [--language zh|en]\n",
+		"Full manual: dbexplain --manual [--language zh|en]\n",
+	))
+}
+
+func printManual(lang, filter string) {
+	if filter == "" {
+		printManualContent(lang)
+		return
+	}
+	captured := captureManualOutput(lang)
+	kw := strings.ToLower(filter)
+
+	// Split by ─── section boundaries; each section is a complete block
+	sections := splitSections(captured)
+	var matched []string
+	for _, sec := range sections {
+		if strings.Contains(strings.ToLower(sec), kw) {
+			matched = append(matched, sec)
+		}
+	}
+	if len(matched) == 0 {
+		fmt.Printf("No matches for filter: %q\n", filter)
+		return
+	}
+	fmt.Printf("=== Filtered by: %q (%d section(s)) ===\n\n", filter, len(matched))
+	for _, sec := range matched {
+		fmt.Print(sec)
+		if !strings.HasSuffix(sec, "\n") {
+			fmt.Println()
+		}
+	}
+}
+
+// splitSections splits the manual text into sections.
+// Sections are delimited by lines that start with "───" (box-drawing header lines).
+// The preamble (everything before the first ───) is returned as the first section.
+func splitSections(text string) []string {
+	// Find the first occurrence of "\n───" in the text
+	idx := strings.Index(text, "\n───")
+	if idx < 0 {
+		// No section boundaries found; return entire text as one section
+		return []string{text}
+	}
+	// Split preamble off
+	preamble := text[:idx]
+	body := text[idx+1:] // skip the leading \n
+
+	var sections []string
+	if strings.TrimSpace(preamble) != "" {
+		sections = append(sections, preamble)
+	}
+
+	// Split remaining body on "\n───" to get each section
+	parts := strings.Split(body, "\n───")
+	for _, p := range parts {
+		if p == "" {
+			continue
+		}
+		// Re-prepend the ─── that was consumed by the split
+		sections = append(sections, "───"+p)
+	}
+	return sections
+}
+
+func captureManualOutput(lang string) string {
+	old := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	var buf bytes.Buffer
+	done := make(chan struct{})
+	go func() {
+		io.Copy(&buf, r)
+		close(done)
+	}()
+
+	printManualContent(lang)
+	w.Close()
+	os.Stdout = old
+	<-done
+	return buf.String()
+}
+
+func printManualContent(lang string) {
 	p := func(zh, en string) string {
 		if lang == "en" {
 			return en
@@ -529,7 +750,10 @@ DESCRIPTION
     -include <filter>     仅包含匹配的 DSN (按类型/label/env编号, 逗号分隔)
     -exclude <filter>     排除匹配的 DSN (格式同 -include)
     -json                 输出 JSON 格式 (适合程序消费)
+    -human                人类友好输出：带上下文标记 [table=] [pattern=] 和视觉分隔
     -o <file>             将报告写入文件 (自动添加 UTF-8 BOM)
+    -context <dir>        写入 AI 上下文文件到目录 (summary.json/topology.json/diagnostics.json/chunks/)
+    -cache <file>         Schema 指纹缓存文件，用于增量变更检测 (.json)
     -timeout <duration>   每 DSN 采集超时 (默认 20s, 如 30s/1m)
     --version             输出版本号并退出
     --manual              打印此完整手册并退出
@@ -546,7 +770,10 @@ DESCRIPTION
     -include <filter>     Only include matching DSNs (by kind/label/env-key, comma-sep)
     -exclude <filter>     Exclude matching DSNs (same format as -include)
     -json                 Output JSON format (for programmatic consumption)
+    -human                Human-friendly output: context markers [table=] [pattern=] etc.
     -o <file>             Write report to file (auto-prepends UTF-8 BOM)
+    -context <dir>        Write AI context files to directory (summary.json/topology.json/diagnostics.json/chunks/)
+    -cache <file>         Schema fingerprint cache file for incremental delta detection (.json)
     -timeout <duration>   Per-DSN collect timeout (default 20s, e.g. 30s/1m)
     --version             Print version and exit
     --manual              Print this comprehensive manual and exit
