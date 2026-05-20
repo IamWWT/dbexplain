@@ -8,6 +8,7 @@ import (
 	"time"
 
 	_ "github.com/glebarez/go-sqlite"
+	"dbexplain/capabilities"
 	"dbexplain/dsn"
 	"dbexplain/schema"
 )
@@ -17,6 +18,15 @@ func init() {
 }
 
 type sqliteConnector struct{}
+
+func (sqliteConnector) Capabilities() []capabilities.Capability {
+	return []capabilities.Capability{
+		capabilities.CapForeignKey,
+		capabilities.CapSampling,
+		capabilities.CapRowCount,
+		capabilities.CapIndex,
+	}
+}
 
 func (sqliteConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instance, error) {
 	path := d.SQLitePath()

@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 
+	"dbexplain/capabilities"
 	"dbexplain/dsn"
 	"dbexplain/schema"
 )
@@ -24,6 +25,7 @@ func logf(ctx context.Context, format string, args ...interface{}) {
 
 type Connector interface {
 	Collect(ctx context.Context, d *dsn.DSN) (*schema.Instance, error)
+	Capabilities() []capabilities.Capability
 }
 
 // Collect 主入口，解析 DSN、获取连接器并安全调用

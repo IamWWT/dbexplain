@@ -7,6 +7,7 @@ import (
 
 	"github.com/qdrant/go-client/qdrant"
 
+	"dbexplain/capabilities"
 	"dbexplain/dsn"
 	"dbexplain/schema"
 )
@@ -16,6 +17,13 @@ func init() {
 }
 
 type qdrantConnector struct{}
+
+func (qdrantConnector) Capabilities() []capabilities.Capability {
+	return []capabilities.Capability{
+		capabilities.CapVector,
+		capabilities.CapRowCount,
+	}
+}
 
 func (qdrantConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instance, error) {
 	host := d.Host

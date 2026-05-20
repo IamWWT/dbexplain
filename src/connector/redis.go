@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
+	"dbexplain/capabilities"
 	"dbexplain/dsn"
 	"dbexplain/schema"
 )
@@ -19,6 +20,13 @@ func init() {
 }
 
 type redisConnector struct{}
+
+func (redisConnector) Capabilities() []capabilities.Capability {
+	return []capabilities.Capability{
+		capabilities.CapTTL,
+		capabilities.CapSampling,
+	}
+}
 
 const (
 	maxScanKeys   = 2000 // 扫描上限，足够发现模式，同时控制耗时

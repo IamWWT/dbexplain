@@ -8,6 +8,7 @@ import (
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
+	"dbexplain/capabilities"
 	"dbexplain/dsn"
 	"dbexplain/schema"
 )
@@ -17,6 +18,15 @@ func init() {
 }
 
 type mysqlConnector struct{}
+
+func (mysqlConnector) Capabilities() []capabilities.Capability {
+	return []capabilities.Capability{
+		capabilities.CapForeignKey,
+		capabilities.CapSampling,
+		capabilities.CapRowCount,
+		capabilities.CapIndex,
+	}
+}
 
 func (mysqlConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instance, error) {
 	connStr := buildMySQLDSN(d)

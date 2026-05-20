@@ -10,6 +10,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
 
+	"dbexplain/capabilities"
 	"dbexplain/dsn"
 	"dbexplain/schema"
 )
@@ -19,6 +20,12 @@ func init() {
 }
 
 type mongoConnector struct{}
+
+func (mongoConnector) Capabilities() []capabilities.Capability {
+	return []capabilities.Capability{
+		capabilities.CapRowCount,
+	}
+}
 
 func (mongoConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instance, error) {
 	if d.DBName == "" {

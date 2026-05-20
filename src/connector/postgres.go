@@ -8,6 +8,7 @@ import (
 	"time"
 
 	_ "github.com/lib/pq"
+	"dbexplain/capabilities"
 	"dbexplain/dsn"
 	"dbexplain/schema"
 )
@@ -18,6 +19,15 @@ func init() {
 }
 
 type postgresConnector struct{}
+
+func (postgresConnector) Capabilities() []capabilities.Capability {
+	return []capabilities.Capability{
+		capabilities.CapForeignKey,
+		capabilities.CapSampling,
+		capabilities.CapRowCount,
+		capabilities.CapIndex,
+	}
+}
 
 func (postgresConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instance, error) {
 	connStr := buildPGDSN(d)

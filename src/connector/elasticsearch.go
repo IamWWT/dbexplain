@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/elastic/go-elasticsearch/v8"
+	"dbexplain/capabilities"
 	"dbexplain/dsn"
 	"dbexplain/schema"
 )
@@ -21,6 +22,10 @@ func init() {
 }
 
 type esConnector struct{}
+
+func (esConnector) Capabilities() []capabilities.Capability {
+	return nil
+}
 
 func (esConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instance, error) {
 	host := d.Host

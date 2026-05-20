@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"dbexplain/capabilities"
 	"dbexplain/dsn"
 	"dbexplain/schema"
 )
@@ -19,6 +20,14 @@ func init() {
 }
 
 type clickhouseConnector struct{}
+
+func (clickhouseConnector) Capabilities() []capabilities.Capability {
+	return []capabilities.Capability{
+		capabilities.CapSampling,
+		capabilities.CapRowCount,
+		capabilities.CapPartition,
+	}
+}
 
 func (clickhouseConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instance, error) {
 	host := d.Host
