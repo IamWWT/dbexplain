@@ -17,6 +17,21 @@ Connector 声明 Capability → 算法按 Capability 触发
 | `row_count` | 行数归一化（评分因子） | MySQL, PostgreSQL, GaussDB, ClickHouse, SQLite, MongoDB, Qdrant |
 | `index` | 索引密度（评分因子） | MySQL, PostgreSQL, GaussDB, SQLite |
 
+### 算法→功能需求→输出位置对照
+
+| 算法 | 满足的功能需求 | 触发方式 | 输出位置 |
+|------|---------------|----------|----------|
+| 多因子重要性评分 | 重要性排序 | 默认启用 | 终端：表排列顺序；`--context`：`summary.json` 的 `importance_score` |
+| 分层输出生成 | 上下文压缩 | `--context <dir>` | `summary.json` / `topology.json` / `diagnostics.json` / `chunks/*.md` |
+| Schema 指纹哈希 | 增量变更检测 | `--cache <file>` | `<file>` 快照 + `<file>_delta.json` |
+| 操作统计采集 | 查询频率/写入强度 | 默认启用（自动降级） | `summary.json` 的 `query_frequency` / `write_intensity`，影响重要性排序 |
+| 命名约定关系推断 | 隐式外键发现 | 默认启用（需 `foreign_key` capability） | 终端 `> Relationships` 中 `confidence < 100` 的条目（inferred） |
+| 并查集表聚类 | 跨库表分组 | 默认启用 | 终端 `> Clusters` 章节；`--context`：`topology.json` |
+| 确定性字段语义推断 | 无注释列的注释生成 | 默认启用（需 `sampling` capability） | 终端表的 `comment` 列，标注为规则推断结果 |
+| 能力驱动诊断规则 | 问题检测（MissingPK 等） | 默认启用（按 capability 触发） | 终端 `> Issues` 章节；`--context`：`diagnostics.json` |
+| 正则键模式聚类 | Redis key 聚合为"虚拟表" | 默认启用（仅 Redis） | 终端 Redis 表的 `key_pattern` 字段 |
+| 过滤日志记录 | 跳过/排除 DSN 可追溯 | `-include` / `-exclude` | `logs/filter.log` |
+
 ---
 
 ## 1. 命名约定关系推断 (Naming Convention Ref Inference)
