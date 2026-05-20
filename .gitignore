@@ -22,3 +22,6 @@ src/dbexplain-*
 .claude
 .claude.resume
 release-wechat.md
+
+# not expose to user
+docs/ALGORITHMS.md

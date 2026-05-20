@@ -14,6 +14,7 @@ type Result struct {
 	Refs     []*schema.Ref
 	Groups   []TableGroup
 	Issues   []diagnostics.Issue
+	Ranks    []TableScore
 }
 
 type TableGroup struct {
@@ -65,6 +66,10 @@ func Analyze(u *schema.Universe, kindCaps map[string]*capabilities.Set) *Result 
 
 	// 2. 运行基于能力的统一诊断
 	r.Issues = diagnostics.NewRunner().Run(u, kindCaps)
+
+	// 3. 确定性重要性评分
+	r.Ranks = NewRanker().Rank(u, r.Refs)
+
 	return r
 }
 
