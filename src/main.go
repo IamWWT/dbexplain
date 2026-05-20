@@ -46,6 +46,7 @@ func main() {
 	perDSNTimeout := flag.Duration("timeout", 20*time.Second, "per-DSN collect timeout")
 	showVersion := flag.Bool("version", false, "print version and exit")
 	showManual := flag.Bool("manual", false, "print comprehensive manual and exit")
+	language := flag.String("language", "zh", "manual language: zh (Chinese) or en (English)")
 	flag.Parse()
 
 	if *showVersion {
@@ -53,7 +54,7 @@ func main() {
 		return
 	}
 	if *showManual {
-		printManual()
+		printManual(*language)
 		return
 	}
 
@@ -144,7 +145,7 @@ func main() {
 
 	wg.Wait()
 	if len(instances) == 0 {
-		fmt.Fprintf(os.Stderr, "⚠ 所有 DSN 采集均失败，报告为空。请检查日志: %s\n", logDir)
+		fmt.Fprintf(os.Stderr, "[!] 所有 DSN 采集均失败，报告为空。请检查日志: %s\n", logDir)
 	} else {
 		fmt.Fprintf(os.Stderr, "全部采集完成，总耗时 %v\n", time.Since(startAll))
 	}
@@ -345,8 +346,27 @@ func captureJSON(result *analyze.Result) string {
 
 // ── 完整帮助手册 ──
 
-func printManual() {
-	fmt.Print(`
+type langText struct {
+	ZH string
+	EN string
+}
+
+func (lt langText) Get(lang string) string {
+	if lang == "en" {
+		return lt.EN
+	}
+	return lt.ZH
+}
+
+func printManual(lang string) {
+	p := func(zh, en string) string {
+		if lang == "en" {
+			return en
+		}
+		return zh
+	}
+
+	fmt.Print(p(`
 NAME
     dbexplain — 零依赖多数据库结构探查与关系分析工具
 
@@ -360,230 +380,800 @@ DESCRIPTION
     dbexplain 是一个静态编译、无外部运行时依赖的命令行工具。
     只需提供数据库连接串，即可自动导出表结构、列信息、索引、外键，
     分析跨库/跨实例的表关系（显式外键 + 命名推断），生成聚类关系
-    图与问题诊断。
+    图与问题诊断。所有操作为只读，安全无副作用。
+`,
+		`
+NAME
+    dbexplain — zero-dependency multi-database schema explorer and relationship analyzer
 
-    支持 MySQL、PostgreSQL、GaussDB、SQLite、ClickHouse、Redis、
-    Qdrant、Elasticsearch、MongoDB 共 9 种数据库。
+SYNOPSIS
+    dbexplain -dsn '<scheme>://[user:pass@]host[:port][/db][?params]'
+    dbexplain -env
+    dbexplain -config dbs.json
+    dbexplain -dsn '...' -json -o report.json
 
-    所有操作为只读，安全无副作用。
+DESCRIPTION
+    dbexplain is a statically compiled, zero-runtime-dependency CLI tool.
+    Given database connection strings, it auto-exports table structures,
+    column info, indexes, foreign keys, analyzes cross-db/cross-instance
+    table relationships (explicit FK + naming inference), generates
+    cluster graphs and issue diagnostics. All read-only, safe by default.
+`))
 
-─── DSN 格式详解 ──────────────────────────────────────────────
+	fmt.Print(p(`
+
+─── DSN 格式 ──────────────────────────────────────────────────
 
     通用格式:
       scheme://[用户:密码@]主机[:端口][/库名][?param1=val1&param2=val2]
 
-    scheme 一览:
-      mysql://           MySQL (默认端口 3306)
-      postgres://        PostgreSQL (默认端口 5432)
-      gaussdb://         GaussDB (兼容 PostgreSQL 协议)
-      clickhouse://      ClickHouse HTTP (默认端口 8123)
-      sqlite://          本地 SQLite (路径为绝对路径)
-      redis://           Redis (默认端口 6379)
-      elasticsearch://   Elasticsearch HTTP (默认端口 9200)
-      elasticsearchs://  Elasticsearch HTTPS (同 elasticsearch://?tls=true)
-      mongodb://         MongoDB (默认端口 27017)
-      qdrant://          Qdrant 向量数据库 (默认端口 6334)
-
     DSN 参数速查:
       label=<别名>        实例别名，决定日志文件名 logs/<label>.log
-      cluster=true        Redis 集群模式，自动扫描所有分片
-      tls=true            Elasticsearch / Redis 启用 TLS 加密
-      sslmode=<mode>      PostgreSQL SSL 模式:
-                            disable (默认) / require / verify-ca / verify-full
+      cluster=true        Redis 集群模式 (自动扫描所有分片)
+      tls=true            ES / Redis 启用 TLS 加密
+      sslmode=<mode>      PostgreSQL SSL: disable/require/verify-ca/verify-full
       authSource=<db>     MongoDB 认证数据库名
+`,
+		`
 
-    示例:
-      'mysql://root:pass@127.0.0.1:3306/shop?label=shop-db'
-      'postgres://u:p@host:5432/warehouse?sslmode=disable&label=my-pg'
-      'redis://:pass@10.0.0.1:7000/0?cluster=true&label=redis-cluster'
-      'sqlite:///home/user/data/app.db?label=local-sqlite'
-      'mongodb://admin:p@host:27017/mydb?authSource=admin&label=mongo'
-      'qdrant://:api-key@127.0.0.1:6334?label=qdrant'
+─── DSN FORMAT ────────────────────────────────────────────────
 
-─── 参数 (OPTIONS) ───────────────────────────────────────────
+    General format:
+      scheme://[user:password@]host[:port][/dbname][?param1=val1&param2=val2]
 
-    -dsn <DSN-string>
-        指定一个数据库连接串。可重复使用以连接多个数据库。
+    DSN parameters:
+      label=<name>        Instance alias, determines log file name logs/<label>.log
+      cluster=true        Redis cluster mode (auto-scan all shards)
+      tls=true            ES / Redis enable TLS encryption
+      sslmode=<mode>      PostgreSQL SSL: disable/require/verify-ca/verify-full
+      authSource=<db>     MongoDB authentication database name
+`))
 
-    -config <file>
-        从 JSON 文件读取 DSN 列表。文件格式:
-          ["dsn1", "dsn2", ...]
+	fmt.Print(p(`
 
-    -env
-        从当前目录或上层目录的 .env 文件加载 DSN。
-        .env 格式: DB<n>=<DSN>  (如 DB1=mysql://... DB2=redis://...)
-        编号无需连续，程序按数字升序加载。
-        使用 -env 前请确保 .env 文件存在且 DSN 已正确配置。
+─── 全局参数 ──────────────────────────────────────────────────
 
-    -include <filter>
-        仅包含匹配的 DSN，过滤维度:
-          - 数据库类型:    mysql, postgres, redis, mongodb ...
-          - 标签 (label):  shop-db, my-pg ...
-          - .env 编号:     DB1, DB3, DB5 ...
-        逗号分隔，大小写不敏感。示例:
-          -include 'mysql,postgres'        仅采集 MySQL 和 PostgreSQL
-          -include 'DB1,DB3'                仅采集指定编号的 .env DSN
+    -dsn <string>         数据库连接串，可重复多次指定多个库
+    -config <file>        从 JSON 文件读取 DSN 列表 (数组格式)
+    -env                  从 .env 加载 DSN (格式: DB<n>=<DSN>)
+    -include <filter>     仅包含匹配的 DSN (按类型/label/env编号, 逗号分隔)
+    -exclude <filter>     排除匹配的 DSN (格式同 -include)
+    -json                 输出 JSON 格式 (适合程序消费)
+    -o <file>             将报告写入文件 (自动添加 UTF-8 BOM)
+    -timeout <duration>   每 DSN 采集超时 (默认 20s, 如 30s/1m)
+    --version             输出版本号并退出
+    --manual              打印此完整手册并退出
+    --language <zh|en>    手册语言 (默认 zh)
+    -h, --help            打印简版参数列表并退出
+`,
+		`
 
-    -exclude <filter>
-        排除匹配的 DSN，过滤维度同 -include。示例:
-          -exclude 'mongodb,qdrant'         跳过 MongoDB 和 Qdrant
-          -exclude 'DB5'                    排除指定 .env 编号
+─── GLOBAL OPTIONS ────────────────────────────────────────────
 
-        注意: 当 -include 和 -exclude 同时使用时，-include 优先。
+    -dsn <string>         Database connection string, repeatable for multiple databases
+    -config <file>        Read DSN list from JSON file (array format)
+    -env                  Load DSNs from .env file (format: DB<n>=<DSN>)
+    -include <filter>     Only include matching DSNs (by kind/label/env-key, comma-sep)
+    -exclude <filter>     Exclude matching DSNs (same format as -include)
+    -json                 Output JSON format (for programmatic consumption)
+    -o <file>             Write report to file (auto-prepends UTF-8 BOM)
+    -timeout <duration>   Per-DSN collect timeout (default 20s, e.g. 30s/1m)
+    --version             Print version and exit
+    --manual              Print this comprehensive manual and exit
+    --language <zh|en>    Manual language (default zh)
+    -h, --help            Print brief flag list and exit
+`))
 
-    -json
-        输出 JSON 格式而非终端美化输出。适合程序消费或管道处理。
-        详见下方「JSON 输出格式」章节。
+	fmt.Print(p(`
 
-    -o <file>
-        将报告写入指定文件（而非 stdout）。
-        输出内容自动添加 UTF-8 BOM，兼容 Windows Notepad/CMD。
-        与 -json 配合使用时写入 JSON 格式。
+─── 支持数据库总览 ────────────────────────────────────────────
 
-    -timeout <duration>
-        每个 DSN 的采集超时时间 (默认 20s)。
-        格式: 30s, 1m, 500ms 等。
-        单库采集超时不影响其他 DSN，该库被跳过并记录日志。
+    类型             默认端口   采集方式               元数据亮点
+    ───────────────  ────────  ────────────────────  ──────────────────
+    mysql            3306      information_schema     FK、索引、注释推断
+    postgres         5432      pg_catalog             多Schema、行数统计
+    gaussdb          25308     pg_catalog (兼容PG)    行数、表大小
+    clickhouse       8123      HTTP/system.tables     排序键/分区键/主键
+    sqlite           -         PRAGMA                 纯Go驱动(无CGO)
+    redis            6379      SCAN/Pipeline           键模式推断/风险诊断
+    elasticsearch    9200      Cat Indices            索引映射
+    mongodb          27017     ListCollections        近似文档数
+    qdrant           6334      gRPC                   集合向量维度
+`,
+		`
 
-    --version
-        输出版本号并退出。
+─── SUPPORTED DATABASES ──────────────────────────────────────
 
-    --manual
-        打印此完整帮助手册并退出。
+    Kind             Port     Collection Method      Metadata Highlights
+    ───────────────  ───────  ────────────────────   ──────────────────
+    mysql            3306     information_schema     FK, indexes, comment inference
+    postgres         5432     pg_catalog             Multi-schema, row estimates
+    gaussdb          25308    pg_catalog (PG compat) Row counts, table sizes
+    clickhouse       8123     HTTP/system.tables     Sort/partition/primary keys
+    sqlite           -        PRAGMA                 Pure Go driver (no CGO)
+    redis            6379     SCAN/Pipeline          Key pattern inference, risk diag
+    elasticsearch    9200     Cat Indices            Index mappings
+    mongodb          27017    ListCollections        Estimated doc counts
+    qdrant           6334     gRPC                   Collection vector dimensions
+`))
 
-    -h, --help
-        打印简版参数列表并退出。
+	// ─── Per-database sections ───
 
-─── 使用示例 ──────────────────────────────────────────────────
+	printManualMySQL(p)
+	printManualPostgres(p)
+	printManualGaussDB(p)
+	printManualClickHouse(p)
+	printManualSQLite(p)
+	printManualRedis(p)
+	printManualElasticsearch(p)
+	printManualMongoDB(p)
+	printManualQdrant(p)
 
-    # 1) 分析单个 MySQL 库
-    ./dbexplain -dsn 'mysql://root:pwd@localhost:3306/mydb?label=my'
-
-    # 2) 同时分析多个不同数据库
-    ./dbexplain \
-      -dsn 'mysql://root:pwd@172.0.0.1:3306/orders' \
-      -dsn 'postgres://u:p@10.0.0.2:5432/users?label=pg' \
-      -dsn 'redis://:pwd@10.0.0.3:6379/0?label=cache'
-
-    # 3) 使用 .env 文件 (推荐)
-    cat > .env << 'EOF'
-    DB1=mysql://root:pwd@127.0.0.1:3306/shop?label=my-mysql
-    DB3=redis://:pwd@127.0.0.1:6379/0?label=my-redis
-    DB5=postgres://u:p@localhost:5432/warehouse?label=my-pg
-    EOF
-    ./dbexplain -env
-
-    # 4) 用 -include 过滤 .env 中的指定 DSN
-    ./dbexplain -env -include 'mysql,DB3'
-
-    # 5) 输出 JSON 到文件 (程序消费)
-    ./dbexplain -env -json -o report.json
-
-    # 6) 输出美化报告到文件 (人工阅读)
-    ./dbexplain -env -o report.md
-
-    # 7) 自定义超时
-    ./dbexplain -env -timeout 60s
+	fmt.Print(p(`
 
 ─── JSON 输出格式 ────────────────────────────────────────────
 
     顶层结构:
-
-    {
-      "instances": [ ... ],   // 实例数组
-      "refs":      [ ... ],   // 表关系数组 (外键 + 推断)
-      "groups":    [ ... ],   // 表聚类数组 (可选)
-      "issues":    [ ... ]    // 问题诊断数组
-    }
-
-    ── instances[] ──────────────────────────────────────────
-
       {
-        "label":     "my-mysql",       // 实例别名 (来自 DSN ?label=)
-        "kind":      "mysql",          // 数据库类型
-        "databases": [                 // 数据库数组
-          {
-            "name":        "mydb",     // 数据库名
-            "table_count": 5,          // 该库下表的数量
-            "tables": [                // 表数组
-              {
-                "name":          "orders",      // 表名
-                "comment":       "订单表",        // 表注释 (可选)
-                "engine":        "InnoDB",       // 存储引擎 (可选)
-                "row_count":     42000,          // 近似行数 (可选)
-                "size_bytes":    1572864,        // 表大小 (字节, 可选)
-                "partition_key": "...",          // 分区键 (可选, ClickHouse)
-                "order_by_key":  "...",          // 排序键 (可选, ClickHouse)
-                "key_pattern":   "...",          // Redis 键模式 (可选)
-                "data_type":     "...",          // 数据类型 (可选, Redis)
-                "columns": [                     // 列数组
-                  {
-                    "name":             "id",
-                    "type":             "int(11)",
-                    "nullable":         false,
-                    "default":          "",         // 默认值 (可选)
-                    "comment":          "标识符",    // 列注释 (可选)
-                    "is_primary":       true,       // 主键 (可选)
-                    "is_unique":        false,      // 唯一约束 (可选)
-                    "is_index":         false,      // 有索引 (可选)
-                    "is_sort_key":      false,      // 排序键 (可选)
-                    "is_partition_key": false       // 分区键 (可选)
-                  }
-                ],
-                "indexes": [                      // 索引数组 (可选)
-                  {
-                    "name":    "idx_user_id",
-                    "columns": ["user_id"],
-                    "unique":  false,
-                    "type":    ""                 // 索引类型 (可选)
-                  }
-                ],
-                "foreign_keys": [                 // 外键数组 (可选)
-                  {
-                    "name":         "fk_orders_users",
-                    "columns":      ["user_id"],
-                    "ref_instance": "my-mysql",
-                    "ref_db":       "mydb",
-                    "ref_table":    "users",
-                    "ref_columns":  ["id"]
-                  }
-                ]
-              }
-            ]
-          }
-        ]
+        "instances": [ ... ],   实例数组
+        "refs":      [ ... ],   表关系数组 (外键 + 推断)
+        "groups":    [ ... ],   表聚类数组 (可选)
+        "issues":    [ ... ]    问题诊断数组
       }
 
-    ── refs[] ────────────────────────────────────────────────
+    instances[].databases[].tables[] 包含:
+      name, comment, engine, row_count, size_bytes,
+      partition_key, order_by_key, key_pattern, data_type,
+      columns[] (name, type, nullable, is_primary, is_unique,
+                 is_index, is_sort_key, is_partition_key, comment),
+      indexes[] (name, columns, unique, type),
+      foreign_keys[] (name, columns, ref_instance, ref_db, ref_table, ref_columns)
 
+    refs[] 字段:
+      from, to, inferred (bool), confidence (int, 推断置信度)
+
+    issues[] 字段:
+      severity (warn|info), table, message
+`,
+		`
+
+─── JSON OUTPUT FORMAT ───────────────────────────────────────
+
+    Top-level:
       {
-        "from":       "my-mysql/mydb.orders(user_id)",
-        "to":         "my-mysql/mydb.users(id)",
-        "inferred":   false,          // false=显式外键, true=命名推断
-        "confidence": 85              // 推断置信度 (仅 inferred=true 时有效)
+        "instances": [ ... ],   Instance array
+        "refs":      [ ... ],   Table relationships (FK + inferred)
+        "groups":    [ ... ],   Table clusters (optional)
+        "issues":    [ ... ]    Issue diagnostics
       }
 
-    ── groups[] ──────────────────────────────────────────────
+    instances[].databases[].tables[] contains:
+      name, comment, engine, row_count, size_bytes,
+      partition_key, order_by_key, key_pattern, data_type,
+      columns[] (name, type, nullable, is_primary, is_unique,
+                 is_index, is_sort_key, is_partition_key, comment),
+      indexes[] (name, columns, unique, type),
+      foreign_keys[] (name, columns, ref_instance, ref_db, ref_table, ref_columns)
 
-      {
-        "name":   "orders* cluster",   // 聚类名称
-        "tables": [
-          { "instance": "my-mysql", "db": "mydb", "table": "orders" },
-          { "instance": "my-pg",    "db": "warehouse", "table": "order_items" }
-        ]
-      }
+    refs[] fields:
+      from, to, inferred (bool), confidence (int, inference confidence)
 
-    ── issues[] ──────────────────────────────────────────────
+    issues[] fields:
+      severity (warn|info), table, message
+`))
 
-      {
-        "severity": "warn",
-        "table":    "my-mysql/mydb/orders",
-        "message":  "FK column \"user_id\" has no index"
-      }
+	fmt.Print(p(`
 
-─── EXIT CODES ───────────────────────────────────────────────
+─── 退出码 ────────────────────────────────────────────────────
 
     0   成功
     1   参数错误、配置读取失败、所有 DSN 采集失败
-`)
+`,
+		`
+
+─── EXIT CODES ───────────────────────────────────────────────
+
+    0   Success
+    1   Argument error, config read failure, all DSN collects failed
+`))
+}
+
+// ── 各数据库详细章节 ──
+
+func printManualMySQL(p func(string, string) string) {
+	fmt.Print(p(`
+
+─── MySQL ─────────────────────────────────────────────────────
+
+    DSN 格式:
+      mysql://用户:密码@主机:端口/库名?label=别名
+
+    端口: 默认 3306
+    库名: 必填 (或用 SHOW DATABASES 全量采集非系统库)
+
+    采集机制:
+      • 表元数据 — INFORMATION_SCHEMA.TABLES: 表名、引擎(InnoDB/MyISAM)、
+        行数估算(TABLE_ROWS)、数据大小、表注释
+      • 列信息   — SHOW FULL COLUMNS: 名称、类型、可空、键类型(PRI/UNI/MUL)、
+        默认值、注释；对无注释字段取首行数据通过规则引擎推断语义
+      • 索引     — SHOW INDEX FROM: 主键(PRIMARY) + 二级索引，含列列表与唯一性
+      • 外键     — INFORMATION_SCHEMA.KEY_COLUMN_USAGE: 约束名、本表列、
+        引用库/表/列
+      • 主键识别 — SHOW INDEX WHERE Key_name='PRIMARY'
+
+    安全机制:
+      • 跳过系统库: information_schema, performance_schema, mysql, sys
+      • 所有查询使用参数化，标识符严格转义
+      • 密码在日志和输出中脱敏 (替换为 ***)
+
+    示例:
+      ./dbexplain -dsn 'mysql://root:pwd@127.0.0.1:3306/shop?label=shop-db'
+`,
+		`
+
+─── MySQL ─────────────────────────────────────────────────────
+
+    DSN format:
+      mysql://user:password@host:port/dbname?label=alias
+
+    Port: default 3306
+    DBName: required (or all non-system DBs are auto-collected)
+
+    Collection mechanism:
+      • Table metadata — INFORMATION_SCHEMA.TABLES: name, engine (InnoDB/MyISAM),
+        row estimate (TABLE_ROWS), data size, table comment
+      • Column info   — SHOW FULL COLUMNS: name, type, nullable, key (PRI/UNI/MUL),
+        default, comment; uncommented columns get semantic inference from sample row
+      • Indexes       — SHOW INDEX FROM: PRIMARY key + secondary indexes, with
+        column lists and uniqueness
+      • Foreign keys  — INFORMATION_SCHEMA.KEY_COLUMN_USAGE: constraint name,
+        local columns, referenced DB/table/columns
+      • PK detection  — SHOW INDEX WHERE Key_name='PRIMARY'
+
+    Safety:
+      • Skips system DBs: information_schema, performance_schema, mysql, sys
+      • All queries parameterized, identifiers strictly escaped
+      • Passwords redacted in logs and output (replaced with ***)
+
+    Example:
+      ./dbexplain -dsn 'mysql://root:pwd@127.0.0.1:3306/shop?label=shop-db'
+`))
+}
+
+func printManualPostgres(p func(string, string) string) {
+	fmt.Print(p(`
+
+─── PostgreSQL ────────────────────────────────────────────────
+
+    DSN 格式:
+      postgres://用户:密码@主机:端口/库名?label=别名&sslmode=disable
+
+    端口: 默认 5432
+    别名: postgres, postgresql, pg
+
+    特有参数:
+      sslmode=<mode>  SSL 连接模式:
+                        disable (默认) — 不加密
+                        require       — 必须 SSL，不验证证书
+                        verify-ca     — 验证服务器证书由可信 CA 签发
+                        verify-full   — 验证证书 + 主机名匹配
+
+    采集机制:
+      • 多 Schema — 自动采集所有非系统 schema (pg_catalog/information_schema 除外)
+      • 库列表   — pg_database (跳过模板库和不可连接库)
+      • 表元数据 — pg_class + pg_namespace: 表名、行数(n_live_tup)、
+        体积(pg_total_relation_size)、注释(obj_description)
+      • 列信息   — information_schema.columns + pg_constraint:
+        名称、类型、可空、默认值、主键/唯一约束标记、注释(col_description)
+      • 索引     — pg_indexes: 名称、唯一性、列列表
+      • 外键     — pg_constraint (confreltype='f'): 约束名、列、引用表/列
+      • 行数统计 — pg_stat_user_tables.n_live_tup (近似值)
+
+    安全机制:
+      • SSL 可配置，默认 disable (兼容内网环境)
+      • 跳过系统 schema: pg_%, information_schema
+      • 参数化查询，密码脱敏
+
+    示例:
+      ./dbexplain -dsn 'postgres://u:p@host:5432/warehouse?label=my-pg&sslmode=disable'
+`,
+		`
+
+─── PostgreSQL ────────────────────────────────────────────────
+
+    DSN format:
+      postgres://user:password@host:port/dbname?label=alias&sslmode=disable
+
+    Port: default 5432
+    Aliases: postgres, postgresql, pg
+
+    Specific parameters:
+      sslmode=<mode>  SSL connection mode:
+                        disable (default) — no encryption
+                        require       — SSL required, no cert verification
+                        verify-ca     — verify server cert signed by trusted CA
+                        verify-full   — verify cert + hostname match
+
+    Collection mechanism:
+      • Multi-schema — Auto-collects all non-system schemas (excluding
+        pg_catalog / information_schema)
+      • DB list      — pg_database (skips templates and non-connectable DBs)
+      • Table meta   — pg_class + pg_namespace: name, row count (n_live_tup),
+        size (pg_total_relation_size), comment (obj_description)
+      • Column info  — information_schema.columns + pg_constraint:
+        name, type, nullable, default, PK/UNIQUE flag, comment (col_description)
+      • Indexes      — pg_indexes: name, uniqueness, column list
+      • Foreign keys — pg_constraint (confreltype='f'): constraint name, columns,
+        referenced table/columns
+      • Row stats    — pg_stat_user_tables.n_live_tup (approximate)
+
+    Safety:
+      • SSL configurable, defaults to disable (internal network friendly)
+      • Skips system schemas: pg_%, information_schema
+      • Parameterized queries, password redaction
+
+    Example:
+      ./dbexplain -dsn 'postgres://u:p@host:5432/warehouse?label=my-pg&sslmode=disable'
+`))
+}
+
+func printManualGaussDB(p func(string, string) string) {
+	fmt.Print(p(`
+
+─── GaussDB ───────────────────────────────────────────────────
+
+    DSN 格式:
+      gaussdb://用户:密码@主机:端口/库名?label=别名
+
+    端口: 默认 25308
+    别名: gaussdb, opengauss
+
+    说明:
+      GaussDB 兼容 PostgreSQL 协议，使用同一个 Connector。
+      采集机制、安全策略与 PostgreSQL 完全相同 (pg_catalog)。
+      支持行数统计、多 Schema 自动采集。
+
+    示例:
+      ./dbexplain -dsn 'gaussdb://user:pwd@192.168.0.1:25308/mydb?label=my-gauss'
+`,
+		`
+
+─── GaussDB ───────────────────────────────────────────────────
+
+    DSN format:
+      gaussdb://user:password@host:port/dbname?label=alias
+
+    Port: default 25308
+    Aliases: gaussdb, opengauss
+
+    Notes:
+      GaussDB is PostgreSQL-protocol compatible and uses the same Connector.
+      Collection mechanism and safety policies are identical to PostgreSQL
+      (pg_catalog). Supports row stats and multi-schema auto-collection.
+
+    Example:
+      ./dbexplain -dsn 'gaussdb://user:pwd@192.168.0.1:25308/mydb?label=my-gauss'
+`))
+}
+
+func printManualClickHouse(p func(string, string) string) {
+	fmt.Print(p(`
+
+─── ClickHouse ────────────────────────────────────────────────
+
+    DSN 格式:
+      clickhouse://用户:密码@主机:端口/库名?label=别名
+
+    端口: 默认 8123 (HTTP 接口)
+    别名: clickhouse, ch
+
+    采集机制:
+      • HTTP 接口 — 直接通过 HTTP POST 发送查询 (非标准 database/sql 驱动)
+      • 库列表   — SHOW DATABASES (跳过 system, information_schema)
+      • 表元数据 — system.tables: 名称、引擎(MergeTree/ReplacingMergeTree/...)、
+        行数、体积、注释、排序键(sorting_key)、分区键(partition_key)、主键
+      • 列信息   — system.columns: 名称、类型、默认值、注释、
+        is_in_primary_key, is_in_sorting_key, is_in_partition_key
+      • 列标志   — 自动识别: PK (主键), SORT (排序键), PART (分区键)
+
+    特有引擎:
+      MergeTree           — 标准合并树 (有排序键、分区键)
+      ReplacingMergeTree  — 去重合并树 (按排序键去重)
+      Distributed         — 分布式表
+
+    已知局限:
+      • 无传统外键约束
+      • 注释推断依赖首行采样数据
+      • 不支持 View 引擎表的行数统计
+
+    示例:
+      ./dbexplain -dsn 'clickhouse://default:pwd@127.0.0.1:8123/default?label=my-ch'
+`,
+		`
+
+─── ClickHouse ────────────────────────────────────────────────
+
+    DSN format:
+      clickhouse://user:password@host:port/dbname?label=alias
+
+    Port: default 8123 (HTTP interface)
+    Aliases: clickhouse, ch
+
+    Collection mechanism:
+      • HTTP interface — Queries sent via HTTP POST (non-standard database/sql driver)
+      • DB list       — SHOW DATABASES (skips system, information_schema)
+      • Table meta    — system.tables: name, engine (MergeTree/ReplacingMergeTree/...),
+        row count, size, comment, sorting_key, partition_key, primary key
+      • Column info   — system.columns: name, type, default, comment,
+        is_in_primary_key, is_in_sorting_key, is_in_partition_key
+      • Column flags  — Auto-detected: PK (primary key), SORT (sorting key),
+        PART (partition key)
+
+    Notable engines:
+      MergeTree           — Standard merge tree (with sort/partition keys)
+      ReplacingMergeTree  — Deduplicating merge tree (dedup by sort key)
+      Distributed         — Distributed table
+
+    Known limitations:
+      • No traditional foreign key constraints
+      • Comment inference relies on sample row data
+      • View engine tables excluded from row counts
+
+    Example:
+      ./dbexplain -dsn 'clickhouse://default:pwd@127.0.0.1:8123/default?label=my-ch'
+`))
+}
+
+func printManualSQLite(p func(string, string) string) {
+	fmt.Print(p(`
+
+─── SQLite ────────────────────────────────────────────────────
+
+    DSN 格式:
+      sqlite:///绝对路径?label=别名
+
+    别名: sqlite, sqlite3
+
+    说明:
+      纯 Go 驱动 (无 CGO)，零外部依赖。
+      路径为绝对路径，用户/密码留空。
+
+    采集机制:
+      • 表列表   — sqlite_master: 表名 (跳过 sqlite_% 内部表)
+      • 列信息   — PRAGMA table_info(): 名称、类型、可空、默认值、主键标志
+      • 行数     — SELECT COUNT(*) (直接查询)
+      • 索引     — PRAGMA index_list() + PRAGMA index_info(): 名称、唯一性、列列表
+      • 外键     — PRAGMA foreign_key_list(): 列、引用表/列、ON UPDATE/DELETE 动作
+      • 注释推断 — 首行数据 + 规则引擎 (SQLite 无原生注释)
+
+    安全机制:
+      • 只读操作，无写/改/删
+      • 跳过 sqlite_% 内部表
+      • 密码在日志中脱敏
+
+    示例:
+      ./dbexplain -dsn 'sqlite:///home/user/data/app.db?label=local-sqlite'
+`,
+		`
+
+─── SQLite ────────────────────────────────────────────────────
+
+    DSN format:
+      sqlite:///absolute/path?label=alias
+
+    Aliases: sqlite, sqlite3
+
+    Notes:
+      Pure Go driver (no CGO), zero external dependencies.
+      Path must be absolute; user/password left empty.
+
+    Collection mechanism:
+      • Table list  — sqlite_master: table names (skips sqlite_% internal tables)
+      • Column info — PRAGMA table_info(): name, type, nullable, default, PK flag
+      • Row count   — SELECT COUNT(*) (direct query)
+      • Indexes     — PRAGMA index_list() + PRAGMA index_info(): name, unique, columns
+      • Foreign keys— PRAGMA foreign_key_list(): columns, ref table/columns,
+        ON UPDATE/DELETE actions
+      • Comment inf.— First row sampling + rule engine (SQLite has no native comments)
+
+    Safety:
+      • Read-only operations, no write/update/delete
+      • Skips sqlite_% internal tables
+      • Passwords redacted in logs
+
+    Example:
+      ./dbexplain -dsn 'sqlite:///home/user/data/app.db?label=local-sqlite'
+`))
+}
+
+func printManualRedis(p func(string, string) string) {
+	fmt.Print(p(`
+
+─── Redis ─────────────────────────────────────────────────────
+
+    DSN 格式 (单机):
+      redis://:密码@主机:端口/数据库编号?label=别名
+    DSN 格式 (集群):
+      redis://:密码@任意节点:端口/0?cluster=true&label=别名
+
+    端口: 默认 6379
+    别名: redis, rediss (rediss 自动启用 TLS)
+
+    特有参数:
+      cluster=true    启用 Redis 集群模式，自动扫描所有分片
+      tls=true        启用 TLS 加密连接
+
+    采集机制:
+      • 键空间扫描 — SCAN 非阻塞迭代 (集群: ForEachMaster 遍历分片)
+      • 采样限制   — 最多扫描 2000 个 key，每批 100 个
+      • 模式推断   — 正则规范化: \d{2,}→{id}, hex→{hex}, UUID→{uuid}
+        将相似 key 聚合为模式 (如 session:{hex}), 生成"表"
+      • Pipeline   — 批量 TYPE/TTL/MEMORY USAGE 查询，减少网络往返
+      • 类型采样   — string: GETRANGE 截取前 512 字节推断类型
+                      hash: HSCAN 采样 5 个字段
+                      stream: XRANGE 采样 10 条消息
+                      set/zset/list: 统计成员数
+
+    风险诊断:
+      • 无 TTL 安全敏感键 (session/token/auth/otp/captcha/login/credential)
+      • 超大容器 (hash>1000 字段, set/list/zset>10000 成员)
+      • 大 key (string>1MB)
+      • 未消费 stream (无消费者组, 消息>1000)
+      • 超长 TTL (>30 天)
+
+    安全机制:
+      • SCAN 非阻塞 (不会阻塞 Redis)
+      • 严格采样上限 (2000 key, 5 hash 字段, 512 字节, 10 stream 消息)
+      • 全量只读, 绝不写/改/删
+      • 集群模式仅访问 db0
+
+    示例:
+      # 单机
+      ./dbexplain -dsn 'redis://:pwd@127.0.0.1:6379/0?label=my-redis'
+      # 集群
+      ./dbexplain -dsn 'redis://:pwd@10.0.0.1:7000/0?cluster=true&label=my-cluster'
+`,
+		`
+
+─── Redis ─────────────────────────────────────────────────────
+
+    DSN format (standalone):
+      redis://:password@host:port/db_index?label=alias
+    DSN format (cluster):
+      redis://:password@any-node:port/0?cluster=true&label=alias
+
+    Port: default 6379
+    Aliases: redis, rediss (rediss auto-enables TLS)
+
+    Specific parameters:
+      cluster=true    Enable Redis cluster mode, auto-scan all shards
+      tls=true        Enable TLS encrypted connection
+
+    Collection mechanism:
+      • Keyspace scan — SCAN non-blocking iteration (cluster: ForEachMaster per shard)
+      • Sampling limit— Max 2000 keys, 100 per batch
+      • Pattern infer — Regex normalization: \d{2,}→{id}, hex→{hex}, UUID→{uuid}
+        Groups similar keys into patterns (e.g. session:{hex}), generating "tables"
+      • Pipeline      — Batch TYPE/TTL/MEMORY USAGE queries, fewer round-trips
+      • Type sampling — string: GETRANGE first 512 bytes to infer value type
+                        hash: HSCAN sample 5 fields
+                        stream: XRANGE sample 10 messages
+                        set/zset/list: count members
+
+    Risk diagnostics:
+      • No-TTL security-sensitive keys (session/token/auth/otp/captcha/login/credential)
+      • Oversized containers (hash>1000 fields, set/list/zset>10000 members)
+      • Large keys (string>1MB)
+      • Unconsumed streams (no consumer group, messages>1000)
+      • Very long TTL (>30 days)
+
+    Safety:
+      • SCAN is non-blocking (won't block Redis)
+      • Strict sampling caps (2000 keys, 5 hash fields, 512 bytes, 10 stream msgs)
+      • Fully read-only, never write/update/delete
+      • Cluster mode only accesses db0
+
+    Example:
+      # Standalone
+      ./dbexplain -dsn 'redis://:pwd@127.0.0.1:6379/0?label=my-redis'
+      # Cluster
+      ./dbexplain -dsn 'redis://:pwd@10.0.0.1:7000/0?cluster=true&label=my-cluster'
+`))
+}
+
+func printManualElasticsearch(p func(string, string) string) {
+	fmt.Print(p(`
+
+─── Elasticsearch ─────────────────────────────────────────────
+
+    DSN 格式 (HTTP):
+      elasticsearch://用户:密码@主机:端口?label=别名
+    DSN 格式 (HTTPS):
+      elasticsearchs://用户:密码@主机:端口?label=别名
+      或 elasticsearch://...?tls=true&label=别名
+
+    端口: 默认 9200
+    别名: elasticsearch, es, elasticsearchs
+
+    特有参数:
+      tls=true        启用 HTTPS (InsecureSkipVerify, 诊断工具可接受)
+
+    采集机制:
+      • 索引列表 — Cat Indices API: 获取所有索引名
+      • 索引映射 — Indices.GetMapping: 遍历 properties 提取字段名和类型
+      • 字段     — 名称 (如 title, severity), 类型 (text/keyword/date/nested/...)
+      • 列标志   — 自动标记: NN (非空, 所有 ES 字段视为必填)
+
+    过滤:
+      • 跳过以 . 开头的系统索引 (如 .kibana, .security 等)
+
+    已知局限:
+      • 不获取文档数 (row_count)
+      • 不获取索引设置和别名
+      • 不获取嵌套字段的展开结构
+
+    示例:
+      # HTTP
+      ./dbexplain -dsn 'elasticsearch://elastic:pwd@127.0.0.1:9200?label=my-es'
+      # HTTPS
+      ./dbexplain -dsn 'elasticsearchs://elastic:pwd@127.0.0.1:9200?label=my-es'
+`,
+		`
+
+─── Elasticsearch ─────────────────────────────────────────────
+
+    DSN format (HTTP):
+      elasticsearch://user:password@host:port?label=alias
+    DSN format (HTTPS):
+      elasticsearchs://user:password@host:port?label=alias
+      or elasticsearch://...?tls=true&label=alias
+
+    Port: default 9200
+    Aliases: elasticsearch, es, elasticsearchs
+
+    Specific parameters:
+      tls=true        Enable HTTPS (InsecureSkipVerify, acceptable for diagnostics)
+
+    Collection mechanism:
+      • Index list  — Cat Indices API: get all index names
+      • Index maps  — Indices.GetMapping: iterate properties to extract field name & type
+      • Fields      — name (e.g. title, severity), type (text/keyword/date/nested/...)
+      • Column flags— Auto-marked: NN (not-null, all ES fields treated as required)
+
+    Filtering:
+      • Skips system indices starting with . (e.g. .kibana, .security)
+
+    Known limitations:
+      • Document counts not fetched (row_count)
+      • Index settings and aliases not fetched
+      • Nested field structures not expanded
+
+    Example:
+      # HTTP
+      ./dbexplain -dsn 'elasticsearch://elastic:pwd@127.0.0.1:9200?label=my-es'
+      # HTTPS
+      ./dbexplain -dsn 'elasticsearchs://elastic:pwd@127.0.0.1:9200?label=my-es'
+`))
+}
+
+func printManualMongoDB(p func(string, string) string) {
+	fmt.Print(p(`
+
+─── MongoDB ───────────────────────────────────────────────────
+
+    DSN 格式:
+      mongodb://用户:密码@主机:端口/库名?authSource=认证库&label=别名
+
+    端口: 默认 27017
+
+    必填参数:
+      authSource=<db>  认证数据库名 (用户创建所在的库, 如 admin)
+      库名              路径中必须指定数据库名
+
+    采集机制:
+      • 集合列表 — db.ListCollectionNames(): 获取所有集合
+      • 文档数   — EstimatedDocumentCount(): 近似文档数 (零数据风险)
+      • 列信息   — 固定 _id 列 (objectId 类型, "mongodb document primary key")
+      • 引擎标记 — 硬编码为 WiredTiger
+
+    安全机制:
+      • 强制要求库名 (防止意外全实例扫描)
+      • 超时 10s, 禁读重试, 禁写重试 (快速失败)
+      • 仅 ListCollections + EstimatedDocumentCount (零数据风险)
+
+    已知局限:
+      • 不获取文档 Schema/字段结构 (MongoDB 无固定模式)
+      • 不获取索引信息
+      • EstimatedDocumentCount 为近似值 (非精确 COUNT)
+
+    示例:
+      ./dbexplain -dsn 'mongodb://admin:pwd@127.0.0.1:27017/mydb?authSource=admin&label=my-mongo'
+`,
+		`
+
+─── MongoDB ───────────────────────────────────────────────────
+
+    DSN format:
+      mongodb://user:password@host:port/dbname?authSource=authDB&label=alias
+
+    Port: default 27017
+
+    Required parameters:
+      authSource=<db>  Authentication database name (where user was created, e.g. admin)
+      dbname           Database name must be specified in the path
+
+    Collection mechanism:
+      • Collections — db.ListCollectionNames(): get all collection names
+      • Doc count   — EstimatedDocumentCount(): approximate count (zero data risk)
+      • Column info — Fixed _id column (objectId, "mongodb document primary key")
+      • Engine tag  — Hardcoded as WiredTiger
+
+    Safety:
+      • DB name required (prevents accidental full-instance scan)
+      • Timeout 10s, read retries disabled, write retries disabled (fast fail)
+      • Only ListCollections + EstimatedDocumentCount (zero data risk)
+
+    Known limitations:
+      • Document schema/field structure not collected (MongoDB is schemaless)
+      • Index information not collected
+      • EstimatedDocumentCount is approximate (not exact COUNT)
+
+    Example:
+      ./dbexplain -dsn 'mongodb://admin:pwd@127.0.0.1:27017/mydb?authSource=admin&label=my-mongo'
+`))
+}
+
+func printManualQdrant(p func(string, string) string) {
+	fmt.Print(p(`
+
+─── Qdrant ────────────────────────────────────────────────────
+
+    DSN 格式:
+      qdrant://:api密钥@主机:端口?label=别名
+
+    端口: 默认 6334 (gRPC)
+
+    说明:
+      Qdrant 是向量数据库，用户名为空 (仅用 API Key 认证)。
+
+    采集机制:
+      • 集合列表 — client.ListCollections(): 获取所有集合
+      • 点数量   — info.GetPointsCount(): 向量数量
+      • 列信息   — 固定 vector 列 (float[] 类型, "embedding vector")
+      • 引擎标记 — 硬编码为 qdrant
+
+    已知局限:
+      • 不获取向量维度
+      • 不获取 payload schema
+      • 当前仅支持非 TLS 连接 (UseTLS=false)
+
+    示例:
+      ./dbexplain -dsn 'qdrant://:my-api-key@127.0.0.1:6334?label=my-qdrant'
+`,
+		`
+
+─── Qdrant ────────────────────────────────────────────────────
+
+    DSN format:
+      qdrant://:api-key@host:port?label=alias
+
+    Port: default 6334 (gRPC)
+
+    Notes:
+      Qdrant is a vector database. Username is empty (API Key auth only).
+
+    Collection mechanism:
+      • Collections — client.ListCollections(): get all collections
+      • Point count — info.GetPointsCount(): vector count
+      • Column info — Fixed vector column (float[], "embedding vector")
+      • Engine tag  — Hardcoded as qdrant
+
+    Known limitations:
+      • Vector dimensions not collected
+      • Payload schema not collected
+      • Currently only non-TLS connections supported (UseTLS=false)
+
+    Example:
+      ./dbexplain -dsn 'qdrant://:my-api-key@127.0.0.1:6334?label=my-qdrant'
+`))
 }
