@@ -62,6 +62,11 @@ func FromProvider(p Provider) *Set {
 	return NewSet(p.Capabilities()...)
 }
 
+// Add adds a capability to the set.
+func (s *Set) Add(c Capability) {
+	s.items[c] = true
+}
+
 // Has returns true if the capability is present.
 func (s *Set) Has(c Capability) bool {
 	return s.items[c]

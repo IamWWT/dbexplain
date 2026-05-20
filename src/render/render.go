@@ -95,7 +95,7 @@ func Print(result *analyze.Result) {
 			}
 			fmt.Printf("  %s %s  %s\n",
 				col(icon),
-				dim(iss.Table.Instance+"/"+iss.Table.DB+"/"+iss.Table.Table),
+				dim(iss.Instance+"/"+iss.DB+"/"+iss.Table),
 				iss.Message,
 			)
 		}
@@ -428,8 +428,8 @@ func buildJSONResult(r *analyze.Result) *jsonResult {
 
 	for _, iss := range r.Issues {
 		jr.Issues = append(jr.Issues, jsonIssue{
-			Severity: iss.Severity,
-			Table:    iss.Table.Instance + "/" + iss.Table.DB + "/" + iss.Table.Table,
+			Severity: string(iss.Severity),
+			Table:    iss.Format(),
 			Message:  iss.Message,
 		})
 	}

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 
+	"dbexplain/capabilities"
+	"dbexplain/diagnostics"
 	"dbexplain/schema"
 )
 
@@ -11,7 +13,7 @@ type Result struct {
 	Universe *schema.Universe
 	Refs     []*schema.Ref
 	Groups   []TableGroup
-	Issues   []Issue
+	Issues   []diagnostics.Issue
 }
 
 type TableGroup struct {
@@ -25,13 +27,7 @@ type QTable struct {
 	Table    string
 }
 
-type Issue struct {
-	Severity string // warn | info
-	Table    QTable
-	Message  string
-}
-
-func Analyze(u *schema.Universe) *Result {
+func Analyze(u *schema.Universe, kindCaps map[string]*capabilities.Set) *Result {
 	r := &Result{Universe: u}
 
 	// 1. explicit FKs
@@ -67,12 +63,8 @@ func Analyze(u *schema.Universe) *Result {
 	r.Refs = append(r.Refs, inferRefs(allTables, r.Refs)...)
 	r.Groups = clusterGroups(allTables, r.Refs)
 
-	// 2. 构建 instanceKinds 映射
-	instanceKinds := make(map[string]string)
-	for _, inst := range u.Instances {
-		instanceKinds[inst.Label] = inst.Kind
-	}
-	r.Issues = detectIssues(allTables, r.Refs, instanceKinds)
+	// 2. 运行基于能力的统一诊断
+	r.Issues = diagnostics.NewRunner().Run(u, kindCaps)
 	return r
 }
 
@@ -279,95 +271,3 @@ func longestCommonPrefix(strs []string) string {
 	return prefix
 }
 
-func detectIssues(tables []tableEntry, refs []*schema.Ref, instanceKinds map[string]string) []Issue {
-	var issues []Issue
-
-	for _, e := range tables {
-		kind, exists := instanceKinds[e.inst]
-		if !exists {
-			kind = ""
-		}
-
-		// 1. 外键列无索引 (所有数据库都可能存在显式外键定义)
-		fkCols := map[string]bool{}
-		for _, fk := range e.table.ForeignKeys {
-			for _, c := range fk.Columns {
-				fkCols[strings.ToLower(c)] = true
-			}
-		}
-		indexedCols := map[string]bool{}
-		for _, idx := range e.table.Indexes {
-			for _, c := range idx.Columns {
-				indexedCols[strings.ToLower(c)] = true
-			}
-		}
-		for col := range fkCols {
-			if !indexedCols[col] {
-				issues = append(issues, Issue{
-					Severity: "warn",
-					Table:    QTable{e.inst, e.db, e.table.Name},
-					Message:  fmt.Sprintf("FK column %q has no index — full scan risk", col),
-				})
-			}
-		}
-
-		// 2. 宽表 (通用)
-		if len(e.table.Columns) > 30 {
-			issues = append(issues, Issue{
-				Severity: "info",
-				Table:    QTable{e.inst, e.db, e.table.Name},
-				Message:  fmt.Sprintf("%d columns — consider vertical partitioning", len(e.table.Columns)),
-			})
-		}
-
-		// 3. 无主键 —— 仅对传统 SQL 数据库检测，NoSQL 豁免
-		if !isNoSQLKind(kind) {
-			hasPK := false
-			for _, c := range e.table.Columns {
-				if c.IsPrimary {
-					hasPK = true
-					break
-				}
-			}
-			if !hasPK && len(e.table.Columns) > 0 {
-				issues = append(issues, Issue{
-					Severity: "warn",
-					Table:    QTable{e.inst, e.db, e.table.Name},
-					Message:  "no primary key defined",
-				})
-			}
-		}
-
-		// 4. 无时间戳列 —— 对 NoSQL 和 ClickHouse 豁免 (可按需扩展)
-		if !isNoSQLKind(kind) && kind != "clickhouse" {
-			if len(e.table.Columns) >= 3 {
-				hasTime := false
-				for col := range e.colSet {
-					if strings.Contains(col, "created") || strings.Contains(col, "updated") ||
-						strings.Contains(col, "timestamp") || strings.Contains(col, "time") {
-						hasTime = true
-						break
-					}
-				}
-				if !hasTime {
-					issues = append(issues, Issue{
-						Severity: "info",
-						Table:    QTable{e.inst, e.db, e.table.Name},
-						Message:  "no timestamp column — audit trail gap",
-					})
-				}
-			}
-		}
-	}
-
-	return issues
-}
-
-// isNoSQLKind 判断数据库类型是否属于 NoSQL（键值、文档、向量等），这些通常没有传统“表”的主键概念。
-func isNoSQLKind(kind string) bool {
-    switch kind {
-    case "redis", "mongodb", "qdrant", "elasticsearch":
-        return true
-    }
-    return false
-}

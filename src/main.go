@@ -19,6 +19,7 @@ import (
 	"github.com/joho/godotenv"
 
 	"dbexplain/analyze"
+	"dbexplain/capabilities"
 	"dbexplain/connector"
 	"dbexplain/dsn"
 	"dbexplain/render"
@@ -150,8 +151,22 @@ func main() {
 		fmt.Fprintf(os.Stderr, "全部采集完成，总耗时 %v\n", time.Since(startAll))
 	}
 
+	// 按数据库类型构建能力映射 (每种类型只查询一次)
+	kindCaps := make(map[string]*capabilities.Set)
+	for _, inst := range instances {
+		if _, ok := kindCaps[inst.Kind]; ok {
+			continue
+		}
+		c, err := connector.GetConnector(inst.Kind)
+		if err != nil {
+			kindCaps[inst.Kind] = capabilities.NewSet()
+		} else {
+			kindCaps[inst.Kind] = capabilities.FromProvider(c)
+		}
+	}
+
 	universe := &schema.Universe{Instances: instances}
-	result := analyze.Analyze(universe)
+	result := analyze.Analyze(universe, kindCaps)
 
 	var out string
 	if *jsonOut {
