@@ -105,7 +105,12 @@ func collectPGDB(ctx context.Context, db *sql.DB, dbName, redactedDSN string) (*
 			SELECT t.tablename,
 			       COALESCE(s.n_live_tup, 0),
 			       COALESCE(pg_total_relation_size(quote_ident(t.schemaname) || '.' || quote_ident(t.tablename)), 0),
-			       COALESCE(obj_description((quote_ident(t.schemaname) || '.' || quote_ident(t.tablename))::regclass, 'pg_class'), '')
+			       COALESCE(obj_description((quote_ident(t.schemaname) || '.' || quote_ident(t.tablename))::regclass, 'pg_class'), ''),
+			       COALESCE(s.seq_scan, 0),
+			       COALESCE(s.idx_scan, 0),
+			       COALESCE(s.n_tup_ins, 0),
+			       COALESCE(s.n_tup_upd, 0),
+			       COALESCE(s.n_tup_del, 0)
 			FROM pg_tables t
 			LEFT JOIN pg_stat_user_tables s
 				ON s.schemaname = t.schemaname AND s.relname = t.tablename
@@ -117,8 +122,17 @@ func collectPGDB(ctx context.Context, db *sql.DB, dbName, redactedDSN string) (*
 		}
 		for tRows.Next() {
 			t := &schema.Table{}
-			if err := tRows.Scan(&t.Name, &t.RowCount, &t.SizeBytes, &t.Comment); err != nil {
+			var seqScan, idxScan, ntupIns, ntupUpd, ntupDel int64
+			if err := tRows.Scan(&t.Name, &t.RowCount, &t.SizeBytes, &t.Comment,
+				&seqScan, &idxScan, &ntupIns, &ntupUpd, &ntupDel); err != nil {
 				continue
+			}
+			t.OpStats = &schema.OpStats{
+				SeqScan: seqScan,
+				IdxScan: idxScan,
+				NtupIns: ntupIns,
+				NtupUpd: ntupUpd,
+				NtupDel: ntupDel,
 			}
 			// 非 public schema 的表名加上 schema 前缀，保证跨 schema 唯一
 			if schemaName != "public" {

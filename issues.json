@@ -342,11 +342,12 @@
     {
       "id": "ISSUE-032",
       "title": "[Phase 3] Query-Aware Metadata（操作语义层）",
-      "status": "open",
+      "status": "closed",
+      "closed": "2026-05-20",
       "priority": "low",
       "category": "feature",
-      "description": "采集真实查询行为事实（非 AI 推理）。PostgreSQL: pg_stat_statements；MySQL: performance_schema；ClickHouse: system.query_log；Redis: keyspace stats。提取 join 频率、热表、写入强度、真实依赖关系。这些是可观测的行为事实，不是 AI 推测。详见 docs/ARCHITECTURE.md §7。",
-      "file": "src/connector/postgres.go, mysql.go, clickhouse.go, redis.go (扩展)",
+      "description": "采集真实查询行为事实（非 AI 推理）。PostgreSQL: pg_stat_user_tables seq_scan/idx_scan/n_tup_*；MySQL: performance_schema.table_io_waits_summary_by_table；ClickHouse: system.query_log ARRAY JOIN tables；Redis: INFO stats keyspace_hits/misses。兜底机制：查询失败时静默跳过并记录日志，不可用因子权重自动归零并重新归一化。ISSUE-034 跟踪 GaussDB/TDSQL 兼容性。",
+      "file": "src/connector/postgres.go, mysql.go, clickhouse.go, redis.go",
       "created": "2026-05-20"
     },
     {
@@ -357,6 +358,16 @@
       "category": "feature",
       "description": "与主流 AI Agent 生态集成：Claude Code Skill（已有）、Cursor 集成、OpenHands 集成、Aider 集成。提供标准化的 Agent Context 输出格式，让各平台 AI Agent 无缝消费 IR。",
       "file": "db-relationship-explainer/SKILL.md (扩展)",
+      "created": "2026-05-20"
+    },
+    {
+      "id": "ISSUE-034",
+      "title": "[Phase 3] GaussDB/TDSQL 操作语义元数据兼容性确认",
+      "status": "open",
+      "priority": "medium",
+      "category": "compat",
+      "description": "GaussDB(PG兼容)和TDSQL(MySQL兼容)的操作语义表结构可能与原生PG/MySQL不同。需有实际环境用户确认： GaussDB — pg_stat_user_tables字段名/计数器语义是否一致、pg_stat_statements扩展是否存在、是否有WDR替代方案； TDSQL — performance_schema.table_io_waits_summary_by_table在分布式版本是否反映全局统计、events_statements_summary_by_digest在分片查询下的行为。兜底机制已设计：查询失败时跳过该数据源并记录日志，因子权重自动重新归一化。",
+      "file": "src/connector/postgres.go, src/connector/mysql.go",
       "created": "2026-05-20"
     }
   ]

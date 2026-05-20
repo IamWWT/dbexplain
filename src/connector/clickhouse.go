@@ -99,7 +99,46 @@ func collectCHDB(ctx context.Context, cli *chHTTP, dbName, redactedDSN string) (
 		fillCHTable(ctx, cli, dbName, t, redactedDSN)
 		database.Tables = append(database.Tables, t)
 	}
+
+	// 操作语义采集 (Phase 3) — system.query_log 始终可用
+	collectCHOpStats(ctx, cli, dbName, database.Tables)
+
 	return database, nil
+}
+
+// collectCHOpStats 从 system.query_log 获取每表查询频率统计。
+// ClickHouse 的 tables 字段是内核解析数组，无需正则提取，无文本解析误差。
+func collectCHOpStats(ctx context.Context, cli *chHTTP, dbName string, tables []*schema.Table) {
+	// 批量查询所有表的 query_count（最近 7 天）
+	rows, err := cli.queryRows(ctx, fmt.Sprintf(`
+		SELECT table_name, count() AS cnt, avg(query_duration_ms) AS avg_ms
+		FROM system.query_log
+		ARRAY JOIN tables AS table_name
+		WHERE type = 'QueryFinish'
+		  AND event_time > now() - INTERVAL 7 DAY
+		  AND tables IS NOT NULL
+		  AND database = '%s'
+		GROUP BY table_name`, escCH(dbName)))
+	if err != nil {
+		logf(ctx, "[clickhouse] query_log unavailable for %s: %v", dbName, err)
+		return
+	}
+
+	// 分配到各表
+	statsMap := make(map[string]*schema.OpStats, len(rows))
+	for _, r := range rows {
+		var queryCount int64
+		var avgMs float64
+		fmt.Sscan(r[1], &queryCount)
+		fmt.Sscan(r[2], &avgMs)
+		statsMap[r[0]] = &schema.OpStats{QueryCount: queryCount, AvgDurationMs: avgMs}
+	}
+
+	for _, t := range tables {
+		if s, ok := statsMap[t.Name]; ok {
+			t.OpStats = s
+		}
+	}
 }
 
 func fillCHTable(ctx context.Context, cli *chHTTP, dbName string, t *schema.Table, redactedDSN string) {

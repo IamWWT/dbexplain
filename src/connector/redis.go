@@ -130,7 +130,7 @@ func (redisConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instance
 
 // aggregateInfo 获取 Redis 服务器信息。集群模式下聚合各分片 keyspace 数据。
 func aggregateInfo(ctx context.Context, rdb redis.UniversalClient, isCluster bool) map[string]string {
-	info, err := rdb.Info(ctx, "server", "keyspace", "memory").Result()
+	info, err := rdb.Info(ctx, "server", "keyspace", "memory", "stats").Result()
 	if err != nil {
 		logf(ctx, "[redis] INFO failed: %v", err)
 		return map[string]string{}
@@ -175,19 +175,34 @@ func aggregateInfo(ctx context.Context, rdb redis.UniversalClient, isCluster boo
 
 // buildServerSummary 构建服务器概览表
 func buildServerSummary(infoMap map[string]string, dbIdx int, isCluster bool) *schema.Table {
+	// 解析操作语义统计 (Phase 3)
+	var hits, misses, ops int64
+	fmt.Sscan(infoMap["keyspace_hits"], &hits)
+	fmt.Sscan(infoMap["keyspace_misses"], &misses)
+	fmt.Sscan(infoMap["instantaneous_ops_per_sec"], &ops)
+
+	opStats := &schema.OpStats{
+		KeyspaceHits:   hits,
+		KeyspaceMisses: misses,
+		OpsPerSec:      ops,
+	}
+
 	if isCluster {
 		totalKeys := infoMap["cluster_total_keys"]
-		return &schema.Table{
-			Name: "_server_info",
+		t := &schema.Table{
+			Name:    "_server_info",
 			Comment: fmt.Sprintf("Redis Cluster | version=%s | memory=%s | total_keys=%s",
 				infoMap["redis_version"], infoMap["used_memory_human"], totalKeys),
+			OpStats: opStats,
 		}
+		return t
 	}
 	return &schema.Table{
 		Name: "_server_info",
 		Comment: fmt.Sprintf("Redis %s | memory=%s | total_keys=%s",
 			infoMap["redis_version"], infoMap["used_memory_human"],
 			infoMap["db"+strconv.Itoa(dbIdx)]),
+		OpStats: opStats,
 	}
 }
 

@@ -23,12 +23,16 @@ type Ranker struct {
 }
 
 // DefaultWeights returns the standard factor weights.
+// Phase 2 factors (always available): graph_degree, fk_centrality, row_count, index_density
+// Phase 3 factors (conditionally available): write_intensity, query_frequency
 func DefaultWeights() map[string]float64 {
 	return map[string]float64{
-		"graph_degree":  0.35,
-		"fk_centrality": 0.35,
-		"row_count":     0.20,
-		"index_density": 0.10,
+		"graph_degree":    0.30,
+		"fk_centrality":   0.30,
+		"row_count":       0.18,
+		"index_density":   0.07,
+		"write_intensity": 0.10,
+		"query_frequency": 0.05,
 	}
 }
 
@@ -68,6 +72,8 @@ func (r *Ranker) Rank(u *schema.Universe, refs []*schema.Ref) []TableScore {
 	// Compute raw metrics
 	graphDegree := map[key]int{}
 	fkRefCount := map[key]int{}
+	writeIntensity := map[key]float64{}
+	queryFreq := map[key]float64{}
 
 	for _, ref := range refs {
 		from := key{ref.FromInstance, ref.FromDB, ref.FromTable}
@@ -75,6 +81,46 @@ func (r *Ranker) Rank(u *schema.Universe, refs []*schema.Ref) []TableScore {
 		graphDegree[from]++
 		graphDegree[to]++
 		fkRefCount[to]++
+	}
+
+	// Phase 3: operational stats
+	for _, k := range keys {
+		t := tableMap[k]
+		if t.OpStats != nil {
+			writeIntensity[k] = t.OpStats.WriteIntensity()
+			// Query frequency: use query_count if available, else 0
+			if t.OpStats.QueryCount > 0 {
+				queryFreq[k] = logNorm(t.OpStats.QueryCount, 10000)
+			}
+		}
+	}
+
+	// Detect which Phase 3 factors have any data across the universe
+	hasWrite := false
+	hasQuery := false
+	for _, k := range keys {
+		if writeIntensity[k] > 0 {
+			hasWrite = true
+		}
+		if queryFreq[k] > 0 {
+			hasQuery = true
+		}
+	}
+
+	// Build effective weights: zero out unavailable factors and re-normalize
+	weights := make(map[string]float64)
+	for k, v := range r.Weights {
+		weights[k] = v
+	}
+	if !hasWrite {
+		weights["write_intensity"] = 0
+	}
+	if !hasQuery {
+		weights["query_frequency"] = 0
+	}
+	weightSum := 0.0
+	for _, w := range weights {
+		weightSum += w
 	}
 
 	// Find max values for normalization
@@ -97,15 +143,20 @@ func (r *Ranker) Rank(u *schema.Universe, refs []*schema.Ref) []TableScore {
 	var scores []TableScore
 	for _, k := range keys {
 		factors := map[string]float64{
-			"graph_degree":  safeDiv(float64(graphDegree[k]), float64(maxDegree)),
-			"fk_centrality": safeDiv(float64(fkRefCount[k]), float64(maxFK)),
-			"row_count":     logNorm(rowCounts[k], maxRows),
-			"index_density": clamp(indexDensities[k], 0, 1),
+			"graph_degree":    safeDiv(float64(graphDegree[k]), float64(maxDegree)),
+			"fk_centrality":   safeDiv(float64(fkRefCount[k]), float64(maxFK)),
+			"row_count":       logNorm(rowCounts[k], maxRows),
+			"index_density":   clamp(indexDensities[k], 0, 1),
+			"write_intensity": writeIntensity[k],
+			"query_frequency": queryFreq[k],
 		}
 
 		var score float64
-		for dim, weight := range r.Weights {
+		for dim, weight := range weights {
 			score += weight * factors[dim]
+		}
+		if weightSum > 0 {
+			score = score / weightSum // re-normalize
 		}
 		score = math.Round(score*1000) / 1000 // round to 3 decimal places
 

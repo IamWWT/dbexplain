@@ -234,6 +234,29 @@ func fillMySQLTable(ctx context.Context, db *sql.DB, dbName string, t *schema.Ta
 	} else {
 		logf(ctx, "[mysql] FK query failed for %s: %v", t.Name, err)
 	}
+
+	// 操作语义采集 (Phase 3) — performance_schema 可能不可用，静默跳过
+	collectMySQLOpStats(ctx, db, dbName, t)
+}
+
+// collectMySQLOpStats 从 performance_schema 采集表级 IO 统计。
+// 如果 performance_schema 不可用（如 TDSQL 分布式版本或关闭了该功能），静默跳过。
+func collectMySQLOpStats(ctx context.Context, db *sql.DB, dbName string, t *schema.Table) {
+	row := db.QueryRowContext(ctx, `
+		SELECT COALESCE(SUM(count_read), 0),
+		       COALESCE(SUM(count_write), 0)
+		FROM performance_schema.table_io_waits_summary_by_table
+		WHERE object_schema = ? AND object_name = ?`, dbName, t.Name)
+
+	var countRead, countWrite int64
+	if err := row.Scan(&countRead, &countWrite); err != nil {
+		logf(ctx, "[mysql] performance_schema unavailable for %s.%s, skipping op stats", dbName, t.Name)
+		return
+	}
+	t.OpStats = &schema.OpStats{
+		SeqScan: countRead + countWrite, // MySQL 不区分 seq/index scan
+		NtupIns: countWrite,
+	}
 }
 
 // fetchMySQLSampleRow 获取表的第一行数据，返回 map[column]value
