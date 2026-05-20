@@ -78,7 +78,7 @@ EOF
 ./dbexplain -env -include 'mysql,postgres'
 ./dbexplain -env -exclude 'mongodb,qdrant'
 
-# 输出到文件（自动添加 UTF-8 BOM，兼容 Windows）
+# 输出到文件（Windows 中文系统自动 GBK，其他系统 UTF-8 BOM，记事本/CMD 均兼容）
 ./dbexplain -env -o report.md
 ./dbexplain -env -json -o report.json
 

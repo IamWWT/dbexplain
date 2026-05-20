@@ -379,6 +379,17 @@
       "description": "待评估 GBase (南大通用，国产数据库) 和 HBase (Hadoop生态，宽表/LSM) 是否需要接入 dbexplain。OceanBase (蚂蚁集团，MySQL兼容OLTP) 列入待支持列表，可通过MySQL兼容协议浅层接入(表/列/索引/FK)，需调研是否有特有元数据表(如增量编译、分布式事务信息)。",
       "file": "待定",
       "created": "2026-05-20"
+    },
+    {
+      "id": "ISSUE-036",
+      "title": "Windows -o 文件输出编码兼容性 — GBK自适应",
+      "status": "closed",
+      "closed": "2026-05-20",
+      "priority": "high",
+      "category": "bug",
+      "description": "Windows下 -o 输出UTF-8 BOM文件，CMD `type` 命令按系统代码页(GBK/CP936)解析导致中文乱码，BOM显示为'锘?'。修复：运行时检测ANSI代码页，中文系统(936)转GBK输出，其他locale保持UTF-8 BOM。同时替换schema/infer.go中Unicode省略号(…)为ASCII(...)。引入golang.org/x/sys(Win API)和golang.org/x/text(GBK编码器)，通过build tag分离平台代码(encode_windows.go / encode.go)。",
+      "file": "src/main.go, src/encode.go, src/encode_windows.go, src/schema/infer.go",
+      "created": "2026-05-20"
     }
   ]
 }

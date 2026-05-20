@@ -78,7 +78,7 @@ EOF
 ./dbexplain -env -include 'mysql,postgres'
 ./dbexplain -env -exclude 'mongodb,qdrant'
 
-# Write to file (auto UTF-8 BOM for Windows compatibility)
+# Write to file (Windows CN: auto GBK, others: UTF-8 BOM, Notepad/CMD compatible)
 ./dbexplain -env -o report.md
 ./dbexplain -env -json -o report.json
 
