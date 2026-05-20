@@ -25,9 +25,11 @@ func Register(kind string, constructor func() Connector) {
 func GetConnector(kind string) (Connector, error) {
     registryMu.Lock()
     constructor, ok := registry[kind]
-    registryMu.Unlock()
     if !ok {
+        registryMu.Unlock()
         return nil, fmt.Errorf("no connector for %q", kind)
     }
-    return constructor(), nil
+    c := constructor()
+    registryMu.Unlock()
+    return c, nil
 }

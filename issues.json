@@ -229,6 +229,37 @@
       "description": "MySQL 驱动返回 []byte 类型时，fetchMySQLSampleRow 和 fetchPGSampleRow 使用 fmt.Sprintf(\"%v\", val) 将其格式化为 [97 105 111 112 115 ...] 字节数组而非可读字符串。修复：在值转换时优先判断 []byte 并使用 string(b) 转换。",
       "file": "src/connector/mysql.go, src/connector/postgres.go",
       "created": "2026-05-19"
+    },
+    {
+      "id": "ISSUE-022",
+      "title": "GetConnector 锁与 constructor() 调用之间存在 TOCTOU 窗口",
+      "status": "closed",
+      "closed": "2026-05-20",
+      "priority": "low",
+      "category": "bug",
+      "description": "registry.go GetConnector 函数先在锁内读取 constructor，释放锁后再调用 constructor()。若存在并发 Register（当前不会发生，所有 Register 在 init() 中完成），该窗口可能导致 TOCTOU 问题。修复：将 constructor() 调用也纳入锁保护范围，或将 ok==false 分支提前并保持锁至 constructor() 调用完成。",
+      "file": "src/connector/registry.go",
+      "created": "2026-05-20"
+    },
+    {
+      "id": "ISSUE-023",
+      "title": "缺少统一的全局数据库健康度画像",
+      "status": "pending-evaluation",
+      "priority": "low",
+      "category": "improvement",
+      "description": "工具功能分散在不同模块：字段推断在 schema/、风险诊断内嵌在连接器（如 Redis 大 key 检测在 redis.go）、聚类分析在 analyze/、渲染在 render/。缺少一个统一的全局健康度评分或画像来整合所有分析结果，使其从功能清单升级为一体化的数据库治理解决方案。考虑：新增健康度评分模块，按实例/表/关系维度汇总风险并给出全局评分。",
+      "file": "src/analyze/, src/connector/redis.go",
+      "created": "2026-05-20"
+    },
+    {
+      "id": "ISSUE-024",
+      "title": "DSN 脱敏后多实例无法区分",
+      "status": "wontfix",
+      "priority": "low",
+      "category": "improvement",
+      "description": "Redacted() 将密码替换为 ***，相同密码的多个实例脱敏后完全一致，用户难以区分。但 label 参数已解决此问题——DSN 中设置 ?label=别名 即可唯一标识实例。建议在文档和 --manual 中强调 label 的使用场景。",
+      "file": "src/dsn/dsn.go",
+      "created": "2026-05-20"
     }
   ]
 }
