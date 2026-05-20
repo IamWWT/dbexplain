@@ -21,6 +21,8 @@ import (
 	"dbexplain/analyze"
 	"dbexplain/capabilities"
 	"dbexplain/connector"
+	"dbexplain/cache"
+	ctxcompress "dbexplain/context"
 	"dbexplain/dsn"
 	"dbexplain/render"
 	"dbexplain/schema"
@@ -43,6 +45,8 @@ func main() {
 	includeFilter := flag.String("include", "", "comma-separated kinds/labels/env-keys to include (e.g. mysql,redis or DB1,DB3)")
 	excludeFilter := flag.String("exclude", "", "comma-separated kinds/labels/env-keys to exclude (e.g. mongodb,qdrant or DB5)")
 	jsonOut := flag.Bool("json", false, "output JSON")
+	contextDir := flag.String("context", "", "write AI context files to directory (summary.json, topology.json, diagnostics.json, chunks/)")
+	cacheFile := flag.String("cache", "", "fingerprint cache file for delta scan (.json)")
 	outputFile := flag.String("o", "", "write output to file")
 	perDSNTimeout := flag.Duration("timeout", 20*time.Second, "per-DSN collect timeout")
 	showVersion := flag.Bool("version", false, "print version and exit")
@@ -167,6 +171,30 @@ func main() {
 
 	universe := &schema.Universe{Instances: instances}
 	result := analyze.Analyze(universe, kindCaps)
+
+	// 增量扫描: 加载指纹缓存并比较
+	if *cacheFile != "" {
+		store, err := cache.LoadStore(*cacheFile)
+		if err != nil {
+			log.Printf("load cache: %v (starting fresh)", err)
+		}
+		delta := store.Diff(universe)
+		if len(delta.Added)+len(delta.Removed)+len(delta.Changed) > 0 {
+			data, _ := json.MarshalIndent(delta, "", "  ")
+			fmt.Fprintf(os.Stderr, "[delta] %d added, %d removed, %d changed\n",
+				len(delta.Added), len(delta.Removed), len(delta.Changed))
+			deltaFile := strings.TrimSuffix(*cacheFile, ".json") + "_delta.json"
+			os.WriteFile(deltaFile, data, 0644)
+		}
+		if err := store.Update(universe); err != nil {
+			log.Printf("save cache: %v", err)
+		}
+	}
+
+	// 生成 AI Agent 上下文文件
+	if *contextDir != "" {
+		writeContext(*contextDir, result)
+	}
 
 	var out string
 	if *jsonOut {
@@ -317,6 +345,53 @@ func loadFromConfig(filename string) []string {
 		log.Fatalf("parse config: %v", err)
 	}
 	return dsnList
+}
+
+// ── 上下文输出 ──
+
+func writeContext(dir string, result *analyze.Result) {
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		log.Fatalf("create context dir: %v", err)
+	}
+
+	// summary.json
+	summary := ctxcompress.GenerateSummary(result, 10)
+	writeJSON(filepath.Join(dir, "summary.json"), summary)
+
+	// topology.json
+	topo := ctxcompress.GenerateTopology(result)
+	writeJSON(filepath.Join(dir, "topology.json"), topo)
+
+	// diagnostics.json
+	diag := ctxcompress.GenerateDiagnostics(result.Issues)
+	writeJSON(filepath.Join(dir, "diagnostics.json"), diag)
+
+	// retrieval chunks
+	chunksDir := filepath.Join(dir, "chunks")
+	if err := os.MkdirAll(chunksDir, 0755); err != nil {
+		log.Fatalf("create chunks dir: %v", err)
+	}
+	chunks := ctxcompress.GenerateChunks(result, 15)
+	for _, chunk := range chunks {
+		md := ctxcompress.RenderChunkMarkdown(&chunk)
+		name := strings.ReplaceAll(strings.ReplaceAll(chunk.Table, "/", "_"), "\\", "_") + ".md"
+		if err := os.WriteFile(filepath.Join(chunksDir, name), []byte(md), 0644); err != nil {
+			log.Printf("write chunk %s: %v", name, err)
+		}
+	}
+
+	fmt.Fprintf(os.Stderr, "Context written to %s (%d files)\n", dir, 3+len(chunks))
+}
+
+func writeJSON(path string, v any) {
+	data, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		log.Printf("marshal %s: %v", path, err)
+		return
+	}
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		log.Printf("write %s: %v", path, err)
+	}
 }
 
 // ── 输出捕获 ──
