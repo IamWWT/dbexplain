@@ -309,31 +309,34 @@
     {
       "id": "ISSUE-029",
       "title": "[Phase 2] Context Compression 多层上下文输出",
-      "status": "open",
+      "status": "closed",
+      "closed": "2026-05-20",
       "priority": "medium",
       "category": "feature",
-      "description": "实现多层上下文输出：summary.json（核心表、最大表、高连接表、热表）、topology.json（子图、孤立表、环路）、diagnostics.json（缺主键、未索引FK、Redis无TTL）、retrieval_chunks/（单表上下文 Markdown 文件，供 Agent retrieval 使用）。详见 docs/ARCHITECTURE.md §5。",
-      "file": "src/render/ 或 src/ir/",
+      "description": "实现多层上下文输出：summary.json（核心表、最大表、高连接表、热表）、topology.json（子图、孤立表、环路）、diagnostics.json（缺主键、未索引FK、Redis无TTL）、retrieval_chunks/（单表上下文 Markdown 文件，供 Agent retrieval 使用）。详见 docs/ARCHITECTURE.md §5。已产出 src/context/compress.go。",
+      "file": "src/context/compress.go",
       "created": "2026-05-20"
     },
     {
       "id": "ISSUE-030",
       "title": "[Phase 2] Importance Ranking（确定性表重要性评分）",
-      "status": "open",
+      "status": "closed",
+      "closed": "2026-05-20",
       "priority": "medium",
       "category": "feature",
-      "description": "实现确定性重要性评分算法，不依赖 AI。维度：图出入度、FK 被引次数、行数、索引密度。输出 importance_score (0-1) 及各因子分解。用于 Agent context window 优先加载。详见 docs/ARCHITECTURE.md §5。",
-      "file": "src/analyze/ (扩展)",
+      "description": "实现确定性重要性评分算法，不依赖 AI。维度：图出入度、FK 被引次数、行数、索引密度。输出 importance_score (0-1) 及各因子分解。用于 Agent context window 优先加载。详见 docs/ARCHITECTURE.md §5。已产出 src/analyze/ranking.go。",
+      "file": "src/analyze/ranking.go",
       "created": "2026-05-20"
     },
     {
       "id": "ISSUE-031",
       "title": "[Phase 2] Delta Scan 增量扫描",
-      "status": "open",
+      "status": "closed",
+      "closed": "2026-05-20",
       "priority": "medium",
       "category": "feature",
-      "description": "实现增量扫描支持。表指纹（列名+类型 hash、索引定义 hash、FK 定义 hash）、元数据版本、last_scan_at 时间戳。两次扫描相同指纹时跳过。解决企业库全量扫描不可行问题。详见 docs/ARCHITECTURE.md §6。",
-      "file": "src/cache/ (新建)",
+      "description": "实现增量扫描支持。表指纹（列名+类型 hash、索引定义 hash、FK 定义 hash）、元数据版本、last_scan_at 时间戳。两次扫描相同指纹时跳过。解决企业库全量扫描不可行问题。详见 docs/ARCHITECTURE.md §6。已产出 src/cache/cache.go。",
+      "file": "src/cache/cache.go",
       "created": "2026-05-20"
     },
     {
