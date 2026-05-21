@@ -17,7 +17,7 @@ param(
 
 $VERSION = "v0.0.5"
 $InstallDir = "$env:LOCALAPPDATA\dbexplain"
-$ConfigDir = "$env:USERPROFILE\.dbexplain"
+$ConfigDir = "$env:USERPROFILE\.config\dbexplain"
 $DestBin = Join-Path $InstallDir "dbexplain.exe"
 
 # ── Colors ──

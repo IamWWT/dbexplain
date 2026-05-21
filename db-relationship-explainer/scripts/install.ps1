@@ -29,7 +29,7 @@ $BINARY_DOWNLOAD = "dbexplain-windows-amd64.exe"
 $BINARY_DEST = "dbexplain.exe"
 
 $InstallDir = "$env:LOCALAPPDATA\dbexplain"
-$ConfigDir = "$env:USERPROFILE\.dbexplain"
+$ConfigDir = "$env:USERPROFILE\.config\dbexplain"
 $EnvFilePath = "$ConfigDir\.env.dbexplain"
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $SkillSrcDir = Join-Path $ScriptDir ".."
