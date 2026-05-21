@@ -390,6 +390,39 @@
       "description": "Windows下 -o 输出UTF-8 BOM文件，CMD `type` 命令按系统代码页(GBK/CP936)解析导致中文乱码，BOM显示为'锘?'。修复：运行时检测ANSI代码页，中文系统(936)转GBK输出，其他locale保持UTF-8 BOM。同时替换schema/infer.go中Unicode省略号(…)为ASCII(...)。引入golang.org/x/sys(Win API)和golang.org/x/text(GBK编码器)，通过build tag分离平台代码(encode_windows.go / encode.go)。",
       "file": "src/main.go, src/encode.go, src/encode_windows.go, src/schema/infer.go",
       "created": "2026-05-20"
+    },
+    {
+      "id": "ISSUE-037",
+      "title": "[v0.0.5] 用户可指定日志输出目录",
+      "status": "closed",
+      "closed": "2026-05-21",
+      "priority": "medium",
+      "category": "feature",
+      "description": "当前日志目录固定为工具二进制所在目录下的 logs/，用户无法自定义。需求：增加 CLI 参数（如 --log-dir <path>），允许用户指定日志输出目录。默认行为保持不变（二进制所在目录），但用户可通过参数覆盖。影响范围：filter.log、各 DSN 独立日志（<label>.log）等所有日志输出。",
+      "file": "src/main.go",
+      "created": "2026-05-20"
+    },
+    {
+      "id": "ISSUE-038",
+      "title": "[v0.0.5] 一键安装脚本改造 — 全局安装 + 用户级配置",
+      "status": "closed",
+      "closed": "2026-05-21",
+      "priority": "high",
+      "category": "feature",
+      "description": "当前工具使用方式需要二进制和 .env 文件同在工具目录下，用户体验差。改造目标：(1) 提供 Linux 一键安装脚本（install.sh）和 Windows 一键安装脚本（install.bat/ps1）；(2) 二进制自动移动到 PATH 目录（Linux: /usr/local/bin/，Windows: %USERPROFILE%\\AppData\\Local\\dbexplain\\ 并添加到用户 PATH）；(3) .env 文件默认改名为 .env.dbexplain，存放在 $HOME/.config/dbexplain/（Linux）或 %USERPROFILE%\\.dbexplain\\（Windows），符合 XDG 规范；(4) Linux 安装在 ~/.bashrc 中增加 source 脚本自动加载 .env.dbexplain 中的环境变量（或通过导出 DBPROBE_ENV_FILE 环境变量指向配置文件路径）；(5) 工具启动时优先读取 DBPROBE_ENV_FILE 环境变量指向的配置文件，其次读取当前目录下的 .env.dbexplain，最后回退到 .env；(6) 安装完成后提示用户将 .env.dbexplain 放置在配置目录并填入实际数据库连接串。",
+      "file": "install_skill_for_all_platform.sh, 新增 install.sh / install.ps1, src/main.go (配置文件查找逻辑)",
+      "created": "2026-05-20"
+    },
+    {
+      "id": "ISSUE-039",
+      "title": "[v0.0.5] SKILL.md 和 Skill 安装脚本适配全局安装变更",
+      "status": "closed",
+      "closed": "2026-05-21",
+      "priority": "high",
+      "category": "feature",
+      "description": "基于 ISSUE-038 的全局安装改造，Skill 相关文件需相应调整：(1) SKILL.md 中更新 .env 文件路径说明，指向新的默认配置路径 ~/.config/dbexplain/.env.dbexplain；(2) SKILL.md 中更新使用示例，反映全局安装后的调用方式（直接 dbexplain 而非 ./dbexplain-linux-amd64）；(3) install_skill_for_all_platform.sh 中更新工具路径检测逻辑，优先查找 PATH 中的 dbexplain，其次查找本地二进制；(4) 确保 Claude Code / Cursor / AixCoding / Agents 等各平台 Skill 安装后能正确找到全局安装的二进制和配置文件；(5) uninstall_skill_for_all_platform.sh 同步更新卸载逻辑。",
+      "file": "db-relationship-explainer/SKILL.md, install_skill_for_all_platform.sh, uninstall_skill_for_all_platform.sh",
+      "created": "2026-05-20"
     }
   ]
 }

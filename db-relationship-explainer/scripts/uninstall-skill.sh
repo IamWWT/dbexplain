@@ -1,18 +1,18 @@
 #!/bin/bash
 # ============================================================
-# uninstall_skill_for_all_platform.sh — db-relationship-explainer
+# uninstall-skill.sh — db-relationship-explainer
 # ============================================================
 # Removes the skill from global, project-local, or custom
 # directories. Detects all installations and asks before removal.
 #
 # Usage:
-#   bash uninstall_skill_for_all_platform.sh          # interactive mode
-#   bash uninstall_skill_for_all_platform.sh --help    # show help
-#   bash uninstall_skill_for_all_platform.sh --list    # list found installations
+#   bash uninstall-skill.sh          # interactive mode
+#   bash uninstall-skill.sh --help    # show help
+#   bash uninstall-skill.sh --list    # list found installations
 # ============================================================
 
 SKILL_NAME="db-relationship-explainer"
-VERSION="v0.0.3"
+VERSION="v0.0.5"
 
 RED=$'\033[0;31m'; GREEN=$'\033[0;32m'; YELLOW=$'\033[1;33m'
 CYAN=$'\033[0;36m'; BOLD=$'\033[1m'; NC=$'\033[0m'
@@ -60,7 +60,7 @@ describe_installation() {
     echo -e "  ${YELLOW}symlink${NC}  ${short} → ${target}"
   else
     local has_env=""
-    [ -f "${dir}/.env" ] && has_env=" + .env"
+    [ -f "${dir}/.env.dbexplain" ] && has_env=" + .env.dbexplain"
     echo -e "  ${GREEN}directory${NC} ${short}${has_env}"
   fi
 }
@@ -77,10 +77,10 @@ remove_one() {
     rm "$dir"
     info "Removed ${short}"
   elif [ -d "$dir" ]; then
-    # Check for .env and warn about credentials
-    if [ -f "${dir}/.env" ]; then
+    # Check for .env.dbexplain and warn about credentials
+    if [ -f "${dir}/.env.dbexplain" ]; then
       echo ""
-      echo -e "  ${YELLOW}⚠  This installation contains a .env file${NC}"
+      echo -e "  ${YELLOW}⚠  This installation contains a .env.dbexplain file${NC}"
       echo -e "  ${YELLOW}   which may have database credentials.${NC}"
       echo -e "  ${YELLOW}   Removing will delete it permanently.${NC}"
       echo ""
@@ -175,18 +175,18 @@ show_help() {
   echo "db-relationship-explainer Skill Uninstaller  ${VERSION}"
   echo ""
   echo "Usage:"
-  echo "  bash uninstall_skill_for_all_platform.sh           Interactive removal"
-  echo "  bash uninstall_skill_for_all_platform.sh --list    List found installations"
-  echo "  bash uninstall_skill_for_all_platform.sh --all     Remove ALL found installations"
-  echo "  bash uninstall_skill_for_all_platform.sh --help    This help"
+  echo "  bash uninstall-skill.sh           Interactive removal"
+  echo "  bash uninstall-skill.sh --list    List found installations"
+  echo "  bash uninstall-skill.sh --all     Remove ALL found installations"
+  echo "  bash uninstall-skill.sh --help    This help"
   echo ""
   echo "Scans: ~/.claude/skills, ~/.deepseek/skills, ~/.agents/skills,"
   echo "       ~/.aixcoding/skills, and current project directories."
   echo ""
-  echo "About .env:"
-  echo "  If the installed skill directory contains a .env file (which may"
+  echo "About .env.dbexplain:"
+  echo "  If the installed skill directory contains a .env.dbexplain file (which may"
   echo "  hold database credentials), you will be warned before removal."
-  echo "  Backup your .env before uninstalling if you need those credentials."
+  echo "  Backup your .env.dbexplain before uninstalling if you need those credentials."
 }
 
 # ─── Main ────────────────────────────────────────────────────

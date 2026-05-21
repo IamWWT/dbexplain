@@ -2,25 +2,26 @@
 set -e
 
 # ============================================================
-# install_skill_for_all_platform.sh — db-relationship-explainer
+# install-skill.sh — db-relationship-explainer Skill Deployer
 # ============================================================
 # Interactive installer that deploys the skill to one or more
 # AI platform directories (Claude Code, DeepSeek, Agents, AiXCoding)
 # or to a project-local or custom directory.
 #
 # Usage:
-#   bash install_skill_for_all_platform.sh          # interactive mode
-#   bash install_skill_for_all_platform.sh --verify # verify existing installation
-#   bash install_skill_for_all_platform.sh --help    # show help
+#   bash install-skill.sh          # interactive mode
+#   bash install-skill.sh --verify # verify existing installation
+#   bash install-skill.sh --update # update existing installations
+#   bash install-skill.sh --help   # show help
 # ============================================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-TOOLS_DIR="${SCRIPT_DIR}/tools"
-SKILL_MD="${SCRIPT_DIR}/SKILL.md"
-ENV_FILE="${SCRIPT_DIR}/.env"
-ENV_EXAMPLE="${SCRIPT_DIR}/.env.example"
+SKILL_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+TOOLS_DIR="${SKILL_DIR}/tools"
+SKILL_MD="${SKILL_DIR}/SKILL.md"
+ENV_EXAMPLE="${SKILL_DIR}/.env.dbexplain.example"
 SKILL_NAME="db-relationship-explainer"
-VERSION="v0.0.3"
+VERSION="v0.0.5"
 
 # ─── Platform detection ────────────────────────────────────
 
@@ -53,14 +54,6 @@ detect_platform() {
 }
 
 PLATFORM="$(detect_platform)"
-OS="${PLATFORM%-*}"
-ARCH="${PLATFORM#*-}"
-
-# Binary name: dbexplain-{os}-{arch}[.exe]
-BINARY_SRC="dbexplain-${PLATFORM}"
-[ "$OS" = "windows" ] && BINARY_SRC="${BINARY_SRC}.exe"
-
-BINARY_SRC_PATH="${TOOLS_DIR}/${BINARY_SRC}"
 
 # ─── Colour helpers ─────────────────────────────────────────
 
@@ -75,31 +68,35 @@ _step()   { echo -e "${CYAN}→${NC} $*"; }
 
 # ─── Pre-flight checks ──────────────────────────────────────
 
+# Track whether we're using a system-installed dbexplain or a local binary
+SYSTEM_DBEXPLAIN=""
+BINARY_SRC_PATH=""
+
 run_preflight() {
   if [ ! -f "$SKILL_MD" ]; then
     err "SKILL.md not found at $SKILL_MD"
     exit 1
   fi
 
-  if [ ! -f "$BINARY_SRC_PATH" ]; then
-    err "Binary not found for platform ${PLATFORM}"
-    echo ""
-    echo "  Expected: ${BINARY_SRC_PATH}"
-    echo ""
-    echo "  Available binaries:"
-    ls -1 "$TOOLS_DIR/" 2>/dev/null | sed 's/^/    /' || true
-    echo ""
-    echo "  Download from GitHub Releases:"
-    echo "    https://github.com/IamWWT/understand_dbs_skills/releases/tag/${VERSION}"
-    echo ""
-    echo "  Then place the downloaded binary into:"
-    echo "    ${TOOLS_DIR}/"
-    echo "  And re-run this script."
-    exit 1
+  # Check for system-installed dbexplain first (in PATH)
+  if command -v dbexplain &>/dev/null; then
+    SYSTEM_DBEXPLAIN="$(command -v dbexplain)"
+    BINARY_SRC_PATH="$SYSTEM_DBEXPLAIN"
+    info "Detected platform : ${BOLD}${PLATFORM}${NC}"
+    info "Using system binary: ${BOLD}${SYSTEM_DBEXPLAIN}${NC}"
+    return
   fi
 
-  info "Detected platform : ${BOLD}${PLATFORM}${NC}"
-  info "Binary to install : ${BOLD}${BINARY_SRC}${NC} ($(du -h "$BINARY_SRC_PATH" | cut -f1))"
+  # system dbexplain not found
+  err "dbexplain not found in PATH"
+  echo ""
+  echo "  Run the tool installer first:"
+  echo ""
+  echo "    bash install.sh"
+  echo ""
+  echo "  Or download from GitHub Releases:"
+  echo "    https://github.com/IamWWT/understand_dbs_skills/releases"
+  exit 1
 }
 
 # ─── Menu ───────────────────────────────────────────────────
@@ -151,39 +148,36 @@ install_to() {
   cp "$SKILL_MD" "${target_dir}/${SKILL_NAME}/SKILL.md"
   _step "SKILL.md → ${target_dir}/${SKILL_NAME}/SKILL.md"
 
-  # Copy .env.example (always safe)
+  # Copy .env.dbexplain.example (always safe)
   if [ -f "$ENV_EXAMPLE" ]; then
-    cp "$ENV_EXAMPLE" "${target_dir}/${SKILL_NAME}/.env.example"
-    _step ".env.example → ${target_dir}/${SKILL_NAME}/.env.example"
+    cp "$ENV_EXAMPLE" "${target_dir}/${SKILL_NAME}/.env.dbexplain.example"
+    _step ".env.dbexplain.example → ${target_dir}/${SKILL_NAME}/.env.dbexplain.example"
   fi
 
-  # Copy .env if it exists (may contain credentials)
-  if [ -f "$ENV_FILE" ]; then
-    copy_env_if_wanted "${target_dir}/${SKILL_NAME}"
-  fi
+  # Install binary (as "dbexplain" — platform-agnostic name)
+  local dest_bin="${target_dir}/${SKILL_NAME}/tools/dbexplain"
 
-  # Copy binary
-  cp "$BINARY_SRC_PATH" "${target_dir}/${SKILL_NAME}/tools/${BINARY_SRC}"
-  chmod +x "${target_dir}/${SKILL_NAME}/tools/${BINARY_SRC}"
-  _step "${BINARY_SRC}  → ${target_dir}/${SKILL_NAME}/tools/${BINARY_SRC}"
+  if [ -n "$SYSTEM_DBEXPLAIN" ]; then
+    # System binary available — create symlink
+    rm -f "$dest_bin"  # remove any old copy/symlink
+    if ln -s "$SYSTEM_DBEXPLAIN" "$dest_bin" 2>/dev/null; then
+      _step "Symlink: ${dest_bin} → ${SYSTEM_DBEXPLAIN}"
+    else
+      # Symlink failed — fall back to copy
+      cp "$BINARY_SRC_PATH" "$dest_bin"
+      chmod +x "$dest_bin"
+      _step "Copied:  ${BINARY_SRC_PATH} → ${dest_bin}"
+    fi
+  else
+    # Local binary — copy with platform-agnostic name
+    cp "$BINARY_SRC_PATH" "$dest_bin"
+    chmod +x "$dest_bin"
+    _step "Copied:  ${BINARY_SRC_PATH} → ${dest_bin}"
+  fi
 
   info "Done — installed to ${target_dir}/${SKILL_NAME}/"
 }
 
-copy_env_if_wanted() {
-  local dest_dir="$1"
-  echo ""
-  echo -e "  ${YELLOW}Source .env detected — may contain database credentials.${NC}"
-  echo -n "  Copy it to the installation directory? [y/N] "
-  read -r answer
-  if [ "$answer" = "y" ] || [ "$answer" = "Y" ]; then
-    cp "$ENV_FILE" "${dest_dir}/.env"
-    chmod 600 "${dest_dir}/.env"
-    _step ".env → ${dest_dir}/.env (permissions: 600)"
-  else
-    info "Skipped .env — copy .env.example to .env and edit it manually."
-  fi
-}
 
 create_symlink() {
   local link_dir="$1"
@@ -338,21 +332,28 @@ verify_installation() {
       ((errors++))
     fi
 
-    # 2. Check tools directory and binary
-    local bin_path="${real_dir}/tools/${BINARY_SRC}"
+    # 2. Check tools directory and binary (look for "dbexplain" first, then legacy platform names)
+    local bin_path="${real_dir}/tools/dbexplain"
     if [ -f "$bin_path" ]; then
       if [ -x "$bin_path" ]; then
-        echo -e "  ${GREEN}✓${NC} ${BINARY_SRC} present + executable"
+        if [ -L "$bin_path" ]; then
+          local target
+          target="$(readlink -f "$bin_path" 2>/dev/null || readlink "$bin_path")"
+          echo -e "  ${GREEN}✓${NC} dbexplain present (symlink → ${target})"
+        else
+          echo -e "  ${GREEN}✓${NC} dbexplain present + executable"
+        fi
       else
-        echo -e "  ${YELLOW}⚠${NC} ${BINARY_SRC} present but NOT executable — fixing..."
+        echo -e "  ${YELLOW}⚠${NC} dbexplain present but NOT executable — fixing..."
         chmod +x "$bin_path"
       fi
     else
       # Check for any dbexplain binary
       local any_bin
-      any_bin="$(ls "${real_dir}/tools"/dbexplain-* 2>/dev/null | head -1)"
+      any_bin="$(ls "${real_dir}/tools"/dbexplain* 2>/dev/null | head -1)"
       if [ -n "$any_bin" ]; then
-        echo -e "  ${YELLOW}⚠${NC} Found alternative binary: $(basename "$any_bin") (expected: ${BINARY_SRC})"
+        echo -e "  ${YELLOW}⚠${NC} Found alternative binary: $(basename "$any_bin")"
+        bin_path="$any_bin"
       else
         echo -e "  ${RED}✗${NC} No binary found in tools/"
         ((errors++))
@@ -361,7 +362,7 @@ verify_installation() {
 
     # 3. Smoke-test the binary (--version, no DSN needed)
     local binary
-    binary="${real_dir}/tools/${BINARY_SRC}"
+    binary="$bin_path"
     if [ -x "$binary" ]; then
       local ver_output
       if ver_output="$("$binary" --version 2>&1)"; then
@@ -424,17 +425,29 @@ update_single_dir() {
   echo -e "      ${GREEN}✓${NC} SKILL.md"
 
   if [ -f "$ENV_EXAMPLE" ]; then
-    cp "$ENV_EXAMPLE" "${real_dir}/.env.example"
-    echo -e "      ${GREEN}✓${NC} .env.example"
+    cp "$ENV_EXAMPLE" "${real_dir}/.env.dbexplain.example"
+    echo -e "      ${GREEN}✓${NC} .env.dbexplain.example"
   fi
 
-  if [ -f "${real_dir}/.env" ]; then
-    echo -e "      ${YELLOW}○${NC} .env (preserved, unchanged)"
+  if [ -f "${real_dir}/.env.dbexplain" ]; then
+    echo -e "      ${YELLOW}○${NC} .env.dbexplain (preserved, unchanged)"
   fi
 
-  cp "$BINARY_SRC_PATH" "${real_dir}/tools/${BINARY_SRC}"
-  chmod +x "${real_dir}/tools/${BINARY_SRC}"
-  echo -e "      ${GREEN}✓${NC} ${BINARY_SRC}"
+  # Update binary (platform-agnostic name: dbexplain)
+  local dest_bin="${real_dir}/tools/dbexplain"
+  if [ -n "$SYSTEM_DBEXPLAIN" ]; then
+    rm -f "$dest_bin"
+    ln -s "$SYSTEM_DBEXPLAIN" "$dest_bin" 2>/dev/null || {
+      cp "$BINARY_SRC_PATH" "$dest_bin"
+      chmod +x "$dest_bin"
+    }
+  else
+    cp "$BINARY_SRC_PATH" "$dest_bin"
+    chmod +x "$dest_bin"
+  fi
+  local method="copied"
+  [ -L "$dest_bin" ] && method="symlink"
+  echo -e "      ${GREEN}✓${NC} dbexplain (${method})"
   return 0
 }
 
@@ -493,7 +506,7 @@ show_help() {
   echo ""
   echo "--update scans standard locations (global + project-local) by default."
   echo "Add a directory path to update a custom installation instead."
-  echo "The .env file is always preserved."
+  echo "The .env.dbexplain file is always preserved."
 }
 
 # ─── Main ────────────────────────────────────────────────────
@@ -527,8 +540,8 @@ main() {
       info "All done!"
       echo ""
       echo -e "  ${BOLD}Next steps:${NC}"
-      echo -e "    1. Configure .env — edit the .env file and fill in your real DB credentials"
-      echo -e "       (or copy .env.example to .env if it doesn't exist yet)"
+      echo -e "    1. Create config: cp .env.dbexplain.example ~/.config/dbexplain/.env.dbexplain"
+      echo -e "       Then edit ~/.config/dbexplain/.env.dbexplain with your real DB credentials."
       echo -e "    2. Verify —— ${BOLD}bash install_skill_for_all_platform.sh --verify${NC}"
       echo ""
       ;;

@@ -36,29 +36,74 @@ See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) and [`CONSTITUTION.md`](CONST
 
 ## Quick Start
 
-```bash
-# Download prebuilt binary
-wget https://github.com/IamWWT/understand_dbs_skills/releases/download/v0.0.4/dbexplain-linux-amd64
-chmod +x dbexplain-linux-amd64
+### Option 1: Online Install (Recommended)
 
-# Create .env file
-cat > .env << 'EOF'
+One command for global tool install + AI Skill deployment:
+
+```bash
+bash db-relationship-explainer/scripts/install.sh
+```
+
+After install, create the config file:
+
+```bash
+cat > ~/.config/dbexplain/.env.dbexplain << 'EOF'
 DB1=mysql://root:pass@127.0.0.1:3306/mydb?label=my-mysql
 DB2=redis://:pass@127.0.0.1:6379/0?label=my-redis
 DB3=postgres://user:pass@127.0.0.1:5432/mydb?label=my-pg
 EOF
-
-# Run
-./dbexplain-linux-amd64 -env
-
-# Output JSON
-./dbexplain-linux-amd64 -env -json -o report.json
-
-# View full manual
-./dbexplain-linux-amd64 --manual --language en
 ```
 
-> Build from source: `cd src && go mod tidy && bash build.sh`
+Run directly (no cd required):
+
+```bash
+dbexplain -env                  # Terminal formatted report
+dbexplain -env -json -o report.json  # JSON output
+dbexplain --manual --language en     # Full manual
+```
+
+> The installer auto-detects your platform and downloads the matching binary from GitHub Releases.
+
+### Option 2: Offline Install
+
+Pre-download the binary, then install with `--offline`:
+
+```bash
+# 1. Download on a machine with internet
+wget https://github.com/IamWWT/understand_dbs_skills/releases/download/v0.0.5/dbexplain-linux-amd64
+
+# 2. Copy to offline environment, then:
+bash db-relationship-explainer/scripts/install.sh --offline ./dbexplain-linux-amd64
+```
+
+Interactive offline mode (prompts for binary path):
+
+```bash
+bash db-relationship-explainer/scripts/install.sh --offline
+```
+
+Tool only, no Skill:
+
+```bash
+bash db-relationship-explainer/scripts/install.sh --offline ./dbexplain-linux-amd64 --no-skill
+```
+
+### Option 3: Manual Binary Download
+
+```bash
+wget https://github.com/IamWWT/understand_dbs_skills/releases/download/v0.0.5/dbexplain-linux-amd64
+chmod +x dbexplain-linux-amd64
+sudo mv dbexplain-linux-amd64 /usr/local/bin/dbexplain
+dbexplain --version
+```
+
+### Build from Source
+
+```bash
+cd src && go mod tidy && bash build.sh
+```
+
+Binaries are generated in the `release/` directory.
 
 ---
 
@@ -66,7 +111,7 @@ EOF
 
 ```bash
 # Single database
-./dbexplain -dsn 'mysql://user:pass@localhost:3306/shop?label=shop-db'
+dbexplain -dsn 'mysql://user:pass@localhost:3306/shop?label=shop-db'
 
 # Multiple heterogeneous databases
 ./dbexplain \
@@ -75,15 +120,15 @@ EOF
   -dsn 'redis://:pwd@host3:6379/0?label=cache'
 
 # Load from .env, filter with include/exclude
-./dbexplain -env -include 'mysql,postgres'
-./dbexplain -env -exclude 'mongodb,qdrant'
+dbexplain -env -include 'mysql,postgres'
+dbexplain -env -exclude 'mongodb,qdrant'
 
 # Write to file (Windows CN: auto GBK, others: UTF-8 BOM, Notepad/CMD compatible)
-./dbexplain -env -o report.md
-./dbexplain -env -json -o report.json
+dbexplain -env -o report.md
+dbexplain -env -json -o report.json
 
 # Custom timeout (default 20s)
-./dbexplain -env -timeout 60s
+dbexplain -env -timeout 60s
 ```
 
 ### Option Reference
@@ -91,12 +136,13 @@ EOF
 | Option | Description |
 |--------|-------------|
 | `-dsn <string>` | Database connection string, repeatable |
-| `-env` | Load DSNs from `.env` file (format `DB<n>=<DSN>`) |
+| `-env` | Load DSNs from config file (search: `DBPROBE_ENV_FILE` → `.env.dbexplain` → XDG/user config → `.env`) |
 | `-config <file>` | Read DSN array from JSON file |
 | `-include <filter>` | Only include matching DSNs (by kind/label/index, comma-sep) |
 | `-exclude <filter>` | Exclude matching DSNs |
 | `-json` | Output JSON format |
 | `-o <file>` | Write output to file |
+| `--log-dir <dir>` | Log output directory (default `./logs`) |
 | `-timeout <duration>` | Per-DSN timeout (default 20s) |
 | `--version` | Print version |
 | `--manual` | Full help manual (`--language en` for English) |
@@ -114,14 +160,14 @@ EOF
 
 ```bash
 # Output JSON for programmatic or AI Agent consumption
-./dbexplain -env -json -o report.json
+dbexplain -env -json -o report.json
 
 # Generate AI context files (for embedding in agent prompts)
-./dbexplain -env --context ./context
+dbexplain -env --context ./context
 # Outputs: summary.json / topology.json / diagnostics.json / chunks/*.md
 
 # Incremental change detection (with cron)
-./dbexplain -env --cache schema_cache.json
+dbexplain -env --cache schema_cache.json
 # First run creates cache; subsequent runs output schema_cache_delta.json
 ```
 
@@ -129,13 +175,13 @@ EOF
 
 ```bash
 # Direct terminal rendering (default text format with color highlights)
-./dbexplain -env
+dbexplain -env
 
 # Human-friendly format (with [table=] [pattern=] context markers)
-./dbexplain -env --human
+dbexplain -env --human
 
 # Write Markdown file (with UTF-8 BOM, Windows Notepad compatible)
-./dbexplain -env --human -o report.md
+dbexplain -env --human -o report.md
 
 # Search the manual
 ./dbexplain --manual --filter redis
@@ -145,47 +191,47 @@ EOF
 
 **MySQL**
 ```bash
-./dbexplain -dsn 'mysql://root:pwd@127.0.0.1:3306/shop?label=shop-db'
+dbexplain -dsn 'mysql://root:pwd@127.0.0.1:3306/shop?label=shop-db'
 ```
 
 **PostgreSQL**
 ```bash
-./dbexplain -dsn 'postgres://user:pwd@127.0.0.1:5432/warehouse?label=my-pg&sslmode=disable'
+dbexplain -dsn 'postgres://user:pwd@127.0.0.1:5432/warehouse?label=my-pg&sslmode=disable'
 ```
 
 **Redis (Cluster)**
 ```bash
-./dbexplain -dsn 'redis://:pwd@10.0.0.1:7000/0?cluster=true&label=my-cluster'
+dbexplain -dsn 'redis://:pwd@10.0.0.1:7000/0?cluster=true&label=my-cluster'
 ```
 
 **ClickHouse**
 ```bash
-./dbexplain -dsn 'clickhouse://default:pwd@127.0.0.1:8123/default?label=my-ch'
+dbexplain -dsn 'clickhouse://default:pwd@127.0.0.1:8123/default?label=my-ch'
 ```
 
 **SQLite**
 ```bash
-./dbexplain -dsn 'sqlite:///home/user/data/app.db?label=local-db'
+dbexplain -dsn 'sqlite:///home/user/data/app.db?label=local-db'
 ```
 
 **MongoDB**
 ```bash
-./dbexplain -dsn 'mongodb://admin:pwd@127.0.0.1:27017/mydb?authSource=admin&label=my-mongo'
+dbexplain -dsn 'mongodb://admin:pwd@127.0.0.1:27017/mydb?authSource=admin&label=my-mongo'
 ```
 
 **Elasticsearch (HTTPS)**
 ```bash
-./dbexplain -dsn 'elasticsearchs://elastic:pwd@127.0.0.1:9200?label=my-es'
+dbexplain -dsn 'elasticsearchs://elastic:pwd@127.0.0.1:9200?label=my-es'
 ```
 
 **Qdrant**
 ```bash
-./dbexplain -dsn 'qdrant://:api-key@127.0.0.1:6334?label=my-qdrant'
+dbexplain -dsn 'qdrant://:api-key@127.0.0.1:6334?label=my-qdrant'
 ```
 
 **GaussDB**
 ```bash
-./dbexplain -dsn 'gaussdb://user:pwd@192.168.0.1:25308/mydb?label=my-gauss'
+dbexplain -dsn 'gaussdb://user:pwd@192.168.0.1:25308/mydb?label=my-gauss'
 ```
 
 > More database details: `./dbexplain --manual [--filter <keyword>]`
@@ -208,7 +254,14 @@ scheme://[user:password@]host[:port][/dbname][?label=alias&params...]
 | `sslmode=<mode>` | PostgreSQL | SSL mode: `disable`/`require`/`verify-ca`/`verify-full` |
 | `authSource=<db>` | MongoDB | Authentication database name |
 
-**.env Template:**
+**Config file search order (`-env` mode):**
+
+1. `DBPROBE_ENV_FILE` environment variable
+2. `.env.dbexplain` in current directory
+3. `~/.config/dbexplain/.env.dbexplain` (Linux/macOS) or `%USERPROFILE%\.dbexplain\.env.dbexplain` (Windows)
+4. `.env` in current directory (legacy backward compat)
+
+**.env.dbexplain Template:**
 
 ```ini
 # MySQL
@@ -286,20 +339,32 @@ All operations are **read-only**: MySQL/PostgreSQL only `SELECT`/`SHOW`/`PRAGMA`
 
 ## AI Assistant Skill Integration
 
-```bash
-cd db-relationship-explainer
+`install.sh` installs both tool and skill by default. Or run separately:
 
-# One-click install (interactive platform selection)
-bash install_skill_for_all_platform.sh
+```bash
+# One-click (tool + skill, online)
+bash db-relationship-explainer/scripts/install.sh
+
+# One-click (tool + skill, offline)
+bash db-relationship-explainer/scripts/install.sh --offline ./dbexplain-linux-amd64
+
+# Tool only, skip skill deployment
+bash db-relationship-explainer/scripts/install.sh --no-skill
+
+# Skill only (when tool is already installed)
+bash db-relationship-explainer/scripts/install-skill.sh
 
 # Update installed skill
-bash install_skill_for_all_platform.sh --update
+bash db-relationship-explainer/scripts/install-skill.sh --update
 
 # Verify installation
-bash install_skill_for_all_platform.sh --verify
+bash db-relationship-explainer/scripts/install-skill.sh --verify
 
-# Uninstall
-bash uninstall_skill_for_all_platform.sh
+# Uninstall skill
+bash db-relationship-explainer/scripts/uninstall-skill.sh
+
+# Uninstall tool
+bash db-relationship-explainer/scripts/uninstall.sh
 ```
 
 ![Skill install](docs/assets/skill_install_mgr.png)
@@ -322,7 +387,7 @@ No core code changes needed — fully compliant with the open/closed principle.
 ## Development
 
 - **Language**: Go 1.26+
-- **Build**: `CGO_ENABLED=0 go build -ldflags="-s -w -X main.version=v0.0.4"`
+- **Build**: `CGO_ENABLED=0 go build -ldflags="-s -w -X main.version=v0.0.5"`
 - **Test**: `go test ./...` (DSN parsing + field inference)
 - **Cross-compile**: `bash build.sh` (linux/darwin/windows x amd64/arm64)
 

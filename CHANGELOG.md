@@ -1,5 +1,31 @@
 # 变更日志
 
+## v0.0.5 (2026-05-21)
+
+### 一键安装与部署
+- **`scripts/install.sh`**: Linux/macOS 一键安装脚本，支持在线（GitHub Releases）和离线模式
+- **`scripts/install.ps1`**: Windows PowerShell 一键安装脚本，自动配置用户 PATH
+- **`scripts/uninstall.sh` / `scripts/uninstall.ps1`**: 配套卸载脚本，支持静默模式（`--all`）
+- **`scripts/install-skill.sh`**: Skill 多平台部署脚本（交互选择目标平台）
+- **`scripts/uninstall-skill.sh`**: Skill 卸载脚本
+- **全局安装**: 二进制安装到系统 PATH（Linux/macOS: `/usr/local/bin/dbexplain`，Windows: `%LOCALAPPDATA%\dbexplain\`）
+- **用户级配置**: 配置文件 `.env.dbexplain` 按 XDG 规范存放（`~/.config/dbexplain/`），可选设置 `DBPROBE_ENV_FILE` 指向自定义路径
+
+### 配置搜索
+- **多级回退**: `DBPROBE_ENV_FILE` → `.env.dbexplain` (CWD) → `~/.config/dbexplain/.env.dbexplain` → `.env` (CWD, 旧版兼容)
+- 不再需要 `cd <skill-dir>`，工具在任意目录均可运行 `-env` 模式
+
+### 新参数
+- **`--log-dir <dir>`**: 用户可指定日志输出目录（默认 `./logs`），影响 `filter.log` 和各实例独立日志
+
+### Skill 适配
+- **SKILL.md**: 移除 `cd <skill-dir>` 要求，更新为全局 `dbexplain` 调用方式，添加多级配置搜索路径说明
+- **Skill 安装脚本**: 优先检测系统 PATH 中的 `dbexplain`，Skill 目录中的二进制改为 `dbexplain` symlink（平台无关名）
+- **版本号**: install/uninstall skill 脚本升级到 v0.0.5
+
+### 文档
+- `--manual` 手册更新：添加配置搜索优先级章节、`--log-dir` 参数、所有 `./dbexplain` 改为 `dbexplain`
+
 ## v0.0.4 (2026-05-20)
 
 ### 核心架构

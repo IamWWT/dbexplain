@@ -6,11 +6,28 @@
 
 ## 🚀 一键安装（推荐）
 
-项目提供了交互式安装脚本，自动检测当前平台并安装对应的二进制文件：
+### 安装工具 + Skill（推荐）
+
+项目提供了统一的安装脚本，一次完成工具全局安装和 Skill 部署：
 
 ```bash
-cd db-relationship-explainer
-bash install_skill_for_all_platform.sh
+# 在线安装（自动下载最新版 + 配置 + Skill）
+bash db-relationship-explainer/scripts/install.sh
+
+# 跳过 Skill，仅安装工具
+bash db-relationship-explainer/scripts/install.sh --no-skill
+
+# 离线安装（手动放置二进制）
+bash db-relationship-explainer/scripts/install.sh --offline
+
+# 更新已有安装
+bash db-relationship-explainer/scripts/install.sh --update
+```
+
+### 单独安装 Skill（已有工具时）
+
+```bash
+bash db-relationship-explainer/scripts/install-skill.sh
 ```
 
 运行后交互选择安装目标：
@@ -25,21 +42,21 @@ bash install_skill_for_all_platform.sh
 安装完成后，使用 `--verify` 进行闭环验证：
 
 ```bash
-bash install_skill_for_all_platform.sh --verify
+bash db-relationship-explainer/scripts/install-skill.sh --verify
 ```
 
 **更新**（SKILL.md 或二进制有新版本时，`.env` 保留）：
 
 ```bash
-bash install_skill_for_all_platform.sh --update    # 更新所有已安装位置的 SKILL.md + 二进制
+bash db-relationship-explainer/scripts/install-skill.sh --update    # 更新所有已安装位置的 SKILL.md + 二进制
 ```
 
 **卸载**：
 
 ```bash
-bash uninstall_skill_for_all_platform.sh           # 交互选择要移除的安装
-bash uninstall_skill_for_all_platform.sh --list    # 列出所有已安装位置
-bash uninstall_skill_for_all_platform.sh --all     # 移除全部安装
+bash db-relationship-explainer/scripts/uninstall-skill.sh           # 交互选择要移除的安装
+bash db-relationship-explainer/scripts/uninstall-skill.sh --list    # 列出所有已安装位置
+bash db-relationship-explainer/scripts/uninstall-skill.sh --all     # 移除全部安装
 ```
 
 验证项包括：SKILL.md 存在性与格式检查、二进制文件存在与可执行权限、`--version` 烟雾测试。
@@ -52,18 +69,22 @@ bash uninstall_skill_for_all_platform.sh --all     # 移除全部安装
 
 ```
 db-relationship-explainer/
-├── SKILL.md                     # Skill 定义文件（触发词、指令、工具路径）
-└── tools/                       # 预编译的二进制（需根据平台放置）
-    ├── dbexplain-linux-amd64
-    ├── dbexplain-linux-arm64
-    ├── dbexplain-darwin-amd64
-    ├── dbexplain-darwin-arm64
-    └── dbexplain-windows-amd64.exe
+├── SKILL.md                               # Skill 定义（AI Agent 的安装 + 使用指南）
+├── .env.dbexplain.example                 # 配置文件模板
+└── scripts/
+    ├── install.sh                         # 工具安装器（下载 → /usr/local/bin）
+    ├── uninstall.sh                       # 工具卸载器
+    ├── install-skill.sh                   # Skill 多平台部署脚本
+    ├── uninstall-skill.sh                 # Skill 卸载脚本
+    ├── install.ps1                        # Windows 工具安装器
+    └── uninstall.ps1                      # Windows 工具卸载器
 ```
 
 其中：
-- `SKILL.md` 包含名称、描述、触发词和工具调用规范。
-- `tools/` 目录存放对应平台的静态二进制文件。
+- `SKILL.md` 是自包含的：AI Agent 先读第 1 节，若工具未安装则运行 `bash scripts/install.sh`。
+- `scripts/install.sh` 从 GitHub Releases 下载 dbexplain 并安装到系统 PATH。
+- 部署后 `install-skill.sh` 会在目标目录创建 `tools/dbexplain` symlink，指向系统二进制。
+- 配置文件 `.env.dbexplain` 存放在 `~/.config/dbexplain/`（全局配置）。
 
 ---
 
@@ -75,23 +96,18 @@ db-relationship-explainer/
 ~/.<平台名>/skills/
 └── db-relationship-explainer/   # 一个 Skill 一个子目录
     ├── SKILL.md
+    ├── scripts/
+    │   ├── install.sh            # 工具安装器
+    │   └── uninstall.sh          # 工具卸载器
     └── tools/
-        └── dbexplain-{platform}  # 根据当前平台选择一个
-```
-
-或项目级：
-
-```
-<workspace>/.<平台名>/skills/
-└── db-relationship-explainer/
-    ├── SKILL.md
-    └── tools/
+        └── dbexplain             # symlink → /usr/local/bin/dbexplain
 ```
 
 关键点：
 - 目录名通常作为 Skill 的唯一标识。
 - `SKILL.md` 必须存在且格式正确（YAML frontmatter + Markdown 指令体）。
-- `tools/` 下的可执行文件必须有执行权限。
+- `scripts/install.sh` 确保工具可一键安装，Skill 真正做到零依赖自包含。
+- `tools/` 下的 symlink 指向系统全局二进制。
 
 ---
 
@@ -112,12 +128,13 @@ mkdir -p ~/.claude/skills/db-relationship-explainer
 # 2. 复制 SKILL.md
 cp db-relationship-explainer/SKILL.md ~/.claude/skills/db-relationship-explainer/
 
-# 3. 复制对应平台的二进制（以 Linux amd64 为例）
+# 3. 创建工具 symlink（指向系统全局 dbexplain）
 mkdir -p ~/.claude/skills/db-relationship-explainer/tools
-cp db-relationship-explainer/tools/dbexplain-linux-amd64 ~/.claude/skills/db-relationship-explainer/tools/dbexplain-linux-amd64
+ln -s $(which dbexplain) ~/.claude/skills/db-relationship-explainer/tools/dbexplain
 
-# 4. 赋予执行权限
-chmod +x ~/.claude/skills/db-relationship-explainer/tools/dbexplain-linux-amd64
+# 如果没有全局安装，复制本地二进制
+# cp release/dbexplain-linux-amd64 ~/.claude/skills/db-relationship-explainer/tools/dbexplain
+# chmod +x ~/.claude/skills/db-relationship-explainer/tools/dbexplain
 
 # 5. 验证发现：在 Claude Code 会话中执行
 /skills
@@ -131,8 +148,10 @@ chmod +x ~/.claude/skills/db-relationship-explainer/tools/dbexplain-linux-amd64
 mkdir -p .claude/skills/db-relationship-explainer
 cp db-relationship-explainer/SKILL.md .claude/skills/db-relationship-explainer/
 mkdir -p .claude/skills/db-relationship-explainer/tools
-cp db-relationship-explainer/tools/dbexplain-linux-amd64 .claude/skills/db-relationship-explainer/tools/
-chmod +x .claude/skills/db-relationship-explainer/tools/dbexplain-linux-amd64
+ln -s $(which dbexplain) .claude/skills/db-relationship-explainer/tools/dbexplain 2>/dev/null || {
+  cp release/dbexplain-linux-amd64 .claude/skills/db-relationship-explainer/tools/dbexplain
+  chmod +x .claude/skills/db-relationship-explainer/tools/dbexplain
+}
 ```
 
 #### 方式三：Web/Desktop 端上传 ZIP
@@ -171,10 +190,12 @@ mkdir -p ~/.cline/skills/db-relationship-explainer
 # 2. 复制 SKILL.md
 cp db-relationship-explainer/SKILL.md ~/.cline/skills/db-relationship-explainer/
 
-# 3. 复制二进制
+# 3. 创建工具 symlink
 mkdir -p ~/.cline/skills/db-relationship-explainer/tools
-cp db-relationship-explainer/tools/dbexplain-linux-amd64 ~/.cline/skills/db-relationship-explainer/tools/
-chmod +x ~/.cline/skills/db-relationship-explainer/tools/dbexplain-linux-amd64
+ln -s $(which dbexplain) ~/.cline/skills/db-relationship-explainer/tools/dbexplain 2>/dev/null || {
+  cp release/dbexplain-linux-amd64 ~/.cline/skills/db-relationship-explainer/tools/dbexplain
+  chmod +x ~/.cline/skills/db-relationship-explainer/tools/dbexplain
+}
 ```
 
 **部署步骤**（项目级）：
@@ -183,8 +204,10 @@ chmod +x ~/.cline/skills/db-relationship-explainer/tools/dbexplain-linux-amd64
 mkdir -p .cline/skills/db-relationship-explainer
 cp db-relationship-explainer/SKILL.md .cline/skills/db-relationship-explainer/
 mkdir -p .cline/skills/db-relationship-explainer/tools
-cp db-relationship-explainer/tools/dbexplain-linux-amd64 .cline/skills/db-relationship-explainer/tools/
-chmod +x .cline/skills/db-relationship-explainer/tools/dbexplain-linux-amd64
+ln -s $(which dbexplain) .cline/skills/db-relationship-explainer/tools/dbexplain 2>/dev/null || {
+  cp release/dbexplain-linux-amd64 .cline/skills/db-relationship-explainer/tools/dbexplain
+  chmod +x .cline/skills/db-relationship-explainer/tools/dbexplain
+}
 ```
 
 在 Cline 面板底部点击 Skills 图标，即可查看、切换、创建和管理 Skills。
@@ -242,7 +265,7 @@ skills-forge install output_skills/db-relationship-explainer --target all
 ```bash
 # 测试工具本身是否能正常运行（以 SQLite 为例）
 echo "CREATE TABLE t(id int);" | sqlite3 /tmp/test.db
-~/.claude/skills/db-relationship-explainer/tools/dbexplain-linux-amd64 -dsn "sqlite:////tmp/test.db"
+dbexplain -dsn "sqlite:////tmp/test.db"
 ```
 
 应输出类似：

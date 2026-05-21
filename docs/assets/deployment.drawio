@@ -1,0 +1,215 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="drawio" version="26.0.0">
+  <diagram name="dbexplain-deployment">
+    <mxGraphModel>
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- Title -->
+        <mxCell id="title" value="dbexplain Deployment Dependency Diagram" style="text;html=1;fontSize=20;fontStyle=1;align=center;verticalAlign=middle;fontColor=#333333;" vertex="1" parent="1">
+          <mxGeometry x="300" y="15" width="550" height="35" as="geometry" />
+        </mxCell>
+
+        <!-- ===== Column 1: Source ===== -->
+        <mxCell id="col-source-hdr" value="Source" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#666666;strokeColor=#333333;fontColor=#ffffff;fontSize=13;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="30" y="70" width="200" height="35" as="geometry" />
+        </mxCell>
+
+        <!-- GitHub Releases -->
+        <mxCell id="github" value="GitHub Releases&#xa;(5 platform binaries)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;dashed=1;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="125" width="180" height="55" as="geometry" />
+        </mxCell>
+
+        <!-- Project Source -->
+        <mxCell id="project-src" value="Project Source Tree&#xa;(src/ + db-relationship-explainer/)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="40" y="200" width="180" height="55" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e-src-github" value="git tag → release" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=0;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;fontSize=9;fontColor=#666666;" edge="1" parent="1" source="project-src" target="github">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- ===== Column 2: Installer Scripts ===== -->
+        <mxCell id="col-install-hdr" value="Installer Scripts" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#666666;strokeColor=#333333;fontColor=#ffffff;fontSize=13;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="280" y="70" width="220" height="35" as="geometry" />
+        </mxCell>
+
+        <mxCell id="install-sh" value="install.sh / install.ps1&#xa;(One-click: binary + config&#xa;+ optional skill deploy)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="290" y="125" width="200" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="install-skill-sh" value="install_skill_for_all_platform.sh&#xa;(Skill-only: SKILL.md + symlink&#xa;→ 6 platform targets)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="290" y="205" width="200" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e-github-install" value="download binary" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;fontSize=9;fontColor=#666666;" edge="1" parent="1" source="github" target="install-sh">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e-src-install-skill" value="copy SKILL.md" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;fontSize=9;fontColor=#666666;" edge="1" parent="1" source="project-src" target="install-skill-sh">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- ===== Column 3: System Files ===== -->
+        <mxCell id="col-system-hdr" value="System Installation" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#666666;strokeColor=#333333;fontColor=#ffffff;fontSize=13;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="560" y="70" width="280" height="35" as="geometry" />
+        </mxCell>
+
+        <mxCell id="binary-path" value="/usr/local/bin/dbexplain&#xa;(or ~/.local/bin/dbexplain)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="580" y="125" width="220" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="config-dir" value="~/.config/dbexplain/&#xa;  .env.dbexplain (global config)&#xa;(Linux/macOS XDG spec)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="580" y="195" width="220" height="55" as="geometry" />
+        </mxCell>
+
+        <mxCell id="win-config" value="%USERPROFILE%\\.dbexplain\\&#xa;  .env.dbexplain&#xa;(Windows config path)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="580" y="265" width="220" height="55" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e-install-binary" value="sudo mv" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.25;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;fontSize=9;fontColor=#666666;" edge="1" parent="1" source="install-sh" target="binary-path">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e-install-config" value="copy template" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.75;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;fontSize=9;fontColor=#666666;" edge="1" parent="1" source="install-sh" target="config-dir">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- ===== Column 4: AI Platform Skill Dirs ===== -->
+        <mxCell id="col-platforms-hdr" value="AI Platform Skill Directories" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#666666;strokeColor=#333333;fontColor=#ffffff;fontSize=13;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="900" y="70" width="360" height="35" as="geometry" />
+        </mxCell>
+
+        <mxCell id="skill-agents" value="~/.agents/skills/&#xa;db-relationship-explainer/&#xa;(canonical install)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="920" y="120" width="210" height="55" as="geometry" />
+        </mxCell>
+
+        <mxCell id="skill-claude" value="~/.claude/skills/&#xa;db-relationship-explainer/&#xa;(symlink → ~/.agents/skills/...)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=9;" vertex="1" parent="1">
+          <mxGeometry x="920" y="190" width="210" height="55" as="geometry" />
+        </mxCell>
+
+        <mxCell id="skill-deepseek" value="~/.deepseek/skills/&#xa;db-relationship-explainer/" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="920" y="260" width="210" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="skill-others" value="~/.aixcoding/skills/&#xa;~/.cline/skills/&#xa;~/.continue/&#xa;(multi-platform support)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=9;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="920" y="325" width="210" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e-skill-install" value="deploy SKILL.md + symlink" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;fontSize=9;fontColor=#666666;" edge="1" parent="1" source="install-skill-sh" target="skill-agents">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- ===== Skill Dir Internals ===== -->
+        <mxCell id="skill-internals-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#999999;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="900" y="410" width="360" height="130" as="geometry" />
+        </mxCell>
+        <mxCell id="skill-int-title" value="Skill Directory Contents" style="text;html=1;fontSize=12;fontStyle=1;align=center;fontColor=#333333;" vertex="1" parent="1">
+          <mxGeometry x="980" y="415" width="200" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="skill-file1" value="SKILL.md&#xa;(YAML frontmatter +&#xa;7-section Markdown)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="915" y="440" width="155" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="skill-file2" value="tools/dbexplain&#xa;(symlink → /usr/local/bin)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="1090" y="440" width="155" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="skill-file3" value=".env.dbexplain.example (template)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=9;" vertex="1" parent="1">
+          <mxGeometry x="915" y="500" width="330" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- ===== Config Search Priority ===== -->
+        <mxCell id="config-search-title" value="Config File Search Priority" style="text;html=1;fontSize=13;fontStyle=1;align=left;fontColor=#333333;" vertex="1" parent="1">
+          <mxGeometry x="40" y="420" width="250" height="25" as="geometry" />
+        </mxCell>
+
+        <mxCell id="cfg-prio-1" value="1. DBPROBE_ENV_FILE env var&#xa;     (explicit override)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="50" y="455" width="230" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="cfg-prio-2" value="2. ./.env.dbexplain&#xa;     (current working dir)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="50" y="505" width="230" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="cfg-prio-3" value="3. ~/.config/dbexplain/.env.dbexplain&#xa;     (user-global config)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="50" y="555" width="230" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="cfg-prio-4" value="4. ./.env&#xa;     (legacy compat, CWD)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="50" y="605" width="230" height="40" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e-cfg-1-2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeColor=#999999;dashed=1;" edge="1" parent="1" source="cfg-prio-1" target="cfg-prio-2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-cfg-2-3" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeColor=#999999;dashed=1;" edge="1" parent="1" source="cfg-prio-2" target="cfg-prio-3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-cfg-3-4" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeColor=#999999;dashed=1;" edge="1" parent="1" source="cfg-prio-3" target="cfg-prio-4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Fallback label -->
+        <mxCell id="fallback-label" value="fallback if not found" style="text;html=1;fontSize=9;fontColor=#999999;align=left;" vertex="1" parent="1">
+          <mxGeometry x="295" y="520" width="100" height="15" as="geometry" />
+        </mxCell>
+
+        <!-- ===== Runtime Flow ===== -->
+        <mxCell id="runtime-title" value="Runtime Invocation" style="text;html=1;fontSize=13;fontStyle=1;align=left;fontColor=#333333;" vertex="1" parent="1">
+          <mxGeometry x="360" y="420" width="200" height="25" as="geometry" />
+        </mxCell>
+
+        <mxCell id="runtime-user" value="User / AI Agent" style="ellipse;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="370" y="455" width="140" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="runtime-cmd" value="dbexplain -dsn '...'&#xa;or dbexplain -env" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="370" y="520" width="160" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="runtime-binary" value="/usr/local/bin/dbexplain&#xa;(single static binary,&#xa;zero runtime deps)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=9;" vertex="1" parent="1">
+          <mxGeometry x="370" y="590" width="170" height="55" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e-runtime-1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="runtime-user" target="runtime-cmd">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-runtime-2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="runtime-cmd" target="runtime-binary">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Binary symlink to skill -->
+        <mxCell id="e-binary-symlink" value="symlink" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;fontSize=9;fontColor=#666666;dashed=1;dashPattern=4 4;" edge="1" parent="1" source="binary-path" target="skill-file2">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="550" y="140" />
+              <mxPoint x="550" y="467" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Config lookup arrow -->
+        <mxCell id="e-config-lookup" value="findConfigFile() lookup" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;fontSize=9;fontColor=#666666;dashed=1;dashPattern=4 4;" edge="1" parent="1" source="runtime-binary" target="cfg-prio-1">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="340" y="475" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Legend -->
+        <mxCell id="legend-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#999999;" vertex="1" parent="1">
+          <mxGeometry x="40" y="680" width="400" height="65" as="geometry" />
+        </mxCell>
+        <mxCell id="legend-title" value="Legend" style="text;html=1;fontSize=11;fontStyle=1;fontColor=#333333;" vertex="1" parent="1">
+          <mxGeometry x="180" y="683" width="50" height="18" as="geometry" />
+        </mxCell>
+        <mxCell id="legend-binary" value="Binary / Executable" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=9;" vertex="1" parent="1">
+          <mxGeometry x="50" y="710" width="120" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="legend-config" value="Config / Template" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=9;" vertex="1" parent="1">
+          <mxGeometry x="185" y="710" width="120" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="legend-skill" value="Skill Dir" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=9;" vertex="1" parent="1">
+          <mxGeometry x="320" y="710" width="90" height="25" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

@@ -36,29 +36,74 @@ AI 时代数据库的“真值基座”。
 
 ## 快速开始
 
-```bash
-# 下载预编译二进制
-wget https://github.com/IamWWT/understand_dbs_skills/releases/download/v0.0.4/dbexplain-linux-amd64
-chmod +x dbexplain-linux-amd64
+### 方式一：在线安装（推荐）
 
-# 创建 .env 文件
-cat > .env << 'EOF'
+一条命令完成工具全局安装 + AI Skill 部署：
+
+```bash
+bash db-relationship-explainer/scripts/install.sh
+```
+
+安装完成后，创建配置文件：
+
+```bash
+cat > ~/.config/dbexplain/.env.dbexplain << 'EOF'
 DB1=mysql://root:pass@127.0.0.1:3306/mydb?label=my-mysql
 DB2=redis://:pass@127.0.0.1:6379/0?label=my-redis
 DB3=postgres://user:pass@127.0.0.1:5432/mydb?label=my-pg
 EOF
-
-# 运行
-./dbexplain-linux-amd64 -env
-
-# 输出 JSON
-./dbexplain-linux-amd64 -env -json -o report.json
-
-# 查看完整手册
-./dbexplain-linux-amd64 --manual
 ```
 
-> 从源码编译：`cd src && go mod tidy && bash build.sh`
+然后直接运行（无需 cd 到特定目录）：
+
+```bash
+dbexplain -env                  # 终端格式化报告
+dbexplain -env -json -o report.json  # JSON 输出
+dbexplain --manual              # 查看完整手册
+```
+
+> 安装脚本会自动检测平台并从 GitHub Releases 下载对应二进制。
+
+### 方式二：离线安装
+
+预先下载对应平台的二进制文件，通过 `--offline` 参数指定路径：
+
+```bash
+# 1. 在有网络的机器上下载
+wget https://github.com/IamWWT/understand_dbs_skills/releases/download/v0.0.5/dbexplain-linux-amd64
+
+# 2. 复制到离线环境后安装
+bash db-relationship-explainer/scripts/install.sh --offline ./dbexplain-linux-amd64
+```
+
+或交互式离线（省略路径则提示手动放置）：
+
+```bash
+bash db-relationship-explainer/scripts/install.sh --offline
+```
+
+仅安装工具不部署 Skill：
+
+```bash
+bash db-relationship-explainer/scripts/install.sh --offline ./dbexplain-linux-amd64 --no-skill
+```
+
+### 方式三：手动下载二进制
+
+```bash
+wget https://github.com/IamWWT/understand_dbs_skills/releases/download/v0.0.5/dbexplain-linux-amd64
+chmod +x dbexplain-linux-amd64
+sudo mv dbexplain-linux-amd64 /usr/local/bin/dbexplain
+dbexplain --version
+```
+
+### 从源码编译
+
+```bash
+cd src && go mod tidy && bash build.sh
+```
+
+编译产物在 `release/` 目录下。
 
 ---
 
@@ -66,46 +111,47 @@ EOF
 
 ```bash
 # 单个数据库
-./dbexplain -dsn 'mysql://user:pass@localhost:3306/shop?label=shop-db'
+dbexplain -dsn 'mysql://user:pass@localhost:3306/shop?label=shop-db'
 
 # 多个异构数据库
-./dbexplain \
+dbexplain \
   -dsn 'mysql://root:pwd@host1:3306/orders' \
   -dsn 'postgres://u:p@host2:5432/users' \
   -dsn 'redis://:pwd@host3:6379/0?label=cache'
 
-# 从 .env 加载，使用 include/exclude 过滤
-./dbexplain -env -include 'mysql,postgres'
-./dbexplain -env -exclude 'mongodb,qdrant'
+# 从配置文件加载（搜索优先级：DBPROBE_ENV_FILE → .env.dbexplain → ~/.config/dbexplain/.env.dbexplain → .env）
+dbexplain -env
+dbexplain -env -include 'mysql,postgres'
+dbexplain -env -exclude 'mongodb,qdrant'
 
 # 输出到文件（Windows 中文系统自动 GBK，其他系统 UTF-8 BOM，记事本/CMD 均兼容）
-./dbexplain -env -o report.md
-./dbexplain -env -json -o report.json
+dbexplain -env -o report.md
+dbexplain -env -json -o report.json
 
 # 从 JSON 配置文件加载 DSN 数组
-./dbexplain -config dbs.json
+dbexplain -config dbs.json
 
 # 生成 AI 上下文文件（适合喂给 Agent）
-./dbexplain -env --context ./context
+dbexplain -env --context ./context
 # → context/summary.json      全局摘要（实例列表、表排行、重要性评分）
 # → context/topology.json      关系拓扑图（跨库引用、集群）
 # → context/diagnostics.json   问题诊断清单（严重度、表、消息）
 # → context/chunks/*.md        每表单独的检索友好 Markdown
 
 # 增量变更检测（配合 cron 定时任务）
-./dbexplain -env --cache schema_cache.json
+dbexplain -env --cache schema_cache.json
 # 首次：生成 schema_cache.json（指纹快照）
 # 后续：对比差异 → 输出 schema_cache_delta.json（added/removed/changed）
 
 # 人类友好格式（带 [table=] [pattern=] 上下文标记）
-./dbexplain -env --human
+dbexplain -env --human
 
 # 自定义超时（默认 20s）
-./dbexplain -env -timeout 60s
+dbexplain -env -timeout 60s
 
 # 按关键字查找手册内容
-./dbexplain --manual --filter redis
-./dbexplain --manual --language en --filter "SSL mode"
+dbexplain --manual --filter redis
+dbexplain --manual --language en --filter "SSL mode"
 ```
 
 ### 参数速查
@@ -113,12 +159,13 @@ EOF
 | 参数 | 说明 |
 |------|------|
 | `-dsn <string>` | 数据库连接串，可多次使用 |
-| `-env` | 从 `.env` 文件加载 DSN（格式 `DB<n>=<DSN>`） |
+| `-env` | 从配置文件加载 DSN（搜索: `DBPROBE_ENV_FILE` → `.env.dbexplain` → `~/.config/dbexplain/.env.dbexplain` → `.env`） |
 | `-config <file>` | 从 JSON 文件读取 DSN 数组 |
 | `-include <filter>` | 仅包含匹配的 DSN（按类型/标签/编号，逗号分隔） |
 | `-exclude <filter>` | 排除匹配的 DSN |
 | `-json` | 输出 JSON 格式 |
 | `-o <file>` | 写入文件 |
+| `--log-dir <dir>` | 日志输出目录（默认 `./logs`） |
 | `-timeout <duration>` | 每 DSN 超时（默认 20s） |
 | `--version` | 输出版本号 |
 | `--manual` | 完整帮助手册（`--language en` 英文） |
@@ -136,14 +183,14 @@ EOF
 
 ```bash
 # 输出 JSON 供程序或 AI Agent 解析
-./dbexplain -env -json -o report.json
+dbexplain -env -json -o report.json
 
 # 生成 AI 上下文文件（适合嵌入 Agent 提示词）
-./dbexplain -env --context ./context
+dbexplain -env --context ./context
 # 生成: summary.json / topology.json / diagnostics.json / chunks/*.md
 
 # 增量变更检测（配合 cron 定时任务）
-./dbexplain -env --cache schema_cache.json
+dbexplain -env --cache schema_cache.json
 # 首次运行生成缓存，后续运行输出 schema_cache_delta.json
 ```
 
@@ -151,66 +198,66 @@ EOF
 
 ```bash
 # 终端直接渲染（默认文本格式，含颜色高亮）
-./dbexplain -env
+dbexplain -env
 
 # 人类友好格式（带 [table=] [pattern=] 上下文标记）
-./dbexplain -env --human
+dbexplain -env --human
 
 # 写入 Markdown 文件（带 UTF-8 BOM，兼容 Windows 记事本）
-./dbexplain -env --human -o report.md
+dbexplain -env --human -o report.md
 
 # 查找手册内容
-./dbexplain --manual --filter redis
+dbexplain --manual --filter redis
 ```
 
 ### 不同数据库用法
 
 **MySQL**
 ```bash
-./dbexplain -dsn 'mysql://root:pwd@127.0.0.1:3306/shop?label=shop-db'
+dbexplain -dsn 'mysql://root:pwd@127.0.0.1:3306/shop?label=shop-db'
 ```
 
 **PostgreSQL**
 ```bash
-./dbexplain -dsn 'postgres://user:pwd@127.0.0.1:5432/warehouse?label=my-pg&sslmode=disable'
+dbexplain -dsn 'postgres://user:pwd@127.0.0.1:5432/warehouse?label=my-pg&sslmode=disable'
 ```
 
 **Redis（集群）**
 ```bash
-./dbexplain -dsn 'redis://:pwd@10.0.0.1:7000/0?cluster=true&label=my-cluster'
+dbexplain -dsn 'redis://:pwd@10.0.0.1:7000/0?cluster=true&label=my-cluster'
 ```
 
 **ClickHouse**
 ```bash
-./dbexplain -dsn 'clickhouse://default:pwd@127.0.0.1:8123/default?label=my-ch'
+dbexplain -dsn 'clickhouse://default:pwd@127.0.0.1:8123/default?label=my-ch'
 ```
 
 **SQLite**
 ```bash
-./dbexplain -dsn 'sqlite:///home/user/data/app.db?label=local-db'
+dbexplain -dsn 'sqlite:///home/user/data/app.db?label=local-db'
 ```
 
 **MongoDB**
 ```bash
-./dbexplain -dsn 'mongodb://admin:pwd@127.0.0.1:27017/mydb?authSource=admin&label=my-mongo'
+dbexplain -dsn 'mongodb://admin:pwd@127.0.0.1:27017/mydb?authSource=admin&label=my-mongo'
 ```
 
 **Elasticsearch（HTTPS）**
 ```bash
-./dbexplain -dsn 'elasticsearchs://elastic:pwd@127.0.0.1:9200?label=my-es'
+dbexplain -dsn 'elasticsearchs://elastic:pwd@127.0.0.1:9200?label=my-es'
 ```
 
 **Qdrant**
 ```bash
-./dbexplain -dsn 'qdrant://:api-key@127.0.0.1:6334?label=my-qdrant'
+dbexplain -dsn 'qdrant://:api-key@127.0.0.1:6334?label=my-qdrant'
 ```
 
 **GaussDB**
 ```bash
-./dbexplain -dsn 'gaussdb://user:pwd@192.168.0.1:25308/mydb?label=my-gauss'
+dbexplain -dsn 'gaussdb://user:pwd@192.168.0.1:25308/mydb?label=my-gauss'
 ```
 
-> 更多数据库细节: `./dbexplain --manual [--filter <关键字>]`
+> 更多数据库细节: `dbexplain --manual [--filter <关键字>]`
 
 ---
 
@@ -230,7 +277,14 @@ scheme://[用户:密码@]主机[:端口][/库名][?label=别名&参数...]
 | `sslmode=<mode>` | PostgreSQL | SSL 模式：`disable`/`require`/`verify-ca`/`verify-full` |
 | `authSource=<db>` | MongoDB | 认证数据库名 |
 
-**.env 配置模板：**
+**配置文件搜索优先级（`-env` 模式）：**
+
+1. `DBPROBE_ENV_FILE` 环境变量指向的路径
+2. 当前目录 `.env.dbexplain`
+3. `~/.config/dbexplain/.env.dbexplain`（Linux/macOS）或 `%USERPROFILE%\.dbexplain\.env.dbexplain`（Windows）
+4. 当前目录 `.env`（向下兼容旧版）
+
+**.env.dbexplain 配置模板：**
 
 ```ini
 # MySQL
@@ -308,20 +362,32 @@ DB9=qdrant://:api-key@127.0.0.1:6334?label=my-qdrant
 
 ## 作为 Skill 集成到 AI 助手
 
-```bash
-cd db-relationship-explainer
+`install.sh` 默认同时安装工具和 Skill。也可分开操作：
 
-# 一键安装（交互选择目标平台）
-bash install_skill_for_all_platform.sh
+```bash
+# 一键安装（工具 + Skill，在线）
+bash db-relationship-explainer/scripts/install.sh
+
+# 一键安装（工具 + Skill，离线）
+bash db-relationship-explainer/scripts/install.sh --offline ./dbexplain-linux-amd64
+
+# 仅安装工具，不部署 Skill
+bash db-relationship-explainer/scripts/install.sh --no-skill
+
+# 仅部署 Skill（工具已安装时）
+bash db-relationship-explainer/scripts/install-skill.sh
 
 # 更新已安装的 Skill
-bash install_skill_for_all_platform.sh --update
+bash db-relationship-explainer/scripts/install-skill.sh --update
 
 # 验证安装
-bash install_skill_for_all_platform.sh --verify
+bash db-relationship-explainer/scripts/install-skill.sh --verify
 
-# 卸载
-bash uninstall_skill_for_all_platform.sh
+# 卸载 Skill
+bash db-relationship-explainer/scripts/uninstall-skill.sh
+
+# 卸载工具
+bash db-relationship-explainer/scripts/uninstall.sh
 ```
 
 ![Skill 安装管理](docs/assets/skill_install_mgr.png)
@@ -344,7 +410,7 @@ bash uninstall_skill_for_all_platform.sh
 ## 开发
 
 - **语言**：Go 1.26+
-- **构建**：`CGO_ENABLED=0 go build -ldflags="-s -w -X main.version=v0.0.4"`
+- **构建**：`CGO_ENABLED=0 go build -ldflags="-s -w -X main.version=v0.0.5"`
 - **测试**：`go test ./...`（DSN 解析 + 字段推断）
 - **交叉编译**：`bash build.sh`（linux/darwin/windows × amd64/arm64）
 

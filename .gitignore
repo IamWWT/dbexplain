@@ -2,28 +2,29 @@
 .env
 src/.env
 
-
 # 日志
 logs/
+db-relationship-explainer/logs/
 
 # IDE
 .idea/
 .vscode/
 *.swp
 *.swo
-.git
-.github
-# 编译的二进制文件（Git 不追踪，通过 Release 发布）
-db-relationship-explainer/tools/dbexplain-*
-db-relationship-explainer/logs/
-tools/
-db-relationship-explainer/.claude
+
+# 编译二进制（Git 不追踪，通过 Release 分发）
+release/
 src/dbexplain
 src/dbexplain-*
+src/dbexplain.exe
+
+# AI 平台本地目录
 .deepseek
 .claude
 .claude.resume
-release-wechat.md
+db-relationship-explainer/.claude
 
-# not expose to user
+# 内部文件（不对外暴露）
+.github
+release-wechat.md
 docs/ALGORITHMS.md

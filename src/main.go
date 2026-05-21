@@ -10,6 +10,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -28,7 +29,7 @@ import (
 	"dbexplain/schema"
 )
 
-var version = "v0.0.4"
+var version = "v0.0.5"
 
 type dsnEntry struct {
 	raw    string // DSN string
@@ -54,8 +55,6 @@ func hasHelpFlag() bool {
 }
 
 func main() {
-	_ = godotenv.Load()
-
 	userLang := preScanLanguage()
 
 	// Intercept -h/--help before flag.Parse for localized output
@@ -76,6 +75,7 @@ func main() {
 	contextDir := flag.String("context", "", "write AI context files to directory (summary.json, topology.json, diagnostics.json, chunks/)")
 	cacheFile := flag.String("cache", "", "fingerprint cache file for delta scan (.json)")
 	outputFile := flag.String("o", "", "write output to file")
+	logDirFlag := flag.String("log-dir", "./logs", "directory for log files (filter.log, <label>.log)")
 	perDSNTimeout := flag.Duration("timeout", 20*time.Second, "per-DSN collect timeout")
 	showVersion := flag.Bool("version", false, "print version and exit")
 	showManual := flag.Bool("manual", false, "print comprehensive manual and exit")
@@ -97,6 +97,13 @@ func main() {
 		entries = append(entries, dsnEntry{raw: raw})
 	}
 	if *useEnv {
+		configPath := findConfigFile()
+		if configPath == "" {
+			log.Fatal("no config file found. Create .env.dbexplain in ~/.config/dbexplain/ or set DBPROBE_ENV_FILE. Also supports .env in current directory (legacy).")
+		}
+		if err := godotenv.Load(configPath); err != nil {
+			log.Printf("warning: load config %s: %v", configPath, err)
+		}
 		entries = append(entries, loadFromEnv()...)
 	}
 	if *configFile != "" {
@@ -105,7 +112,7 @@ func main() {
 		}
 	}
 
-	logDir := "./logs"
+	logDir := *logDirFlag
 	if err := os.MkdirAll(logDir, 0755); err != nil {
 		log.Fatalf("create log dir: %v", err)
 	}
@@ -394,6 +401,47 @@ func loadFromConfig(filename string) []string {
 	return dsnList
 }
 
+// ── 配置文件搜索 ──
+
+// findConfigFile 按优先级搜索配置文件，返回第一个存在的文件路径
+// 优先级: DBPROBE_ENV_FILE > .env.dbexplain (CWD) > XDG/user config > .env (CWD, legacy)
+func findConfigFile() string {
+	// 1. DBPROBE_ENV_FILE 环境变量（显式指定）
+	if envFile := os.Getenv("DBPROBE_ENV_FILE"); envFile != "" {
+		if _, err := os.Stat(envFile); err == nil {
+			return envFile
+		}
+	}
+	// 2. .env.dbexplain (CWD)
+	if _, err := os.Stat(".env.dbexplain"); err == nil {
+		return ".env.dbexplain"
+	}
+	// 3. 用户配置目录
+	path := userConfigPath()
+	if _, err := os.Stat(path); err == nil {
+		return path
+	}
+	// 4. .env (CWD, legacy 兼容)
+	if _, err := os.Stat(".env"); err == nil {
+		return ".env"
+	}
+	return ""
+}
+
+// userConfigPath 返回用户配置目录下的配置文件路径
+// Linux/macOS: ~/.config/dbexplain/.env.dbexplain
+// Windows:     %USERPROFILE%\.dbexplain\.env.dbexplain
+func userConfigPath() string {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	if runtime.GOOS == "windows" {
+		return filepath.Join(homeDir, ".dbexplain", ".env.dbexplain")
+	}
+	return filepath.Join(homeDir, ".config", "dbexplain", ".env.dbexplain")
+}
+
 // ── 上下文输出 ──
 
 func writeContext(dir string, result *analyze.Result) {
@@ -516,11 +564,13 @@ func printHelp(lang string) {
 	fmt.Fprint(out, p(
 		"数据源 (Input Sources):\n"+
 			"  -dsn string        数据库连接串，可重复使用\n"+
-			"  -env               从 .env 文件加载 DSN (DB1=, DB2=, ...)\n"+
+			"  -env               从配置文件加载 DSN (搜索: DBPROBE_ENV_FILE >\n"+
+			"                     .env.dbexplain > ~/.config/dbexplain/.env.dbexplain > .env)\n"+
 			"  -config file       从 JSON 文件读取 DSN 数组\n\n",
 		"Input Sources:\n"+
 			"  -dsn string        Database connection string, repeatable\n"+
-			"  -env               Load DSNs from .env file (DB1=, DB2=, ...)\n"+
+			"  -env               Load DSNs from config file (search: DBPROBE_ENV_FILE >\n"+
+			"                     .env.dbexplain > XDG/user config > .env)\n"+
 			"  -config file       Read DSN array from JSON file\n\n",
 	))
 
@@ -537,9 +587,11 @@ func printHelp(lang string) {
 	// Group 3: Output Control
 	fmt.Fprint(out, p(
 		"输出控制 (Output Control):\n"+
-			"  -o file            将输出写入文件 (自动添加 UTF-8 BOM)\n\n",
+			"  -o file            将输出写入文件 (自动添加 UTF-8 BOM)\n"+
+			"  --log-dir dir      日志输出目录 (默认 ./logs)\n\n",
 		"Output Control:\n"+
-			"  -o file            Write output to file (auto UTF-8 BOM)\n\n",
+			"  -o file            Write output to file (auto UTF-8 BOM)\n"+
+			"  --log-dir dir      Log output directory (default ./logs)\n\n",
 	))
 
 	// Group 4: Display Format
@@ -727,6 +779,13 @@ DESCRIPTION
       tls=true            ES / Redis 启用 TLS 加密
       sslmode=<mode>      PostgreSQL SSL: disable/require/verify-ca/verify-full
       authSource=<db>     MongoDB 认证数据库名
+
+    配置文件搜索优先级 (-env 模式):
+      1. DBPROBE_ENV_FILE 环境变量指定路径
+      2. 当前目录 .env.dbexplain
+      3. ~/.config/dbexplain/.env.dbexplain (Linux/macOS)
+         %USERPROFILE%\\.dbexplain\\.env.dbexplain (Windows)
+      4. 当前目录 .env (向下兼容旧版)
 `,
 		`
 
@@ -741,6 +800,13 @@ DESCRIPTION
       tls=true            ES / Redis enable TLS encryption
       sslmode=<mode>      PostgreSQL SSL: disable/require/verify-ca/verify-full
       authSource=<db>     MongoDB authentication database name
+
+    Config file search order (-env mode):
+      1. DBPROBE_ENV_FILE environment variable
+      2. .env.dbexplain in current directory
+      3. ~/.config/dbexplain/.env.dbexplain (Linux/macOS)
+         %USERPROFILE%\\.dbexplain\\.env.dbexplain (Windows)
+      4. .env in current directory (legacy backward compat)
 `))
 
 	fmt.Print(p(`
@@ -749,12 +815,13 @@ DESCRIPTION
 
     -dsn <string>         数据库连接串，可重复多次指定多个库
     -config <file>        从 JSON 文件读取 DSN 列表 (数组格式)
-    -env                  从 .env 加载 DSN (格式: DB<n>=<DSN>)
+    -env                  从配置文件加载 DSN (格式: DB<n>=<DSN>, 搜索优先级见 DSN 格式章节)
     -include <filter>     仅包含匹配的 DSN (按类型/label/env编号, 逗号分隔)
     -exclude <filter>     排除匹配的 DSN (格式同 -include)
     -json                 输出 JSON 格式 (适合程序消费)
     -human                人类友好输出：带上下文标记 [table=] [pattern=] 和视觉分隔
     -o <file>             将报告写入文件 (自动添加 UTF-8 BOM)
+    --log-dir <dir>       日志输出目录 (默认 ./logs, 包含 filter.log 和各实例日志)
     -context <dir>        写入 AI 上下文文件到目录 (summary.json/topology.json/diagnostics.json/chunks/)
     -cache <file>         Schema 指纹缓存文件，用于增量变更检测 (.json)
     -timeout <duration>   每 DSN 采集超时 (默认 20s, 如 30s/1m)
@@ -769,12 +836,13 @@ DESCRIPTION
 
     -dsn <string>         Database connection string, repeatable for multiple databases
     -config <file>        Read DSN list from JSON file (array format)
-    -env                  Load DSNs from .env file (format: DB<n>=<DSN>)
+    -env                  Load DSNs from config file (format: DB<n>=<DSN>, search order see DSN FORMAT)
     -include <filter>     Only include matching DSNs (by kind/label/env-key, comma-sep)
     -exclude <filter>     Exclude matching DSNs (same format as -include)
     -json                 Output JSON format (for programmatic consumption)
     -human                Human-friendly output: context markers [table=] [pattern=] etc.
     -o <file>             Write report to file (auto-prepends UTF-8 BOM)
+    --log-dir <dir>       Log output directory (default ./logs, filter.log + per-instance logs)
     -context <dir>        Write AI context files to directory (summary.json/topology.json/diagnostics.json/chunks/)
     -cache <file>         Schema fingerprint cache file for incremental delta detection (.json)
     -timeout <duration>   Per-DSN collect timeout (default 20s, e.g. 30s/1m)
@@ -927,7 +995,7 @@ func printManualMySQL(p func(string, string) string) {
       • 密码在日志和输出中脱敏 (替换为 ***)
 
     示例:
-      ./dbexplain -dsn 'mysql://root:pwd@127.0.0.1:3306/shop?label=shop-db'
+      dbexplain -dsn 'mysql://root:pwd@127.0.0.1:3306/shop?label=shop-db'
 `,
 		`
 
@@ -956,7 +1024,7 @@ func printManualMySQL(p func(string, string) string) {
       • Passwords redacted in logs and output (replaced with ***)
 
     Example:
-      ./dbexplain -dsn 'mysql://root:pwd@127.0.0.1:3306/shop?label=shop-db'
+      dbexplain -dsn 'mysql://root:pwd@127.0.0.1:3306/shop?label=shop-db'
 `))
 }
 
@@ -995,7 +1063,7 @@ func printManualPostgres(p func(string, string) string) {
       • 参数化查询，密码脱敏
 
     示例:
-      ./dbexplain -dsn 'postgres://u:p@host:5432/warehouse?label=my-pg&sslmode=disable'
+      dbexplain -dsn 'postgres://u:p@host:5432/warehouse?label=my-pg&sslmode=disable'
 `,
 		`
 
@@ -1033,7 +1101,7 @@ func printManualPostgres(p func(string, string) string) {
       • Parameterized queries, password redaction
 
     Example:
-      ./dbexplain -dsn 'postgres://u:p@host:5432/warehouse?label=my-pg&sslmode=disable'
+      dbexplain -dsn 'postgres://u:p@host:5432/warehouse?label=my-pg&sslmode=disable'
 `))
 }
 
@@ -1054,7 +1122,7 @@ func printManualGaussDB(p func(string, string) string) {
       支持行数统计、多 Schema 自动采集。
 
     示例:
-      ./dbexplain -dsn 'gaussdb://user:pwd@192.168.0.1:25308/mydb?label=my-gauss'
+      dbexplain -dsn 'gaussdb://user:pwd@192.168.0.1:25308/mydb?label=my-gauss'
 `,
 		`
 
@@ -1072,7 +1140,7 @@ func printManualGaussDB(p func(string, string) string) {
       (pg_catalog). Supports row stats and multi-schema auto-collection.
 
     Example:
-      ./dbexplain -dsn 'gaussdb://user:pwd@192.168.0.1:25308/mydb?label=my-gauss'
+      dbexplain -dsn 'gaussdb://user:pwd@192.168.0.1:25308/mydb?label=my-gauss'
 `))
 }
 
@@ -1107,7 +1175,7 @@ func printManualClickHouse(p func(string, string) string) {
       • 不支持 View 引擎表的行数统计
 
     示例:
-      ./dbexplain -dsn 'clickhouse://default:pwd@127.0.0.1:8123/default?label=my-ch'
+      dbexplain -dsn 'clickhouse://default:pwd@127.0.0.1:8123/default?label=my-ch'
 `,
 		`
 
@@ -1140,7 +1208,7 @@ func printManualClickHouse(p func(string, string) string) {
       • View engine tables excluded from row counts
 
     Example:
-      ./dbexplain -dsn 'clickhouse://default:pwd@127.0.0.1:8123/default?label=my-ch'
+      dbexplain -dsn 'clickhouse://default:pwd@127.0.0.1:8123/default?label=my-ch'
 `))
 }
 
@@ -1172,7 +1240,7 @@ func printManualSQLite(p func(string, string) string) {
       • 密码在日志中脱敏
 
     示例:
-      ./dbexplain -dsn 'sqlite:///home/user/data/app.db?label=local-sqlite'
+      dbexplain -dsn 'sqlite:///home/user/data/app.db?label=local-sqlite'
 `,
 		`
 
@@ -1202,7 +1270,7 @@ func printManualSQLite(p func(string, string) string) {
       • Passwords redacted in logs
 
     Example:
-      ./dbexplain -dsn 'sqlite:///home/user/data/app.db?label=local-sqlite'
+      dbexplain -dsn 'sqlite:///home/user/data/app.db?label=local-sqlite'
 `))
 }
 
@@ -1249,9 +1317,9 @@ func printManualRedis(p func(string, string) string) {
 
     示例:
       # 单机
-      ./dbexplain -dsn 'redis://:pwd@127.0.0.1:6379/0?label=my-redis'
+      dbexplain -dsn 'redis://:pwd@127.0.0.1:6379/0?label=my-redis'
       # 集群
-      ./dbexplain -dsn 'redis://:pwd@10.0.0.1:7000/0?cluster=true&label=my-cluster'
+      dbexplain -dsn 'redis://:pwd@10.0.0.1:7000/0?cluster=true&label=my-cluster'
 `,
 		`
 
@@ -1295,9 +1363,9 @@ func printManualRedis(p func(string, string) string) {
 
     Example:
       # Standalone
-      ./dbexplain -dsn 'redis://:pwd@127.0.0.1:6379/0?label=my-redis'
+      dbexplain -dsn 'redis://:pwd@127.0.0.1:6379/0?label=my-redis'
       # Cluster
-      ./dbexplain -dsn 'redis://:pwd@10.0.0.1:7000/0?cluster=true&label=my-cluster'
+      dbexplain -dsn 'redis://:pwd@10.0.0.1:7000/0?cluster=true&label=my-cluster'
 `))
 }
 
@@ -1334,9 +1402,9 @@ func printManualElasticsearch(p func(string, string) string) {
 
     示例:
       # HTTP
-      ./dbexplain -dsn 'elasticsearch://elastic:pwd@127.0.0.1:9200?label=my-es'
+      dbexplain -dsn 'elasticsearch://elastic:pwd@127.0.0.1:9200?label=my-es'
       # HTTPS
-      ./dbexplain -dsn 'elasticsearchs://elastic:pwd@127.0.0.1:9200?label=my-es'
+      dbexplain -dsn 'elasticsearchs://elastic:pwd@127.0.0.1:9200?label=my-es'
 `,
 		`
 
@@ -1370,9 +1438,9 @@ func printManualElasticsearch(p func(string, string) string) {
 
     Example:
       # HTTP
-      ./dbexplain -dsn 'elasticsearch://elastic:pwd@127.0.0.1:9200?label=my-es'
+      dbexplain -dsn 'elasticsearch://elastic:pwd@127.0.0.1:9200?label=my-es'
       # HTTPS
-      ./dbexplain -dsn 'elasticsearchs://elastic:pwd@127.0.0.1:9200?label=my-es'
+      dbexplain -dsn 'elasticsearchs://elastic:pwd@127.0.0.1:9200?label=my-es'
 `))
 }
 
@@ -1407,7 +1475,7 @@ func printManualMongoDB(p func(string, string) string) {
       • EstimatedDocumentCount 为近似值 (非精确 COUNT)
 
     示例:
-      ./dbexplain -dsn 'mongodb://admin:pwd@127.0.0.1:27017/mydb?authSource=admin&label=my-mongo'
+      dbexplain -dsn 'mongodb://admin:pwd@127.0.0.1:27017/mydb?authSource=admin&label=my-mongo'
 `,
 		`
 
@@ -1439,7 +1507,7 @@ func printManualMongoDB(p func(string, string) string) {
       • EstimatedDocumentCount is approximate (not exact COUNT)
 
     Example:
-      ./dbexplain -dsn 'mongodb://admin:pwd@127.0.0.1:27017/mydb?authSource=admin&label=my-mongo'
+      dbexplain -dsn 'mongodb://admin:pwd@127.0.0.1:27017/mydb?authSource=admin&label=my-mongo'
 `))
 }
 
@@ -1468,7 +1536,7 @@ func printManualQdrant(p func(string, string) string) {
       • 当前仅支持非 TLS 连接 (UseTLS=false)
 
     示例:
-      ./dbexplain -dsn 'qdrant://:my-api-key@127.0.0.1:6334?label=my-qdrant'
+      dbexplain -dsn 'qdrant://:my-api-key@127.0.0.1:6334?label=my-qdrant'
 `,
 		`
 
@@ -1494,6 +1562,6 @@ func printManualQdrant(p func(string, string) string) {
       • Currently only non-TLS connections supported (UseTLS=false)
 
     Example:
-      ./dbexplain -dsn 'qdrant://:my-api-key@127.0.0.1:6334?label=my-qdrant'
+      dbexplain -dsn 'qdrant://:my-api-key@127.0.0.1:6334?label=my-qdrant'
 `))
 }

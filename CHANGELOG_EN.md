@@ -1,5 +1,31 @@
 # Changelog
 
+## v0.0.5 (2026-05-21)
+
+### One-Click Install & Deployment
+- **`scripts/install.sh`**: Linux/macOS one-click installer with online (GitHub Releases) and offline modes
+- **`scripts/install.ps1`**: Windows PowerShell one-click installer with automatic user PATH configuration
+- **`scripts/uninstall.sh` / `scripts/uninstall.ps1`**: Companion uninstall scripts with silent mode (`--all`)
+- **`scripts/install-skill.sh`**: Multi-platform skill deployment script (interactive target selection)
+- **`scripts/uninstall-skill.sh`**: Skill uninstaller script
+- **Global install**: Binary installed to system PATH (Linux/macOS: `/usr/local/bin/dbexplain`, Windows: `%LOCALAPPDATA%\dbexplain\`)
+- **User-level config**: `.env.dbexplain` per XDG spec (`~/.config/dbexplain/`), with optional `DBPROBE_ENV_FILE` for custom paths
+
+### Config Search
+- **Multi-level fallback**: `DBPROBE_ENV_FILE` → `.env.dbexplain` (CWD) → `~/.config/dbexplain/.env.dbexplain` → `.env` (CWD, legacy compat)
+- No more `cd <skill-dir>` required — tool runs from any directory in `-env` mode
+
+### New Options
+- **`--log-dir <dir>`**: User-specifiable log output directory (default `./logs`), affects `filter.log` and per-instance logs
+
+### Skill Adaptation
+- **SKILL.md**: Removed `cd <skill-dir>` requirement, updated to global `dbexplain` invocation, added multi-level config search path docs
+- **Skill installer**: Prioritizes system `dbexplain` in PATH; skill directory binary is now `dbexplain` symlink (platform-agnostic name)
+- **Version**: install/uninstall skill scripts bumped to v0.0.5
+
+### Documentation
+- `--manual` updated: config search priority section, `--log-dir` option, all `./dbexplain` → `dbexplain`
+
 ## v0.0.4 (2026-05-20)
 
 ### Core Architecture

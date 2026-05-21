@@ -50,14 +50,20 @@ understand_dbs_skills/
 │   ├── main.go                 # 入口（并发控制、输出捕获）
 │   ├── go.mod
 │   └── build.sh                # 多平台交叉编译脚本
-├── db-relationship-explainer/  # AI Skill 模板
+├── db-relationship-explainer/  # AI Skill 模板（自包含）
 │   ├── SKILL.md
-│   └── tools/                  # 预编译二进制放置处
+│   ├── .env.dbexplain.example
+│   └── scripts/
+│       ├── install.sh          # 工具安装器 (Linux/macOS)
+│       ├── uninstall.sh        # 工具卸载器 (Linux/macOS)
+│       ├── install-skill.sh    # Skill 多平台部署脚本
+│       ├── uninstall-skill.sh  # Skill 卸载脚本
+│       ├── install.ps1         # 工具安装器 (Windows)
+│       └── uninstall.ps1       # 工具卸载器 (Windows)
 ├── docs/
 │   └── MONGO.md                # MongoDB 排障文档
 ├── README.md
 ├── LICENSE
-└── deploy.md                   # 本文件
 ```
 
 ---
@@ -100,12 +106,12 @@ CGO_ENABLED=0 go build -ldflags="-s -w" -o dbexplain .
 bash build.sh
 ```
 
-该脚本会生成以下平台二进制文件：
-- `dbexplain-linux-amd64`
-- `dbexplain-linux-arm64`
-- `dbexplain-darwin-amd64`
-- `dbexplain-darwin-arm64`
-- `dbexplain-windows-amd64.exe`
+该脚本会在 `release/` 目录生成以下平台二进制文件：
+- `release/dbexplain-linux-amd64`
+- `release/dbexplain-linux-arm64`
+- `release/dbexplain-darwin-amd64`
+- `release/dbexplain-darwin-arm64`
+- `release/dbexplain-windows-amd64.exe`
 
 ---
 
@@ -121,30 +127,50 @@ echo "CREATE TABLE t(id int primary key, name text);" | sqlite3 /tmp/test.db
 
 若能看到终端美化的表结构卡片，说明编译成功。
 
-也可以创建 `.env` 文件（参考下一节）并通过 `./dbexplain -env` 同时测试多个数据源。
+也可以创建 `.env.dbexplain` 配置文件（推荐放在 `~/.config/dbexplain/.env.dbexplain`，详见第 6 节）并通过 `dbexplain -env` 同时测试多个数据源。
 
 ---
 
 ## 5. 部署到 Skill 系统
 
-`db-relationship-explainer/` 目录已经包含 Skill 定义文件 `SKILL.md`，你只需将对应平台的二进制放入 `tools/` 子目录即可。
-
-### 5.1 复制二进制文件
+推荐使用一键安装脚本完成工具全局安装和 Skill 部署：
 
 ```bash
-# 假设你在 src/ 目录下编译完成，返回项目根目录
-cd ..
-cp src/dbexplain-linux-amd64 db-relationship-explainer/tools/dbexplain-linux-amd64
-# 如需其他平台，同样复制
+# 一键安装（工具 + Skill）
+bash db-relationship-explainer/scripts/install.sh
+
+# 或仅安装工具，稍后单独部署 Skill
+bash db-relationship-explainer/scripts/install.sh --no-skill
 ```
 
-### 5.2 调整 SKILL.md（可选）
+如需手动部署或单独更新 Skill，参见以下步骤。
 
-`db-relationship-explainer/SKILL.md` 已默认配置好工具的路径 `tools/dbexplain-{platform}`，如果你的 AI 平台要求特殊格式，可微调其中的触发词或说明。
+### 5.1 手动创建 Symlink
+
+如果你手动部署 Skill 目录到 AI 平台（非通过脚本），需要创建指向系统二进制的 symlink：
+
+```bash
+# 假设已通过 scripts/install.sh 或手动将 dbexplain 安装到系统 PATH
+# 目标 Skill 目录（例如 Claude Code）:
+mkdir -p ~/.claude/skills/db-relationship-explainer/tools
+ln -s $(which dbexplain) ~/.claude/skills/db-relationship-explainer/tools/dbexplain
+
+# 或从 src/ 编译后手动放置
+# cp src/dbexplain ~/.claude/skills/db-relationship-explainer/tools/dbexplain
+# chmod +x ~/.claude/skills/db-relationship-explainer/tools/dbexplain
+```
+
+### 5.2 运行 Skill 安装脚本
+
+```bash
+bash db-relationship-explainer/scripts/install-skill.sh
+```
+
+交互选择安装目标：Claude Code / DeepSeek / AixCoding / Agents / 全部平台等。
 
 ### 5.3 集成到你的 AI 助手
 
-按照你所使用的 AI Skill 规范（如 Claude Code、自定义 GPT Action）将该目录打包或直接引用，即可让 AI 调用该工具。
+按照你所使用的 AI Skill 规范（如 Claude Code、自定义 GPT Action）将该目录打包或直接引用，即可让 AI 调用该工具。详见 [`docs/DEPLOY_SKILLS.md`](DEPLOY_SKILLS.md)。
 
 ---
 
@@ -153,35 +179,41 @@ cp src/dbexplain-linux-amd64 db-relationship-explainer/tools/dbexplain-linux-amd
 工具支持三种方式指定 DSN：
 
 1. **命令行参数**（推荐）：`-dsn 'scheme://...'`（注意含 `!` 等特殊字符时使用单引号包裹）
-2. **`.env` 文件**：在 `src/` 目录创建 `.env`，使用 `DB1=, DB2=...` 格式。编号无需连续，程序会自动按数字升序加载。
+2. **配置文件**（`-env` 模式）：创建 `.env.dbexplain` 文件，使用 `DB1=, DB2=...` 格式。编号无需连续，程序会自动按数字升序加载。配置文件搜索优先级：
+   1. `DBPROBE_ENV_FILE` 环境变量
+   2. `.env.dbexplain`（当前目录）
+   3. `~/.config/dbexplain/.env.dbexplain`（Linux/macOS）/ `%USERPROFILE%\.dbexplain\.env.dbexplain`（Windows）
+   4. `.env`（当前目录，向下兼容旧版）
 3. **JSON 配置文件**：`-config dbs.json`
+
+推荐将配置文件放在用户目录下，这样从任意目录运行 `dbexplain -env` 都能加载。
 
 常用 DSN 示例：
 
 ```bash
 # MySQL
-./dbexplain -dsn 'mysql://root:password@localhost:3306/mydb?label=prod-mysql'
+dbexplain -dsn 'mysql://root:password@localhost:3306/mydb?label=prod-mysql'
 
 # PostgreSQL / pgvector
-./dbexplain -dsn 'postgres://user:pass@localhost:5432/mydb?label=pg'
+dbexplain -dsn 'postgres://user:pass@localhost:5432/mydb?label=pg'
 
 # SQLite
-./dbexplain -dsn 'sqlite:///absolute/path/to/database.db'
+dbexplain -dsn 'sqlite:///absolute/path/to/database.db'
 
 # ClickHouse
-./dbexplain -dsn 'clickhouse://default:pass@localhost:8123/default'
+dbexplain -dsn 'clickhouse://default:pass@localhost:8123/default'
 
 # Redis（密码含特殊字符时使用单引号）
-./dbexplain -dsn 'redis://:password@localhost:6379/0?label=cache'
+dbexplain -dsn 'redis://:password@localhost:6379/0?label=cache'
 
 # MongoDB（必须指定库名）
-./dbexplain -dsn 'mongodb://user:pass@localhost:27017/mydb?authSource=admin&label=mongo'
+dbexplain -dsn 'mongodb://user:pass@localhost:27017/mydb?authSource=admin&label=mongo'
 
 # Qdrant（API Key 作为密码）
-./dbexplain -dsn 'qdrant://:api-key@localhost:6334'
+dbexplain -dsn 'qdrant://:api-key@localhost:6334'
 
 # Elasticsearch
-./dbexplain -dsn 'elasticsearch://elastic:pass@localhost:9200'
+dbexplain -dsn 'elasticsearch://elastic:pass@localhost:9200'
 ```
 
 > 确保所用数据库账号仅具有**只读权限**，以保证安全。
@@ -193,10 +225,10 @@ cp src/dbexplain-linux-amd64 db-relationship-explainer/tools/dbexplain-linux-amd
 **Q: 编译时报 `cannot find module`**  
 A: 执行 `go mod tidy` 前确认网络通畅，Go 版本 ≥1.26。
 
-**Q: 密码中含 `!` 等特殊字符，命令行报错？**  
-A: 使用单引号包裹整个 DSN，例如 `-dsn 'redis://:pass!word@host:6379/0'`。在 `.env` 文件中无需转义。
+**Q: 密码中含 `!` 等特殊字符，命令行报错？**
+A: 使用单引号包裹整个 DSN，例如 `-dsn 'redis://:pass!word@host:6379/0'`。在 `.env.dbexplain` 文件中无需转义。
 
-**Q: `.env` 中注释掉前面的条目后，后面的会失效吗？**  
+**Q: `.env.dbexplain` 中注释掉前面的条目后，后面的会失效吗？**
 A: 不会。程序会扫描所有 `DB<n>` 环境变量并按数字排序，编号无需连续。
 
 **Q: Redis 扫描会拖慢服务吗？**  
@@ -205,8 +237,8 @@ A: 使用 `SCAN` 非阻塞迭代，且上限 2000 个 key，对每个模式仅�
 **Q: MongoDB 认证失败**  
 A: 检查 `authSource` 是否正确（用户创建时所在的库），详见 `docs/MONGO.md`。
 
-**Q: 程序卡住不输出结果**  
-A: 可查看 `src/logs/<label>.log` 定位具体卡在哪个数据库。必要时使用 `-timeout` 调整每个 DSN 的超时时间。若报告正常生成但终端无输出，可能由管道死锁引起（已修复，请更新到最新代码）。
+**Q: 程序卡住不输出结果**
+A: 可查看 `logs/<label>.log`（默认当前目录）或用 `--log-dir` 指定日志目录，定位具体卡在哪个数据库。必要时使用 `-timeout` 调整每个 DSN 的超时时间。若报告正常生成但终端无输出，可能由管道死锁引起（已修复，请更新到最新代码）。
 
 **Q: 如何添加新的数据库支持**  
 A: 在 `src/connector/` 下新建文件，实现 `Connector` 接口，并在 `init()` 中调用 `Register("类型", func() Connector { return xxxConnector{} })`，无需修改其他任何文件。

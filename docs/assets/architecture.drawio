@@ -1,0 +1,226 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="drawio" version="26.0.0">
+  <diagram name="dbexplain-architecture">
+    <mxGraphModel>
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- Title -->
+        <mxCell id="title" value="dbexplain Project Architecture" style="text;html=1;fontSize=22;fontStyle=1;align=center;verticalAlign=middle;fontColor=#333333;" vertex="1" parent="1">
+          <mxGeometry x="400" y="20" width="500" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- ===== Layer 0: CLI Entry ===== -->
+        <mxCell id="sw-cli" value="CLI Entry (main.go)" style="swimlane;startSize=28;fillColor=#f5f5f5;strokeColor=#999999;fontStyle=1;fontSize=13;swimlaneFillColor=#f5f5f5;" vertex="1" parent="1">
+          <mxGeometry x="40" y="70" width="1280" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="flags" value="Flag Parsing&#xa;(-dsn, -env, -config,&#xa;-json, --log-dir, ...)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="sw-cli">
+          <mxGeometry x="40" y="35" width="180" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="config" value="Config Loading&#xa;(findConfigFile: 4-level&#xa;fallback search)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="sw-cli">
+          <mxGeometry x="270" y="35" width="200" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="dsn-parse" value="DSN Parsing &amp; Filtering&#xa;(ParseDSN, Sanitize,&#xa;-include/-exclude)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="sw-cli">
+          <mxGeometry x="520" y="35" width="210" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="encode" value="Output Encoding&#xa;(encode.go: UTF-8 BOM,&#xa;Windows GBK support)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="sw-cli">
+          <mxGeometry x="780" y="35" width="200" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="concurrent" value="Concurrent Orchestration&#xa;(sync.WaitGroup +&#xa;Mutex-protected slice)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="sw-cli">
+          <mxGeometry x="1030" y="35" width="210" height="55" as="geometry" />
+        </mxCell>
+
+        <!-- Arrow CLI → Connector -->
+        <mxCell id="e-cli-conn" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="sw-cli" target="sw-conn">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- ===== Layer 1: Connector Layer ===== -->
+        <mxCell id="sw-conn" value="Connector Layer (connector/)" style="swimlane;startSize=28;fillColor=#f5f5f5;strokeColor=#999999;fontStyle=1;fontSize=13;swimlaneFillColor=#f5f5f5;" vertex="1" parent="1">
+          <mxGeometry x="40" y="220" width="1280" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="registry" value="Registry&#xa;(Self-registration&#xa;via init()+Register())" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;fontStyle=1;" vertex="1" parent="sw-conn">
+          <mxGeometry x="40" y="35" width="180" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="runner" value="Runner (Panic Isolation)&#xa;CollectSafe() → defer+recover()&#xa;One crash never kills process" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10;fontStyle=1;" vertex="1" parent="sw-conn">
+          <mxGeometry x="270" y="35" width="220" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="conn-mysql" value="MySQL" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;" vertex="1" parent="sw-conn">
+          <mxGeometry x="530" y="30" width="80" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="conn-pg" value="PostgreSQL" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;" vertex="1" parent="sw-conn">
+          <mxGeometry x="620" y="30" width="90" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="conn-ch" value="ClickHouse" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;" vertex="1" parent="sw-conn">
+          <mxGeometry x="720" y="30" width="85" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="conn-sqlite" value="SQLite" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;" vertex="1" parent="sw-conn">
+          <mxGeometry x="815" y="30" width="75" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="conn-redis" value="Redis" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=10;" vertex="1" parent="sw-conn">
+          <mxGeometry x="530" y="70" width="75" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="conn-es" value="Elasticsearch" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=10;" vertex="1" parent="sw-conn">
+          <mxGeometry x="615" y="70" width="95" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="conn-mongo" value="MongoDB" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=10;" vertex="1" parent="sw-conn">
+          <mxGeometry x="720" y="70" width="85" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="conn-qdrant" value="Qdrant" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=10;" vertex="1" parent="sw-conn">
+          <mxGeometry x="815" y="70" width="75" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="connector-interface" value="All implement&#xa;Connector interface:&#xa;Collect() + Capabilities()" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;dashed=1;" vertex="1" parent="sw-conn">
+          <mxGeometry x="960" y="35" width="190" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- ===== Layer 2: Schema Layer ===== -->
+        <mxCell id="e-conn-schema" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="sw-conn" target="sw-schema">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="sw-schema" value="Schema Layer (schema/)" style="swimlane;startSize=28;fillColor=#f5f5f5;strokeColor=#999999;fontStyle=1;fontSize=13;swimlaneFillColor=#f5f5f5;" vertex="1" parent="1">
+          <mxGeometry x="40" y="380" width="1280" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="types" value="Data Types (types.go)&#xa;Universe → Instance → Database&#xa;→ Table → Column/Index/FK/Ref" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1" parent="sw-schema">
+          <mxGeometry x="40" y="35" width="260" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="infer-schema" value="Column Semantics (infer.go)&#xa;Rule engine: name patterns&#xa;→ semantic comments" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1" parent="sw-schema">
+          <mxGeometry x="360" y="35" width="240" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="errors" value="Error Handling (errors.go)&#xa;DBError: structured context&#xa;(DSN+DB+Table+Op+Err)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;" vertex="1" parent="sw-schema">
+          <mxGeometry x="660" y="35" width="240" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="capabilities" value="Capability Set (capabilities/)&#xa;7 named capabilities&#xa;(fk, sampling, ttl, partition,&#xa;vector, row_count, index)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;" vertex="1" parent="sw-schema">
+          <mxGeometry x="960" y="35" width="240" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- ===== Layer 3: Analysis Pipeline ===== -->
+        <mxCell id="e-schema-analyze" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="sw-schema" target="sw-analyze">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="sw-analyze" value="Analysis Pipeline (analyze/ + diagnostics/)" style="swimlane;startSize=28;fillColor=#f5f5f5;strokeColor=#999999;fontStyle=1;fontSize=13;swimlaneFillColor=#f5f5f5;" vertex="1" parent="1">
+          <mxGeometry x="40" y="540" width="1280" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="fk-extract" value="FK Extraction&#xa;Explicit: DDL foreign keys&#xa;Inferred: naming patterns (_id, _fk)&#xa;Confidence: 55-100" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;" vertex="1" parent="sw-analyze">
+          <mxGeometry x="40" y="35" width="230" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="clustering" value="Relationship Clustering&#xa;Union-Find on ref graph&#xa;Groups by longest common prefix" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;" vertex="1" parent="sw-analyze">
+          <mxGeometry x="300" y="35" width="240" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="ranking" value="Table Ranking (ranking.go)&#xa;6 weighted factors&#xa;(graph 0.30, fk 0.30, rows 0.18,&#xa;index 0.07, write 0.10, query 0.05)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;" vertex="1" parent="sw-analyze">
+          <mxGeometry x="570" y="35" width="260" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="diagnostics" value="Diagnostic Rules (diagnostics/)&#xa;Capability-driven: 4 standard rules&#xa;(unindexed_fk, wide_table,&#xa;missing_pk, no_timestamp)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;" vertex="1" parent="sw-analyze">
+          <mxGeometry x="860" y="35" width="260" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- ===== Layer 4: Cache & Context ===== -->
+        <mxCell id="e-analyze-cache" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="sw-analyze" target="sw-cache">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="sw-cache" value="Cache &amp; AI Context Layer (cache/ + context/)" style="swimlane;startSize=28;fillColor=#f5f5f5;strokeColor=#999999;fontStyle=1;fontSize=13;swimlaneFillColor=#f5f5f5;" vertex="1" parent="1">
+          <mxGeometry x="40" y="700" width="1280" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="cache" value="Schema Fingerprinting (cache.go)&#xa;SHA-256 per table (cols+index+FK)&#xa;Disk-persisted Store → Diff() delta" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;" vertex="1" parent="sw-cache">
+          <mxGeometry x="40" y="35" width="330" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="context" value="AI Context Compression (context/compress.go)&#xa;summary.json (scope) → topology.json (structure)&#xa;→ diagnostics.json (issues) → chunks/*.md (detail)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;" vertex="1" parent="sw-cache">
+          <mxGeometry x="420" y="35" width="420" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="ir-graph" value="IR &amp; Graph&#xa;(ir/ + graph/)&#xa;Graph-first primitives:&#xa;Node, Edge, Graph → Query" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;" vertex="1" parent="sw-cache">
+          <mxGeometry x="890" y="35" width="240" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- ===== Layer 5: Output ===== -->
+        <mxCell id="e-cache-output" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="sw-cache" target="sw-output">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="sw-output" value="Output Layer (render/)" style="swimlane;startSize=28;fillColor=#f5f5f5;strokeColor=#999999;fontStyle=1;fontSize=13;swimlaneFillColor=#f5f5f5;" vertex="1" parent="1">
+          <mxGeometry x="40" y="860" width="1280" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="render-term" value="Terminal Markdown&#xa;(ANSI colors, table cards,&#xa;relationship sections)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1" parent="sw-output">
+          <mxGeometry x="40" y="35" width="240" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="render-json" value="JSON Output (-json)&#xa;(structured IR for&#xa;AI Agent consumption)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1" parent="sw-output">
+          <mxGeometry x="330" y="35" width="240" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="render-file" value="File Output (-o)&#xa;(write report to file,&#xa;platform-aware encoding)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1" parent="sw-output">
+          <mxGeometry x="620" y="35" width="240" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="render-log" value="Log Output (--log-dir)&#xa;Per-DSN log files&#xa;(logs/&lt;label&gt;.log)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1" parent="sw-output">
+          <mxGeometry x="910" y="35" width="220" height="55" as="geometry" />
+        </mxCell>
+
+        <!-- ===== Bottom: Database Icons ===== -->
+        <mxCell id="e-output-db" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="sw-output" target="sw-db">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="sw-db" value="Target Databases (9 supported)" style="swimlane;startSize=28;fillColor=#f5f5f5;strokeColor=#999999;fontStyle=1;fontSize=13;swimlaneFillColor=#f5f5f5;" vertex="1" parent="1">
+          <mxGeometry x="40" y="1010" width="1280" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="db-mysql" value="MySQL" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;size=10;" vertex="1" parent="sw-db">
+          <mxGeometry x="30" y="35" width="80" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="db-pg" value="PostgreSQL" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=9;size=10;" vertex="1" parent="sw-db">
+          <mxGeometry x="130" y="35" width="85" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="db-ch" value="ClickHouse" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=9;size=10;" vertex="1" parent="sw-db">
+          <mxGeometry x="235" y="35" width="85" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="db-sqlite" value="SQLite" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;size=10;" vertex="1" parent="sw-db">
+          <mxGeometry x="340" y="35" width="80" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="db-redis" value="Redis" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=10;size=10;" vertex="1" parent="sw-db">
+          <mxGeometry x="440" y="35" width="80" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="db-es" value="Elasticsearch" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=9;size=10;" vertex="1" parent="sw-db">
+          <mxGeometry x="540" y="35" width="95" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="db-mongo" value="MongoDB" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=9;size=10;" vertex="1" parent="sw-db">
+          <mxGeometry x="655" y="35" width="85" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="db-qdrant" value="Qdrant" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=10;size=10;" vertex="1" parent="sw-db">
+          <mxGeometry x="760" y="35" width="80" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="db-readonly" value="All connections: READ-ONLY" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;fontStyle=1;dashed=1;" vertex="1" parent="sw-db">
+          <mxGeometry x="880" y="35" width="200" height="45" as="geometry" />
+        </mxCell>
+
+        <!-- ===== Key Design Principles Callout ===== -->
+        <mxCell id="principles-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;dashed=1;dashPattern=8 8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="1130" width="1280" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="p1" value="Plugin Registry (OCP)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=9;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="50" y="1140" width="140" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="p2" value="Panic Isolation" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=9;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="210" y="1140" width="120" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="p3" value="Read-Only Safety" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=9;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="350" y="1140" width="130" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="p4" value="Zero CGO" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=9;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="500" y="1140" width="100" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="p5" value="Graph-First IR" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=9;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="620" y="1140" width="125" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="p6" value="Capability Architecture" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=9;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="765" y="1140" width="160" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="p7" value="Deterministic Only" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=9;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="945" y="1140" width="145" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="p8" value="Stateless Design" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=9;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1110" y="1140" width="130" height="35" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

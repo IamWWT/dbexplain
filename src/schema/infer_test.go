@@ -82,7 +82,7 @@ func TestInferComment(t *testing.T) {
 
 		// Sample value fallback
 		{name: "unknown_col", typ: "varchar", sample: "short", want: "示例: short"},
-		{name: "unknown_col", typ: "text", sample: "this is a very long sample value for testing", want: "示例: this is a very long …"},
+		{name: "unknown_col", typ: "text", sample: "this is a very long sample value for testing", want: "示例: this is a very long ..."},
 		{name: "unknown_col", typ: "varchar", sample: "", want: ""},
 	}
 

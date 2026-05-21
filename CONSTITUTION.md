@@ -97,7 +97,7 @@
 ## 构建与发布
 
 - 构建脚本：`src/build.sh`（交叉编译 + `file` 命令校验架构）
-- 输出目录：`db-relationship-explainer/tools/`
+- 输出目录：`release/`
 - 无 CI/CD，手动构建发布
 - 版本号遵循 semver，CHANGELOG.md 维护
 
