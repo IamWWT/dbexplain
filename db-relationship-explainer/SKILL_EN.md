@@ -45,10 +45,12 @@ If a password is needed, prompt: "To protect your password, consider configuring
 
 ### Method 2: Config File (Recommended for multiple DBs or password protection)
 
-Config file search priority:
-1. `DBPROBE_ENV_FILE` environment variable
+Config file search priority (`-env` auto-discovery):
+1. `DBPROBE_ENV_FILE` environment variable (optional override)
 2. `./.env.dbexplain` (current directory)
-3. `~/.config/dbexplain/.env.dbexplain`
+3. `./.env.dbexplain.enc` (current directory, auto-decrypt)
+4. `~/.config/dbexplain/.env.dbexplain`
+5. `~/.config/dbexplain/.env.dbexplain.enc` (auto-decrypt)
 
 Guide the user to create a config at `~/.config/dbexplain/.env.dbexplain`:
 
@@ -64,6 +66,35 @@ dbexplain -env
 ```
 
 The Agent must never view or edit the config file. If the user reports the config file is missing, respond with the correct path and format, and wait for the user to act.
+
+### Encrypted Config Files (v0.0.6)
+
+Users can encrypt their config file with a machine fingerprint. The encrypted file can only be decrypted on the same machine. **The Agent must NEVER view, ask for, or log the user's password.** The user runs these commands themselves in their terminal:
+
+```bash
+# Encrypt config file (machine fingerprint, no password)
+dbexplain encrypt ~/.config/dbexplain/.env.dbexplain
+
+# IMPORTANT: Delete the plaintext config after encryption!
+rm ~/.config/dbexplain/.env.dbexplain
+```
+
+If the user chooses password-enhanced mode:
+
+```bash
+# User runs this themselves (Agent cannot see password input)
+dbexplain encrypt ~/.config/dbexplain/.env.dbexplain --password
+
+# Delete plaintext, save password to key file (user does this, Agent cannot read)
+rm ~/.config/dbexplain/.env.dbexplain
+echo "user-chosen-password" > ~/.config/dbexplain/.encryption_key
+chmod 600 ~/.config/dbexplain/.encryption_key
+```
+
+After encryption, `dbexplain -env` auto-discovers and decrypts the `.enc` file (no env vars needed). The Agent should remind the user:
+1. **Always delete the plaintext config file** after encryption (otherwise it takes priority)
+2. The key file `~/.config/dbexplain/.encryption_key` should have permissions 600
+3. The Agent **will never** read or modify these files
 
 ### Method 3: JSON Config File
 
@@ -103,7 +134,7 @@ The user provides a JSON file path. The Agent uses `-config <path>`.
      - Not configured → guide to create config file, wait, then execute.
 3. **Troubleshooting**:
    - `dbexplain` not found → `bash scripts/install.sh`
-   - Config file not found → check `~/.config/dbexplain/.env.dbexplain` or `DBPROBE_ENV_FILE`
+   - Config file not found → check `~/.config/dbexplain/.env.dbexplain` or encrypted `~/.config/dbexplain/.env.dbexplain.enc`
 4. **Present results**: Show the tool output to the user, and optionally provide suggestions based on the report.
 
 ## 7. Notes

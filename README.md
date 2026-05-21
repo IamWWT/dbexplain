@@ -17,6 +17,7 @@ AI 时代数据库的"真值基座"。
   - [Windows](#windows)
   - [从源码编译](#从源码编译)
   - [安装后配置](#安装后配置)
+  - [加密配置文件](#加密配置文件)
 - [使用方式](#使用方式)
   - [基本用法](#基本用法)
   - [参数速查](#参数速查)
@@ -82,7 +83,7 @@ bash db-relationship-explainer/scripts/install.sh --lang en  # English skill
 
 ```bash
 # 在有网络的机器上下载（以 Linux amd64 为例）
-wget https://github.com/IamWWT/understand_dbs_skills/releases/download/v0.0.5/dbexplain-linux-amd64
+wget https://github.com/IamWWT/understand_dbs_skills/releases/download/v0.0.6/dbexplain-linux-amd64
 
 # 复制到离线环境后安装
 bash db-relationship-explainer/scripts/install.sh --offline ./dbexplain-linux-amd64
@@ -98,12 +99,12 @@ bash db-relationship-explainer/scripts/install.sh --offline ./dbexplain-linux-am
 
 ```bash
 # Linux amd64
-wget https://github.com/IamWWT/understand_dbs_skills/releases/download/v0.0.5/dbexplain-linux-amd64
+wget https://github.com/IamWWT/understand_dbs_skills/releases/download/v0.0.6/dbexplain-linux-amd64
 chmod +x dbexplain-linux-amd64
 sudo mv dbexplain-linux-amd64 /usr/local/bin/dbexplain
 
 # macOS Apple Silicon
-wget https://github.com/IamWWT/understand_dbs_skills/releases/download/v0.0.5/dbexplain-darwin-arm64
+wget https://github.com/IamWWT/understand_dbs_skills/releases/download/v0.0.6/dbexplain-darwin-arm64
 chmod +x dbexplain-darwin-arm64
 sudo mv dbexplain-darwin-arm64 /usr/local/bin/dbexplain
 
@@ -129,7 +130,7 @@ cd understand_dbs_skills
 
 ```powershell
 # 在有网络的机器上下载
-Invoke-WebRequest -Uri "https://github.com/IamWWT/understand_dbs_skills/releases/download/v0.0.5/dbexplain-windows-amd64.exe" -OutFile "dbexplain-windows-amd64.exe"
+Invoke-WebRequest -Uri "https://github.com/IamWWT/understand_dbs_skills/releases/download/v0.0.6/dbexplain-windows-amd64.exe" -OutFile "dbexplain-windows-amd64.exe"
 
 # 复制到离线环境后，放到 %LOCALAPPDATA%\dbexplain\dbexplain.exe
 # 然后把目录添加到用户 PATH
@@ -169,6 +170,45 @@ dbexplain -env                  # 终端格式化报告
 dbexplain --version             # 查看版本
 dbexplain --manual              # 完整手册
 ```
+
+### 加密配置文件
+
+`dbexplain` 支持使用机器指纹加密 `.env.dbexplain` 文件，加密后仅能在同一台机器上解密。
+
+```bash
+# 使用机器指纹加密（默认，无需密码）
+dbexplain encrypt
+
+# 使用密码 + 机器指纹双重保护
+dbexplain encrypt --password
+
+# 指定输入/输出文件
+dbexplain encrypt .env.dbexplain -o config.enc
+```
+
+加密后，将 `.env.dbexplain.enc` 放在 `~/.config/dbexplain/` 或当前目录，`dbexplain -env` 会自动发现并解密：
+
+```bash
+# 加密后直接运行（无需手动设置环境变量）
+dbexplain -env
+
+# 如果使用了 --password 加密，将密码写入密钥文件：
+echo "your-password" > ~/.config/dbexplain/.encryption_key
+chmod 600 ~/.config/dbexplain/.encryption_key
+dbexplain -env
+```
+
+> 也可通过 `DBPROBE_ENV_FILE` 环境变量显式指定加密文件路径（可选覆盖），通过 `APP_ENCRYPTION_KEY` 环境变量提供密码（可选覆盖）。
+>
+> **加密算法**: XChaCha20-Poly1305 (AEAD)。机器指纹模式无需密码，配置文件只能在加密时的机器上使用。
+>
+> **核心优势**:
+> - 无需记忆密码，加密文件即用即解，对用户透明
+> - 文件脱离机器即失效，即使被窃取也无法在其他机器解密
+> - 纵深防御：弥补防火墙/ACL 之后的落盘加密防线
+> - 合规友好：满足等保/GDPR 对敏感凭证静态加密要求
+>
+> **注意**: 加密后务必删除明文配置文件。更换硬件后需重新加密。
 
 ---
 
@@ -226,7 +266,7 @@ dbexplain --manual --language en --filter "SSL mode"
 | 参数 | 说明 |
 |------|------|
 | `-dsn <string>` | 数据库连接串，可多次使用 |
-| `-env` | 从配置文件加载 DSN（搜索: `DBPROBE_ENV_FILE` → `.env.dbexplain` → `~/.config/dbexplain/.env.dbexplain` → `.env`） |
+| `-env` | 从配置文件加载 DSN（搜索: `.env.dbexplain` → `.env.dbexplain.enc` → `~/.config/dbexplain/.env.dbexplain` → `~/.config/dbexplain/.env.dbexplain.enc` → `.env`，`DBPROBE_ENV_FILE` 可选覆盖） |
 | `-config <file>` | 从 JSON 文件读取 DSN 数组 |
 | `-include <filter>` | 仅包含匹配的 DSN（按类型/标签/编号，逗号分隔） |
 | `-exclude <filter>` | 排除匹配的 DSN |
@@ -317,10 +357,12 @@ scheme://[用户:密码@]主机[:端口][/库名][?label=别名&参数...]
 
 ### 配置文件搜索优先级（`-env` 模式）
 
-1. `DBPROBE_ENV_FILE` 环境变量指向的路径
+1. `DBPROBE_ENV_FILE` 环境变量指向的路径（可选覆盖）
 2. 当前目录 `.env.dbexplain`
-3. `~/.config/dbexplain/.env.dbexplain`（Linux/macOS）或 `%USERPROFILE%\.dbexplain\.env.dbexplain`（Windows）
-4. 当前目录 `.env`（向下兼容旧版）
+3. 当前目录 `.env.dbexplain.enc`（加密文件，自动解密）
+4. `~/.config/dbexplain/.env.dbexplain`（Linux/macOS）或 `%USERPROFILE%\.dbexplain\.env.dbexplain`（Windows）
+5. `~/.config/dbexplain/.env.dbexplain.enc`（加密文件，自动解密）
+6. 当前目录 `.env`（向下兼容旧版）
 
 ### 配置模板
 
@@ -451,7 +493,7 @@ bash db-relationship-explainer/scripts/uninstall.sh
 ## 开发
 
 - **语言**：Go 1.26+
-- **构建**：`CGO_ENABLED=0 go build -ldflags="-s -w -X main.version=v0.0.5"`
+- **构建**：`CGO_ENABLED=0 go build -ldflags="-s -w -X main.version=v0.0.6"`
 - **测试**：`go test ./...`（DSN 解析 + 字段推断）
 - **交叉编译**：`bash build.sh`（linux/darwin/windows × amd64/arm64）
 

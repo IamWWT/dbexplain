@@ -183,10 +183,12 @@ bash db-relationship-explainer/scripts/install-skill.sh --lang en
 
 1. **命令行参数**（推荐）：`-dsn 'scheme://...'`（注意含 `!` 等特殊字符时使用单引号包裹）
 2. **配置文件**（`-env` 模式）：创建 `.env.dbexplain` 文件，使用 `DB1=, DB2=...` 格式。编号无需连续，程序会自动按数字升序加载。配置文件搜索优先级：
-   1. `DBPROBE_ENV_FILE` 环境变量
+   1. `DBPROBE_ENV_FILE` 环境变量（可选覆盖）
    2. `.env.dbexplain`（当前目录）
-   3. `~/.config/dbexplain/.env.dbexplain`（Linux/macOS）/ `%USERPROFILE%\.dbexplain\.env.dbexplain`（Windows）
-   4. `.env`（当前目录，向下兼容旧版）
+   3. `.env.dbexplain.enc`（当前目录，加密文件自动解密）
+   4. `~/.config/dbexplain/.env.dbexplain`（Linux/macOS）/ `%USERPROFILE%\.dbexplain\.env.dbexplain`（Windows）
+   5. `~/.config/dbexplain/.env.dbexplain.enc`（加密文件自动解密）
+   6. `.env`（当前目录，向下兼容旧版）
 3. **JSON 配置文件**：`-config dbs.json`
 
 推荐将配置文件放在用户目录下，这样从任意目录运行 `dbexplain -env` 都能加载。
@@ -222,6 +224,38 @@ dbexplain -dsn 'elasticsearch://elastic:pass@localhost:9200'
 > 确保所用数据库账号仅具有**只读权限**，以保证安全。
 >
 > 详见 [SECURITY_CHECKLIST.md](./SECURITY_CHECKLIST.md) 安全手册。
+
+### 6.1 加密配置文件 (v0.0.6)
+
+为防止明文密码泄露，`dbexplain` 支持使用机器指纹加密 `.env.dbexplain` 文件：
+
+```bash
+# 使用机器指纹加密（默认，无需密码）
+dbexplain encrypt .env.dbexplain
+
+# 使用密码 + 机器指纹双重保护
+dbexplain encrypt .env.dbexplain --password
+
+# 指定输出路径
+dbexplain encrypt .env.dbexplain -o /secure/path/config.enc
+```
+
+加密后，将 `.enc` 文件放在 `~/.config/dbexplain/` 或当前目录，`dbexplain -env` 会自动发现并解密：
+
+```bash
+# 无需设置环境变量，直接运行：
+dbexplain -env
+
+# 若使用了 --password 加密，将密码写入密钥文件：
+echo "your-password" > ~/.config/dbexplain/.encryption_key
+chmod 600 ~/.config/dbexplain/.encryption_key
+
+# 也可通过环境变量显式指定（可选覆盖）：
+# export DBPROBE_ENV_FILE=/path/to/config.enc
+# export APP_ENCRYPTION_KEY="your-password"
+```
+
+> **注意**：加密文件与机器硬件绑定，更换硬件后需重新加密。加密算法为 XChaCha20-Poly1305 (AEAD)，密钥派生使用 SHA-256 (机器模式) 或 PBKDF2-HMAC-SHA256 (密码模式)。
 
 ---
 

@@ -21,7 +21,7 @@ for platform in "${PLATFORMS[@]}"; do
   [ "$GOOS" = "windows" ] && out+=".exe"
   
   echo "Building $base (GOOS=$GOOS GOARCH=$GOARCH)..."
-  CGO_ENABLED=0 GOOS=$GOOS GOARCH=$GOARCH go build -ldflags="-s -w -X main.version=v0.0.5" -o "$out" .
+  CGO_ENABLED=0 GOOS=$GOOS GOARCH=$GOARCH go build -ldflags="-s -w -X main.version=v0.0.6" -o "$out" .
   
   # 校验架构正确性
   file "$out" | grep -q "$GOARCH" || {

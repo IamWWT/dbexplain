@@ -348,6 +348,45 @@ log.Printf("skipping %s (not matched by include filter)", e.raw)
 - **元数据优先**：MongoDB 使用 `EstimatedDocumentCount`，不做全表扫描
 - **独立隔离**：每实例独立日志文件，单实例 panic 不影响其他实例采集
 
+### 配置文件加密 (v0.0.6)
+
+通过硬件绑定加密保护 `.env` 中的敏感配置，防止明文密码泄露。
+
+**两种模式：**
+| 模式 | 密钥派生 | 使用方式 |
+|------|----------|----------|
+| 机器指纹（默认） | `SHA-256(硬件特征)` | `dbexplain encrypt` |
+| 密码增强 | `PBKDF2-HMAC-SHA256(密码, 指纹, 100k)` | `dbexplain encrypt --password` |
+
+**运行时透明解密：**
+- `loadEnvFile()` 自动检测加密文件（首字节 0x00/0x01）
+- 密码模式通过 `~/.config/dbexplain/.encryption_key` 文件提供解密密码（`APP_ENCRYPTION_KEY` 环境变量作为可选覆盖）
+- 不使用加密文件时行为与 v0.0.5 完全一致（向后兼容）
+
+**密钥层次：**
+```
+Machine-Only Mode:
+  硬件特征 → SHA-256 → [32-byte key] → XChaCha20-Poly1305
+
+Password Mode:
+  密码 ──────────────────┐
+                         ├─ PBKDF2-HMAC-SHA256(100k) → [32B key] → XChaCha20-Poly1305
+  硬件特征 (salt 成分) ──┘
+```
+
+**文件格式：**
+```
+[1B mode][16B salt?][24B nonce][ciphertext + 16B tag]
+```
+
+**平台指纹来源：**
+
+| 平台 | 核心数据源 | 备用 |
+|------|-----------|------|
+| Linux | `/etc/machine-id`, `/sys/class/dmi/id/product_uuid` | `/proc/cpuinfo`, hostname |
+| macOS | `sysctl hw.uuid`, `hw.model`, `hw.machine` | `hw.memsize`, hostname |
+| Windows | `HKLM\SOFTWARE\Microsoft\Cryptography\MachineGuid` | hostname |
+
 > 全面的安全检查清单见 [SECURITY_CHECKLIST.md](./SECURITY_CHECKLIST.md)，发布前必须逐项确认。
 
 ---

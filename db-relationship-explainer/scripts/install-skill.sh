@@ -22,7 +22,7 @@ SKILL_MD_ZH="${SKILL_DIR}/SKILL_ZH.md"
 SKILL_MD_EN="${SKILL_DIR}/SKILL_EN.md"
 ENV_EXAMPLE="${SKILL_DIR}/.env.dbexplain.example"
 SKILL_NAME="db-relationship-explainer"
-VERSION="v0.0.5"
+VERSION="v0.0.6"
 LANG="zh"        # default: Chinese
 LANG_VIA_CLI=""  # non-empty when --lang was passed on command line
 

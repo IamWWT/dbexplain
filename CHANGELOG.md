@@ -1,5 +1,28 @@
 # 变更日志
 
+## v0.0.6 (2026-05-21)
+
+### 配置加密
+- **`dbexplain encrypt`**: 新增 encrypt 子命令，使用机器指纹加密 `.env` 配置文件
+- **机器指纹模式（默认）**: 基于硬件特征（machine-id/主板 UUID/CPU 型号/hostname）生成加密密钥，无需密码，加密后文件仅能在同一台机器上解密
+- **密码增强模式**: `encrypt --password` 提供 PBKDF2-HMAC-SHA256(100k) 双重保护（密码 + 机器指纹）
+- **运行时自动解密**: `-env` 模式自动检测加密文件（首字节 0x00/0x01），无需额外参数
+- **`APP_ENCRYPTION_KEY`**: 密码模式通过此环境变量提供解密密码（可选覆盖，默认从 `~/.config/dbexplain/.encryption_key` 文件读取）
+- **跨平台纯 Go**: Linux (`/etc/machine-id`, DMI, `/proc/cpuinfo`)、macOS (`sysctl hw.*`)、Windows (Registry MachineGuid)，CGO_ENABLED=0
+- **加密算法**: XChaCha20-Poly1305 (AEAD) + SHA-256 / PBKDF2-HMAC-SHA256 密钥派生
+- **安全文件权限**: 加密输出文件 `0600`，密码输入不回显，解密失败不暴露内部原因
+
+### 配置搜索增强
+- **findConfigFile()**: 新增 `.env.dbexplain.enc` 和 `.env.enc` 搜索支持，加密文件与明文文件统一搜索优先级
+
+### 文档
+- `README.md` / `README_EN.md`: 新增"加密配置文件"章节，包含完整使用示例
+- `--manual` 手册新增加密子命令完整文档（中英双语）
+- `-h` 帮助新增"加密"参数组
+- `docs/SECURITY_CHECKLIST.md`: 新增"配置加密检查"章节
+- `docs/ARCHITECTURE.md`: 新增"配置加密架构"章节
+- `.gitignore`: 新增 `*.enc` 排除规则
+
 ## v0.0.5 (2026-05-21)
 
 ### 一键安装与部署

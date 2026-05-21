@@ -1,5 +1,28 @@
 # Changelog
 
+## v0.0.6 (2026-05-21)
+
+### Config Encryption
+- **`dbexplain encrypt`**: New encrypt subcommand for encrypting `.env` config files with machine fingerprint
+- **Machine-only mode (default)**: Key derived from hardware characteristics (machine-id/motherboard UUID/CPU model/hostname), no password needed, file only decryptable on the same machine
+- **Password-enhanced mode**: `encrypt --password` provides PBKDF2-HMAC-SHA256(100k) dual protection (password + machine fingerprint)
+- **Runtime auto-decrypt**: `-env` mode auto-detects encrypted files (header byte 0x00/0x01), no extra flags required
+- **`APP_ENCRYPTION_KEY`**: Password-mode decryption via this environment variable (optional override; default reads from `~/.config/dbexplain/.encryption_key` file)
+- **Cross-platform pure Go**: Linux (`/etc/machine-id`, DMI, `/proc/cpuinfo`), macOS (`sysctl hw.*`), Windows (Registry MachineGuid), CGO_ENABLED=0
+- **Algorithm**: XChaCha20-Poly1305 (AEAD) + SHA-256 / PBKDF2-HMAC-SHA256 key derivation
+- **Security**: Output file permissions `0600`, password input without echo, generic decryption error messages
+
+### Config Search Enhancement
+- **findConfigFile()**: Added `.env.dbexplain.enc` and `.env.enc` to search order, unified priority for encrypted and plaintext files
+
+### Documentation
+- `README.md` / `README_EN.md`: New "Encrypt Config Files" section with full usage examples
+- `--manual` updated with complete encrypt subcommand documentation (bilingual)
+- `-h` updated with "Encryption" option group
+- `docs/SECURITY_CHECKLIST.md`: New "Config Encryption Checks" section
+- `docs/ARCHITECTURE.md`: New "Config Encryption Architecture" section
+- `.gitignore`: Added `*.enc` exclusion rules
+
 ## v0.0.5 (2026-05-21)
 
 ### One-Click Install & Deployment

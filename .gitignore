@@ -2,6 +2,13 @@
 .env
 src/.env
 
+# 加密配置文件
+.env.enc
+.env.dbexplain.enc
+src/.env.enc
+src/.env.dbexplain.enc
+*.enc
+
 # 日志
 logs/
 src/logs/

@@ -17,6 +17,7 @@ The "ground truth layer" for databases in the AI era.
   - [Windows](#windows)
   - [Build from Source](#build-from-source)
   - [Post-Install Config](#post-install-config)
+  - [Encrypt Config Files](#encrypt-config-files)
 - [Usage](#usage)
   - [Basic Usage](#basic-usage)
   - [Option Reference](#option-reference)
@@ -82,7 +83,7 @@ Pre-download the binary for your platform, then install with `--offline`:
 
 ```bash
 # Download on a machine with internet (Linux amd64 example)
-wget https://github.com/IamWWT/understand_dbs_skills/releases/download/v0.0.5/dbexplain-linux-amd64
+wget https://github.com/IamWWT/understand_dbs_skills/releases/download/v0.0.6/dbexplain-linux-amd64
 
 # Copy to offline environment, then:
 bash db-relationship-explainer/scripts/install.sh --offline ./dbexplain-linux-amd64
@@ -98,12 +99,12 @@ bash db-relationship-explainer/scripts/install.sh --offline ./dbexplain-linux-am
 
 ```bash
 # Linux amd64
-wget https://github.com/IamWWT/understand_dbs_skills/releases/download/v0.0.5/dbexplain-linux-amd64
+wget https://github.com/IamWWT/understand_dbs_skills/releases/download/v0.0.6/dbexplain-linux-amd64
 chmod +x dbexplain-linux-amd64
 sudo mv dbexplain-linux-amd64 /usr/local/bin/dbexplain
 
 # macOS Apple Silicon
-wget https://github.com/IamWWT/understand_dbs_skills/releases/download/v0.0.5/dbexplain-darwin-arm64
+wget https://github.com/IamWWT/understand_dbs_skills/releases/download/v0.0.6/dbexplain-darwin-arm64
 chmod +x dbexplain-darwin-arm64
 sudo mv dbexplain-darwin-arm64 /usr/local/bin/dbexplain
 
@@ -129,7 +130,7 @@ The script downloads `dbexplain-windows-amd64.exe` to `%LOCALAPPDATA%\dbexplain\
 
 ```powershell
 # Download on a machine with internet
-Invoke-WebRequest -Uri "https://github.com/IamWWT/understand_dbs_skills/releases/download/v0.0.5/dbexplain-windows-amd64.exe" -OutFile "dbexplain-windows-amd64.exe"
+Invoke-WebRequest -Uri "https://github.com/IamWWT/understand_dbs_skills/releases/download/v0.0.6/dbexplain-windows-amd64.exe" -OutFile "dbexplain-windows-amd64.exe"
 
 # Copy to offline environment, place at:
 # %LOCALAPPDATA%\dbexplain\dbexplain.exe
@@ -170,6 +171,45 @@ dbexplain -env                  # Terminal formatted report
 dbexplain --version             # Print version
 dbexplain --manual --language en  # Full English manual
 ```
+
+### Encrypt Config Files
+
+`dbexplain` supports encrypting `.env.dbexplain` files using a machine fingerprint. The encrypted file can only be decrypted on the same machine.
+
+```bash
+# Encrypt with machine fingerprint (default, no password needed)
+dbexplain encrypt
+
+# Password + machine fingerprint double protection
+dbexplain encrypt --password
+
+# Specify input/output files
+dbexplain encrypt .env.dbexplain -o config.enc
+```
+
+After encryption, place the `.env.dbexplain.enc` file in `~/.config/dbexplain/` or the current directory, and `dbexplain -env` will auto-discover and decrypt it:
+
+```bash
+# Run directly after encryption (no manual env vars needed)
+dbexplain -env
+
+# If encrypted with --password, save the password to a key file:
+echo "your-password" > ~/.config/dbexplain/.encryption_key
+chmod 600 ~/.config/dbexplain/.encryption_key
+dbexplain -env
+```
+
+> You can also use `DBPROBE_ENV_FILE` to explicitly specify the encrypted file path (optional override), and `APP_ENCRYPTION_KEY` to provide the password (optional override).
+>
+> **Algorithm**: XChaCha20-Poly1305 (AEAD). Machine-only mode requires no password; the config file can only be used on the original machine.
+>
+> **Key Advantages**:
+> - No password to remember — encrypt once, auto-decrypt transparently
+> - File is useless on any other machine even if stolen (hardware fingerprint mismatch)
+> - Defense-in-depth: at-rest encryption beyond firewall/ACL
+> - Compliance-friendly: meets GDPR/regulatory requirements for credential encryption
+>
+> **Note**: Delete the plaintext config after encryption. Re-encrypt after hardware changes.
 
 ---
 
@@ -227,7 +267,7 @@ dbexplain --manual --language en --filter "SSL mode"
 | Option | Description |
 |--------|-------------|
 | `-dsn <string>` | Database connection string, repeatable |
-| `-env` | Load DSNs from config file (search: `DBPROBE_ENV_FILE` → `.env.dbexplain` → `~/.config/dbexplain/.env.dbexplain` → `.env`) |
+| `-env` | Load DSNs from config file (search: `.env.dbexplain` → `.env.dbexplain.enc` → `~/.config/dbexplain/.env.dbexplain` → `~/.config/dbexplain/.env.dbexplain.enc` → `.env`, `DBPROBE_ENV_FILE` optional override) |
 | `-config <file>` | Read DSN array from JSON file |
 | `-include <filter>` | Only include matching DSNs (by kind/label/index, comma-sep) |
 | `-exclude <filter>` | Exclude matching DSNs |
@@ -318,10 +358,12 @@ scheme://[user:password@]host[:port][/dbname][?label=alias&params...]
 
 ### Config File Search Order (`-env` mode)
 
-1. `DBPROBE_ENV_FILE` environment variable
+1. `DBPROBE_ENV_FILE` environment variable (optional override)
 2. `.env.dbexplain` in current directory
-3. `~/.config/dbexplain/.env.dbexplain` (Linux/macOS) or `%USERPROFILE%\.dbexplain\.env.dbexplain` (Windows)
-4. `.env` in current directory (legacy backward compat)
+3. `.env.dbexplain.enc` in current directory (encrypted, auto-decrypt)
+4. `~/.config/dbexplain/.env.dbexplain` (Linux/macOS) or `%USERPROFILE%\.dbexplain\.env.dbexplain` (Windows)
+5. `~/.config/dbexplain/.env.dbexplain.enc` (encrypted, auto-decrypt)
+6. `.env` in current directory (legacy backward compat)
 
 ### Config Template
 
@@ -452,7 +494,7 @@ No core code changes needed — fully compliant with the open/closed principle.
 ## Development
 
 - **Language**: Go 1.26+
-- **Build**: `CGO_ENABLED=0 go build -ldflags="-s -w -X main.version=v0.0.5"`
+- **Build**: `CGO_ENABLED=0 go build -ldflags="-s -w -X main.version=v0.0.6"`
 - **Test**: `go test ./...` (DSN parsing + field inference)
 - **Cross-compile**: `bash build.sh` (linux/darwin/windows × amd64/arm64)
 

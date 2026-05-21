@@ -7,6 +7,15 @@
 
 核心哲学：**dbexplain 只输出 deterministic facts，LLM 在外部消费 IR 做推理**。
 
+## ⚠️ 重要设计原则：变量永远通过文件加载
+
+**不要让用户手动配置任何环境变量。** 所有配置通过文件自动发现和加载。
+
+- 原先用 `.env.dbexplain` 的地方，加密后就是 `.env.dbexplain.enc`，`findConfigFile()` 必须自动发现并加载
+- 用户无需设置 `DBPROBE_ENV_FILE` 来指向加密文件 — 工具应自动搜索所有已知路径的 `.enc` 变体
+- 用户无需设置 `APP_ENCRYPTION_KEY` 来解密密码模式文件 — 密码应从固定位置的 key file 加载（如 `~/.config/dbexplain/.encryption_key`）
+- 环境变量只能作为可选覆盖（override），不能作为必须配置项
+
 ## 快速定位
 
 | 需求 | 路径 |
@@ -29,13 +38,15 @@
 | Skill 安装脚本 | `db-relationship-explainer/scripts/install-skill.sh` |
 | Skill 卸载脚本 | `db-relationship-explainer/scripts/uninstall-skill.sh` |
 | CHANGELOG（中文） | `CHANGELOG.md` |
-| 测试文档 | `docs/TEST_v0.0.5.md` |
+| 测试文档 | `docs/TEST_v0.0.6.md` |
 | CHANGELOG（英文） | `CHANGELOG_EN.md` |
 | README（英文） | `README_EN.md` |
 | 项目宪法 | `CONSTITUTION.md` |
 | 架构愿景 | `docs/ARCHITECTURE.md` |
 | 算法文档 | `docs/ALGORITHMS.md` |
 | 安全检查手册 | `docs/SECURITY_CHECKLIST.md` |
+| 加密/解密核心 (v0.0.6) | `src/crypto/crypto.go` |
+| 机器指纹采集 (v0.0.6) | `src/crypto/fingerprint*.go` |
 | Issue 追踪 | `issues.json` |
 
 ## 构建命令
@@ -66,7 +77,7 @@ scheme://[user[:pass]@]host[:port][/dbname][?label=别名&其他参数]
 | 参数 | 类型 | 默认 | 说明 |
 |------|------|------|------|
 | `-dsn` | repeatable | — | 直接指定 DSN，可多次使用 |
-| `-env` | bool | false | 从配置文件加载 DSN（搜索: DBPROBE_ENV_FILE → .env.dbexplain → ~/.config/dbexplain/.env.dbexplain → .env） |
+| `-env` | bool | false | 从配置文件加载 DSN（搜索: .env.dbexplain → .env.dbexplain.enc → ~/.config/dbexplain/.env.dbexplain → ~/.config/dbexplain/.env.dbexplain.enc → .env；DBPROBE_ENV_FILE 可选覆盖） |
 | `-config` | string | "" | JSON 文件路径，内含 DSN 数组 |
 | `-include` | string | "" | 逗号分隔的 kind/label，只采集匹配项 |
 | `-exclude` | string | "" | 逗号分隔的 kind/label，排除匹配项 |
@@ -81,6 +92,7 @@ scheme://[user[:pass]@]host[:port][/dbname][?label=别名&其他参数]
 | `--language` | string | zh | 手册语言（zh/en） |
 | `--filter` | string | "" | 过滤手册输出（忽略大小写，配合 --manual） |
 | `--version` | bool | false | 输出版本号并退出 |
+| `encrypt` | subcommand | — | 使用机器指纹加密配置文件 |
 
 ## 消费方
 
@@ -94,6 +106,8 @@ scheme://[user[:pass]@]host[:port][/dbname][?label=别名&其他参数]
 **v0.0.4 已关闭（ISSUE-022 ~ ISSUE-032）：** IR v1 架构、Capability 重构、统一诊断、Importance Ranking、Context Compression、Delta Scan、Operational Stats、Windows 编码兼容。
 
 **v0.0.5 已关闭：** `--log-dir` 日志目录（默认 `/var/log/dbexplain`）、一键安装脚本（scripts/install.sh/ps1）、全局配置搜索、SKILL 中英文分拆（`--lang zh|en`）、13 项 Bug 修复（ISSUE-040~052）。
+
+**v0.0.6 新增：** 配置加密子命令（`encrypt`）、机器指纹绑定（Linux DMI/macOS sysctl/Windows Registry）、XChaCha20-Poly1305 AEAD 加密、PBKDF2-HMAC-SHA256 密码增强模式、运行时自动解密（`loadEnvFile` 自动检测加密文件头）。
 
 **当前开放（ISSUE-033 ~ ISSUE-035）：** Phase 4 LLM 生态集成、GaussDB/TDSQL 兼容性确认、GBase/HBase/OceanBase 评估。
 
@@ -114,6 +128,7 @@ scheme://[user[:pass]@]host[:port][/dbname][?label=别名&其他参数]
 - 密码通过 `DSN.Redacted()` 自动脱敏显示
 - 工具仅执行只读操作，详见 CONSTITUTION.md
 - **发布前必须执行**: `docs/SECURITY_CHECKLIST.md` 全部检查项
+- **配置加密 (v0.0.6)**: `dbexplain encrypt` 使用机器指纹加密配置文件，加密后仅能在同一台机器上解密。`-env` 模式自动发现并解密 `.enc` 文件（无需手动设置环境变量）。密码增强模式通过 `~/.config/dbexplain/.encryption_key` 文件提供解密密钥（`APP_ENCRYPTION_KEY` 环境变量作为可选覆盖）。
 
 ## 版本性能对比（每次发版必做）
 
@@ -173,4 +188,4 @@ wc -c /tmp/perf-prev-1.json /tmp/perf-curr-1.json
 | 3 | **已完成 (v0.0.4)** | Query-Aware Metadata + Operational Graph |
 | 4 | 进行中 | LLM Ecosystem Integration + MCP Server + 企业特性 |
 
-当前版本：**v0.0.5** — 一键安装（scripts/install.sh/ps1）、全局配置搜索、`--log-dir`、Skill 全局适配。
+当前版本：**v0.0.6** — 配置加密（encrypt 子命令）、机器指纹绑定、XChaCha20-Poly1305 AEAD、跨平台硬件识别。

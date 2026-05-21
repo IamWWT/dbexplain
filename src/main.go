@@ -24,12 +24,13 @@ import (
 	"dbexplain/connector"
 	"dbexplain/cache"
 	ctxcompress "dbexplain/context"
+	"dbexplain/crypto"
 	"dbexplain/dsn"
 	"dbexplain/render"
 	"dbexplain/schema"
 )
 
-var version = "v0.0.5"
+var version = "v0.0.6"
 
 type dsnEntry struct {
 	raw    string // DSN string
@@ -55,6 +56,12 @@ func hasHelpFlag() bool {
 }
 
 func main() {
+	// Intercept "encrypt" subcommand BEFORE flag.Parse
+	if len(os.Args) > 1 && os.Args[1] == "encrypt" {
+		handleEncrypt(os.Args[2:])
+		return
+	}
+
 	userLang := preScanLanguage()
 
 	// Intercept -h/--help before flag.Parse for localized output
@@ -99,7 +106,7 @@ func main() {
 	if *useEnv {
 		configPath := findConfigFile()
 		if configPath == "" {
-			log.Fatal("no config file found. Create .env.dbexplain in ~/.config/dbexplain/ or set DBPROBE_ENV_FILE. Also supports .env in current directory (legacy).")
+			log.Fatal("no config file found. Create .env.dbexplain (or .env.dbexplain.enc) in ~/.config/dbexplain/ or current directory.")
 		}
 		if err := loadEnvFile(configPath); err != nil {
 			log.Printf("warning: load config %s: %v", configPath, sanitizeErr(err))
@@ -261,6 +268,124 @@ func main() {
 	}
 }
 
+// ── Encrypt 子命令 ──
+
+func handleEncrypt(args []string) {
+	showHelp := false
+	usePassword := false
+	outputFile := ""
+	inputFile := ""
+
+	// Manual arg scanning: Go's flag.FlagSet stops at first positional arg.
+	// We support both `encrypt -o out.enc input.env` and `encrypt input.env -o out.enc`.
+	i := 0
+	for i < len(args) {
+		switch args[i] {
+		case "-h", "--help":
+			showHelp = true
+		case "-password", "--password":
+			usePassword = true
+		case "-o", "--output":
+			if i+1 < len(args) {
+				i++
+				outputFile = args[i]
+			} else {
+				log.Fatal("crypto: -o requires a file path argument")
+			}
+		default:
+			if !strings.HasPrefix(args[i], "-") {
+				inputFile = args[i]
+			} else {
+				log.Fatalf("crypto: unknown flag: %s", args[i])
+			}
+		}
+		i++
+	}
+
+	if showHelp {
+		fmt.Fprint(os.Stderr, "Usage: dbexplain encrypt [flags] [<file>]\n\n"+
+			"Encrypt a .env configuration file using machine fingerprint.\n"+
+			"The encrypted file can only be decrypted on the same machine.\n\n"+
+			"Flags:\n"+
+			"  -password, --password   Prompt for a password (PBKDF2 + machine fingerprint)\n"+
+			"  -o, --output <file>     Output file path (default: <input>.enc)\n"+
+			"  -h, --help              Show this help\n\n"+
+			"Examples:\n"+
+			"  dbexplain encrypt                        # uses .env.dbexplain in CWD or config dir\n"+
+			"  dbexplain encrypt .env.dbexplain          # explicit input file\n"+
+			"  dbexplain encrypt --password              # password + machine fingerprint\n"+
+			"  dbexplain encrypt -o config.enc .env\n")
+		return
+	}
+
+	// Determine input file
+	if inputFile == "" {
+		inputFile = findConfigFile()
+		if inputFile == "" {
+			log.Fatal("crypto: no config file found. Specify a file path or create .env.dbexplain")
+		}
+	}
+
+	// Read plaintext
+	plaintext, err := os.ReadFile(inputFile)
+	if err != nil {
+		log.Fatalf("crypto: read input file %s: %v", inputFile, err)
+	}
+
+	// Strip BOM (consistent with loadEnvFile behavior)
+	plaintext = bytes.TrimPrefix(plaintext, []byte{0xEF, 0xBB, 0xBF})
+
+	// Detect if already encrypted
+	if len(plaintext) > 0 && (plaintext[0] == crypto.ModeMachine || plaintext[0] == crypto.ModePassword) {
+		fmt.Fprintf(os.Stderr, "Warning: %s appears to be already encrypted. Proceeding anyway.\n", inputFile)
+	}
+
+	// Compute machine fingerprint
+	machineID, err := crypto.MachineID()
+	if err != nil {
+		log.Fatalf("crypto: compute machine fingerprint: %v", err)
+	}
+
+	// Read password if --password flag set
+	var password string
+	if usePassword {
+		pwd, err := crypto.ReadPassword("Enter encryption password: ")
+		if err != nil {
+			log.Fatalf("crypto: %v", err)
+		}
+		pwd2, err := crypto.ReadPassword("Confirm password: ")
+		if err != nil {
+			log.Fatalf("crypto: %v", err)
+		}
+		if pwd != pwd2 {
+			log.Fatal("crypto: passwords do not match")
+		}
+		password = pwd
+	}
+
+	// Determine output file
+	var dstPath string
+	if outputFile != "" {
+		dstPath = outputFile
+	} else {
+		dstPath = inputFile + ".enc"
+	}
+
+	// Encrypt
+	if err := crypto.EncryptFile(plaintext, dstPath, machineID, password); err != nil {
+		log.Fatalf("crypto: encrypt: %v", err)
+	}
+
+	if password != "" {
+		fmt.Fprintf(os.Stderr, "Encrypted with machine fingerprint + password: %s\n", dstPath)
+		fmt.Fprintf(os.Stderr, "Save your password to ~/.config/dbexplain/.encryption_key before running dbexplain -env.\n")
+	} else {
+		fmt.Fprintf(os.Stderr, "Encrypted with machine fingerprint: %s\n", dstPath)
+		fmt.Fprintf(os.Stderr, "File can only be decrypted on this machine.\n")
+	}
+	fmt.Fprintf(os.Stderr, "Place this file in ~/.config/dbexplain/ (or CWD) and run: dbexplain -env\n")
+}
+
 // totalTables 统计一个实例中所有数据库的总表数
 func totalTables(inst *schema.Instance) int {
 	total := 0
@@ -369,6 +494,21 @@ func loadEnvFile(path string) error {
 	}
 	// Strip UTF-8 BOM (e.g. from Windows Notepad saving as UTF-8 with BOM)
 	data = bytes.TrimPrefix(data, []byte{0xEF, 0xBB, 0xBF})
+
+	// Auto-detect encrypted config file
+	if len(data) > 0 && (data[0] == crypto.ModeMachine || data[0] == crypto.ModePassword) {
+		machineID, err := crypto.MachineID()
+		if err != nil {
+			return fmt.Errorf("compute machine fingerprint for config %s: %w", path, err)
+		}
+		password := readEncryptionKey()
+		plaintext, err := crypto.DecryptBytes(data, machineID, password)
+		if err != nil {
+			return fmt.Errorf("decrypt config %s: %w", path, sanitizeErr(err))
+		}
+		data = plaintext
+	}
+
 	envMap, err := godotenv.UnmarshalBytes(data)
 	if err != nil {
 		return err
@@ -454,9 +594,9 @@ func loadFromConfig(filename string) []string {
 // ── 配置文件搜索 ──
 
 // findConfigFile 按优先级搜索配置文件，返回第一个存在的文件路径
-// 优先级: DBPROBE_ENV_FILE > .env.dbexplain (CWD) > XDG/user config > .env (CWD, legacy)
+// 优先级: DBPROBE_ENV_FILE > .env.dbexplain (CWD) > .env.dbexplain.enc (CWD) > XDG/user config > user config .enc > .env (CWD, legacy) > .env.enc (CWD)
 func findConfigFile() string {
-	// 1. DBPROBE_ENV_FILE 环境变量（显式指定）
+	// 1. DBPROBE_ENV_FILE 环境变量（显式覆盖，可选）
 	if envFile := os.Getenv("DBPROBE_ENV_FILE"); envFile != "" {
 		if _, err := os.Stat(envFile); err == nil {
 			return envFile
@@ -466,14 +606,28 @@ func findConfigFile() string {
 	if _, err := os.Stat(".env.dbexplain"); err == nil {
 		return ".env.dbexplain"
 	}
-	// 3. 用户配置目录
+	// 2b. .env.dbexplain.enc (CWD) — encrypted variant
+	if _, err := os.Stat(".env.dbexplain.enc"); err == nil {
+		return ".env.dbexplain.enc"
+	}
+	// 3. 用户配置目录 — 明文
 	path := userConfigPath()
 	if _, err := os.Stat(path); err == nil {
 		return path
 	}
+	// 3b. 用户配置目录 — 加密变体（自动发现，无需 DBPROBE_ENV_FILE）
+	if encPath := userConfigEncPath(); encPath != "" {
+		if _, err := os.Stat(encPath); err == nil {
+			return encPath
+		}
+	}
 	// 4. .env (CWD, legacy 兼容)
 	if _, err := os.Stat(".env"); err == nil {
 		return ".env"
+	}
+	// 4b. .env.enc (CWD) — encrypted legacy variant
+	if _, err := os.Stat(".env.enc"); err == nil {
+		return ".env.enc"
 	}
 	return ""
 }
@@ -490,6 +644,54 @@ func userConfigPath() string {
 		return filepath.Join(homeDir, ".dbexplain", ".env.dbexplain")
 	}
 	return filepath.Join(homeDir, ".config", "dbexplain", ".env.dbexplain")
+}
+
+// userConfigEncPath 返回用户配置目录下的加密配置文件路径
+// Linux/macOS: ~/.config/dbexplain/.env.dbexplain.enc
+// Windows:     %USERPROFILE%\.dbexplain\.env.dbexplain.enc
+func userConfigEncPath() string {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	if runtime.GOOS == "windows" {
+		return filepath.Join(homeDir, ".dbexplain", ".env.dbexplain.enc")
+	}
+	return filepath.Join(homeDir, ".config", "dbexplain", ".env.dbexplain.enc")
+}
+
+// encryptionKeyPath 返回加密密钥文件路径（密码模式用）
+// Linux/macOS: ~/.config/dbexplain/.encryption_key
+// Windows:     %USERPROFILE%\.dbexplain\.encryption_key
+func encryptionKeyPath() string {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	if runtime.GOOS == "windows" {
+		return filepath.Join(homeDir, ".dbexplain", ".encryption_key")
+	}
+	return filepath.Join(homeDir, ".config", "dbexplain", ".encryption_key")
+}
+
+// readEncryptionKey returns the password for decrypting password-mode .enc files.
+// Priority: APP_ENCRYPTION_KEY env var (override) > ~/.config/dbexplain/.encryption_key file
+// The key file is a plain text file containing only the password (created by the user).
+// Unlike the env var, this requires zero manual configuration in the normal workflow.
+func readEncryptionKey() string {
+	// 1. APP_ENCRYPTION_KEY env var (explicit override, backward compatible)
+	if key := os.Getenv("APP_ENCRYPTION_KEY"); key != "" {
+		return key
+	}
+	// 2. ~/.config/dbexplain/.encryption_key file (zero-config default)
+	keyPath := encryptionKeyPath()
+	if keyPath != "" {
+		data, err := os.ReadFile(keyPath)
+		if err == nil {
+			return strings.TrimSpace(string(data))
+		}
+	}
+	return ""
 }
 
 // ── 上下文输出 ──
@@ -620,13 +822,11 @@ func printHelp(lang string) {
 	fmt.Fprint(out, p(
 		"数据源 (Input Sources):\n"+
 			"  -dsn string        数据库连接串，可重复使用\n"+
-			"  -env               从配置文件加载 DSN (搜索: DBPROBE_ENV_FILE >\n"+
-			"                     .env.dbexplain > ~/.config/dbexplain/.env.dbexplain > .env)\n"+
+			"  -env               从配置文件加载 DSN (自动搜索 .env.dbexplain / .env.dbexplain.enc)\n"+
 			"  -config file       从 JSON 文件读取 DSN 数组\n\n",
 		"Input Sources:\n"+
 			"  -dsn string        Database connection string, repeatable\n"+
-			"  -env               Load DSNs from config file (search: DBPROBE_ENV_FILE >\n"+
-			"                     .env.dbexplain > XDG/user config > .env)\n"+
+			"  -env               Load DSNs from config file (auto-search .env.dbexplain / .env.dbexplain.enc)\n"+
 			"  -config file       Read DSN array from JSON file\n\n",
 	))
 
@@ -678,7 +878,17 @@ func printHelp(lang string) {
 			"  -timeout duration  Per-DSN collect timeout (default 20s, e.g. 30s/1m)\n\n",
 	))
 
-	// Group 7: Help
+	// Group 7: Encryption
+	fmt.Fprint(out, p(
+		"加密 (Encryption):\n"+
+			"  encrypt  [file]   使用机器指纹加密配置文件（支持 --password）\n"+
+			"                     文件仅能在加密时的机器上解密\n\n",
+		"Encryption:\n"+
+			"  encrypt  [file]   Encrypt config file with machine fingerprint (supports --password)\n"+
+			"                     File can only be decrypted on the same machine\n\n",
+	))
+
+	// Group 8: Help
 	fmt.Fprint(out, p(
 		"帮助 (Help):\n"+
 			"  -h, --help         打印此参数列表并退出\n"+
@@ -696,8 +906,10 @@ func printHelp(lang string) {
 
 	// Footer
 	fmt.Fprint(out, p(
-		"完整手册: dbexplain --manual [--language zh|en]\n",
-		"Full manual: dbexplain --manual [--language zh|en]\n",
+		"完整手册: dbexplain --manual [--language zh|en]\n"+
+			"encrypt 帮助: dbexplain encrypt -h\n",
+		"Full manual: dbexplain --manual [--language zh|en]\n"+
+			"encrypt help: dbexplain encrypt -h\n",
 	))
 }
 
@@ -840,11 +1052,14 @@ DESCRIPTION
       authSource=<db>     MongoDB 认证数据库名
 
     配置文件搜索优先级 (-env 模式):
-      1. DBPROBE_ENV_FILE 环境变量指定路径
-      2. 当前目录 .env.dbexplain
-      3. ~/.config/dbexplain/.env.dbexplain (Linux/macOS)
-         %USERPROFILE%\\.dbexplain\\.env.dbexplain (Windows)
-      4. 当前目录 .env (向下兼容旧版)
+      1. DBPROBE_ENV_FILE 环境变量指定路径（可选覆盖）
+      2. 当前目录 .env.dbexplain（明文）
+      3. 当前目录 .env.dbexplain.enc（加密，自动解密）
+      4. ~/.config/dbexplain/.env.dbexplain（明文）
+      5. ~/.config/dbexplain/.env.dbexplain.enc（加密，自动解密）
+      6. 当前目录 .env（向下兼容旧版）
+      加密后务必删除明文配置文件，否则优先匹配明文。
+      密码模式密码从 ~/.config/dbexplain/.encryption_key 文件自动读取。
 `,
 		`
 
@@ -861,11 +1076,14 @@ DESCRIPTION
       authSource=<db>     MongoDB authentication database name
 
     Config file search order (-env mode):
-      1. DBPROBE_ENV_FILE environment variable
-      2. .env.dbexplain in current directory
-      3. ~/.config/dbexplain/.env.dbexplain (Linux/macOS)
-         %USERPROFILE%\\.dbexplain\\.env.dbexplain (Windows)
-      4. .env in current directory (legacy backward compat)
+      1. DBPROBE_ENV_FILE environment variable (optional override)
+      2. .env.dbexplain in current directory (plaintext)
+      3. .env.dbexplain.enc in current directory (encrypted, auto-decrypt)
+      4. ~/.config/dbexplain/.env.dbexplain (plaintext)
+      5. ~/.config/dbexplain/.env.dbexplain.enc (encrypted, auto-decrypt)
+      6. .env in current directory (legacy backward compat)
+      Delete plaintext config after encryption, or it will take priority.
+      Password-mode key is auto-read from ~/.config/dbexplain/.encryption_key.
 `))
 
 	fmt.Print(p(`
@@ -1007,6 +1225,121 @@ DESCRIPTION
 
     issues[] fields:
       severity (warn|info), table, message
+`))
+
+	fmt.Print(p(`
+
+─── 配置文件加密 ──────────────────────────────────────────────
+
+    子命令:
+      dbexplain encrypt [<file>] [flags]
+
+    加密 .env 配置文件，使用机器指纹作为密钥。
+    加密后的文件仅能在同一台机器上解密。
+
+    参数:
+      -password, --password    交互式输入密码（PBKDF2 + 机器指纹双重保护）
+      -o, --output <file>      输出文件路径（默认：<输入文件>.enc）
+      -h, --help               显示 encrypt 帮助
+
+    示例:
+      # 仅机器指纹加密（无需密码）
+      dbexplain encrypt
+
+      # 指定输入文件
+      dbexplain encrypt .env.dbexplain
+
+      # 密码 + 机器指纹双重加密
+      dbexplain encrypt --password
+
+      # 指定输出路径
+      dbexplain encrypt .env.dbexplain -o config.enc
+
+    使用加密文件（无需环境变量，自动发现 .enc 文件）：
+      # 直接运行，工具自动搜索并解密
+      dbexplain -env
+
+      # 如果使用了 --password 加密，将密码写入密钥文件：
+      echo "your-password" > ~/.config/dbexplain/.encryption_key
+      chmod 600 ~/.config/dbexplain/.encryption_key
+
+      # 也可通过环境变量显式指定（可选）：
+      # export DBPROBE_ENV_FILE=.env.dbexplain.enc
+      # export APP_ENCRYPTION_KEY="your-password"
+
+    技术细节:
+      加密算法: XChaCha20-Poly1305 (AEAD)
+      密钥派生: SHA-256(硬件指纹) → 机器模式
+                PBKDF2-HMAC-SHA256(密码, 指纹, 100k) → 密码模式
+      文件格式: [1B mode][16B salt?][24B nonce][ciphertext+tag]
+
+    平台指纹来源:
+      Linux:   /etc/machine-id, /sys/class/dmi/id/product_uuid,
+               /proc/cpuinfo, hostname
+      macOS:   hw.uuid (sysctl), hw.model, hw.machine, hostname
+      Windows: HKLM\\SOFTWARE\\Microsoft\\Cryptography\\MachineGuid
+
+    注意事项:
+      • 更换硬件后需重新加密配置文件
+      • 加密文件权限为 0600（仅所有者可读写）
+      • 原始明文文件应在加密后安全删除
+`,
+		`
+
+─── CONFIG ENCRYPTION ─────────────────────────────────────────
+
+    Subcommand:
+      dbexplain encrypt [<file>] [flags]
+
+    Encrypt a .env configuration file using machine fingerprint.
+    The encrypted file can only be decrypted on the same machine.
+
+    Flags:
+      -password, --password    Interactive password prompt (PBKDF2 + machine fingerprint)
+      -o, --output <file>      Output file path (default: <input>.enc)
+      -h, --help               Show encrypt help
+
+    Examples:
+      # Machine fingerprint only (no password)
+      dbexplain encrypt
+
+      # Specify input file
+      dbexplain encrypt .env.dbexplain
+
+      # Password + machine fingerprint double protection
+      dbexplain encrypt --password
+
+      # Specify output path
+      dbexplain encrypt .env.dbexplain -o config.enc
+
+    Using encrypted files (no env vars needed — auto-discovery):
+      # Just run, the tool auto-searches and decrypts
+      dbexplain -env
+
+      # If encrypted with --password, save password to key file:
+      echo "your-password" > ~/.config/dbexplain/.encryption_key
+      chmod 600 ~/.config/dbexplain/.encryption_key
+
+      # Or override via environment variables (optional):
+      # export DBPROBE_ENV_FILE=.env.dbexplain.enc
+      # export APP_ENCRYPTION_KEY="your-password"
+
+    Technical details:
+      Algorithm:  XChaCha20-Poly1305 (AEAD)
+      Key deriv:  SHA-256(hardware fingerprint) → machine mode
+                  PBKDF2-HMAC-SHA256(password, fingerprint, 100k) → password mode
+      Format:     [1B mode][16B salt?][24B nonce][ciphertext+tag]
+
+    Platform fingerprint sources:
+      Linux:   /etc/machine-id, /sys/class/dmi/id/product_uuid,
+               /proc/cpuinfo, hostname
+      macOS:   hw.uuid (sysctl), hw.model, hw.machine, hostname
+      Windows: HKLM\\SOFTWARE\\Microsoft\\Cryptography\\MachineGuid
+
+    Notes:
+      • Re-encrypt config after hardware changes
+      • Encrypted file permissions are 0600 (owner read/write only)
+      • Delete the original plaintext file after encryption
 `))
 
 	fmt.Print(p(`
