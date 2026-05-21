@@ -9,6 +9,7 @@
 #   .\install.ps1 -Offline          Offline mode (manual binary placement)
 #   .\install.ps1 -NoSkill          Skip skill installation
 #   .\install.ps1 -Update           Overwrite existing installation
+#   .\install.ps1 -Lang en           Install with English skill
 #   .\install.ps1 -Help             Show this help
 # ============================================================
 
@@ -16,6 +17,8 @@ param(
     [switch]$Offline,
     [switch]$NoSkill,
     [switch]$Update,
+    [ValidateSet("zh", "en")]
+    [string]$Lang = "",
     [switch]$Help
 )
 
@@ -50,13 +53,15 @@ Options:
   -NoSkill    Skip AI Agent skill installation (tool only).
   -Update     Update mode: overwrite existing binary and skill files
               without touching config.
+  -Lang zh|en Skill language: zh=中文 (default), en=English.
   -Help       Show this help message and exit.
 
 Examples:
   .\install.ps1                  # Full interactive install
-  .\install.ps1 -NoSkill         # Tool only, no skill
-  .\install.ps1 -Offline         # Offline: you provide the binary
-  .\install.ps1 -Update          # Update to latest version
+  .\install.ps1 -Lang en          # Full install with English skill
+  .\install.ps1 -NoSkill          # Tool only, no skill
+  .\install.ps1 -Offline          # Offline: you provide the binary
+  .\install.ps1 -Update           # Update to latest version
 
 After install:
   Binary : $InstallDir\$BINARY_DEST
@@ -221,7 +226,11 @@ if (-not $NoSkill) {
         # Check if bash is available (Git Bash / MSYS2 / WSL)
         if (Get-Command bash -ErrorAction SilentlyContinue) {
             Write-Info "Running skill installer via bash ..."
-            bash $skillInstaller
+            if ($Lang -ne "") {
+                bash $skillInstaller --lang $Lang
+            } else {
+                bash $skillInstaller
+            }
         } else {
             Write-Warn "bash not found in PATH."
             Write-Warn "The skill installer requires Git Bash or MSYS2."

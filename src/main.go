@@ -75,7 +75,7 @@ func main() {
 	contextDir := flag.String("context", "", "write AI context files to directory (summary.json, topology.json, diagnostics.json, chunks/)")
 	cacheFile := flag.String("cache", "", "fingerprint cache file for delta scan (.json)")
 	outputFile := flag.String("o", "", "write output to file")
-	logDirFlag := flag.String("log-dir", "./logs", "directory for log files (filter.log, <label>.log)")
+	logDirFlag := flag.String("log-dir", "/var/log/dbexplain", "directory for log files (filter.log, <label>.log)")
 	perDSNTimeout := flag.Duration("timeout", 20*time.Second, "per-DSN collect timeout")
 	showVersion := flag.Bool("version", false, "print version and exit")
 	showManual := flag.Bool("manual", false, "print comprehensive manual and exit")
@@ -598,10 +598,10 @@ func printHelp(lang string) {
 	fmt.Fprint(out, p(
 		"输出控制 (Output Control):\n"+
 			"  -o file            将输出写入文件 (自动添加 UTF-8 BOM)\n"+
-			"  --log-dir dir      日志输出目录 (默认 ./logs)\n\n",
+			"  --log-dir dir      日志输出目录 (默认 /var/log/dbexplain)\n\n",
 		"Output Control:\n"+
 			"  -o file            Write output to file (auto UTF-8 BOM)\n"+
-			"  --log-dir dir      Log output directory (default ./logs)\n\n",
+			"  --log-dir dir      Log output directory (default /var/log/dbexplain)\n\n",
 	))
 
 	// Group 4: Display Format
@@ -787,7 +787,7 @@ DESCRIPTION
       scheme://[用户:密码@]主机[:端口][/库名][?param1=val1&param2=val2]
 
     DSN 参数速查:
-      label=<别名>        实例别名，决定日志文件名 logs/<label>.log
+      label=<别名>        实例别名，决定日志文件名 <label>.log
       cluster=true        Redis 集群模式 (自动扫描所有分片)
       tls=true            ES / Redis 启用 TLS 加密
       sslmode=<mode>      PostgreSQL SSL: disable/require/verify-ca/verify-full
@@ -808,7 +808,7 @@ DESCRIPTION
       scheme://[user:password@]host[:port][/dbname][?param1=val1&param2=val2]
 
     DSN parameters:
-      label=<name>        Instance alias, determines log file name logs/<label>.log
+      label=<name>        Instance alias, determines log file name <label>.log
       cluster=true        Redis cluster mode (auto-scan all shards)
       tls=true            ES / Redis enable TLS encryption
       sslmode=<mode>      PostgreSQL SSL: disable/require/verify-ca/verify-full
@@ -834,7 +834,7 @@ DESCRIPTION
     -json                 输出 JSON 格式 (适合程序消费)
     -human                人类友好输出：带上下文标记 [table=] [pattern=] 和视觉分隔
     -o <file>             将报告写入文件 (自动添加 UTF-8 BOM)
-    --log-dir <dir>       日志输出目录 (默认 ./logs, 包含 filter.log 和各实例日志)
+    --log-dir <dir>       日志输出目录 (默认 /var/log/dbexplain, 包含 filter.log 和各实例日志)
     -context <dir>        写入 AI 上下文文件到目录 (summary.json/topology.json/diagnostics.json/chunks/)
     -cache <file>         Schema 指纹缓存文件，用于增量变更检测 (.json)
     -timeout <duration>   每 DSN 采集超时 (默认 20s, 如 30s/1m)
@@ -855,7 +855,7 @@ DESCRIPTION
     -json                 Output JSON format (for programmatic consumption)
     -human                Human-friendly output: context markers [table=] [pattern=] etc.
     -o <file>             Write report to file (auto-prepends UTF-8 BOM)
-    --log-dir <dir>       Log output directory (default ./logs, filter.log + per-instance logs)
+    --log-dir <dir>       Log output directory (default /var/log/dbexplain, filter.log + per-instance logs)
     -context <dir>        Write AI context files to directory (summary.json/topology.json/diagnostics.json/chunks/)
     -cache <file>         Schema fingerprint cache file for incremental delta detection (.json)
     -timeout <duration>   Per-DSN collect timeout (default 20s, e.g. 30s/1m)

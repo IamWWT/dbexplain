@@ -68,7 +68,8 @@ One command for global tool install + AI Skill deployment:
 ```bash
 git clone https://github.com/IamWWT/understand_dbs_skills.git
 cd understand_dbs_skills
-bash db-relationship-explainer/scripts/install.sh
+bash db-relationship-explainer/scripts/install.sh            # Chinese skill
+bash db-relationship-explainer/scripts/install.sh --lang en  # English skill
 ```
 
 The script auto-detects your OS and architecture (via `uname -s`/`uname -m`) and downloads the matching binary from GitHub Releases.
@@ -118,7 +119,8 @@ In PowerShell:
 ```powershell
 git clone https://github.com/IamWWT/understand_dbs_skills.git
 cd understand_dbs_skills
-.\db-relationship-explainer\scripts\install.ps1
+.\db-relationship-explainer\scripts\install.ps1              # Chinese skill
+.\db-relationship-explainer\scripts\install.ps1 -Lang en     # English skill
 ```
 
 The script downloads `dbexplain-windows-amd64.exe` to `%LOCALAPPDATA%\dbexplain\` and adds it to your user PATH.
@@ -231,7 +233,7 @@ dbexplain --manual --language en --filter "SSL mode"
 | `-exclude <filter>` | Exclude matching DSNs |
 | `-json` | Output JSON format |
 | `-o <file>` | Write output to file (auto UTF-8 BOM) |
-| `--log-dir <dir>` | Log output directory (default `./logs`) |
+| `--log-dir <dir>` | Log output directory (default `/var/log/dbexplain`) |
 | `-timeout <duration>` | Per-DSN timeout (default 20s) |
 | `--version` | Print version |
 | `--manual` | Full help manual (`--language en` for English) |
@@ -385,11 +387,12 @@ DB9=qdrant://:api-key@127.0.0.1:6334?label=my-qdrant
 
 ## AI Skill Integration
 
-`install.sh` installs both tool and skill by default. Or run separately:
+`install.sh` installs both tool and skill by default, with `--lang zh|en` for language. Or run separately:
 
 ```bash
 # One-click (tool + skill, online)
 bash db-relationship-explainer/scripts/install.sh
+bash db-relationship-explainer/scripts/install.sh --lang en   # English skill
 
 # One-click (tool + skill, offline)
 bash db-relationship-explainer/scripts/install.sh --offline ./dbexplain-linux-amd64
@@ -398,7 +401,9 @@ bash db-relationship-explainer/scripts/install.sh --offline ./dbexplain-linux-am
 bash db-relationship-explainer/scripts/install.sh --no-skill
 
 # Skill only (when tool is already installed)
+# --lang zh for Chinese, --lang en for English
 bash db-relationship-explainer/scripts/install-skill.sh
+bash db-relationship-explainer/scripts/install-skill.sh --lang en
 
 # Update installed skill
 bash db-relationship-explainer/scripts/install-skill.sh --update

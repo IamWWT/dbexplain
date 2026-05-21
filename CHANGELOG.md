@@ -16,11 +16,13 @@
 - 不再需要 `cd <skill-dir>`，工具在任意目录均可运行 `-env` 模式
 
 ### 新参数
-- **`--log-dir <dir>`**: 用户可指定日志输出目录（默认 `./logs`），影响 `filter.log` 和各实例独立日志
+- **`--log-dir <dir>`**: 用户可指定日志输出目录（默认 `/var/log/dbexplain`），影响 `filter.log` 和各实例独立日志
 
 ### Skill 适配
+- **SKILL_ZH.md / SKILL_EN.md**: Skill 中英文分拆，`SKILL.md` 保留为中文副本供平台自动发现
 - **SKILL.md**: 移除 `cd <skill-dir>` 要求，更新为全局 `dbexplain` 调用方式，添加多级配置搜索路径说明
 - **Skill 安装脚本**: 优先检测系统 PATH 中的 `dbexplain`，Skill 目录中的二进制改为 `dbexplain` symlink（平台无关名）
+- **`--lang zh|en`**: `install.sh` 和 `install-skill.sh` 新增语言参数，支持安装中文或英文版 Skill
 - **版本号**: install/uninstall skill 脚本升级到 v0.0.5
 
 ### 文档

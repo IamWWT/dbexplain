@@ -54,7 +54,7 @@ understand_dbs_skills/
 │   ├── SKILL.md
 │   ├── .env.dbexplain.example
 │   └── scripts/
-│       ├── install.sh          # 工具安装器 (Linux/macOS)
+│       ├── install.sh          # 工具安装器 (Linux/macOS, 支持 --lang zh|en)
 │       ├── uninstall.sh        # 工具卸载器 (Linux/macOS)
 │       ├── install-skill.sh    # Skill 多平台部署脚本
 │       ├── uninstall-skill.sh  # Skill 卸载脚本
@@ -136,8 +136,9 @@ echo "CREATE TABLE t(id int primary key, name text);" | sqlite3 /tmp/test.db
 推荐使用一键安装脚本完成工具全局安装和 Skill 部署：
 
 ```bash
-# 一键安装（工具 + Skill）
+# 一键安装（工具 + Skill），--lang zh（默认）/ --lang en
 bash db-relationship-explainer/scripts/install.sh
+bash db-relationship-explainer/scripts/install.sh --lang en
 
 # 或仅安装工具，稍后单独部署 Skill
 bash db-relationship-explainer/scripts/install.sh --no-skill
@@ -163,10 +164,12 @@ ln -s $(which dbexplain) ~/.claude/skills/db-relationship-explainer/tools/dbexpl
 ### 5.2 运行 Skill 安装脚本
 
 ```bash
+# 交互选择安装目标，支持 --lang zh|en 指定语言
 bash db-relationship-explainer/scripts/install-skill.sh
+bash db-relationship-explainer/scripts/install-skill.sh --lang en
 ```
 
-交互选择安装目标：Claude Code / DeepSeek / AixCoding / Agents / 全部平台等。
+交互选择安装目标：Claude Code / DeepSeek / AixCoding / Agents / 全部平台等。`--lang zh` 安装中文版，`--lang en` 安装英文版。
 
 ### 5.3 集成到你的 AI 助手
 
@@ -238,7 +241,7 @@ A: 使用 `SCAN` 非阻塞迭代，且上限 2000 个 key，对每个模式仅�
 A: 检查 `authSource` 是否正确（用户创建时所在的库），详见 `docs/MONGO.md`。
 
 **Q: 程序卡住不输出结果**
-A: 可查看 `logs/<label>.log`（默认当前目录）或用 `--log-dir` 指定日志目录，定位具体卡在哪个数据库。必要时使用 `-timeout` 调整每个 DSN 的超时时间。若报告正常生成但终端无输出，可能由管道死锁引起（已修复，请更新到最新代码）。
+A: 可查看 `/var/log/dbexplain/<label>.log` 或用 `--log-dir` 指定日志目录，定位具体卡在哪个数据库。必要时使用 `-timeout` 调整每个 DSN 的超时时间。若报告正常生成但终端无输出，可能由管道死锁引起（已修复，请更新到最新代码）。
 
 **Q: 如何添加新的数据库支持**  
 A: 在 `src/connector/` 下新建文件，实现 `Connector` 接口，并在 `init()` 中调用 `Register("类型", func() Connector { return xxxConnector{} })`，无需修改其他任何文件。

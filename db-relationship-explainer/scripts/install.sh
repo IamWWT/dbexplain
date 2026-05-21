@@ -12,6 +12,7 @@ set -e
 #   bash install.sh --offline [PATH]    Offline mode (manual binary, optional path)
 #   bash install.sh --no-skill          Skip skill installation
 #   bash install.sh --update            Overwrite existing installation
+#   bash install.sh --lang en           Install with English skill
 #   bash install.sh --help              Show this help
 # ============================================================
 
@@ -31,6 +32,7 @@ OFFLINE_MODE=false
 SKIP_SKILL=false
 UPDATE_MODE=false
 OFFLINE_PATH="" # optional pre-placed binary path for --offline
+LANG_SKILL=""   # empty means interactive (ask user)
 INSTALL_DIR=""  # resolved later
 
 # ── Color output ──
@@ -59,10 +61,12 @@ Options:
   --no-skill         Skip AI Agent skill installation (tool only).
   --update           Update mode: overwrite existing binary and skill files
                      without touching config.
+  --lang zh|en       Skill language: zh=中文 (default), en=English.
   --help             Show this help message and exit.
 
 Examples:
   bash install.sh                          # Full interactive install
+  bash install.sh --lang en                # Full install with English skill
   bash install.sh --no-skill               # Tool only, no skill
   bash install.sh --offline                # Offline: you provide the binary
   bash install.sh --offline ./dbexplain    # Offline: use specified binary
@@ -90,6 +94,15 @@ while [ $# -gt 0 ]; do
             ;;
         --no-skill)  SKIP_SKILL=true ;;
         --update)    UPDATE_MODE=true ;;
+        --lang)
+            if [ "$2" = "zh" ] || [ "$2" = "en" ]; then
+                LANG_SKILL="$2"
+                shift
+            else
+                echo "Unknown --lang value: $2 (expected zh or en)"
+                print_help; exit 1
+            fi
+            ;;
         --help)      print_help; exit 0 ;;
         *)           echo "Unknown option: $1"; print_help; exit 1 ;;
     esac
@@ -316,7 +329,12 @@ install_skill() {
     fi
 
     # Run skill installer (already interactive)
-    bash "$skill_installer"
+    # Pass --lang if specified, otherwise let install-skill.sh ask interactively
+    if [ -n "$LANG_SKILL" ]; then
+        bash "$skill_installer" --lang "$LANG_SKILL"
+    else
+        bash "$skill_installer"
+    fi
 }
 
 # ── PATH check ──
@@ -352,7 +370,8 @@ print_success() {
 
     if [ "$SKIP_SKILL" = true ]; then
         echo "  To install the AI Agent skill later:"
-        echo "    cd db-relationship-explainer && bash scripts/install-skill.sh"
+        echo "    bash scripts/install-skill.sh           # 中文"
+        echo "    bash scripts/install-skill.sh --lang en # English"
         echo ""
     fi
 }

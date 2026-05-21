@@ -12,7 +12,9 @@
 
 ```bash
 # 在线安装（自动下载最新版 + 配置 + Skill）
+# --lang zh 中文（默认），--lang en 英文
 bash db-relationship-explainer/scripts/install.sh
+bash db-relationship-explainer/scripts/install.sh --lang en
 
 # 跳过 Skill，仅安装工具
 bash db-relationship-explainer/scripts/install.sh --no-skill
@@ -27,7 +29,9 @@ bash db-relationship-explainer/scripts/install.sh --update
 ### 单独安装 Skill（已有工具时）
 
 ```bash
+# 交互安装（默认中文），--lang en 安装英文版
 bash db-relationship-explainer/scripts/install-skill.sh
+bash db-relationship-explainer/scripts/install-skill.sh --lang en
 ```
 
 运行后交互选择安装目标：
@@ -69,19 +73,22 @@ bash db-relationship-explainer/scripts/uninstall-skill.sh --all     # 移除全�
 
 ```
 db-relationship-explainer/
-├── SKILL.md                               # Skill 定义（AI Agent 的安装 + 使用指南）
+├── SKILL.md                               # 默认 Skill（中文，Claude Code 自动发现用）
+├── SKILL_ZH.md                            # 中文 Skill 定义
+├── SKILL_EN.md                            # 英文 Skill 定义
 ├── .env.dbexplain.example                 # 配置文件模板
 └── scripts/
-    ├── install.sh                         # 工具安装器（下载 → /usr/local/bin）
+    ├── install.sh                         # 工具安装器（下载 → /usr/local/bin，支持 --lang zh|en）
     ├── uninstall.sh                       # 工具卸载器
-    ├── install-skill.sh                   # Skill 多平台部署脚本
+    ├── install-skill.sh                   # Skill 多平台部署脚本（支持 --lang zh|en）
     ├── uninstall-skill.sh                 # Skill 卸载脚本
     ├── install.ps1                        # Windows 工具安装器
     └── uninstall.ps1                      # Windows 工具卸载器
 ```
 
 其中：
-- `SKILL.md` 是自包含的：AI Agent 先读第 1 节，若工具未安装则运行 `bash scripts/install.sh`。
+- `SKILL_ZH.md` / `SKILL_EN.md` 是中英文 Skill 定义，`install-skill.sh --lang zh|en` 选择语言版本部署为目标 `SKILL.md`。
+- `SKILL.md` 保留为中文副本，供 Claude Code 等平台自动发现 Skill。
 - `scripts/install.sh` 从 GitHub Releases 下载 dbexplain 并安装到系统 PATH。
 - 部署后 `install-skill.sh` 会在目标目录创建 `tools/dbexplain` symlink，指向系统二进制。
 - 配置文件 `.env.dbexplain` 存放在 `~/.config/dbexplain/`（全局配置）。

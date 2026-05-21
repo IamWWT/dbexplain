@@ -16,11 +16,13 @@
 - No more `cd <skill-dir>` required — tool runs from any directory in `-env` mode
 
 ### New Options
-- **`--log-dir <dir>`**: User-specifiable log output directory (default `./logs`), affects `filter.log` and per-instance logs
+- **`--log-dir <dir>`**: User-specifiable log output directory (default `/var/log/dbexplain`), affects `filter.log` and per-instance logs
 
 ### Skill Adaptation
+- **SKILL_ZH.md / SKILL_EN.md**: Skill split into Chinese and English versions; `SKILL.md` kept as Chinese copy for platform auto-discovery
 - **SKILL.md**: Removed `cd <skill-dir>` requirement, updated to global `dbexplain` invocation, added multi-level config search path docs
 - **Skill installer**: Prioritizes system `dbexplain` in PATH; skill directory binary is now `dbexplain` symlink (platform-agnostic name)
+- **`--lang zh|en`**: `install.sh` and `install-skill.sh` new language option for installing Chinese or English Skill
 - **Version**: install/uninstall skill scripts bumped to v0.0.5
 
 ### Documentation

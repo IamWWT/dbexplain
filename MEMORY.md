@@ -71,7 +71,7 @@ scheme://[user[:pass]@]host[:port][/dbname][?label=别名&其他参数]
 | `-exclude` | string | "" | 逗号分隔的 kind/label，排除匹配项 |
 | `-json` | bool | false | 输出 JSON 格式 |
 | `-o` | string | "" | 写入文件（自动添加 UTF-8 BOM） |
-| `--log-dir` | string | ./logs | 日志输出目录（filter.log + 各实例日志） |
+| `--log-dir` | string | /var/log/dbexplain | 日志输出目录（filter.log + 各实例日志） |
 | `-context` | string | "" | 写入 AI 上下文文件到指定目录 |
 | `-cache` | string | "" | Schema 指纹缓存文件（增量扫描） |
 | `-timeout` | duration | 20s | 每个 DSN 的采集超时 |
@@ -92,7 +92,7 @@ scheme://[user[:pass]@]host[:port][/dbname][?label=别名&其他参数]
 
 **v0.0.4 已关闭（ISSUE-022 ~ ISSUE-032）：** IR v1 架构、Capability 重构、统一诊断、Importance Ranking、Context Compression、Delta Scan、Operational Stats、Windows 编码兼容。
 
-**v0.0.5 已关闭（ISSUE-037 ~ ISSUE-039）：** `--log-dir` 日志目录、一键安装脚本（scripts/install.sh/ps1）、全局配置搜索、SKILL.md 适配全局安装。
+**v0.0.5 已关闭：** `--log-dir` 日志目录（默认 `/var/log/dbexplain`）、一键安装脚本（scripts/install.sh/ps1）、全局配置搜索、SKILL 中英文分拆（`--lang zh|en`）、12 项 Bug 修复（ISSUE-040~051）。
 
 **当前开放（ISSUE-033 ~ ISSUE-035）：** Phase 4 LLM 生态集成、GaussDB/TDSQL 兼容性确认、GBase/HBase/OceanBase 评估。
 

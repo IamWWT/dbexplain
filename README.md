@@ -68,7 +68,8 @@ AI 时代数据库的"真值基座"。
 ```bash
 git clone https://github.com/IamWWT/understand_dbs_skills.git
 cd understand_dbs_skills
-bash db-relationship-explainer/scripts/install.sh
+bash db-relationship-explainer/scripts/install.sh          # 中文 Skill
+bash db-relationship-explainer/scripts/install.sh --lang en  # English skill
 ```
 
 脚本会自动检测系统和架构（`uname -s`/`uname -m`），从 GitHub Releases 下载对应二进制。
@@ -118,7 +119,8 @@ dbexplain --version
 ```powershell
 git clone https://github.com/IamWWT/understand_dbs_skills.git
 cd understand_dbs_skills
-.\db-relationship-explainer\scripts\install.ps1
+.\db-relationship-explainer\scripts\install.ps1           # 中文 Skill
+.\db-relationship-explainer\scripts\install.ps1 -Lang en   # English skill
 ```
 
 脚本会自动下载 `dbexplain-windows-amd64.exe` 到 `%LOCALAPPDATA%\dbexplain\`，并添加到用户 PATH。
@@ -230,7 +232,7 @@ dbexplain --manual --language en --filter "SSL mode"
 | `-exclude <filter>` | 排除匹配的 DSN |
 | `-json` | 输出 JSON 格式 |
 | `-o <file>` | 写入文件（自动添加 UTF-8 BOM） |
-| `--log-dir <dir>` | 日志输出目录（默认 `./logs`） |
+| `--log-dir <dir>` | 日志输出目录（默认 `/var/log/dbexplain`） |
 | `-timeout <duration>` | 每 DSN 超时（默认 20s） |
 | `--version` | 输出版本号 |
 | `--manual` | 完整帮助手册（`--language en` 英文） |
@@ -384,11 +386,12 @@ DB9=qdrant://:api-key@127.0.0.1:6334?label=my-qdrant
 
 ## 作为 AI Skill 使用
 
-`install.sh` 默认同时安装工具和 Skill。也可分开操作：
+`install.sh` 默认同时安装工具和 Skill，支持 `--lang zh|en` 选择语言。也可分开操作：
 
 ```bash
 # 一键安装（工具 + Skill，在线）
 bash db-relationship-explainer/scripts/install.sh
+bash db-relationship-explainer/scripts/install.sh --lang en   # 英文 Skill
 
 # 一键安装（工具 + Skill，离线）
 bash db-relationship-explainer/scripts/install.sh --offline ./dbexplain-linux-amd64
@@ -397,7 +400,9 @@ bash db-relationship-explainer/scripts/install.sh --offline ./dbexplain-linux-am
 bash db-relationship-explainer/scripts/install.sh --no-skill
 
 # 仅部署 Skill（工具已安装时）
+# --lang zh 安装中文版，--lang en 安装英文版
 bash db-relationship-explainer/scripts/install-skill.sh
+bash db-relationship-explainer/scripts/install-skill.sh --lang en
 
 # 更新已安装的 Skill
 bash db-relationship-explainer/scripts/install-skill.sh --update

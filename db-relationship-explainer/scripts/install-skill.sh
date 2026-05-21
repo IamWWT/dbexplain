@@ -18,10 +18,22 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SKILL_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 TOOLS_DIR="${SKILL_DIR}/tools"
-SKILL_MD="${SKILL_DIR}/SKILL.md"
+SKILL_MD_ZH="${SKILL_DIR}/SKILL_ZH.md"
+SKILL_MD_EN="${SKILL_DIR}/SKILL_EN.md"
 ENV_EXAMPLE="${SKILL_DIR}/.env.dbexplain.example"
 SKILL_NAME="db-relationship-explainer"
 VERSION="v0.0.5"
+LANG="zh"        # default: Chinese
+LANG_VIA_CLI=""  # non-empty when --lang was passed on command line
+
+# Returns the path to the language-specific SKILL.md source
+skill_md_path() {
+  if [ "$LANG" = "en" ]; then
+    echo "$SKILL_MD_EN"
+  else
+    echo "$SKILL_MD_ZH"
+  fi
+}
 
 # ─── Platform detection ────────────────────────────────────
 
@@ -73,8 +85,10 @@ SYSTEM_DBEXPLAIN=""
 BINARY_SRC_PATH=""
 
 run_preflight() {
-  if [ ! -f "$SKILL_MD" ]; then
-    err "SKILL.md not found at $SKILL_MD"
+  local src_md
+  src_md="$(skill_md_path)"
+  if [ ! -f "$src_md" ]; then
+    err "SKILL.md not found at $src_md"
     exit 1
   fi
 
@@ -100,6 +114,21 @@ run_preflight() {
 }
 
 # ─── Menu ───────────────────────────────────────────────────
+
+choose_language() {
+  header "Choose SKILL language"
+  echo ""
+  echo "  [1] 中文 (简体)"
+  echo "  [2] English"
+  echo ""
+  local choice
+  read -r -p "  Enter choice [1-2, default: 1]: " choice
+  case "${choice:-1}" in
+    2) LANG="en" ;;
+    *) LANG="zh" ;;
+  esac
+  info "Language: ${LANG}"
+}
 
 choose_target() {
   header "Choose installation target"
@@ -144,9 +173,11 @@ install_to() {
 
   mkdir -p "${target_dir}/${SKILL_NAME}/tools"
 
-  # Copy SKILL.md
-  cp "$SKILL_MD" "${target_dir}/${SKILL_NAME}/SKILL.md"
-  _step "SKILL.md → ${target_dir}/${SKILL_NAME}/SKILL.md"
+  # Copy language-specific SKILL.md to target as SKILL.md
+  local src_md
+  src_md="$(skill_md_path)"
+  cp "$src_md" "${target_dir}/${SKILL_NAME}/SKILL.md"
+  _step "$(basename "$src_md") → ${target_dir}/${SKILL_NAME}/SKILL.md"
 
   # Copy .env.dbexplain.example (always safe)
   if [ -f "$ENV_EXAMPLE" ]; then
@@ -421,8 +452,10 @@ update_single_dir() {
 
   mkdir -p "${real_dir}/tools"
 
-  cp "$SKILL_MD" "${real_dir}/SKILL.md"
-  echo -e "      ${GREEN}✓${NC} SKILL.md"
+  local src_md
+  src_md="$(skill_md_path)"
+  cp "$src_md" "${real_dir}/SKILL.md"
+  echo -e "      ${GREEN}✓${NC} SKILL.md ($LANG)"
 
   if [ -f "$ENV_EXAMPLE" ]; then
     cp "$ENV_EXAMPLE" "${real_dir}/.env.dbexplain.example"
@@ -500,6 +533,9 @@ show_help() {
   echo "  bash install_skill_for_all_platform.sh --verify <dir>      Verify a specific installation"
   echo "  bash install_skill_for_all_platform.sh --help              This help"
   echo ""
+  echo "Options:"
+  echo "  --lang zh|en    SKILL language: zh=中文 (default), en=English"
+  echo ""
   echo "The script auto-detects your OS and architecture, then interactively"
   echo "asks where to install the skill: globally (~/.claude/skills, etc.),"
   echo "per-project, or a custom directory."
@@ -512,10 +548,32 @@ show_help() {
 # ─── Main ────────────────────────────────────────────────────
 
 main() {
+  # Parse --lang from args
+  local args=()
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --lang)
+        if [ "$2" = "zh" ] || [ "$2" = "en" ]; then
+          LANG="$2"
+          LANG_VIA_CLI="1"
+          shift 2
+        else
+          err "--lang must be 'zh' or 'en', got: ${2:-}"
+          exit 1
+        fi
+        ;;
+      *)
+        args+=("$1")
+        shift
+        ;;
+    esac
+  done
+  set -- "${args[@]}"
+
   echo ""
   echo -e "${BOLD}${CYAN}╔══════════════════════════════════════════╗${NC}"
   echo -e "${BOLD}${CYAN}║  db-relationship-explainer  Installer    ║${NC}"
-  echo -e "${BOLD}${CYAN}║  ${VERSION}                                ║${NC}"
+  echo -e "${BOLD}${CYAN}║  ${VERSION}  lang=${LANG}                      ║${NC}"
   echo -e "${BOLD}${CYAN}╚══════════════════════════════════════════╝${NC}"
 
   case "${1:-}" in
@@ -535,6 +593,10 @@ main() {
       ;;
     "")
       run_preflight
+      # Skip interactive language pick if --lang was passed via CLI
+      if [ -z "$LANG_VIA_CLI" ]; then
+        choose_language
+      fi
       choose_target
       echo ""
       info "All done!"
