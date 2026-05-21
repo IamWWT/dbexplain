@@ -152,14 +152,14 @@ func fillMySQLTable(ctx context.Context, db *sql.DB, dbName string, t *schema.Ta
 		}
 	}
 
-	// indexes
-	idxQuery := "SHOW INDEX FROM " + quoteMySQL(t.Name) + " WHERE Key_name != 'PRIMARY'"
-	idxRows, err := db.QueryContext(ctx, idxQuery)
+	// indexes and primary key (single SHOW INDEX query)
+	idxRows, err := db.QueryContext(ctx, "SHOW INDEX FROM "+quoteMySQL(t.Name))
 	if err == nil {
 		defer idxRows.Close()
 		idxMap := map[string]*schema.Index{}
 		for idxRows.Next() {
-			var nonUnique, keyName, colName string
+			var nonUnique int
+			var keyName, colName string
 			var tableName, seqInIndex, collation, cardinality, subPart, packed, null, indexType, comment, indexComment, visible interface{}
 			if err := idxRows.Scan(&tableName, &nonUnique, &keyName, &seqInIndex, &colName, &collation, &cardinality,
 				&subPart, &packed, &null, &indexType, &comment, &indexComment, &visible); err != nil {
@@ -168,10 +168,11 @@ func fillMySQLTable(ctx context.Context, db *sql.DB, dbName string, t *schema.Ta
 			if existing, ok := idxMap[keyName]; ok {
 				existing.Columns = append(existing.Columns, colName)
 			} else {
+				isPK := keyName == "PRIMARY"
 				idxMap[keyName] = &schema.Index{
 					Name:    keyName,
 					Columns: []string{colName},
-					Unique:  nonUnique == "0",
+					Unique:  isPK || nonUnique == 0,
 				}
 			}
 		}
@@ -180,27 +181,6 @@ func fillMySQLTable(ctx context.Context, db *sql.DB, dbName string, t *schema.Ta
 		}
 	} else {
 		logf(ctx, "[mysql] index query failed for %s: %v", t.Name, err)
-	}
-
-	// primary key
-	pkRows, err := db.QueryContext(ctx, "SHOW INDEX FROM "+quoteMySQL(t.Name)+" WHERE Key_name = 'PRIMARY'")
-	if err == nil {
-		defer pkRows.Close()
-		pk := &schema.Index{Name: "PRIMARY", Unique: true, Columns: []string{}}
-		for pkRows.Next() {
-			var colName string
-			var ignore [12]interface{}
-			if err := pkRows.Scan(&ignore[0], &ignore[1], &ignore[2], &ignore[3], &colName, &ignore[4], &ignore[5],
-				&ignore[6], &ignore[7], &ignore[8], &ignore[9], &ignore[10], &ignore[11]); err != nil {
-				continue
-			}
-			pk.Columns = append(pk.Columns, colName)
-		}
-		if len(pk.Columns) > 0 {
-			t.Indexes = append(t.Indexes, pk)
-		}
-	} else {
-		logf(ctx, "[mysql] PK query failed for %s: %v", t.Name, err)
 	}
 
 	// foreign keys

@@ -8,6 +8,29 @@ The "ground truth layer" for databases in the AI era.
 
 ---
 
+## Table of Contents
+
+- [Supported Databases](#supported-databases)
+- [Core Principles](#core-principles)
+- [Quick Start](#quick-start)
+  - [Linux / macOS](#linux--macos)
+  - [Windows](#windows)
+  - [Build from Source](#build-from-source)
+  - [Post-Install Config](#post-install-config)
+- [Usage](#usage)
+  - [Basic Usage](#basic-usage)
+  - [Option Reference](#option-reference)
+  - [Per-Database Examples](#per-database-examples)
+- [DSN Format & Config](#dsn-format--config)
+- [Output Example](#output-example)
+- [AI Skill Integration](#ai-skill-integration)
+- [Safety](#safety)
+- [Adding New Databases](#adding-new-databases)
+- [Development](#development)
+- [Documentation Index](#documentation-index)
+
+---
+
 ## Supported Databases
 
 | Database | Scheme | Highlights |
@@ -36,50 +59,32 @@ See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) and [`CONSTITUTION.md`](CONST
 
 ## Quick Start
 
-### Option 1: Online Install (Recommended)
+### Linux / macOS
+
+#### Online Install (Recommended)
 
 One command for global tool install + AI Skill deployment:
 
 ```bash
+git clone https://github.com/IamWWT/understand_dbs_skills.git
+cd understand_dbs_skills
 bash db-relationship-explainer/scripts/install.sh
 ```
 
-After install, create the config file:
+The script auto-detects your OS and architecture (via `uname -s`/`uname -m`) and downloads the matching binary from GitHub Releases.
+
+Available platform identifiers: `linux-amd64`, `linux-arm64`, `darwin-amd64`, `darwin-arm64`.
+
+#### Offline Install
+
+Pre-download the binary for your platform, then install with `--offline`:
 
 ```bash
-cat > ~/.config/dbexplain/.env.dbexplain << 'EOF'
-DB1=mysql://root:pass@127.0.0.1:3306/mydb?label=my-mysql
-DB2=redis://:pass@127.0.0.1:6379/0?label=my-redis
-DB3=postgres://user:pass@127.0.0.1:5432/mydb?label=my-pg
-EOF
-```
-
-Run directly (no cd required):
-
-```bash
-dbexplain -env                  # Terminal formatted report
-dbexplain -env -json -o report.json  # JSON output
-dbexplain --manual --language en     # Full manual
-```
-
-> The installer auto-detects your platform and downloads the matching binary from GitHub Releases.
-
-### Option 2: Offline Install
-
-Pre-download the binary, then install with `--offline`:
-
-```bash
-# 1. Download on a machine with internet
+# Download on a machine with internet (Linux amd64 example)
 wget https://github.com/IamWWT/understand_dbs_skills/releases/download/v0.0.5/dbexplain-linux-amd64
 
-# 2. Copy to offline environment, then:
+# Copy to offline environment, then:
 bash db-relationship-explainer/scripts/install.sh --offline ./dbexplain-linux-amd64
-```
-
-Interactive offline mode (prompts for binary path):
-
-```bash
-bash db-relationship-explainer/scripts/install.sh --offline
 ```
 
 Tool only, no Skill:
@@ -88,14 +93,50 @@ Tool only, no Skill:
 bash db-relationship-explainer/scripts/install.sh --offline ./dbexplain-linux-amd64 --no-skill
 ```
 
-### Option 3: Manual Binary Download
+#### Manual Binary Download
 
 ```bash
+# Linux amd64
 wget https://github.com/IamWWT/understand_dbs_skills/releases/download/v0.0.5/dbexplain-linux-amd64
 chmod +x dbexplain-linux-amd64
 sudo mv dbexplain-linux-amd64 /usr/local/bin/dbexplain
+
+# macOS Apple Silicon
+wget https://github.com/IamWWT/understand_dbs_skills/releases/download/v0.0.5/dbexplain-darwin-arm64
+chmod +x dbexplain-darwin-arm64
+sudo mv dbexplain-darwin-arm64 /usr/local/bin/dbexplain
+
 dbexplain --version
 ```
+
+### Windows
+
+#### Online Install (Recommended)
+
+In PowerShell:
+
+```powershell
+git clone https://github.com/IamWWT/understand_dbs_skills.git
+cd understand_dbs_skills
+.\db-relationship-explainer\scripts\install.ps1
+```
+
+The script downloads `dbexplain-windows-amd64.exe` to `%LOCALAPPDATA%\dbexplain\` and adds it to your user PATH.
+
+#### Offline Install
+
+```powershell
+# Download on a machine with internet
+Invoke-WebRequest -Uri "https://github.com/IamWWT/understand_dbs_skills/releases/download/v0.0.5/dbexplain-windows-amd64.exe" -OutFile "dbexplain-windows-amd64.exe"
+
+# Copy to offline environment, place at:
+# %LOCALAPPDATA%\dbexplain\dbexplain.exe
+# Then add that directory to your user PATH.
+```
+
+#### Manual Download
+
+Download `dbexplain-windows-amd64.exe` from [GitHub Releases](https://github.com/IamWWT/understand_dbs_skills/releases), place in a directory of your choice, and add it to PATH.
 
 ### Build from Source
 
@@ -103,32 +144,80 @@ dbexplain --version
 cd src && go mod tidy && bash build.sh
 ```
 
-Binaries are generated in the `release/` directory.
+Binaries are generated in `release/` (linux/darwin/windows × amd64/arm64, 5 targets).
+
+### Post-Install Config
+
+Create a global config file (works from any directory):
+
+```bash
+mkdir -p ~/.config/dbexplain
+cat > ~/.config/dbexplain/.env.dbexplain << 'EOF'
+DB1=mysql://root:pass@127.0.0.1:3306/mydb?label=my-mysql
+DB2=redis://:pass@127.0.0.1:6379/0?label=my-redis
+DB3=postgres://user:pass@127.0.0.1:5432/mydb?label=my-pg
+EOF
+```
+
+Windows users: place the config at `%USERPROFILE%\.dbexplain\.env.dbexplain`.
+
+Verify:
+
+```bash
+dbexplain -env                  # Terminal formatted report
+dbexplain --version             # Print version
+dbexplain --manual --language en  # Full English manual
+```
 
 ---
 
 ## Usage
+
+### Basic Usage
 
 ```bash
 # Single database
 dbexplain -dsn 'mysql://user:pass@localhost:3306/shop?label=shop-db'
 
 # Multiple heterogeneous databases
-./dbexplain \
+dbexplain \
   -dsn 'mysql://root:pwd@host1:3306/orders' \
   -dsn 'postgres://u:p@host2:5432/users' \
   -dsn 'redis://:pwd@host3:6379/0?label=cache'
 
-# Load from .env, filter with include/exclude
+# Load from config file, filter with include/exclude
+dbexplain -env
 dbexplain -env -include 'mysql,postgres'
 dbexplain -env -exclude 'mongodb,qdrant'
 
-# Write to file (Windows CN: auto GBK, others: UTF-8 BOM, Notepad/CMD compatible)
+# Write to file (Windows CN: auto GBK, others: UTF-8 BOM)
 dbexplain -env -o report.md
 dbexplain -env -json -o report.json
 
+# Load DSN array from JSON config
+dbexplain -config dbs.json
+
+# Generate AI context files (for agent prompts)
+dbexplain -env --context ./context
+# → context/summary.json      Global summary (instance list, table ranking, importance)
+# → context/topology.json      Relationship topology (cross-DB refs, clusters)
+# → context/diagnostics.json   Issue checklist (severity, table, message)
+# → context/chunks/*.md        Per-table retrieval-friendly Markdown
+
+# Incremental change detection (with cron)
+dbexplain -env --cache schema_cache.json
+# 1st run: creates schema_cache.json (fingerprint snapshot)
+# Subsequent: compares diff → outputs schema_cache_delta.json (added/removed/changed)
+
+# Human-friendly output (with [table=] [pattern=] context markers)
+dbexplain -env --human
+
 # Custom timeout (default 20s)
 dbexplain -env -timeout 60s
+
+# Search the manual
+dbexplain --manual --filter redis
+dbexplain --manual --language en --filter "SSL mode"
 ```
 
 ### Option Reference
@@ -136,56 +225,21 @@ dbexplain -env -timeout 60s
 | Option | Description |
 |--------|-------------|
 | `-dsn <string>` | Database connection string, repeatable |
-| `-env` | Load DSNs from config file (search: `DBPROBE_ENV_FILE` → `.env.dbexplain` → XDG/user config → `.env`) |
+| `-env` | Load DSNs from config file (search: `DBPROBE_ENV_FILE` → `.env.dbexplain` → `~/.config/dbexplain/.env.dbexplain` → `.env`) |
 | `-config <file>` | Read DSN array from JSON file |
 | `-include <filter>` | Only include matching DSNs (by kind/label/index, comma-sep) |
 | `-exclude <filter>` | Exclude matching DSNs |
 | `-json` | Output JSON format |
-| `-o <file>` | Write output to file |
+| `-o <file>` | Write output to file (auto UTF-8 BOM) |
 | `--log-dir <dir>` | Log output directory (default `./logs`) |
 | `-timeout <duration>` | Per-DSN timeout (default 20s) |
 | `--version` | Print version |
 | `--manual` | Full help manual (`--language en` for English) |
 | `--filter <keyword>` | Filter `--manual` output (case-insensitive) |
 | `--human` | Human-friendly output with context markers |
-| `--context <dir>` | Write AI context files to directory |
-| `--cache <file>` | Schema fingerprint cache for delta detection |
+| `--context <dir>` | Write AI context files to directory (summary.json / topology.json / diagnostics.json / chunks/) |
+| `--cache <file>` | Schema fingerprint cache. First run writes snapshot; subsequent runs output `<file>_delta.json` diff |
 | `--language zh|en` | Manual language (default zh) |
-
----
-
-## Usage Scenarios
-
-### For AI Agents
-
-```bash
-# Output JSON for programmatic or AI Agent consumption
-dbexplain -env -json -o report.json
-
-# Generate AI context files (for embedding in agent prompts)
-dbexplain -env --context ./context
-# Outputs: summary.json / topology.json / diagnostics.json / chunks/*.md
-
-# Incremental change detection (with cron)
-dbexplain -env --cache schema_cache.json
-# First run creates cache; subsequent runs output schema_cache_delta.json
-```
-
-### For Humans
-
-```bash
-# Direct terminal rendering (default text format with color highlights)
-dbexplain -env
-
-# Human-friendly format (with [table=] [pattern=] context markers)
-dbexplain -env --human
-
-# Write Markdown file (with UTF-8 BOM, Windows Notepad compatible)
-dbexplain -env --human -o report.md
-
-# Search the manual
-./dbexplain --manual --filter redis
-```
 
 ### Per-Database Examples
 
@@ -194,13 +248,16 @@ dbexplain -env --human -o report.md
 dbexplain -dsn 'mysql://root:pwd@127.0.0.1:3306/shop?label=shop-db'
 ```
 
-**PostgreSQL**
+**PostgreSQL (multi-schema / SSL)**
 ```bash
 dbexplain -dsn 'postgres://user:pwd@127.0.0.1:5432/warehouse?label=my-pg&sslmode=disable'
 ```
 
-**Redis (Cluster)**
+**Redis standalone / cluster**
 ```bash
+# Standalone
+dbexplain -dsn 'redis://:pwd@127.0.0.1:6379/0?label=my-redis'
+# Cluster
 dbexplain -dsn 'redis://:pwd@10.0.0.1:7000/0?cluster=true&label=my-cluster'
 ```
 
@@ -209,7 +266,7 @@ dbexplain -dsn 'redis://:pwd@10.0.0.1:7000/0?cluster=true&label=my-cluster'
 dbexplain -dsn 'clickhouse://default:pwd@127.0.0.1:8123/default?label=my-ch'
 ```
 
-**SQLite**
+**SQLite (absolute path)**
 ```bash
 dbexplain -dsn 'sqlite:///home/user/data/app.db?label=local-db'
 ```
@@ -219,8 +276,11 @@ dbexplain -dsn 'sqlite:///home/user/data/app.db?label=local-db'
 dbexplain -dsn 'mongodb://admin:pwd@127.0.0.1:27017/mydb?authSource=admin&label=my-mongo'
 ```
 
-**Elasticsearch (HTTPS)**
+**Elasticsearch HTTP / HTTPS**
 ```bash
+# HTTP
+dbexplain -dsn 'elasticsearch://elastic:pwd@127.0.0.1:9200?label=my-es'
+# HTTPS
 dbexplain -dsn 'elasticsearchs://elastic:pwd@127.0.0.1:9200?label=my-es'
 ```
 
@@ -234,17 +294,17 @@ dbexplain -dsn 'qdrant://:api-key@127.0.0.1:6334?label=my-qdrant'
 dbexplain -dsn 'gaussdb://user:pwd@192.168.0.1:25308/mydb?label=my-gauss'
 ```
 
-> More database details: `./dbexplain --manual [--filter <keyword>]`
+> More details: `dbexplain --manual [--filter <keyword>]`
 
 ---
 
-## DSN Format
+## DSN Format & Config
 
 ```
 scheme://[user:password@]host[:port][/dbname][?label=alias&params...]
 ```
 
-**Common Parameters:**
+### Common Parameters
 
 | Parameter | Applies To | Description |
 |-----------|------------|-------------|
@@ -254,14 +314,14 @@ scheme://[user:password@]host[:port][/dbname][?label=alias&params...]
 | `sslmode=<mode>` | PostgreSQL | SSL mode: `disable`/`require`/`verify-ca`/`verify-full` |
 | `authSource=<db>` | MongoDB | Authentication database name |
 
-**Config file search order (`-env` mode):**
+### Config File Search Order (`-env` mode)
 
 1. `DBPROBE_ENV_FILE` environment variable
 2. `.env.dbexplain` in current directory
 3. `~/.config/dbexplain/.env.dbexplain` (Linux/macOS) or `%USERPROFILE%\.dbexplain\.env.dbexplain` (Windows)
 4. `.env` in current directory (legacy backward compat)
 
-**.env.dbexplain Template:**
+### Config Template
 
 ```ini
 # MySQL
@@ -276,13 +336,11 @@ DB3=clickhouse://default:password@127.0.0.1:8123/default?label=my-ch
 # SQLite (absolute path)
 DB4=sqlite:///home/user/data/app.db?label=my-sqlite
 
-# Redis standalone
+# Redis standalone / cluster
 DB5=redis://:password@127.0.0.1:6379/0?label=my-redis
-
-# Redis cluster
 DB6=redis://:password@10.0.0.1:7000/0?cluster=true&label=my-redis-cluster
 
-# Elasticsearch
+# Elasticsearch HTTP / HTTPS
 DB7=elasticsearch://elastic:password@127.0.0.1:9200?label=my-es
 # HTTPS: elasticsearchs:// or elasticsearch://...?tls=true
 
@@ -325,19 +383,7 @@ DB9=qdrant://:api-key@127.0.0.1:6334?label=my-qdrant
 
 ---
 
-## Safety
-
-All operations are **read-only**: MySQL/PostgreSQL only `SELECT`/`SHOW`/`PRAGMA`; Redis only `SCAN`/`TYPE`/`HSCAN` (strict sampling caps); MongoDB only `ListCollectionNames`/`EstimatedDocumentCount`. Never writes, modifies, or deletes data.
-
-- Passwords automatically redacted in output and logs
-- Per-DSN independent logging (`logs/<label>.log`)
-- Filter skip records written to `logs/filter.log`, not polluting terminal output
-- Parameterized queries prevent injection
-- Redis sampling caps: 2000 keys, 5 fields, 512 bytes, 10 stream messages
-
----
-
-## AI Assistant Skill Integration
+## AI Skill Integration
 
 `install.sh` installs both tool and skill by default. Or run separately:
 
@@ -373,6 +419,20 @@ bash db-relationship-explainer/scripts/uninstall.sh
 
 ---
 
+## Safety
+
+All operations are **read-only**: MySQL/PostgreSQL only `SELECT`/`SHOW`/`PRAGMA`; Redis only `SCAN`/`TYPE`/`HSCAN` (strict sampling caps); MongoDB only `ListCollectionNames`/`EstimatedDocumentCount`. Never writes, modifies, or deletes data.
+
+- Passwords automatically redacted in output and logs (`Redacted()`)
+- Per-DSN independent logging (`logs/<label>.log`)
+- Filter skip records written to `logs/filter.log`, not polluting terminal output
+- Parameterized queries prevent SQL injection
+- Redis sampling caps: 2000 keys, 5 fields, 512 bytes, 10 stream messages
+
+> See per-database docs ([`docs/`](docs/)) for detailed safety reviews and permission guides.
+
+---
+
 ## Adding New Databases
 
 1. Create a new file under `src/connector/`
@@ -389,7 +449,7 @@ No core code changes needed — fully compliant with the open/closed principle.
 - **Language**: Go 1.26+
 - **Build**: `CGO_ENABLED=0 go build -ldflags="-s -w -X main.version=v0.0.5"`
 - **Test**: `go test ./...` (DSN parsing + field inference)
-- **Cross-compile**: `bash build.sh` (linux/darwin/windows x amd64/arm64)
+- **Cross-compile**: `bash build.sh` (linux/darwin/windows × amd64/arm64)
 
 ---
 
@@ -399,14 +459,14 @@ No core code changes needed — fully compliant with the open/closed principle.
 |----------|---------|
 | [`CONSTITUTION.md`](CONSTITUTION.md) | Project constitution (core principles, dev constraints) |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Architecture vision and roadmap |
+| [`docs/DEPLOY_SKILLS.md`](docs/DEPLOY_SKILLS.md) | Skill deployment guide (multi-platform) |
+| [`docs/DEPLOY_SRC.md`](docs/DEPLOY_SRC.md) | Source build deployment |
 | [`docs/MYSQL.md`](docs/MYSQL.md) | MySQL field inference, index/FK collection |
 | [`docs/POSTGRESQL.md`](docs/POSTGRESQL.md) | PostgreSQL pg_catalog, SSL, multi-schema |
 | [`docs/CLICKHOUSE.md`](docs/CLICKHOUSE.md) | ClickHouse HTTP, sort/partition keys |
 | [`docs/REDIS.md`](docs/REDIS.md) | Redis keyspace analysis, risk diagnostics |
 | [`docs/MONGO.md`](docs/MONGO.md) | MongoDB auth troubleshooting, read-only metadata |
 | [`docs/ELASTICSEARCH.md`](docs/ELASTICSEARCH.md) | Elasticsearch index mappings, HTTPS |
-| [`docs/DEPLOY_SKILLS.md`](docs/DEPLOY_SKILLS.md) | Skill deployment guide |
-| [`docs/DEPLOY_SRC.md`](docs/DEPLOY_SRC.md) | Source build deployment |
 | [`CHANGELOG.md`](CHANGELOG.md) | Changelog (Chinese) |
 | [`CHANGELOG_EN.md`](CHANGELOG_EN.md) | Changelog (English) |
 | [`issues.json`](issues.json) | Issue tracking |

@@ -26,6 +26,27 @@
 ### Documentation
 - `--manual` updated: config search priority section, `--log-dir` option, all `./dbexplain` → `dbexplain`
 
+### Bug Fixes (12 items)
+
+| Issue | Severity | Description |
+|-------|----------|-------------|
+| ISSUE-040 | CRITICAL | `.env` real credentials removed from Git tracking; `.gitignore` added `src/.env` |
+| ISSUE-041 | HIGH | `src/logs/` production log directory added to `.gitignore` to prevent DB name leaks |
+| ISSUE-044 | LOW | Deleted `analyze/infer.go` dead code, eliminating `strings.Contains(name, "ip")` false-match bug |
+| ISSUE-045 | MEDIUM | Added `RowCount > 0` guard for PostgreSQL sample row fetch, aligning with MySQL/ClickHouse |
+| ISSUE-046 | LOW | `longestCommonPrefix` preserves full prefix when no `_`/`-` separator, preventing empty cluster names |
+| ISSUE-047 | MEDIUM | GaussDB instance Kind fixed from hardcoded `"postgres"` to DSN-specified `"gaussdb"` |
+| ISSUE-048 | MEDIUM | JSON output now includes `op_stats` field (seq_scan/idx_scan/query_count etc.) |
+| ISSUE-049 | LOW | MySQL dual `SHOW INDEX` queries merged into one, halving network round-trips |
+| ISSUE-051 | HIGH | `-json -o` output no longer prepends UTF-8 BOM, ensuring standard JSON parser compatibility |
+
+### Known Security Limitations (2 items, open)
+
+| Issue | Description |
+|-------|-------------|
+| ISSUE-042 | ES TLS `InsecureSkipVerify=true`, acceptable as diagnostic tool, long-term needs cert config |
+| ISSUE-043 | ClickHouse password transmitted via URL query param; consider HTTP Basic Auth Header instead |
+
 ## v0.0.4 (2026-05-20)
 
 ### Core Architecture

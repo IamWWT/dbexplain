@@ -340,6 +340,20 @@ type jsonTable struct {
 	OrderByKey   string       `json:"order_by_key,omitempty"`
 	KeyPattern   string       `json:"key_pattern,omitempty"`
 	DataType     string       `json:"data_type,omitempty"`
+	OpStats      *jsonOpStats `json:"op_stats,omitempty"`
+}
+
+type jsonOpStats struct {
+	SeqScan         int64   `json:"seq_scan,omitempty"`
+	IdxScan         int64   `json:"idx_scan,omitempty"`
+	NtupIns         int64   `json:"n_tup_ins,omitempty"`
+	NtupUpd         int64   `json:"n_tup_upd,omitempty"`
+	NtupDel         int64   `json:"n_tup_del,omitempty"`
+	QueryCount      int64   `json:"query_count,omitempty"`
+	AvgDurationMs   float64 `json:"avg_duration_ms,omitempty"`
+	KeyspaceHits    int64   `json:"keyspace_hits,omitempty"`
+	KeyspaceMisses  int64   `json:"keyspace_misses,omitempty"`
+	OpsPerSec       int64   `json:"ops_per_sec,omitempty"`
 }
 
 type jsonColumn struct {
@@ -413,6 +427,20 @@ func buildJSONResult(r *analyze.Result) *jsonResult {
 					OrderByKey:   t.OrderByKey,
 					KeyPattern:   t.KeyPattern,
 					DataType:     t.DataType,
+				}
+				if t.OpStats != nil {
+					jt.OpStats = &jsonOpStats{
+						SeqScan:        t.OpStats.SeqScan,
+						IdxScan:        t.OpStats.IdxScan,
+						NtupIns:        t.OpStats.NtupIns,
+						NtupUpd:        t.OpStats.NtupUpd,
+						NtupDel:        t.OpStats.NtupDel,
+						QueryCount:     t.OpStats.QueryCount,
+						AvgDurationMs:  t.OpStats.AvgDurationMs,
+						KeyspaceHits:   t.OpStats.KeyspaceHits,
+						KeyspaceMisses: t.OpStats.KeyspaceMisses,
+						OpsPerSec:      t.OpStats.OpsPerSec,
+					}
 				}
 				for _, c := range t.Columns {
 					jt.Columns = append(jt.Columns, jsonColumn{

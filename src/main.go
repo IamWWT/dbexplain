@@ -237,17 +237,21 @@ func main() {
 		var out string
 		if *jsonOut {
 			out = captureJSON(result)
+			// JSON 不加 BOM，保持标准兼容
+			if err := os.WriteFile(*outputFile, []byte(out), 0644); err != nil {
+				log.Fatal(err)
+			}
 		} else {
 			out = captureText(result, *humanOut)
+			data, err := encodeOutput(out)
+			if err != nil {
+				log.Fatalf("encode output: %v", err)
+			}
+			if err := os.WriteFile(*outputFile, data, 0644); err != nil {
+				log.Fatal(err)
+			}
 		}
-		data, err := encodeOutput(out)
-		if err != nil {
-			log.Fatalf("encode output: %v", err)
-		}
-		if err := os.WriteFile(*outputFile, data, 0644); err != nil {
-			log.Fatal(err)
-		}
-		fmt.Println("Report written to", *outputFile)
+		fmt.Fprintln(os.Stderr, "Report written to", *outputFile)
 	} else if *jsonOut {
 		// 终端 JSON：直接输出
 		render.PrintJSON(result)
@@ -493,7 +497,10 @@ func writeJSON(path string, v any) {
 
 func captureText(result *analyze.Result, human bool) string {
 	old := os.Stdout
-	r, w, _ := os.Pipe()
+	r, w, err := os.Pipe()
+	if err != nil {
+		return ""
+	}
 	os.Stdout = w
 
 	var buf bytes.Buffer
@@ -512,7 +519,10 @@ func captureText(result *analyze.Result, human bool) string {
 
 func captureJSON(result *analyze.Result) string {
 	old := os.Stdout
-	r, w, _ := os.Pipe()
+	r, w, err := os.Pipe()
+	if err != nil {
+		return ""
+	}
 	os.Stdout = w
 
 	var buf bytes.Buffer
@@ -707,7 +717,10 @@ func splitSections(text string) []string {
 
 func captureManualOutput(lang string) string {
 	old := os.Stdout
-	r, w, _ := os.Pipe()
+	r, w, err := os.Pipe()
+	if err != nil {
+		return ""
+	}
 	os.Stdout = w
 
 	var buf bytes.Buffer

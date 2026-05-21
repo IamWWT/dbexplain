@@ -265,13 +265,22 @@ func longestCommonPrefix(strs []string) string {
 			prefix = prefix[:len(prefix)-1]
 		}
 	}
+	// Strip trailing separator (or partial word) to produce clean cluster name.
+	// If no _ or - separator found, keep the full common prefix.
 	for len(prefix) > 0 {
 		last := prefix[len(prefix)-1]
 		if last == '_' || last == '-' {
 			prefix = prefix[:len(prefix)-1]
 			break
 		}
-		prefix = prefix[:len(prefix)-1]
+		// Check if there's a separator earlier
+		idx := strings.LastIndexAny(prefix[:len(prefix)-1], "_-")
+		if idx >= 0 {
+			prefix = prefix[:idx]
+			break
+		}
+		// No separator at all — keep full common prefix
+		break
 	}
 	return prefix
 }

@@ -288,7 +288,8 @@ func (c *chHTTP) query(ctx context.Context, sql string) ([]byte, error) {
 }
 
 func escCH(s string) string {
-	return strings.ReplaceAll(s, "'", "\\'")
+	// ClickHouse follows SQL standard: single quotes escaped by doubling
+	return strings.ReplaceAll(s, "'", "''")
 }
 
 func min(a, b int) int {

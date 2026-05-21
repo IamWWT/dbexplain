@@ -4,6 +4,7 @@ src/.env
 
 # 日志
 logs/
+src/logs/
 db-relationship-explainer/logs/
 
 # IDE

@@ -43,7 +43,11 @@ func (postgresConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Insta
 		return nil, schema.NewDBError(d.Redacted(), "", "", "ping", err)
 	}
 
-	inst := &schema.Instance{DSN: d.Redacted(), Kind: "postgres", Label: d.Label}
+	kind := d.Kind
+	if kind == "" {
+		kind = "postgres"
+	}
+	inst := &schema.Instance{DSN: d.Redacted(), Kind: kind, Label: d.Label}
 
 	var dbNames []string
 	if d.DBName != "" {
@@ -204,7 +208,7 @@ func fillPGTable(ctx context.Context, db *sql.DB, schemaName, baseName string, t
 	colRows.Close()
 
 	// 无注释推断
-	if len(colsWithoutComment) > 0 {
+	if len(colsWithoutComment) > 0 && t.RowCount > 0 {
 		sample, err := fetchPGSampleRow(ctx, db, schemaName, baseName)
 		if err == nil {
 			for _, c := range colsWithoutComment {

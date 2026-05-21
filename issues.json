@@ -36,10 +36,11 @@
     {
       "id": "ISSUE-004",
       "title": "analyze/infer.go 与 schema/infer.go 重复且未被调用",
-      "status": "pending-evaluation",
+      "status": "closed",
+      "closed": "2026-05-21",
       "priority": "low",
       "category": "debt",
-      "description": "analyze.InferComment 与 schema.InferComment 字节级完全相同，全局零调用（所有 connector 使用 schema.InferComment）。保留原因：analyze 包作为分析引擎未来可能独立使用自己的推断逻辑。待评估后可删除或利用。",
+      "description": "analyze.InferComment 与 schema.InferComment 功能重复且全局零调用。更严重的是 analyze/infer.go 中 IP 检测使用 strings.Contains(name, \"ip\") 会误匹配 description/chip 等。已由 ISSUE-044 删除文件替代。",
       "file": "src/analyze/infer.go",
       "created": "2026-05-19"
     },
@@ -423,6 +424,136 @@
       "description": "基于 ISSUE-038 的全局安装改造，Skill 相关文件需相应调整：(1) SKILL.md 中更新 .env 文件路径说明，指向新的默认配置路径 ~/.config/dbexplain/.env.dbexplain；(2) SKILL.md 中更新使用示例，反映全局安装后的调用方式（直接 dbexplain 而非 ./dbexplain-linux-amd64）；(3) install_skill_for_all_platform.sh 中更新工具路径检测逻辑，优先查找 PATH 中的 dbexplain，其次查找本地二进制；(4) 确保 Claude Code / Cursor / AixCoding / Agents 等各平台 Skill 安装后能正确找到全局安装的二进制和配置文件；(5) uninstall_skill_for_all_platform.sh 同步更新卸载逻辑。",
       "file": "db-relationship-explainer/SKILL.md, install_skill_for_all_platform.sh, uninstall_skill_for_all_platform.sh",
       "created": "2026-05-20"
+    },
+    {
+      "id": "ISSUE-040",
+      "title": "[v0.0.5] src/.env 包含真实数据库凭证已提交 Git",
+      "status": "closed",
+      "closed": "2026-05-21",
+      "priority": "critical",
+      "category": "security",
+      "description": "src/.env 文件包含 9 个真实数据库的生产环境凭证（MySQL/ClickHouse/PostgreSQL/Redis/MongoDB/Qdrant/ES 密码）。虽然 .gitignore 已添加 src/.env 规则，但文件在规则添加前已提交，密码永久存在于 Git 历史中。修复：(1) 将 src/.env 中的真实密码替换为占位符；(2) 建议立即轮换所有涉及的数据库密码并使用 git filter-branch/BFG 清理历史。",
+      "file": "src/.env",
+      "created": "2026-05-21"
+    },
+    {
+      "id": "ISSUE-041",
+      "title": "[v0.0.5] src/logs/ 目录中生产日志文件已提交 Git",
+      "status": "closed",
+      "closed": "2026-05-21",
+      "priority": "high",
+      "category": "security",
+      "description": "src/logs/ 目录包含 13 个日志文件，部分包含真实连接信息和数据库名。.gitignore 仅排除 logs/(根目录)未排除 src/logs/。修复：添加 src/logs/ 到 .gitignore。",
+      "file": ".gitignore, src/logs/",
+      "created": "2026-05-21"
+    },
+    {
+      "id": "ISSUE-042",
+      "title": "[v0.0.5] Elasticsearch TLS InsecureSkipVerify 绕过证书验证",
+      "status": "open",
+      "priority": "medium",
+      "category": "security",
+      "description": "elasticsearch.go:47 使用 tls.Config{InsecureSkipVerify: true} 禁用 TLS 证书验证，容易遭受中间人攻击。短期内作为诊断工具可接受（已文档化），长期需支持 TLS 证书配置选项（--tls-ca-file 或 ?tls-ca=path）。",
+      "file": "src/connector/elasticsearch.go",
+      "created": "2026-05-21"
+    },
+    {
+      "id": "ISSUE-043",
+      "title": "[v0.0.5] ClickHouse 密码通过 URL 查询参数明文传输",
+      "status": "open",
+      "priority": "medium",
+      "category": "security",
+      "description": "clickhouse.go:269 将密码作为 URL 查询参数（params.Set(\"password\", c.pass)），可能被 HTTP 代理/负载均衡器日志记录。应改用 HTTP Basic Auth Header 传递认证信息。",
+      "file": "src/connector/clickhouse.go",
+      "created": "2026-05-21"
+    },
+    {
+      "id": "ISSUE-044",
+      "title": "[v0.0.5] analyze/infer.go 死代码含 IP 检测 Bug — 删除冗余文件",
+      "status": "closed",
+      "closed": "2026-05-21",
+      "priority": "low",
+      "category": "bug",
+      "description": "analyze/infer.go 与 schema/infer.go 功能重复且全局零调用。更严重的是 analyze/infer.go:27 使用 strings.Contains(name, \"ip\") 检测 IP 地址列，会误匹配 description/chip 等包含 ip 子串的词。schema/infer.go 中已有更精确的边界匹配实现。修复：删除 analyze/infer.go 消除死代码和 bug。替代 ISSUE-004。",
+      "file": "src/analyze/infer.go",
+      "created": "2026-05-21"
+    },
+    {
+      "id": "ISSUE-045",
+      "title": "[v0.0.5] PostgreSQL 采样行缺少 RowCount>0 守卫",
+      "status": "closed",
+      "closed": "2026-05-21",
+      "priority": "medium",
+      "category": "bug",
+      "description": "postgres.go:207 在无注释列采样时未检查 t.RowCount > 0。MySQL(mysql.go:143) 和 ClickHouse(clickhouse.go:174) 均有此守卫。导致对空表执行无意义的 SELECT * LIMIT 1 查询。修复：添加 && t.RowCount > 0 条件。",
+      "file": "src/connector/postgres.go",
+      "created": "2026-05-21"
+    },
+    {
+      "id": "ISSUE-046",
+      "title": "[v0.0.5] longestCommonPrefix 无分隔符时返回空字符串",
+      "status": "closed",
+      "closed": "2026-05-21",
+      "priority": "low",
+      "category": "bug",
+      "description": "analyze.go:268-275 中 longestCommonPrefix 函数在公共前缀不含 _ 或 - 分隔符时会剥离所有字符返回空串（如 abc/abd/abe → ab→\"\"）。导致聚类名变为\"N-table cluster\"而非更有意义的名称。修复：无分隔符时保留完整公共前缀。",
+      "file": "src/analyze/analyze.go",
+      "created": "2026-05-21"
+    },
+    {
+      "id": "ISSUE-047",
+      "title": "[v0.0.5] GaussDB 实例 Kind 错误报告为 postgres",
+      "status": "closed",
+      "closed": "2026-05-21",
+      "priority": "medium",
+      "category": "bug",
+      "description": "postgres.go:46 硬编码 inst.Kind = \"postgres\"，即使 DSN scheme 为 gaussdb:// 也报告为 postgres。用户无法区分 GaussDB 和 PostgreSQL 实例。修复：读取 d.Kind 赋值给 inst.Kind。",
+      "file": "src/connector/postgres.go",
+      "created": "2026-05-21"
+    },
+    {
+      "id": "ISSUE-048",
+      "title": "[v0.0.5] JSON 输出缺少 OpStats 操作统计字段",
+      "status": "closed",
+      "closed": "2026-05-21",
+      "priority": "medium",
+      "category": "bug",
+      "description": "render.go 中 jsonTable 结构体缺少 OpStats 字段。所有连接器（PostgreSQL/MySQL/ClickHouse/Redis）已采集操作统计信息（seq_scan/idx_scan/query_count/keyspace_hits 等），但在 JSON 输出中被丢弃。修复：为 jsonTable 添加 OpStats 字段。",
+      "file": "src/render/render.go",
+      "created": "2026-05-21"
+    },
+    {
+      "id": "ISSUE-049",
+      "title": "[v0.0.5] MySQL 索引和主键使用两次独立 SHOW INDEX 查询",
+      "status": "closed",
+      "closed": "2026-05-21",
+      "priority": "low",
+      "category": "perf",
+      "description": "mysql.go 中索引查询(line 156)和主键查询(line 187)分别发送 SHOW INDEX FROM 查询，产生 2 倍网络往返。可合并为一次 SHOW INDEX FROM 查询，在代码中分离 PRIMARY 和二级索引。",
+      "file": "src/connector/mysql.go",
+      "created": "2026-05-21"
+    },
+    {
+      "id": "ISSUE-050",
+      "title": "[v0.0.5] analy/infer.go 删除（替代 ISSUE-004 并发更新状态）",
+      "status": "closed",
+      "closed": "2026-05-21",
+      "priority": "low",
+      "category": "debt",
+      "description": "更新 ISSUE-004 状态为 closed(wontfix)，已由 ISSUE-044 删除文件替代。analyze.InferComment 与 schema.InferComment 功能完全重复且含 IP 检测 bug，已决定删除而非保留。",
+      "file": "src/analyze/infer.go",
+      "created": "2026-05-21"
+    },
+    {
+      "id": "ISSUE-051",
+      "title": "[v0.0.5] JSON 文件输出含 UTF-8 BOM 导致解析失败",
+      "status": "closed",
+      "closed": "2026-05-21",
+      "priority": "high",
+      "category": "bug",
+      "description": "-json -o file 组合使用时，encodeOutput() 将 UTF-8 BOM (ef bb bf) 写入 JSON 文件开头，导致大多数 JSON 解析器（Python json.load、jq 等）报错 Unexpected UTF-8 BOM。修复：JSON 输出跳过 encodeOutput，直接写入原始字节。文本输出（-o 不含 -json）保持 BOM 行为不变。",
+      "file": "src/main.go",
+      "created": "2026-05-21"
     }
   ]
 }
