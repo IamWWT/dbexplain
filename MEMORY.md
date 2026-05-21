@@ -35,6 +35,7 @@
 | 项目宪法 | `CONSTITUTION.md` |
 | 架构愿景 | `docs/ARCHITECTURE.md` |
 | 算法文档 | `docs/ALGORITHMS.md` |
+| 安全检查手册 | `docs/SECURITY_CHECKLIST.md` |
 | Issue 追踪 | `issues.json` |
 
 ## 构建命令
@@ -92,7 +93,7 @@ scheme://[user[:pass]@]host[:port][/dbname][?label=别名&其他参数]
 
 **v0.0.4 已关闭（ISSUE-022 ~ ISSUE-032）：** IR v1 架构、Capability 重构、统一诊断、Importance Ranking、Context Compression、Delta Scan、Operational Stats、Windows 编码兼容。
 
-**v0.0.5 已关闭：** `--log-dir` 日志目录（默认 `/var/log/dbexplain`）、一键安装脚本（scripts/install.sh/ps1）、全局配置搜索、SKILL 中英文分拆（`--lang zh|en`）、12 项 Bug 修复（ISSUE-040~051）。
+**v0.0.5 已关闭：** `--log-dir` 日志目录（默认 `/var/log/dbexplain`）、一键安装脚本（scripts/install.sh/ps1）、全局配置搜索、SKILL 中英文分拆（`--lang zh|en`）、13 项 Bug 修复（ISSUE-040~052）。
 
 **当前开放（ISSUE-033 ~ ISSUE-035）：** Phase 4 LLM 生态集成、GaussDB/TDSQL 兼容性确认、GBase/HBase/OceanBase 评估。
 
@@ -112,6 +113,7 @@ scheme://[user[:pass]@]host[:port][/dbname][?label=别名&其他参数]
 - Agent **禁止**查看、读取、编辑 `.env` 文件
 - 密码通过 `DSN.Redacted()` 自动脱敏显示
 - 工具仅执行只读操作，详见 CONSTITUTION.md
+- **发布前必须执行**: `docs/SECURITY_CHECKLIST.md` 全部检查项
 
 ## 版本性能对比（每次发版必做）
 

@@ -348,6 +348,8 @@ log.Printf("skipping %s (not matched by include filter)", e.raw)
 - **元数据优先**：MongoDB 使用 `EstimatedDocumentCount`，不做全表扫描
 - **独立隔离**：每实例独立日志文件，单实例 panic 不影响其他实例采集
 
+> 全面的安全检查清单见 [SECURITY_CHECKLIST.md](./SECURITY_CHECKLIST.md)，发布前必须逐项确认。
+
 ---
 
 ## 10. 明确不做

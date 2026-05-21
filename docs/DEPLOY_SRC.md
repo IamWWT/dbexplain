@@ -220,6 +220,8 @@ dbexplain -dsn 'elasticsearch://elastic:pass@localhost:9200'
 ```
 
 > 确保所用数据库账号仅具有**只读权限**，以保证安全。
+>
+> 详见 [SECURITY_CHECKLIST.md](./SECURITY_CHECKLIST.md) 安全手册。
 
 ---
 

@@ -101,8 +101,8 @@ func main() {
 		if configPath == "" {
 			log.Fatal("no config file found. Create .env.dbexplain in ~/.config/dbexplain/ or set DBPROBE_ENV_FILE. Also supports .env in current directory (legacy).")
 		}
-		if err := godotenv.Load(configPath); err != nil {
-			log.Printf("warning: load config %s: %v", configPath, err)
+		if err := loadEnvFile(configPath); err != nil {
+			log.Printf("warning: load config %s: %v", configPath, sanitizeErr(err))
 		}
 		entries = append(entries, loadFromEnv()...)
 	}
@@ -358,6 +358,52 @@ type envEntry struct {
 	idx int
 	key string
 	val string
+}
+
+// loadEnvFile reads and parses an env file, stripping UTF-8 BOM if present.
+// Uses godotenv.Unmarshal() so the file content is loaded into the environment.
+func loadEnvFile(path string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	// Strip UTF-8 BOM (e.g. from Windows Notepad saving as UTF-8 with BOM)
+	data = bytes.TrimPrefix(data, []byte{0xEF, 0xBB, 0xBF})
+	envMap, err := godotenv.UnmarshalBytes(data)
+	if err != nil {
+		return err
+	}
+	for k, v := range envMap {
+		os.Setenv(k, v)
+	}
+	return nil
+}
+
+// sanitizeErr redacts passwords from error messages to prevent credential leaks.
+func sanitizeErr(err error) error {
+	if err == nil {
+		return nil
+	}
+	msg := err.Error()
+	// Redact URL passwords: scheme://user:PASS@host -> scheme://user:***@host
+	for {
+		protoIdx := strings.Index(msg, "://")
+		if protoIdx < 0 {
+			break
+		}
+		userStart := protoIdx + 3
+		colonIdx := strings.Index(msg[userStart:], ":")
+		if colonIdx < 0 {
+			break
+		}
+		passStart := userStart + colonIdx + 1
+		atIdx := strings.Index(msg[passStart:], "@")
+		if atIdx < 0 {
+			break
+		}
+		msg = msg[:passStart] + "***" + msg[passStart+atIdx:]
+	}
+	return fmt.Errorf("%s", msg)
 }
 
 func loadFromEnv() []dsnEntry {

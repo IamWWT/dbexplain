@@ -27,8 +27,9 @@
 
 ### 文档
 - `--manual` 手册更新：添加配置搜索优先级章节、`--log-dir` 参数、所有 `./dbexplain` 改为 `dbexplain`
+- **新增 `docs/SECURITY_CHECKLIST.md`**：发布前安全检查手册，涵盖凭证保护、文件编码、输入验证等 7 大类检查项
 
-### Bug 修复 (12 项)
+### Bug 修复 (13 项)
 
 | Issue | 严重度 | 描述 |
 |-------|--------|------|
@@ -41,6 +42,7 @@
 | ISSUE-048 | MEDIUM | JSON 输出补充 `op_stats` 字段（seq_scan/idx_scan/query_count 等操作统计） |
 | ISSUE-049 | LOW | MySQL 两次 `SHOW INDEX` 查询合并为一次，网络往返减半 |
 | ISSUE-051 | HIGH | `-json -o` 输出不再添加 UTF-8 BOM，确保标准 JSON 解析器兼容 |
+| ISSUE-052 | HIGH | Windows 记事本保存的 `.env.dbexplain` 含 UTF-8 BOM 导致解析失败；godotenv 错误消息泄露密码 |
 
 ### 安全已知限制 (2 项，保持开放)
 

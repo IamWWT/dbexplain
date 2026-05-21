@@ -27,8 +27,9 @@
 
 ### Documentation
 - `--manual` updated: config search priority section, `--log-dir` option, all `./dbexplain` → `dbexplain`
+- **New `docs/SECURITY_CHECKLIST.md`**: Pre-release security audit checklist covering credential protection, file encoding, input validation, and more
 
-### Bug Fixes (12 items)
+### Bug Fixes (13 items)
 
 | Issue | Severity | Description |
 |-------|----------|-------------|
@@ -41,6 +42,7 @@
 | ISSUE-048 | MEDIUM | JSON output now includes `op_stats` field (seq_scan/idx_scan/query_count etc.) |
 | ISSUE-049 | LOW | MySQL dual `SHOW INDEX` queries merged into one, halving network round-trips |
 | ISSUE-051 | HIGH | `-json -o` output no longer prepends UTF-8 BOM, ensuring standard JSON parser compatibility |
+| ISSUE-052 | HIGH | UTF-8 BOM in `.env.dbexplain` (Windows Notepad) caused parse failure; godotenv error messages leaked passwords |
 
 ### Known Security Limitations (2 items, open)
 
