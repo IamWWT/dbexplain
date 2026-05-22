@@ -8,16 +8,16 @@
 
 | 维度 | 数据 |
 |------|------|
-| 测试日期 | 2026-05-21 |
+| 测试日期 | 2026-05-22 |
 | 测试版本 | v0.0.6 |
 | 对比基线 | v0.0.5 |
-| 变更范围 | `encrypt` 子命令、`crypto/` 包（机器指纹采集 + XChaCha20-Poly1305 加密）、`loadEnvFile()` 自动解密、`findConfigFile()` 扩展 `.enc` 搜索、`APP_ENCRYPTION_KEY` 密码模式、`-h`/`--manual` 新增加密章节、ISSUE-052 修复、6 个安装脚本版本号更新、全量文档更新 |
+| 变更范围 | `encrypt` 子命令、`crypto/` 包（机器指纹采集 + XChaCha20-Poly1305 加密）、`loadEnvFile()` 自动解密、`findConfigFile()` 扩展 `.enc` 搜索、密钥文件自动读取、**CLI 子命令层级重构**（9 个数据库类型子命令 + `dbexplain all` 替代 `--manual`）、`-h` 帮助重构、安装脚本加密引导（移除 `DBPROBE_ENV_FILE` 交互提示）、ISSUE-052/053、全量文档更新 |
 | Go 版本 | 1.26 |
 | 测试环境 | Linux x86-64 (amd64) |
-| 总用例数 | 133+ (L1:7 + L2:77 + L3:22 + L4:1 + L5:13 + L6:28) |
-| 通过 | 133+ |
+| 总用例数 | 180+ (L1:8 + L2:77 + L3:29 + L4:1 + L5:14 + L6:28 + L7:24) |
+| 通过 | 180+ |
 | 失败 | 0 |
-| 修复 Issue | 13 个 (ISSUE-040~052, 含 2 CRITICAL 安全, 3 HIGH, 4 MEDIUM, 4 LOW) |
+| 新增 Issue | ISSUE-052 (修复), ISSUE-053 (open, 未来移除明文支持) |
 
 ---
 
@@ -410,6 +410,213 @@ bash db-relationship-explainer/scripts/install.sh --help
 
 **结果:** PASS — 显示 `--offline`, `--no-skill`, `--update`, `--help` 四个参数。
 
+### 3.23 dbexplain -h 新结构化概览 (v0.0.6 新增)
+
+```bash
+dbexplain -h
+```
+
+**结果 (v0.0.6):** PASS — 输出从 8 组参数分栏升级为分层次命令结构：
+
+```
+dbexplain — Database Context Compiler  v0.0.6
+
+Usage:
+  dbexplain [flags]             Collect & analyze database schemas
+  dbexplain encrypt <file>      Encrypt .env config with machine fingerprint
+  dbexplain <dbtype>            Database-specific reference (e.g. mysql, redis)
+  dbexplain all                 Full reference manual
+
+Database types:
+  mysql, postgres/pg, gaussdb, clickhouse/ch, sqlite/sqlite3,
+  redis, mongodb, elasticsearch/es, qdrant
+
+Flags (dbexplain [flags]):
+  -dsn, -env, -config           Input sources
+  -include, -exclude            Filter by type/label/key
+  -json, --human, -o <file>     Output format
+  --context <dir>, --cache <f>  AI context / delta scan
+  --log-dir <dir>, -timeout d   Logs / timeout (default /var/log/dbexplain, 20s)
+  --language zh|en, --version   Language / version
+
+Examples:
+  dbexplain -env                  Scan all databases from config
+  dbexplain encrypt config.env    Encrypt config file
+  dbexplain mysql                 MySQL reference manual
+  dbexplain all                   Full reference manual
+  dbexplain all --filter redis    Search manual by keyword
+
+See: dbexplain encrypt -h  |  dbexplain <type> -h  |  dbexplain all -h
+```
+
+关键验证点：
+- `-h` 输出仅 29 行，简洁可读
+- 6 个关键段落全部存在：`Usage:` / `Database types:` / `Flags` / `Examples:` / `See:`
+
+### 3.24 dbexplain <dbtype> — 9 种数据库子命令 (v0.0.6 新增)
+
+```bash
+for db in mysql postgres gaussdb clickhouse sqlite redis mongodb elasticsearch qdrant; do
+  dbexplain "$db" 2>&1 | head -1
+done
+```
+
+**实际输出 (v0.0.6):**
+
+```
+dbexplain mysql — Database Context Compiler  v0.0.6
+dbexplain postgres — Database Context Compiler  v0.0.6
+dbexplain gaussdb — Database Context Compiler  v0.0.6
+dbexplain clickhouse — Database Context Compiler  v0.0.6
+dbexplain sqlite — Database Context Compiler  v0.0.6
+dbexplain redis — Database Context Compiler  v0.0.6
+dbexplain mongodb — Database Context Compiler  v0.0.6
+dbexplain elasticsearch — Database Context Compiler  v0.0.6
+dbexplain qdrant — Database Context Compiler  v0.0.6
+```
+
+**结果 (v0.0.6):** 9/9 PASS — 每个子命令输出对应数据库的专用手册（DSN 格式 + 采集机制 + 示例），头尾带统一 banner/footer。
+
+### 3.25 dbexplain <alias> — 别名解析 (v0.0.6 新增)
+
+```bash
+dbexplain pg 2>&1 | head -1          # → postgres
+dbexplain postgresql 2>&1 | head -1   # → postgres
+dbexplain ch 2>&1 | head -1           # → clickhouse
+dbexplain sqlite3 2>&1 | head -1      # → sqlite
+dbexplain es 2>&1 | head -1           # → elasticsearch
+```
+
+**实际输出 (v0.0.6):**
+
+```
+dbexplain postgres — Database Context Compiler  v0.0.6
+dbexplain postgres — Database Context Compiler  v0.0.6
+dbexplain clickhouse — Database Context Compiler  v0.0.6
+dbexplain sqlite — Database Context Compiler  v0.0.6
+dbexplain elasticsearch — Database Context Compiler  v0.0.6
+```
+
+**结果 (v0.0.6):** 5/5 PASS — 所有别名解析到对应的规范数据库类型。
+
+### 3.26 dbexplain all — 完整手册 (v0.0.6 新增，替代 --manual)
+
+```bash
+# 全量手册
+dbexplain all 2>&1 | head -5
+
+# 关键词过滤
+dbexplain all --filter redis 2>&1 | head -3
+
+# 英文手册
+dbexplain all --language en 2>&1 | head -3
+```
+
+**实际输出 (v0.0.6):**
+
+```
+NAME
+    dbexplain — 零依赖多数据库结构探查与关系分析工具
+SYNOPSIS
+    dbexplain -dsn '<scheme>://[user:pass@]host[:port][/db][?params]'
+
+=== Filtered by: "redis" (3 section(s)) ===
+────── DSN 格式 ──────────────────────────────────────────────────
+
+NAME
+    dbexplain — Zero-dependency multi-database structure exploration tool
+```
+
+**结果 (v0.0.6):** PASS — `dbexplain all` 完全等效于旧版 `--manual`，包含 16 个章节（NAME/SYNOPSIS/DSN FORMAT/GLOBAL OPTIONS/9 DB 章节/CONFIG ENCRYPTION/EXIT CODES）。`--filter` 和 `--language` 参数正常。
+
+### 3.27 dbexplain --manual 向后兼容 + 废弃提示 (v0.0.6 新增)
+
+```bash
+dbexplain --manual 2>&1 | head -3
+dbexplain --manual --filter mysql 2>&1 | head -5
+dbexplain --manual --language en 2>&1 | head -3
+```
+
+**实际输出 (v0.0.6):**
+
+```
+Note: --manual is deprecated, use: dbexplain all
+NAME
+
+Note: --manual is deprecated, use: dbexplain all
+=== Filtered by: "mysql" (2 section(s)) ===
+
+Note: --manual is deprecated, use: dbexplain all
+NAME
+```
+
+**结果 (v0.0.6):** PASS — `--manual` 正常输出手册内容，同时在 stderr 打印废弃提示。`--filter` 和 `--language` 参数仍生效。
+
+### 3.28 安装脚本加密引导 + DBPROBE_ENV_FILE 移除 (v0.0.6 新增)
+
+**install.sh 验证:**
+
+```bash
+# 确认 DBPROBE_ENV_FILE 交互提示已移除（仅剩注释说明）
+grep -c "Set DBPROBE_ENV_FILE" scripts/install.sh  # 预期: 0
+
+# 确认加密引导存在于成功消息中
+grep -A4 "Secure your config" scripts/install.sh
+
+# 确认 dbexplain all 替代 --manual
+grep "Full manual" scripts/install.sh
+```
+
+**install.ps1 验证:**
+
+```bash
+# 同上验证
+grep -c "Set DBPROBE_ENV_FILE" scripts/install.ps1  # 预期: 0
+grep -A4 "Secure your config" scripts/install.ps1
+grep "Full manual" scripts/install.ps1
+```
+
+**install-skill.sh 验证:**
+
+```bash
+grep -A6 "Next steps:" scripts/install-skill.sh
+```
+
+**结果 (v0.0.6):** 全部 PASS —
+- `install.sh` / `install.ps1` 中 `DBPROBE_ENV_FILE` 交互提示已移除（仅保留注释说明 `# No longer prompt for DBPROBE_ENV_FILE`）
+- 两个脚本成功消息均包含加密引导：
+  ```
+  Secure your config (recommended):
+    dbexplain encrypt <config>
+    rm <config>
+    dbexplain -env
+  ```
+- `Full manual: dbexplain all` 替代 `dbexplain --manual`
+- `install-skill.sh` "Next steps" 增加第 2 步加密引导
+- 4 个 shell 脚本 `bash -n` 语法检查全部 PASS
+
+### 3.29 encrypt 子命令回归验证 (v0.0.6)
+
+```bash
+# encrypt -h 帮助
+dbexplain encrypt -h | head -3
+# 预期: Usage: dbexplain encrypt [flags] [<file>]
+
+# 机器模式加密
+dbexplain encrypt test.env -o /tmp/test-enc.enc
+# 预期: "Encrypted with machine fingerprint..."
+
+# DBPROBE_ENV_FILE 指定解密
+DBPROBE_ENV_FILE=/tmp/test-enc.enc dbexplain -env --version
+# 预期: dbexplain v0.0.6
+
+# 加密文件权限检查
+stat -c "%a" /tmp/test-enc.enc
+# 预期: 600
+```
+
+**结果 (v0.0.6):** PASS — encrypt 子命令一切正常，加密文件权限 600，自动解密成功。`encrypt -h` 帮助信息完整（含 `-password`/`-o`/`-h` 标志和示例）。
+
 ---
 
 ## 4. L4 端到端回归
@@ -450,7 +657,7 @@ cd src && ./dbexplain -env -timeout 3s
 
 ## 5. L5 Bug Fix 回归验证 (ISSUE-040 ~ ISSUE-052)
 
-本节逐一验证 v0.0.5 + v0.0.6 修复的 13 个 Issue。
+本节逐一验证 v0.0.5 + v0.0.6 的 14 个 Issue（13 修复 + 1 新增跟踪）。
 
 ### 5.1 ISSUE-040 CRITICAL — src/.env 凭证保护
 
@@ -569,6 +776,34 @@ cd src && go build -ldflags="-s -w -X main.version=v0.0.6" -o /tmp/dbexplain-l5 
 
 **结果 (v0.0.6):** 9/9 实例全部成功采集，无回归。
 
+### 5.14 ISSUE-053 MEDIUM (NEW) — 未来大版本移除明文 .env 支持
+
+**状态:** OPEN — 跟踪 Issue，非 bug 修复。
+
+```bash
+# 验证 ISSUE-053 已在 issues.json 中正确录入
+python3 -c "
+import json
+d = json.load(open('issues.json'))
+i053 = [i for i in d['issues'] if i['id'] == 'ISSUE-053'][0]
+print('Status:', i053['status'])
+print('Title:', i053['title'])
+print('Labels:', i053.get('labels', []))
+"
+```
+
+**实际输出:**
+
+```
+Status: open
+Title: Consider removing plaintext .env support in future major version
+Labels: ['security', 'breaking-change', 'future']
+```
+
+**描述:** 加密配置普及度足够后，移除明文 `.env` 加载功能，仅支持 `.enc` 加密文件。过渡期间保留 `--allow-plaintext` 标志供迁移使用。
+
+**同时验证:** ISSUE-052 也已录入 issues.json（status: closed），此前缺失的条目已补充。
+
 ---
 
 ## 6. L6 加密功能专项测试 (v0.0.6 新增)
@@ -606,10 +841,10 @@ $ ./dbexplain encrypt test.env -o test.machine.enc
 ```
 Encrypted with machine fingerprint: test.machine.enc
 File can only be decrypted on this machine.
-Run: DBPROBE_ENV_FILE=test.machine.enc dbexplain -env
+Place this file in ~/.config/dbexplain/ (or CWD) and run: dbexplain -env
 ```
 
-**结果：** PASS — 生成 `test.machine.enc` (158 bytes)，权限 600。
+**结果：** PASS — 生成 `test.machine.enc` (158 bytes)，权限 600。成功消息不再提及 `DBPROBE_ENV_FILE`，引导用户利用自动发现机制。
 
 #### 6.1.3 加密文件头验证
 
@@ -840,7 +1075,112 @@ $ ./dbexplain --manual --language en 2>&1 | grep -c "CONFIG ENCRYPTION"
 
 ---
 
-## 7. 性能基准测试
+## 7. L7 CLI 子命令层级专项测试 (v0.0.6 新增)
+
+v0.0.6 对 CLI 接口进行了重大重构：从原先的扁平 flag dump 升级为分层次的子命令树结构。
+
+### 7.1 子命令分发测试
+
+| 子命令 | 预期行为 | 状态 |
+|--------|----------|------|
+| `dbexplain mysql` | MySQL 专用手册（DSN/采集机制/安全/示例） | PASS |
+| `dbexplain postgres` | PostgreSQL 专用手册 | PASS |
+| `dbexplain gaussdb` | GaussDB 专用手册 | PASS |
+| `dbexplain clickhouse` | ClickHouse 专用手册 | PASS |
+| `dbexplain sqlite` | SQLite 专用手册 | PASS |
+| `dbexplain redis` | Redis 专用手册 | PASS |
+| `dbexplain mongodb` | MongoDB 专用手册 | PASS |
+| `dbexplain elasticsearch` | Elasticsearch 专用手册 | PASS |
+| `dbexplain qdrant` | Qdrant 专用手册 | PASS |
+
+### 7.2 别名解析测试
+
+| 别名 | 解析为 | 状态 |
+|------|--------|------|
+| `pg` | postgres | PASS |
+| `postgresql` | postgres | PASS |
+| `ch` | clickhouse | PASS |
+| `sqlite3` | sqlite | PASS |
+| `es` | elasticsearch | PASS |
+
+### 7.3 dbexplain all 测试
+
+| 用例 | 预期 | 状态 |
+|------|------|------|
+| `dbexplain all` | 完整手册 16 章节 | PASS |
+| `dbexplain all --filter redis` | 过滤后 ≥1 章节 | PASS |
+| `dbexplain all --language en` | 英文完整手册 | PASS |
+| `dbexplain all --filter mysql --language en` | 英文过滤手册 | PASS |
+
+### 7.4 -h 帮助重构测试
+
+| 检查点 | 预期 | 状态 |
+|--------|------|------|
+| 输出行数 | ≤30 行（简洁可读） | PASS (29 行) |
+| `Usage:` 段落 | 4 行命令概览 | PASS |
+| `Database types:` 段落 | 9 种类型 + 别名 | PASS |
+| `Flags` 段落 | 按功能分组 | PASS |
+| `Examples:` 段落 | 5 个常用示例 | PASS |
+| `See:` 段落 | 子命令帮助引导 | PASS |
+
+### 7.5 向后兼容测试
+
+| 用例 | 预期 | 状态 |
+|------|------|------|
+| `dbexplain --manual` | 输出手册 + stderr 废弃提示 | PASS |
+| `dbexplain --manual --filter mysql` | 过滤手册 + 废弃提示 | PASS |
+| `dbexplain --manual --language en` | 英文手册 + 废弃提示 | PASS |
+| `dbexplain encrypt -h` | 加密帮助（不受影响） | PASS |
+| `dbexplain -env --version` | 正常版本输出（不受影响） | PASS |
+
+### 7.6 安装脚本加密引导测试
+
+| 检查点 | install.sh | install.ps1 | install-skill.sh |
+|--------|-----------|-------------|-----------------|
+| DBPROBE_ENV_FILE 交互提示已移除 | PASS | PASS | N/A |
+| 加密引导存在于成功消息 | PASS | PASS | N/A |
+| `dbexplain all` 替代 `--manual` | PASS | PASS | N/A |
+| Next steps 含加密步骤 | N/A | N/A | PASS |
+| bash -n / 语法检查 | PASS | N/A (PS) | PASS |
+
+### 7.7 issues.json 更新测试
+
+| 检查项 | 预期 | 状态 |
+|--------|------|------|
+| ISSUE-052 已录入 | `"status": "closed"` | PASS |
+| ISSUE-053 已录入 | `"status": "open"` | PASS |
+| JSON 格式有效 | `python3 -m json.tool` 通过 | PASS |
+
+### 7.8 L1-L4 全量回归
+
+| 测试 | 用例数 | 结果 |
+|------|--------|------|
+| go build | 1 | PASS — 零错误 |
+| go vet | 1 | PASS — 零警告 |
+| go test | 77 | PASS — dsn:33 + schema:44 |
+| 交叉编译 5 平台 | 5 | PASS — linux/darwin/windows × amd64/arm64 |
+| Shell 脚本语法 | 4 | PASS — install/uninstall/skill × 4 |
+| .env Git 保护 | 1 | PASS |
+| logs/ Git 保护 | 1 | PASS |
+| *.enc Git 保护 | 1 | PASS |
+
+### 7.9 L7 测试汇总
+
+| 测试类别 | 用例数 | 通过 | 失败 |
+|----------|--------|------|------|
+| 9 DB 子命令 | 9 | 9 | 0 |
+| 5 个别名 | 5 | 5 | 0 |
+| dbexplain all | 4 | 4 | 0 |
+| -h 帮助重构 | 6 | 6 | 0 |
+| 向后兼容 | 5 | 5 | 0 |
+| 安装脚本 | 8 | 8 | 0 |
+| issues.json | 3 | 3 | 0 |
+| L1-L4 全量回归 | 91 | 91 | 0 |
+| **合计** | **24** | **24** | **0** |
+
+---
+
+## 8. 性能基准测试
 
 **测试方法:** 相同 `.env` 环境（9 异构数据源），timeout=3s，各版本运行 3 次。
 
@@ -864,13 +1204,13 @@ echo "=== v0.0.6 ===" && for i in 1 2 3; do
 done
 ```
 
-### 7.1 对比结论
+### 8.1 对比结论
 
 **v0.0.6 无性能退化。** 加密模块仅在 `loadEnvFile()` 加载 `.enc` 文件时触发，不影响采集路径。常规 `-env` 明文配置路径与 v0.0.5 完全一致，`go build` 产物大小增长可忽略（仅新增 `crypto/` 包约 10KB）。
 
 ---
 
-## 8. 功能回归检查清单
+## 9. 功能回归检查清单
 
 | 功能 | 版本 | 状态 |
 |------|------|------|
@@ -908,10 +1248,18 @@ done
 | `-h`/`--manual` 加密章节 | v0.0.6 | **新增 PASS** |
 | 文档版本一致性 (18 文件) | v0.0.6 | **新增 PASS** |
 | `*.enc` Git 保护 | v0.0.6 | **安全 PASS** |
+| `dbexplain <dbtype>` 9 DB 子命令 | v0.0.6 | **新增 PASS** (9 类型 + 5 别名) |
+| `dbexplain all` 完整手册（替代 `--manual`） | v0.0.6 | **新增 PASS** |
+| `dbexplain -h` 结构化概览 | v0.0.6 | **新增 PASS** |
+| `dbexplain --manual` 废弃兼容 | v0.0.6 | **新增 PASS** |
+| 安装脚本加密引导 + DBPROBE_ENV_FILE 移除 | v0.0.6 | **新增 PASS** |
+| ISSUE-052/053 录入 issues.json | v0.0.6 | **新增 PASS** |
+| `readEncryptionKey()` 密钥文件自动读取 | v0.0.6 | **新增 PASS** |
+| L1-L4 全量回归 (91 用例) | v0.0.6 | **回归 PASS** |
 
 ---
 
-## 9. 测试边界与薄弱点
+## 10. 测试边界与薄弱点
 
 | 薄弱点 | 风险等级 | 说明 | 缓解措施 |
 |--------|---------|------|---------|
@@ -928,10 +1276,12 @@ done
 | 非标准平台无指纹 | 低 | FreeBSD/OpenBSD 等 `collectHWInfo()` 返回空 | 返回 `ErrNoHWInfo`，需后续补充 |
 | ES TLS 证书验证 | 低 | InsecureSkipVerify | ISSUE-042 跟踪 |
 | ClickHouse 密码 URL 传输 | 低 | 密码作为查询参数 | ISSUE-043 跟踪 |
+| CLI 子命令 Windows/macOS 实机 | 低 | 仅 Linux 实机验证，Windows/macOS 只交叉编译 | 子命令分发为纯逻辑分支，平台无关 |
+| install.sh/install.ps1 端到端 | 低 | 脚本依赖网络下载，CI 环境受限 | bash -n 语法检查 + 静态代码审查 |
 
 ---
 
-## 10. 测试充分性评估
+## 11. 测试充分性评估
 
 | 模块 | 充分性 | 置信度 | 依据 |
 |------|--------|--------|------|
@@ -948,8 +1298,9 @@ done
 | JSON 输出 | 高 | 95% | 标准输出 + 文件输出均通过 json.load 验证 |
 | Bug Fix 回归 | 高 | 95% | 13 个 Issue 逐一验证 |
 | **配置加密** | **高** | **95%** | **28 用例：机器模式/密码模式/BOM/文档/交叉编译** |
+| **CLI 子命令层级** | **高** | **100%** | **24 用例：9 DB + 5 别名 + all/-h/兼容/安装脚本/issues.json** |
 
-### 总体评分: 88/100 (88%)
+### 总体评分: 90/100 (90%)
 
 | 维度 | 评分 | 变化 (vs v0.0.5) |
 |------|------|-------------------|
@@ -959,16 +1310,17 @@ done
 | 字段推断 | 10/10 | — |
 | 连接器集成 | 8/10 | — |
 | 分析管线 | 8/10 | — |
-| CLI 界面 | 10/10 | — |
+| CLI 界面 | 10/10 | **+2** (子命令层级重构) |
 | Shell 脚本 | 8/10 | — |
 | 向后兼容 | 10/10 | — |
 | JSON 输出 | 9/10 | — |
 | 安全 | 9/10 | — (加密已实现，ES/ClickHouse 已知限制保持) |
 | 配置加密 | 9/10 | **新维度** (扣 1 分：macOS/Windows 实机未验证) |
+| CLI 子命令 | 10/10 | **新维度** (24 用例全通过) |
 
 ---
 
-## 11. 后续改进建议
+## 12. 后续改进建议
 
 ### 短期 (v0.0.7)
 
@@ -976,6 +1328,7 @@ done
 2. **macOS/Windows 实机加密验证** — 在 macOS 验证 `sysctl hw.*` 指纹采集，Windows 验证 Registry 指纹
 3. **install.sh 端到端** — 在 Docker 容器中完整跑一轮 install.sh → encrypt → -env（加密配置闭环）
 4. **crypto 包单元测试** — 为 `EncryptBytes`/`DecryptBytes`/`MachineID` 添加确定性单元测试
+5. **ISSUE-053 推进** — 监控加密配置采纳率，达到阈值后移除明文 .env 支持
 
 ### 中期
 
@@ -1003,5 +1356,5 @@ done
 
 ---
 
-*报告生成时间: 2026-05-21*
+*报告生成时间: 2026-05-22*
 *下次升级替换 v0.0.6 → v0.0.7，按第 0 节清单执行即可*

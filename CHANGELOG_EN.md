@@ -23,6 +23,21 @@
 - `docs/ARCHITECTURE.md`: New "Config Encryption Architecture" section
 - `.gitignore`: Added `*.enc` exclusion rules
 
+### CLI Subcommand Hierarchy Restructure
+- **`dbexplain <dbtype>`**: 9 database type subcommands (mysql/postgres/gaussdb/clickhouse/sqlite/redis/mongodb/elasticsearch/qdrant), each outputs a database-specific reference manual
+- **Alias support**: `postgres`=`pg`/`postgresql`, `clickhouse`=`ch`, `sqlite`=`sqlite3`, `elasticsearch`=`es`
+- **`dbexplain all`**: Replaces `--manual`, full reference manual. Supports `--filter` keyword search and `--language zh|en`
+- **`dbexplain -h`**: Redesigned as a compact structured overview (Usage / Database types / Flags / Examples / See), upgraded from flat 8-group flag dump
+- **Backward compat**: `--manual` still works, prints deprecation note on stderr guiding users to `dbexplain all`
+
+### Install Script Enhancements
+- **Removed `DBPROBE_ENV_FILE` interactive prompt**: `findConfigFile()` auto-discovery eliminates manual config, install scripts no longer ask to set this env var
+- **Encryption guidance**: `install.sh` / `install.ps1` / `install-skill.sh` success messages now include encryption steps
+- **`dbexplain all`**: Install script help and success messages now reference `dbexplain all` instead of `dbexplain --manual`
+
+### Tracking Issue
+- **ISSUE-053**: Consider removing plaintext `.env` support in a future major version, keeping only encrypted files (`open`, `security/breaking-change/future`)
+
 ## v0.0.5 (2026-05-21)
 
 ### One-Click Install & Deployment

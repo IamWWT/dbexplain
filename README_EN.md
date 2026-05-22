@@ -169,7 +169,9 @@ Verify:
 ```bash
 dbexplain -env                  # Terminal formatted report
 dbexplain --version             # Print version
-dbexplain --manual --language en  # Full English manual
+dbexplain all --language en     # Full English manual (replaces --manual)
+dbexplain mysql                 # MySQL reference manual
+dbexplain redis                 # Redis reference manual
 ```
 
 ### Encrypt Config Files
@@ -258,8 +260,14 @@ dbexplain -env --human
 dbexplain -env -timeout 60s
 
 # Search the manual
-dbexplain --manual --filter redis
-dbexplain --manual --language en --filter "SSL mode"
+dbexplain all --filter redis
+dbexplain all --language en --filter "SSL mode"
+
+# Database-specific reference manuals
+dbexplain mysql               # MySQL
+dbexplain postgres            # PostgreSQL (aliases: pg, postgresql)
+dbexplain redis               # Redis
+dbexplain elasticsearch       # Elasticsearch (alias: es)
 ```
 
 ### Option Reference
@@ -267,21 +275,28 @@ dbexplain --manual --language en --filter "SSL mode"
 | Option | Description |
 |--------|-------------|
 | `-dsn <string>` | Database connection string, repeatable |
-| `-env` | Load DSNs from config file (search: `.env.dbexplain` → `.env.dbexplain.enc` → `~/.config/dbexplain/.env.dbexplain` → `~/.config/dbexplain/.env.dbexplain.enc` → `.env`, `DBPROBE_ENV_FILE` optional override) |
+| `-env` | Load DSNs from config file (auto-search 6-level paths, no manual config needed) |
 | `-config <file>` | Read DSN array from JSON file |
 | `-include <filter>` | Only include matching DSNs (by kind/label/index, comma-sep) |
 | `-exclude <filter>` | Exclude matching DSNs |
 | `-json` | Output JSON format |
-| `-o <file>` | Write output to file (auto UTF-8 BOM) |
+| `-o <file>` | Write output to file (text mode: auto UTF-8 BOM) |
 | `--log-dir <dir>` | Log output directory (default `/var/log/dbexplain`) |
 | `-timeout <duration>` | Per-DSN timeout (default 20s) |
 | `--version` | Print version |
-| `--manual` | Full help manual (`--language en` for English) |
-| `--filter <keyword>` | Filter `--manual` output (case-insensitive) |
 | `--human` | Human-friendly output with context markers |
 | `--context <dir>` | Write AI context files to directory (summary.json / topology.json / diagnostics.json / chunks/) |
 | `--cache <file>` | Schema fingerprint cache. First run writes snapshot; subsequent runs output `<file>_delta.json` diff |
 | `--language zh|en` | Manual language (default zh) |
+
+### Subcommands
+
+| Command | Description |
+|---------|-------------|
+| `dbexplain encrypt <file>` | Encrypt `.env` config file (machine fingerprint / password dual mode) |
+| `dbexplain all` | Full reference manual (supports `--filter`, `--language`) |
+| `dbexplain <dbtype>` | Database-specific reference manual. 9 types: mysql, postgres/pg/postgresql, gaussdb, clickhouse/ch, sqlite/sqlite3, redis, mongodb, elasticsearch/es, qdrant |
+| `dbexplain -h` | Show compact structured help overview |
 
 ### Per-Database Examples
 
@@ -336,7 +351,7 @@ dbexplain -dsn 'qdrant://:api-key@127.0.0.1:6334?label=my-qdrant'
 dbexplain -dsn 'gaussdb://user:pwd@192.168.0.1:25308/mydb?label=my-gauss'
 ```
 
-> More details: `dbexplain --manual [--filter <keyword>]`
+> More details: `dbexplain all [--filter <keyword>]` or `dbexplain <dbtype>`
 
 ---
 

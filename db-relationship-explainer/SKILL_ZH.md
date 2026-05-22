@@ -142,5 +142,5 @@ chmod 600 ~/.config/dbexplain/.encryption_key
 - 密码含 `!` 等特殊字符，命令行用**单引号**包裹整个 DSN；`.env.dbexplain` 文件中无需转义。
 - 工具运行时 stderr 显示进度信息（"采集中… 完成"），不影响最终报告。
 - MongoDB 的 DSN 必须包含数据库名和 `authSource` 参数。
-- 完整文档：`dbexplain --manual`
+- 完整文档：`dbexplain all`（替代旧的 `dbexplain --manual`）
 - 卸载工具：`bash scripts/uninstall.sh`；卸载 Skill：`bash scripts/uninstall-skill.sh`

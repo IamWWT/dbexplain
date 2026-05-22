@@ -23,6 +23,21 @@
 - `docs/ARCHITECTURE.md`: 新增"配置加密架构"章节
 - `.gitignore`: 新增 `*.enc` 排除规则
 
+### CLI 子命令层级重构
+- **`dbexplain <dbtype>`**: 9 个数据库类型子命令（mysql/postgres/gaussdb/clickhouse/sqlite/redis/mongodb/elasticsearch/qdrant），每个输出对应数据库的专用参考手册
+- **别名支持**: `postgres`=`pg`/`postgresql`, `clickhouse`=`ch`, `sqlite`=`sqlite3`, `elasticsearch`=`es`
+- **`dbexplain all`**: 替代 `--manual`，完整参考手册。支持 `--filter` 关键词过滤和 `--language zh|en`
+- **`dbexplain -h`**: 重新设计为简洁结构化概览（Usage / Database types / Flags / Examples / See），从 8 组参数分栏升级为子命令层级
+- **向后兼容**: `--manual` 仍可用，stderr 输出废弃提示引导用户使用 `dbexplain all`
+
+### 安装脚本增强
+- **移除 `DBPROBE_ENV_FILE` 交互提示**: `findConfigFile()` 自动搜索机制消除手动配置需求，安装脚本不再询问设置环境变量
+- **加密引导**: `install.sh` / `install.ps1` / `install-skill.sh` 成功消息新增"加密配置"引导步骤
+- **`dbexplain all`**: 安装脚本帮助和成功消息中 `dbexplain --manual` 替换为 `dbexplain all`
+
+### 跟踪问题
+- **ISSUE-053**: 未来大版本移除明文 `.env` 支持，仅保留加密文件（`open`, `security/breaking-change/future`）
+
 ## v0.0.5 (2026-05-21)
 
 ### 一键安装与部署

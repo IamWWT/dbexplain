@@ -168,7 +168,9 @@ Windows 用户将配置文件放在 `%USERPROFILE%\.dbexplain\.env.dbexplain`。
 ```bash
 dbexplain -env                  # 终端格式化报告
 dbexplain --version             # 查看版本
-dbexplain --manual              # 完整手册
+dbexplain all                   # 完整手册（替代 --manual）
+dbexplain mysql                 # MySQL 专用参考手册
+dbexplain redis                 # Redis 专用参考手册
 ```
 
 ### 加密配置文件
@@ -257,8 +259,14 @@ dbexplain -env --human
 dbexplain -env -timeout 60s
 
 # 按关键字查找手册内容
-dbexplain --manual --filter redis
-dbexplain --manual --language en --filter "SSL mode"
+dbexplain all --filter redis
+dbexplain all --language en --filter "SSL mode"
+
+# 查看特定数据库参考手册
+dbexplain mysql               # MySQL
+dbexplain postgres            # PostgreSQL (别名: pg, postgresql)
+dbexplain redis               # Redis
+dbexplain elasticsearch       # Elasticsearch (别名: es)
 ```
 
 ### 参数速查
@@ -266,21 +274,28 @@ dbexplain --manual --language en --filter "SSL mode"
 | 参数 | 说明 |
 |------|------|
 | `-dsn <string>` | 数据库连接串，可多次使用 |
-| `-env` | 从配置文件加载 DSN（搜索: `.env.dbexplain` → `.env.dbexplain.enc` → `~/.config/dbexplain/.env.dbexplain` → `~/.config/dbexplain/.env.dbexplain.enc` → `.env`，`DBPROBE_ENV_FILE` 可选覆盖） |
+| `-env` | 从配置文件加载 DSN（自动搜索 6 级路径，无需额外配置） |
 | `-config <file>` | 从 JSON 文件读取 DSN 数组 |
 | `-include <filter>` | 仅包含匹配的 DSN（按类型/标签/编号，逗号分隔） |
 | `-exclude <filter>` | 排除匹配的 DSN |
 | `-json` | 输出 JSON 格式 |
-| `-o <file>` | 写入文件（自动添加 UTF-8 BOM） |
+| `-o <file>` | 写入文件（文本模式自动添加 UTF-8 BOM） |
 | `--log-dir <dir>` | 日志输出目录（默认 `/var/log/dbexplain`） |
 | `-timeout <duration>` | 每 DSN 超时（默认 20s） |
 | `--version` | 输出版本号 |
-| `--manual` | 完整帮助手册（`--language en` 英文） |
-| `--filter <keyword>` | 过滤 `--manual` 输出（忽略大小写） |
 | `--human` | 人类友好输出（含上下文标记） |
 | `--context <dir>` | 写入 AI 上下文文件到目录（summary.json / topology.json / diagnostics.json / chunks/） |
 | `--cache <file>` | Schema 指纹缓存。首次生成快照，后续输出 `<file>_delta.json` 增量差异 |
 | `--language zh|en` | 手册语言（默认 zh） |
+
+### 子命令
+
+| 命令 | 说明 |
+|------|------|
+| `dbexplain encrypt <file>` | 加密 `.env` 配置文件（机器指纹 / 密码双重模式） |
+| `dbexplain all` | 完整参考手册（支持 `--filter`、`--language`） |
+| `dbexplain <dbtype>` | 数据库专用参考手册。9 种类型：mysql, postgres/pg/postgresql, gaussdb, clickhouse/ch, sqlite/sqlite3, redis, mongodb, elasticsearch/es, qdrant |
+| `dbexplain -h` | 显示简洁结构化帮助概览 |
 
 ### 各数据库用法
 
@@ -335,7 +350,7 @@ dbexplain -dsn 'qdrant://:api-key@127.0.0.1:6334?label=my-qdrant'
 dbexplain -dsn 'gaussdb://user:pwd@192.168.0.1:25308/mydb?label=my-gauss'
 ```
 
-> 更多细节: `dbexplain --manual [--filter <关键字>]`
+> 更多细节: `dbexplain all [--filter <关键字>]` 或 `dbexplain <dbtype>`
 
 ---
 

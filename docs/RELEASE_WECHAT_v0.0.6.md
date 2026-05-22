@@ -1,12 +1,12 @@
 
-# dbexplain v0.0.6 双版本发布：配置加密 + 一键安装 + 13项 Bug 修复
+# dbexplain v0.0.6 双版本发布：配置加密 + CLI 重构 + 一键安装 + 13项 Bug 修复
 
 > 零依赖、9 种数据库的 AI Agent 上下文生成工具。
 > 支持 MySQL / PostgreSQL / GaussDB / ClickHouse / SQLite / Redis / MongoDB / Elasticsearch / Qdrant。
 
 ---
 
-v0.0.5 和 v0.0.6 合并发布，核心亮点：**配置文件硬件绑定加密**、**全平台一键安装**、**Skill 中英文分拆**、以及 **13 项 Bug 修复**。
+v0.0.5 和 v0.0.6 合并发布，核心亮点：**配置文件硬件绑定加密**、**CLI 子命令层级重构**、**全平台一键安装**、**Skill 中英文分拆**、以及 **13 项 Bug 修复**。
 
 ---
 
@@ -95,6 +95,65 @@ dbexplain -env
 | **Docker 容器** | 绑定宿主机指纹，容器重建后仍可解密（前提是宿主机硬件不变） |
 | **开发者本地环境** | 保护本地数据库密码，电脑丢失后加密文件不可用 |
 | **AI Agent 安全交互** | Agent 只调用工具，绝不接触明文密码；加密文件由用户自行管理 |
+
+---
+
+## v0.0.6 CLI 子命令层级重构
+
+v0.0.6 对命令行接口进行了重大重构，从原先的扁平 `-h` 参数 dump 升级为清晰的子命令层级结构。
+
+### 新命令结构
+
+```
+dbexplain [flags]             采集和分析数据库 Schema
+dbexplain encrypt <file>      使用机器指纹加密 .env 配置
+dbexplain <dbtype>            数据库专用参考手册（如 mysql, redis）
+dbexplain all                 完整参考手册
+dbexplain -h                  简洁结构化帮助概览
+```
+
+### 9 种数据库专用手册
+
+每种数据库现在有独立的子命令，输出该数据库专用的参考手册（DSN 格式 / 采集机制 / 安全策略 / 示例）：
+
+```bash
+dbexplain mysql       # MySQL — InnoDB/MyISAM 引擎、外键、索引、注释推断
+dbexplain postgres    # PostgreSQL — 多 Schema、行统计、SSL 可配
+dbexplain gaussdb     # GaussDB — 兼容 PostgreSQL 协议
+dbexplain clickhouse  # ClickHouse — 排序键/分区键/主键
+dbexplain sqlite      # SQLite — 纯 Go 驱动，零 CGO
+dbexplain redis       # Redis — 键模式推断、集群、风险诊断
+dbexplain mongodb     # MongoDB — 近似文档数、零数据风险
+dbexplain elasticsearch  # Elasticsearch — 索引映射、HTTPS
+dbexplain qdrant      # Qdrant — 向量集合元数据
+```
+
+**别名支持：** `postgres` 可用 `pg` 或 `postgresql`；`clickhouse` 可用 `ch`；`sqlite` 可用 `sqlite3`；`elasticsearch` 可用 `es`。
+
+### dbexplain all — 替代 --manual
+
+```bash
+# 完整手册（16 个章节）
+dbexplain all
+
+# 关键词搜索
+dbexplain all --filter redis
+
+# 英文手册
+dbexplain all --language en
+```
+
+旧的 `--manual` 仍然可用（向后兼容），但输出中会提示："Note: --manual is deprecated, use: dbexplain all"。
+
+### dbexplain -h 精简重构
+
+输出从 8 组参数分栏 dump 升级为 29 行结构化概览，包含 Usage / Database types / Flags / Examples / See 五段落。
+
+### 安装脚本零配置 + 加密引导
+
+- **移除 `DBPROBE_ENV_FILE` 交互提示**：`findConfigFile()` 自动搜索 6 级路径，用户无需手动设置环境变量
+- **加密引导**：安装完成后直接显示加密三步曲（encrypt → rm → -env）
+- **`dbexplain all`**：脚本中帮助和成功消息引导用户使用新命令
 
 ---
 
@@ -229,6 +288,14 @@ dbexplain -env --cache schema_cache.json
 
 # 过滤特定类型
 dbexplain -env -exclude redis,mongodb --human
+
+# 查看完整手册（替代 --manual）
+dbexplain all
+
+# 查看特定数据库参考
+dbexplain mysql
+dbexplain redis
+dbexplain all --filter "SSL mode" --language en
 ```
 
 ---
@@ -253,7 +320,7 @@ dbexplain -env -exclude redis,mongodb --human
 
 - **GitHub**: [IamWWT/understand_dbs_skills](https://github.com/IamWWT/understand_dbs_skills)
 - **完整变更**: [CHANGELOG.md](https://github.com/IamWWT/understand_dbs_skills/blob/main/CHANGELOG.md)
-- **完整测试报告**: [docs/TEST_v0.0.6.md](https://github.com/IamWWT/understand_dbs_skills/blob/main/docs/TEST_v0.0.6.md)（133+ 用例，含 v0.0.5 回归 + v0.0.6 加密专项）
+- **完整测试报告**: [docs/TEST_v0.0.6.md](https://github.com/IamWWT/understand_dbs_skills/blob/main/docs/TEST_v0.0.6.md)（180+ 用例，含 v0.0.5 回归 + v0.0.6 加密专项 + CLI 子命令专项）
 
 ---
 

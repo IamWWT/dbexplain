@@ -2,7 +2,7 @@
 # dbexplain v0.0.6 — Uninstaller (Windows PowerShell)
 # ============================================================
 # Removes the dbexplain binary, config directory,
-# and optionally the DBPROBE_ENV_FILE environment variable.
+# and optionally legacy DBPROBE_ENV_FILE from user environment.
 #
 # Usage:
 #   .\uninstall.ps1                 Interactive uninstall
@@ -38,11 +38,11 @@ Options:
 What gets removed:
   - Binary: $DestBin
   - Install directory: $InstallDir
-  - Config directory: $ConfigDir
-  - DBPROBE_ENV_FILE user environment variable
+  - Config directory: $ConfigDir (may contain .env.dbexplain, .enc files, .encryption_key)
+  - DBPROBE_ENV_FILE user environment variable (legacy cleanup, v0.0.6+ no longer required)
   - Install directory from user PATH
 
-Warning: The config directory may contain credentials in .env.dbexplain.
+Warning: The config directory may contain credentials (.env.dbexplain, .enc, .encryption_key).
 "@
     exit 0
 }
@@ -115,7 +115,7 @@ if (Test-Path $ConfigDir) {
         Write-Info "Removed config directory $ConfigDir"
     } else {
         Write-Warn "Config directory found: $ConfigDir"
-        Write-Warn "This directory may contain credentials in .env.dbexplain!"
+        Write-Warn "This may contain credentials (.env.dbexplain, .enc, .encryption_key)!"
         $answer = Read-Host "  Remove $ConfigDir? [y/N]"
         if ($answer -eq "y" -or $answer -eq "Y") {
             Remove-Item -Force -Recurse $ConfigDir
@@ -126,7 +126,7 @@ if (Test-Path $ConfigDir) {
     }
 }
 
-# ── Remove DBPROBE_ENV_FILE ──
+# ── Remove legacy DBPROBE_ENV_FILE (v0.0.6+ no longer required) ──
 $current = [Environment]::GetEnvironmentVariable("DBPROBE_ENV_FILE", "User")
 if ($current) {
     Write-Host ""

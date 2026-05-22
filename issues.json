@@ -554,6 +554,27 @@
       "description": "-json -o file 组合使用时，encodeOutput() 将 UTF-8 BOM (ef bb bf) 写入 JSON 文件开头，导致大多数 JSON 解析器（Python json.load、jq 等）报错 Unexpected UTF-8 BOM。修复：JSON 输出跳过 encodeOutput，直接写入原始字节。文本输出（-o 不含 -json）保持 BOM 行为不变。",
       "file": "src/main.go",
       "created": "2026-05-21"
+    },
+    {
+      "id": "ISSUE-052",
+      "title": "[v0.0.5] UTF-8 BOM config parse failure + credential leak in error logs",
+      "status": "closed",
+      "closed": "2026-05-21",
+      "priority": "high",
+      "category": "bug",
+      "description": "Two bugs: (1) Windows Notepad saves .env.dbexplain with UTF-8 BOM, causing godotenv parser to fail silently; (2) godotenv library error messages contain raw config lines including passwords. Fix: strip BOM before parsing; sanitize godotenv error messages to redact credentials.",
+      "file": "src/main.go",
+      "created": "2026-05-21"
+    },
+    {
+      "id": "ISSUE-053",
+      "title": "Consider removing plaintext .env support in future major version",
+      "status": "open",
+      "priority": "medium",
+      "category": "security",
+      "description": "Once encrypted config adoption is sufficient, remove plaintext .env loading. Only support .enc encrypted files. Break-glass: --allow-plaintext flag for migration period.",
+      "labels": ["security", "breaking-change", "future"],
+      "created": "2026-05-22"
     }
   ]
 }

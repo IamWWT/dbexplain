@@ -61,6 +61,7 @@ describe_installation() {
   else
     local has_env=""
     [ -f "${dir}/.env.dbexplain" ] && has_env=" + .env.dbexplain"
+    [ -f "${dir}/.env.dbexplain.enc" ] && has_env="${has_env} + .env.dbexplain.enc"
     echo -e "  ${GREEN}directory${NC} ${short}${has_env}"
   fi
 }
@@ -77,12 +78,17 @@ remove_one() {
     rm "$dir"
     info "Removed ${short}"
   elif [ -d "$dir" ]; then
-    # Check for .env.dbexplain and warn about credentials
-    if [ -f "${dir}/.env.dbexplain" ]; then
+    # Check for .env.dbexplain / .env.dbexplain.enc and warn about credentials
+    if [ -f "${dir}/.env.dbexplain" ] || [ -f "${dir}/.env.dbexplain.enc" ]; then
       echo ""
-      echo -e "  ${YELLOW}⚠  This installation contains a .env.dbexplain file${NC}"
-      echo -e "  ${YELLOW}   which may have database credentials.${NC}"
-      echo -e "  ${YELLOW}   Removing will delete it permanently.${NC}"
+      echo -e "  ${YELLOW}⚠  This installation contains config files${NC}"
+      if [ -f "${dir}/.env.dbexplain" ]; then
+        echo -e "  ${YELLOW}   .env.dbexplain (plaintext credentials)${NC}"
+      fi
+      if [ -f "${dir}/.env.dbexplain.enc" ]; then
+        echo -e "  ${YELLOW}   .env.dbexplain.enc (encrypted credentials)${NC}"
+      fi
+      echo -e "  ${YELLOW}   Removing will delete them permanently.${NC}"
       echo ""
     fi
     echo -n "  Remove ${short} and all its contents? [y/N] "
@@ -183,10 +189,10 @@ show_help() {
   echo "Scans: ~/.claude/skills, ~/.deepseek/skills, ~/.agents/skills,"
   echo "       ~/.aixcoding/skills, and current project directories."
   echo ""
-  echo "About .env.dbexplain:"
-  echo "  If the installed skill directory contains a .env.dbexplain file (which may"
-  echo "  hold database credentials), you will be warned before removal."
-  echo "  Backup your .env.dbexplain before uninstalling if you need those credentials."
+  echo "About .env.dbexplain/.env.dbexplain.enc:"
+  echo "  If the installed skill directory contains an .env.dbexplain or encrypted"
+  echo "  .env.dbexplain.enc file (which may hold database credentials), you will be"
+  echo "  warned before removal. Backup these files before uninstalling if needed."
 }
 
 # ─── Main ────────────────────────────────────────────────────

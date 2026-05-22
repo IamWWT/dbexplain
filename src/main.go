@@ -56,10 +56,21 @@ func hasHelpFlag() bool {
 }
 
 func main() {
-	// Intercept "encrypt" subcommand BEFORE flag.Parse
-	if len(os.Args) > 1 && os.Args[1] == "encrypt" {
-		handleEncrypt(os.Args[2:])
-		return
+	// Intercept subcommands BEFORE flag.Parse
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "encrypt":
+			handleEncrypt(os.Args[2:])
+			return
+		case "mysql", "postgres", "postgresql", "pg", "gaussdb",
+			"clickhouse", "ch", "sqlite", "sqlite3",
+			"redis", "mongodb", "elasticsearch", "es", "qdrant":
+			printDBManual(os.Args[1], os.Args[2:])
+			return
+		case "all":
+			handleAllManual(os.Args[2:])
+			return
+		}
 	}
 
 	userLang := preScanLanguage()
@@ -95,6 +106,7 @@ func main() {
 		return
 	}
 	if *showManual {
+		fmt.Fprintln(os.Stderr, "Note: --manual is deprecated, use: dbexplain all")
 		printManual(*language, *filterFlag)
 		return
 	}
@@ -787,6 +799,87 @@ func captureJSON(result *analyze.Result) string {
 	return buf.String()
 }
 
+// ── 子命令分发 ──
+
+// dbSubcommands maps subcommand names to their manual print functions.
+var dbSubcommands = map[string]func(func(string, string) string){
+	"mysql":         printManualMySQL,
+	"postgres":      printManualPostgres,
+	"postgresql":    printManualPostgres,
+	"pg":            printManualPostgres,
+	"gaussdb":       printManualGaussDB,
+	"clickhouse":    printManualClickHouse,
+	"ch":            printManualClickHouse,
+	"sqlite":        printManualSQLite,
+	"sqlite3":       printManualSQLite,
+	"redis":         printManualRedis,
+	"mongodb":       printManualMongoDB,
+	"elasticsearch": printManualElasticsearch,
+	"es":            printManualElasticsearch,
+	"qdrant":        printManualQdrant,
+}
+
+// printDBManual prints the database-specific manual section for the given subcommand.
+func printDBManual(sub string, _ []string) {
+	lang := preScanLanguage()
+	p := func(zh, en string) string {
+		if lang == "en" {
+			return en
+		}
+		return zh
+	}
+
+	fn := dbSubcommands[sub]
+	if fn == nil {
+		fmt.Fprintf(os.Stderr, "Unknown database type: %s\n", sub)
+		os.Exit(1)
+	}
+
+	displayName := sub
+	if displayName == "pg" {
+		displayName = "postgres"
+	} else if displayName == "ch" {
+		displayName = "clickhouse"
+	} else if displayName == "es" {
+		displayName = "elasticsearch"
+	} else if displayName == "sqlite3" {
+		displayName = "sqlite"
+	} else if displayName == "postgresql" {
+		displayName = "postgres"
+	}
+
+	fmt.Fprint(os.Stdout, p(
+		"\ndbexplain "+displayName+" — Database Context Compiler  "+version+"\n\n",
+		"\ndbexplain "+displayName+" — Database Context Compiler  "+version+"\n\n",
+	))
+	fn(p)
+	fmt.Fprint(os.Stdout, p(
+		"\nSee: dbexplain all  for full manual | dbexplain <type> for another database\n",
+		"\nSee: dbexplain all  for full manual | dbexplain <type> for another database\n",
+	))
+}
+
+// handleAllManual handles the "all" subcommand: prints full manual, supports --filter.
+func handleAllManual(args []string) {
+	lang := preScanLanguage()
+	filter := ""
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--filter":
+			if i+1 < len(args) {
+				filter = args[i+1]
+				i++
+			}
+		case "--language":
+			if i+1 < len(args) {
+				lang = args[i+1]
+				i++
+			}
+		}
+	}
+	printManual(lang, filter)
+}
+
 // ── 完整帮助手册 ──
 
 type langText struct {
@@ -812,104 +905,64 @@ func printHelp(lang string) {
 	out := os.Stderr
 
 	fmt.Fprint(out, p(
-		"dbexplain — 数据库上下文编译器\n\n"+
-			"用法: dbexplain [参数]\n\n",
-		"dbexplain — Database Context Compiler\n\n"+
-			"Usage: dbexplain [options]\n\n",
+		"\ndbexplain — Database Context Compiler  "+version+"\n\n"+
+			"Usage:\n"+
+			"  dbexplain [flags]             Collect & analyze database schemas\n"+
+			"  dbexplain encrypt <file>      Encrypt .env config with machine fingerprint\n"+
+			"  dbexplain <dbtype>            Database-specific reference (e.g. mysql, redis)\n"+
+			"  dbexplain all                 Full reference manual\n\n",
+		"\ndbexplain — Database Context Compiler  "+version+"\n\n"+
+			"Usage:\n"+
+			"  dbexplain [flags]             Collect & analyze database schemas\n"+
+			"  dbexplain encrypt <file>      Encrypt .env config with machine fingerprint\n"+
+			"  dbexplain <dbtype>            Database-specific reference (e.g. mysql, redis)\n"+
+			"  dbexplain all                 Full reference manual\n\n",
 	))
 
-	// Group 1: Input Sources
 	fmt.Fprint(out, p(
-		"数据源 (Input Sources):\n"+
-			"  -dsn string        数据库连接串，可重复使用\n"+
-			"  -env               从配置文件加载 DSN (自动搜索 .env.dbexplain / .env.dbexplain.enc)\n"+
-			"  -config file       从 JSON 文件读取 DSN 数组\n\n",
-		"Input Sources:\n"+
-			"  -dsn string        Database connection string, repeatable\n"+
-			"  -env               Load DSNs from config file (auto-search .env.dbexplain / .env.dbexplain.enc)\n"+
-			"  -config file       Read DSN array from JSON file\n\n",
+		"Database types:\n"+
+			"  mysql, postgres/pg, gaussdb, clickhouse/ch, sqlite/sqlite3,\n"+
+			"  redis, mongodb, elasticsearch/es, qdrant\n\n",
+		"Database types:\n"+
+			"  mysql, postgres/pg, gaussdb, clickhouse/ch, sqlite/sqlite3,\n"+
+			"  redis, mongodb, elasticsearch/es, qdrant\n\n",
 	))
 
-	// Group 2: Filtering
 	fmt.Fprint(out, p(
-		"过滤 (Filtering):\n"+
-			"  -include filter    仅包含匹配的 DSN (按类型/标签/编号，逗号分隔)\n"+
-			"  -exclude filter    排除匹配的 DSN\n\n",
-		"Filtering:\n"+
-			"  -include filter    Only include matching DSNs (by kind/label/key, comma-sep)\n"+
-			"  -exclude filter    Exclude matching DSNs\n\n",
+		"Flags (dbexplain [flags]):\n"+
+			"  -dsn, -env, -config           Input sources\n"+
+			"  -include, -exclude            Filter by type/label/key\n"+
+			"  -json, --human, -o <file>     Output format\n"+
+			"  --context <dir>, --cache <f>  AI context / delta scan\n"+
+			"  --log-dir <dir>, -timeout d   Logs / timeout (default /var/log/dbexplain, 20s)\n"+
+			"  --language zh|en, --version   Language / version\n\n",
+		"Flags (dbexplain [flags]):\n"+
+			"  -dsn, -env, -config           Input sources\n"+
+			"  -include, -exclude            Filter by type/label/key\n"+
+			"  -json, --human, -o <file>     Output format\n"+
+			"  --context <dir>, --cache <f>  AI context / delta scan\n"+
+			"  --log-dir <dir>, -timeout d   Logs / timeout (default /var/log/dbexplain, 20s)\n"+
+			"  --language zh|en, --version   Language / version\n\n",
 	))
 
-	// Group 3: Output Control
 	fmt.Fprint(out, p(
-		"输出控制 (Output Control):\n"+
-			"  -o file            将输出写入文件 (自动添加 UTF-8 BOM)\n"+
-			"  --log-dir dir      日志输出目录 (默认 /var/log/dbexplain)\n\n",
-		"Output Control:\n"+
-			"  -o file            Write output to file (auto UTF-8 BOM)\n"+
-			"  --log-dir dir      Log output directory (default /var/log/dbexplain)\n\n",
+		"Examples:\n"+
+			"  dbexplain -env                  Scan all databases from config\n"+
+			"  dbexplain encrypt config.env    Encrypt config file\n"+
+			"  dbexplain mysql                 MySQL reference manual\n"+
+			"  dbexplain all                   Full reference manual\n"+
+			"  dbexplain all --filter redis    Search manual by keyword\n\n",
+		"Examples:\n"+
+			"  dbexplain -env                  Scan all databases from config\n"+
+			"  dbexplain encrypt config.env    Encrypt config file\n"+
+			"  dbexplain mysql                 MySQL reference manual\n"+
+			"  dbexplain all                   Full reference manual\n"+
+			"  dbexplain all --filter redis    Search manual by keyword\n\n",
 	))
 
-	// Group 4: Display Format
 	fmt.Fprint(out, p(
-		"显示格式 (Display Format):\n"+
-			"  -json              输出 JSON 格式\n"+
-			"  --human            人类友好输出 (带上下文标记和视觉分隔)\n\n",
-		"Display Format:\n"+
-			"  -json              Output JSON format\n"+
-			"  --human            Human-friendly output with context markers\n\n",
-	))
-
-	// Group 5: AI Context
-	fmt.Fprint(out, p(
-		"AI 上下文 (AI Context):\n"+
-			"  --context dir      写入 AI 上下文文件 (summary.json/topology.json/chunks/)\n"+
-			"  --cache file       Schema 指纹缓存，用于增量变更检测\n\n",
-		"AI Context:\n"+
-			"  --context dir      Write AI context files (summary.json/topology.json/chunks/)\n"+
-			"  --cache file       Schema fingerprint cache for delta detection\n\n",
-	))
-
-	// Group 6: Performance
-	fmt.Fprint(out, p(
-		"性能 (Performance):\n"+
-			"  -timeout duration  每 DSN 采集超时 (默认 20s, 例: 30s / 1m)\n\n",
-		"Performance:\n"+
-			"  -timeout duration  Per-DSN collect timeout (default 20s, e.g. 30s/1m)\n\n",
-	))
-
-	// Group 7: Encryption
-	fmt.Fprint(out, p(
-		"加密 (Encryption):\n"+
-			"  encrypt  [file]   使用机器指纹加密配置文件（支持 --password）\n"+
-			"                     文件仅能在加密时的机器上解密\n\n",
-		"Encryption:\n"+
-			"  encrypt  [file]   Encrypt config file with machine fingerprint (supports --password)\n"+
-			"                     File can only be decrypted on the same machine\n\n",
-	))
-
-	// Group 8: Help
-	fmt.Fprint(out, p(
-		"帮助 (Help):\n"+
-			"  -h, --help         打印此参数列表并退出\n"+
-			"  --manual           打印完整手册并退出\n"+
-			"  --language zh|en   手册语言 (默认 zh)\n"+
-			"  --filter keyword   过滤手册输出 (配合 --manual 使用)\n"+
-			"  --version          输出版本号并退出\n\n",
-		"Help:\n"+
-			"  -h, --help         Print this option list and exit\n"+
-			"  --manual           Print comprehensive manual and exit\n"+
-			"  --language zh|en   Manual language (default zh)\n"+
-			"  --filter keyword   Filter manual output (use with --manual)\n"+
-			"  --version          Print version and exit\n\n",
-	))
-
-	// Footer
-	fmt.Fprint(out, p(
-		"完整手册: dbexplain --manual [--language zh|en]\n"+
-			"encrypt 帮助: dbexplain encrypt -h\n",
-		"Full manual: dbexplain --manual [--language zh|en]\n"+
-			"encrypt help: dbexplain encrypt -h\n",
+		"See: dbexplain encrypt -h  |  dbexplain <type> -h  |  dbexplain all -h\n",
+		"See: dbexplain encrypt -h  |  dbexplain <type> -h  |  dbexplain all -h\n",
 	))
 }
 

@@ -143,5 +143,5 @@ The user provides a JSON file path. The Agent uses `-config <path>`.
 - For passwords with special characters like `!`, wrap the entire DSN in **single quotes** on the command line; no escaping needed in `.env.dbexplain`.
 - The tool prints progress on stderr ("Collecting… Done"), which does not affect the final report.
 - MongoDB DSNs must include the database name and `authSource` parameter.
-- Full documentation: `dbexplain --manual`
+- Full documentation: `dbexplain all` (replaces the old `dbexplain --manual`)
 - Uninstall tool: `bash scripts/uninstall.sh`; Uninstall Skill: `bash scripts/uninstall-skill.sh`

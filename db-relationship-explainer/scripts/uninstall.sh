@@ -5,7 +5,7 @@ set -e
 # dbexplain v0.0.6 — Uninstaller (Linux / macOS)
 # ============================================================
 # Removes the dbexplain binary, config directory,
-# and optionally the DBPROBE_ENV_FILE environment variable.
+# and optionally legacy DBPROBE_ENV_FILE entries from shell profiles.
 #
 # Usage:
 #   bash uninstall.sh               Interactive uninstall
@@ -44,10 +44,10 @@ Options:
 
 What gets removed:
   - Binary from /usr/local/bin/dbexplain or ~/.local/bin/dbexplain
-  - Config directory: ~/.config/dbexplain/
-  - DBPROBE_ENV_FILE from shell profiles (~/.bashrc, ~/.zshrc, ~/.profile)
+  - Config directory: ~/.config/dbexplain/ (may contain .env.dbexplain, .enc files, .encryption_key)
+  - DBPROBE_ENV_FILE from shell profiles (legacy cleanup, v0.0.6+ no longer required)
 
-Warning: The config directory may contain credentials in .env.dbexplain.
+Warning: The config directory may contain credentials (.env.dbexplain, .enc, .encryption_key).
 EOF
 }
 
@@ -98,7 +98,7 @@ if [ -d "$CONFIG_DIR" ]; then
         info "Removed config directory ${CONFIG_DIR}"
     else
         warn "Config directory found: ${CONFIG_DIR}"
-        warn "This directory may contain credentials in .env.dbexplain!"
+        warn "This may contain credentials (.env.dbexplain, .enc, .encryption_key)!"
         read -r -p "  Remove ${CONFIG_DIR}? [y/N] " answer
         if [ "$answer" = "y" ] || [ "$answer" = "Y" ]; then
             rm -rf "$CONFIG_DIR"
@@ -109,7 +109,7 @@ if [ -d "$CONFIG_DIR" ]; then
     fi
 fi
 
-# ── Remove DBPROBE_ENV_FILE from shell profiles ──
+# ── Remove legacy DBPROBE_ENV_FILE from shell profiles (v0.0.6+ no longer required) ──
 echo ""
 for rc in "${HOME}/.bashrc" "${HOME}/.zshrc" "${HOME}/.profile"; do
     if [ -f "$rc" ] && grep -q "DBPROBE_ENV_FILE" "$rc" 2>/dev/null; then

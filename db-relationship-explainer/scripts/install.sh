@@ -286,27 +286,8 @@ EOFTPL
         warn "Please edit ${ENV_FILE} and fill in your database connections."
     fi
 
-    # Offer to set DBPROBE_ENV_FILE
-    echo ""
-    read -r -p "  Set DBPROBE_ENV_FILE environment variable in shell profile? [y/N] " set_env
-    if [ "$set_env" = "y" ] || [ "$set_env" = "Y" ]; then
-        local export_line="export DBPROBE_ENV_FILE=${ENV_FILE}"
-        local added=false
-        for rc in "${HOME}/.bashrc" "${HOME}/.zshrc" "${HOME}/.profile"; do
-            if [ -f "$rc" ] && ! grep -q "DBPROBE_ENV_FILE" "$rc" 2>/dev/null; then
-                echo "" >> "$rc"
-                echo "# dbexplain config path" >> "$rc"
-                echo "$export_line" >> "$rc"
-                info "Added to ${rc}"
-                added=true
-                break
-            fi
-        done
-        if [ "$added" = false ]; then
-            warn "No shell profile found or DBPROBE_ENV_FILE already set."
-            echo "  You can manually add: ${export_line}"
-        fi
-    fi
+    # No longer prompt for DBPROBE_ENV_FILE — config auto-discovery
+    # in findConfigFile() handles both plaintext and encrypted files.
 }
 
 # ── Skill installation ──
@@ -361,8 +342,13 @@ print_success() {
     echo "  Quick test : dbexplain --version"
     echo "  Edit config: nano ${ENV_FILE}"
     echo "  Run        : dbexplain -env"
-    echo "  Full manual: dbexplain --manual"
     echo ""
+    echo "  Secure your config (recommended):"
+    echo "    dbexplain encrypt ${ENV_FILE}"
+    echo "    rm ${ENV_FILE}"
+    echo "    dbexplain -env"
+    echo ""
+    echo "  Full manual: dbexplain all"
 
     if [ "$INSTALL_DIR" = "$USER_INSTALL_DIR" ]; then
         warn "Binary is in ${USER_INSTALL_DIR}. Make sure it's in your PATH."

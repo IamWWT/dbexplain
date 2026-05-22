@@ -201,14 +201,8 @@ if (-not $Update) {
         Write-Info "Config already exists at $EnvFilePath — skipping."
     }
 
-    # Offer to set DBPROBE_ENV_FILE
-    Write-Host ""
-    $setEnv = Read-Host "  Set DBPROBE_ENV_FILE environment variable? [y/N]"
-    if ($setEnv -eq "y" -or $setEnv -eq "Y") {
-        [Environment]::SetEnvironmentVariable("DBPROBE_ENV_FILE", $EnvFilePath, "User")
-        $env:DBPROBE_ENV_FILE = $EnvFilePath
-        Write-Info "DBPROBE_ENV_FILE set to $EnvFilePath"
-    }
+    # No longer prompt for DBPROBE_ENV_FILE — config auto-discovery
+    # in findConfigFile() handles both plaintext and encrypted files.
 }
 
 # ── Skill installation ──
@@ -263,7 +257,13 @@ Write-Host ""
 Write-Host "  Quick test : dbexplain --version"
 Write-Host "  Edit config: notepad $EnvFilePath"
 Write-Host "  Run        : dbexplain -env"
-Write-Host "  Full manual: dbexplain --manual"
+Write-Host ""
+Write-Host "  Secure your config (recommended):"
+Write-Host "    dbexplain encrypt $EnvFilePath"
+Write-Host "    Remove-Item $EnvFilePath"
+Write-Host "    dbexplain -env"
+Write-Host ""
+Write-Host "  Full manual: dbexplain all"
 Write-Host ""
 Write-Warn "IMPORTANT: Restart your terminal for PATH changes to take effect."
 Write-Host ""
