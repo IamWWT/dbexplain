@@ -118,7 +118,7 @@ func main() {
 	if *useEnv {
 		configPath := findConfigFile()
 		if configPath == "" {
-			log.Fatal("no config file found. Create .env.dbexplain (or .env.dbexplain.enc) in ~/.config/dbexplain/ or current directory.")
+			log.Fatal("no config file found. Create .env.dbexplain (or .env.dbexplain.enc) in " + configDirDisplay() + " or current directory.")
 		}
 		if err := loadEnvFile(configPath); err != nil {
 			log.Printf("warning: load config %s: %v", configPath, sanitizeErr(err))
@@ -390,12 +390,12 @@ func handleEncrypt(args []string) {
 
 	if password != "" {
 		fmt.Fprintf(os.Stderr, "Encrypted with machine fingerprint + password: %s\n", dstPath)
-		fmt.Fprintf(os.Stderr, "Save your password to ~/.config/dbexplain/.encryption_key before running dbexplain -env.\n")
+		fmt.Fprintf(os.Stderr, "Save your password to %s.encryption_key before running dbexplain -env.\n", configDirDisplay())
 	} else {
 		fmt.Fprintf(os.Stderr, "Encrypted with machine fingerprint: %s\n", dstPath)
 		fmt.Fprintf(os.Stderr, "File can only be decrypted on this machine.\n")
 	}
-	fmt.Fprintf(os.Stderr, "Place this file in ~/.config/dbexplain/ (or CWD) and run: dbexplain -env\n")
+	fmt.Fprintf(os.Stderr, "Place this file in %s (or CWD) and run: dbexplain -env\n", configDirDisplay())
 }
 
 // totalTables 统计一个实例中所有数据库的总表数
@@ -644,46 +644,59 @@ func findConfigFile() string {
 	return ""
 }
 
-// userConfigPath 返回用户配置目录下的配置文件路径
-// Linux/macOS: ~/.config/dbexplain/.env.dbexplain
-// Windows:     %USERPROFILE%\.dbexplain\.env.dbexplain
-func userConfigPath() string {
+// configDirDisplay returns a human-readable config directory path for messages.
+// Linux/macOS: ~/.config/dbexplain/
+// Windows:     %USERPROFILE%\.config\dbexplain\
+func configDirDisplay() string {
+	if runtime.GOOS == "windows" {
+		return `%USERPROFILE%\.config\dbexplain\`
+	}
+	return "~/.config/dbexplain/"
+}
+
+// configDirPath returns the actual filesystem path to the config directory.
+func configDirPath() string {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return ""
 	}
 	if runtime.GOOS == "windows" {
-		return filepath.Join(homeDir, ".dbexplain", ".env.dbexplain")
+		return filepath.Join(homeDir, ".config", "dbexplain")
 	}
-	return filepath.Join(homeDir, ".config", "dbexplain", ".env.dbexplain")
+	return filepath.Join(homeDir, ".config", "dbexplain")
+}
+
+// userConfigPath 返回用户配置目录下的配置文件路径
+// Linux/macOS: ~/.config/dbexplain/.env.dbexplain
+// Windows:     %USERPROFILE%\.config\dbexplain\.env.dbexplain
+func userConfigPath() string {
+	dir := configDirPath()
+	if dir == "" {
+		return ""
+	}
+	return filepath.Join(dir, ".env.dbexplain")
 }
 
 // userConfigEncPath 返回用户配置目录下的加密配置文件路径
 // Linux/macOS: ~/.config/dbexplain/.env.dbexplain.enc
-// Windows:     %USERPROFILE%\.dbexplain\.env.dbexplain.enc
+// Windows:     %USERPROFILE%\.config\dbexplain\.env.dbexplain.enc
 func userConfigEncPath() string {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
+	dir := configDirPath()
+	if dir == "" {
 		return ""
 	}
-	if runtime.GOOS == "windows" {
-		return filepath.Join(homeDir, ".dbexplain", ".env.dbexplain.enc")
-	}
-	return filepath.Join(homeDir, ".config", "dbexplain", ".env.dbexplain.enc")
+	return filepath.Join(dir, ".env.dbexplain.enc")
 }
 
 // encryptionKeyPath 返回加密密钥文件路径（密码模式用）
 // Linux/macOS: ~/.config/dbexplain/.encryption_key
-// Windows:     %USERPROFILE%\.dbexplain\.encryption_key
+// Windows:     %USERPROFILE%\.config\dbexplain\.encryption_key
 func encryptionKeyPath() string {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
+	dir := configDirPath()
+	if dir == "" {
 		return ""
 	}
-	if runtime.GOOS == "windows" {
-		return filepath.Join(homeDir, ".dbexplain", ".encryption_key")
-	}
-	return filepath.Join(homeDir, ".config", "dbexplain", ".encryption_key")
+	return filepath.Join(dir, ".encryption_key")
 }
 
 // readEncryptionKey returns the password for decrypting password-mode .enc files.
@@ -1108,11 +1121,11 @@ DESCRIPTION
       1. DBPROBE_ENV_FILE 环境变量指定路径（可选覆盖）
       2. 当前目录 .env.dbexplain（明文）
       3. 当前目录 .env.dbexplain.enc（加密，自动解密）
-      4. ~/.config/dbexplain/.env.dbexplain（明文）
-      5. ~/.config/dbexplain/.env.dbexplain.enc（加密，自动解密）
+      4. ` + configDirDisplay() + `.env.dbexplain（明文）
+      5. ` + configDirDisplay() + `.env.dbexplain.enc（加密，自动解密）
       6. 当前目录 .env（向下兼容旧版）
       加密后务必删除明文配置文件，否则优先匹配明文。
-      密码模式密码从 ~/.config/dbexplain/.encryption_key 文件自动读取。
+      密码模式密码从 ` + configDirDisplay() + `.encryption_key 文件自动读取。
 `,
 		`
 
@@ -1132,11 +1145,11 @@ DESCRIPTION
       1. DBPROBE_ENV_FILE environment variable (optional override)
       2. .env.dbexplain in current directory (plaintext)
       3. .env.dbexplain.enc in current directory (encrypted, auto-decrypt)
-      4. ~/.config/dbexplain/.env.dbexplain (plaintext)
-      5. ~/.config/dbexplain/.env.dbexplain.enc (encrypted, auto-decrypt)
+      4. ` + configDirDisplay() + `.env.dbexplain (plaintext)
+      5. ` + configDirDisplay() + `.env.dbexplain.enc (encrypted, auto-decrypt)
       6. .env in current directory (legacy backward compat)
       Delete plaintext config after encryption, or it will take priority.
-      Password-mode key is auto-read from ~/.config/dbexplain/.encryption_key.
+      Password-mode key is auto-read from ` + configDirDisplay() + `.encryption_key.
 `))
 
 	fmt.Print(p(`
@@ -1313,8 +1326,8 @@ DESCRIPTION
       dbexplain -env
 
       # 如果使用了 --password 加密，将密码写入密钥文件：
-      echo "your-password" > ~/.config/dbexplain/.encryption_key
-      chmod 600 ~/.config/dbexplain/.encryption_key
+      echo "your-password" > ` + configDirDisplay() + `.encryption_key
+      chmod 600 ` + configDirDisplay() + `.encryption_key
 
       # 也可通过环境变量显式指定（可选）：
       # export DBPROBE_ENV_FILE=.env.dbexplain.enc
@@ -1370,8 +1383,8 @@ DESCRIPTION
       dbexplain -env
 
       # If encrypted with --password, save password to key file:
-      echo "your-password" > ~/.config/dbexplain/.encryption_key
-      chmod 600 ~/.config/dbexplain/.encryption_key
+      echo "your-password" > ` + configDirDisplay() + `.encryption_key
+      chmod 600 ` + configDirDisplay() + `.encryption_key
 
       # Or override via environment variables (optional):
       # export DBPROBE_ENV_FILE=.env.dbexplain.enc
