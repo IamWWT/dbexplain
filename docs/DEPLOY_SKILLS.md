@@ -358,7 +358,7 @@ A: `CLAUDE.md` 是 Claude Code 的会话级全局指令文件；`SKILL.md` 是�
 
 ## 📚 相关资源
 
-- [dbexplain 项目主页](https://github.com/IamWWT/understand_dbs_skills)
+- [dbexplain 项目主页](https://github.com/IamWWT/dbexplain)
 - [源码部署指南](./DEPLOY_SRC.md)
 - [MongoDB 排障文档](./MONGO.md)
 - [Claude Code Skills 官方文档](https://code.claude.com/docs/en/skills)

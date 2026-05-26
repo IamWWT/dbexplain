@@ -17,7 +17,7 @@ set -e
 # ============================================================
 
 VERSION="v0.0.7"
-REPO="IamWWT/understand_dbs_skills"
+REPO="IamWWT/dbexplain"
 TOOL_NAME="dbexplain"
 
 # ── Paths ──

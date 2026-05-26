@@ -70,8 +70,8 @@ AI 时代数据库的"真值基座"。
 一条命令完成工具全局安装 + AI Skill 部署：
 
 ```bash
-git clone https://github.com/IamWWT/understand_dbs_skills.git
-cd understand_dbs_skills
+git clone https://github.com/IamWWT/dbexplain.git
+cd dbexplain
 bash db-relationship-explainer/scripts/install.sh          # 中文 Skill
 bash db-relationship-explainer/scripts/install.sh --lang en  # English skill
 ```
@@ -86,7 +86,7 @@ bash db-relationship-explainer/scripts/install.sh --lang en  # English skill
 
 ```bash
 # 在有网络的机器上下载（以 Linux amd64 为例）
-wget https://github.com/IamWWT/understand_dbs_skills/releases/download/v0.0.7/dbexplain-linux-amd64
+wget https://github.com/IamWWT/dbexplain/releases/download/v0.0.7/dbexplain-linux-amd64
 
 # 复制到离线环境后安装
 bash db-relationship-explainer/scripts/install.sh --offline ./dbexplain-linux-amd64
@@ -102,12 +102,12 @@ bash db-relationship-explainer/scripts/install.sh --offline ./dbexplain-linux-am
 
 ```bash
 # Linux amd64
-wget https://github.com/IamWWT/understand_dbs_skills/releases/download/v0.0.7/dbexplain-linux-amd64
+wget https://github.com/IamWWT/dbexplain/releases/download/v0.0.7/dbexplain-linux-amd64
 chmod +x dbexplain-linux-amd64
 sudo mv dbexplain-linux-amd64 /usr/local/bin/dbexplain
 
 # macOS Apple Silicon
-wget https://github.com/IamWWT/understand_dbs_skills/releases/download/v0.0.7/dbexplain-darwin-arm64
+wget https://github.com/IamWWT/dbexplain/releases/download/v0.0.7/dbexplain-darwin-arm64
 chmod +x dbexplain-darwin-arm64
 sudo mv dbexplain-darwin-arm64 /usr/local/bin/dbexplain
 
@@ -121,8 +121,8 @@ dbexplain --version
 在 PowerShell 中运行：
 
 ```powershell
-git clone https://github.com/IamWWT/understand_dbs_skills.git
-cd understand_dbs_skills
+git clone https://github.com/IamWWT/dbexplain.git
+cd dbexplain
 .\db-relationship-explainer\scripts\install.ps1           # 中文 Skill
 .\db-relationship-explainer\scripts\install.ps1 -Lang en   # English skill
 ```
@@ -133,7 +133,7 @@ cd understand_dbs_skills
 
 ```powershell
 # 在有网络的机器上下载
-Invoke-WebRequest -Uri "https://github.com/IamWWT/understand_dbs_skills/releases/download/v0.0.7/dbexplain-windows-amd64.exe" -OutFile "dbexplain-windows-amd64.exe"
+Invoke-WebRequest -Uri "https://github.com/IamWWT/dbexplain/releases/download/v0.0.7/dbexplain-windows-amd64.exe" -OutFile "dbexplain-windows-amd64.exe"
 
 # 复制到离线环境后，放到 %LOCALAPPDATA%\dbexplain\dbexplain.exe
 # 然后把目录添加到用户 PATH
@@ -141,7 +141,7 @@ Invoke-WebRequest -Uri "https://github.com/IamWWT/understand_dbs_skills/releases
 
 #### 手动下载
 
-从 [GitHub Releases](https://github.com/IamWWT/understand_dbs_skills/releases) 下载 `dbexplain-windows-amd64.exe`，放到合适目录并添加到 PATH。
+从 [GitHub Releases](https://github.com/IamWWT/dbexplain/releases) 下载 `dbexplain-windows-amd64.exe`，放到合适目录并添加到 PATH。
 
 ### 从源码编译
 

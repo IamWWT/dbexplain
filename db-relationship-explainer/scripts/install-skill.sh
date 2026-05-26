@@ -109,7 +109,7 @@ run_preflight() {
   echo "    bash install.sh"
   echo ""
   echo "  Or download from GitHub Releases:"
-  echo "    https://github.com/IamWWT/understand_dbs_skills/releases"
+  echo "    https://github.com/IamWWT/dbexplain/releases"
   exit 1
 }
 

@@ -15,14 +15,14 @@
 ## 1. 克隆项目
 
 ```bash
-git clone https://github.com/IamWWT/understand_dbs_skills.git
-cd understand_dbs_skills
+git clone https://github.com/IamWWT/dbexplain.git
+cd dbexplain
 ```
 
 项目结构如下（仅列出关键目录/文件）：
 
 ```
-understand_dbs_skills/
+dbexplain/
 ├── src/                        # 源码主目录
 │   ├── analyze/
 │   │   ├── analyze.go          # 关系推断、聚类、问题检测

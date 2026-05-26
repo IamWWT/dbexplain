@@ -70,8 +70,8 @@ See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) and [`CONSTITUTION.md`](CONST
 One command for global tool install + AI Skill deployment:
 
 ```bash
-git clone https://github.com/IamWWT/understand_dbs_skills.git
-cd understand_dbs_skills
+git clone https://github.com/IamWWT/dbexplain.git
+cd dbexplain
 bash db-relationship-explainer/scripts/install.sh            # Chinese skill
 bash db-relationship-explainer/scripts/install.sh --lang en  # English skill
 ```
@@ -86,7 +86,7 @@ Pre-download the binary for your platform, then install with `--offline`:
 
 ```bash
 # Download on a machine with internet (Linux amd64 example)
-wget https://github.com/IamWWT/understand_dbs_skills/releases/download/v0.0.7/dbexplain-linux-amd64
+wget https://github.com/IamWWT/dbexplain/releases/download/v0.0.7/dbexplain-linux-amd64
 
 # Copy to offline environment, then:
 bash db-relationship-explainer/scripts/install.sh --offline ./dbexplain-linux-amd64
@@ -102,12 +102,12 @@ bash db-relationship-explainer/scripts/install.sh --offline ./dbexplain-linux-am
 
 ```bash
 # Linux amd64
-wget https://github.com/IamWWT/understand_dbs_skills/releases/download/v0.0.7/dbexplain-linux-amd64
+wget https://github.com/IamWWT/dbexplain/releases/download/v0.0.7/dbexplain-linux-amd64
 chmod +x dbexplain-linux-amd64
 sudo mv dbexplain-linux-amd64 /usr/local/bin/dbexplain
 
 # macOS Apple Silicon
-wget https://github.com/IamWWT/understand_dbs_skills/releases/download/v0.0.7/dbexplain-darwin-arm64
+wget https://github.com/IamWWT/dbexplain/releases/download/v0.0.7/dbexplain-darwin-arm64
 chmod +x dbexplain-darwin-arm64
 sudo mv dbexplain-darwin-arm64 /usr/local/bin/dbexplain
 
@@ -121,8 +121,8 @@ dbexplain --version
 In PowerShell:
 
 ```powershell
-git clone https://github.com/IamWWT/understand_dbs_skills.git
-cd understand_dbs_skills
+git clone https://github.com/IamWWT/dbexplain.git
+cd dbexplain
 .\db-relationship-explainer\scripts\install.ps1              # Chinese skill
 .\db-relationship-explainer\scripts\install.ps1 -Lang en     # English skill
 ```
@@ -133,7 +133,7 @@ The script downloads `dbexplain-windows-amd64.exe` to `%LOCALAPPDATA%\dbexplain\
 
 ```powershell
 # Download on a machine with internet
-Invoke-WebRequest -Uri "https://github.com/IamWWT/understand_dbs_skills/releases/download/v0.0.7/dbexplain-windows-amd64.exe" -OutFile "dbexplain-windows-amd64.exe"
+Invoke-WebRequest -Uri "https://github.com/IamWWT/dbexplain/releases/download/v0.0.7/dbexplain-windows-amd64.exe" -OutFile "dbexplain-windows-amd64.exe"
 
 # Copy to offline environment, place at:
 # %LOCALAPPDATA%\dbexplain\dbexplain.exe
@@ -142,7 +142,7 @@ Invoke-WebRequest -Uri "https://github.com/IamWWT/understand_dbs_skills/releases
 
 #### Manual Download
 
-Download `dbexplain-windows-amd64.exe` from [GitHub Releases](https://github.com/IamWWT/understand_dbs_skills/releases), place in a directory of your choice, and add it to PATH.
+Download `dbexplain-windows-amd64.exe` from [GitHub Releases](https://github.com/IamWWT/dbexplain/releases), place in a directory of your choice, and add it to PATH.
 
 ### Build from Source
 

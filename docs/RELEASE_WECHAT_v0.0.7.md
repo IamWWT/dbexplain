@@ -217,8 +217,8 @@ dbexplain -env
 
 ```bash
 # 安装
-git clone https://github.com/IamWWT/understand_dbs_skills.git
-cd understand_dbs_skills
+git clone https://github.com/IamWWT/dbexplain.git
+cd dbexplain
 bash db-relationship-explainer/scripts/install.sh
 
 # 创建配置
@@ -267,11 +267,11 @@ dbexplain all                 # 完整手册
 
 ## 资源链接
 
-- **GitHub**: [IamWWT/understand_dbs_skills](https://github.com/IamWWT/understand_dbs_skills)
-- **完整变更**: [CHANGELOG.md](https://github.com/IamWWT/understand_dbs_skills/blob/main/CHANGELOG.md)
-- **测试报告**: [docs/TEST_v0.0.7.md](https://github.com/IamWWT/understand_dbs_skills/blob/main/docs/TEST_v0.0.7.md)（231+ 用例，零失败）
-- **查询执行安全文档**: [docs/EXECUTE.md](https://github.com/IamWWT/understand_dbs_skills/blob/main/docs/EXECUTE.md)
-- **CLI 查询案例库**: [docs/CLI_EXAMPLES.md](https://github.com/IamWWT/understand_dbs_skills/blob/main/docs/CLI_EXAMPLES.md)（7 数据源 13 条实测命令）
+- **GitHub**: [IamWWT/dbexplain](https://github.com/IamWWT/dbexplain)
+- **完整变更**: [CHANGELOG.md](https://github.com/IamWWT/dbexplain/blob/main/CHANGELOG.md)
+- **测试报告**: [docs/TEST_v0.0.7.md](https://github.com/IamWWT/dbexplain/blob/main/docs/TEST_v0.0.7.md)（231+ 用例，零失败）
+- **查询执行安全文档**: [docs/EXECUTE.md](https://github.com/IamWWT/dbexplain/blob/main/docs/EXECUTE.md)
+- **CLI 查询案例库**: [docs/CLI_EXAMPLES.md](https://github.com/IamWWT/dbexplain/blob/main/docs/CLI_EXAMPLES.md)（7 数据源 13 条实测命令）
 
 ---
 
