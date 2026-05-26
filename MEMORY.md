@@ -109,6 +109,8 @@ scheme://[user[:pass]@]host[:port][/dbname][?label=别名&其他参数]
 
 **v0.0.6 新增：** 配置加密子命令（`encrypt`）、机器指纹绑定（Linux DMI/macOS sysctl/Windows Registry）、XChaCha20-Poly1305 AEAD 加密、PBKDF2-HMAC-SHA256 密码增强模式、运行时自动解密（`loadEnvFile` 自动检测加密文件头）。
 
+**v0.0.7 已关闭：** Go 模块化发布（`github.com/IamWWT/dbexplain`）、公共 API（`src/core/` 导出 `Collect()`/`CollectToGraph()`/`CollectToJSON()`）、IR Graph 构建器（`BuildGraph()`）、ForeignKey 补全（OnDelete/OnUpdate，SQLite/MySQL/PostgreSQL 全覆盖）、SQLite INTEGER PRIMARY KEY nullable 修复、日志目录多级回退（`resolveLogDir()`）、全链路密码审计、只读查询执行引擎（`execute` 子命令 + sqlguard 沙箱）、9 数据库查询全覆盖。
+
 **当前开放（ISSUE-033 ~ ISSUE-035）：** Phase 4 LLM 生态集成、GaussDB/TDSQL 兼容性确认、GBase/HBase/OceanBase 评估。
 
 ## 新增 Connector 模板
@@ -188,4 +190,4 @@ wc -c /tmp/perf-prev-1.json /tmp/perf-curr-1.json
 | 3 | **已完成 (v0.0.4)** | Query-Aware Metadata + Operational Graph |
 | 4 | 进行中 | LLM Ecosystem Integration + MCP Server + 企业特性 |
 
-当前版本：**v0.0.6** — 配置加密（encrypt 子命令）、机器指纹绑定、XChaCha20-Poly1305 AEAD、跨平台硬件识别。
+当前版本：**v0.0.7** — Go 模块化 + 公共 API + IR Graph 构建器 + FK 补全 + 只读查询执行引擎（sqlguard 沙箱）+ 全链路安全审计。

@@ -86,7 +86,7 @@ dbexplain execute -env --db 1 --human 'SELECT * FROM users LIMIT 5'
 
 ## Go 模块化发布：新go项目可直接 import
 
-v0.0.7 将模块路径从 `module dbexplain` 升级为 `module github.com/IamWWT/dbexplain`，符合 Go 模块规范。新建 `src/core/` 包，导出三个公共 API：
+v0.0.7 将项目从 `understand_dbs_skills` 正式更名为 `dbexplain`，模块路径从 `module dbexplain` 升级为 `module github.com/IamWWT/dbexplain`，符合 Go 模块规范。新建 `src/core/` 包，导出三个公共 API：
 
 ```go
 import "github.com/IamWWT/dbexplain/core"
@@ -117,7 +117,7 @@ VeinMap 等 Go 项目现在可以直接 import 调用，消除进程启动和 JS
 }
 ```
 
-SQLite 已有数据源（`PRAGMA foreign_key_list`）；MySQL 新增 `information_schema.REFERENTIAL_CONSTRAINTS` 查询；PostgreSQL 新增 `pg_constraint.confupdtype/confdeltype` 解析。
+SQLite 已有数据源（`PRAGMA foreign_key_list`）；MySQL 新增 `information_schema.REFERENTIAL_CONSTRAINTS` 查询；PostgreSQL 新增 `pg_constraint.confupdtype/confdeltype` 解析。IR Graph 构建器（`BuildGraph()`）同步在 Edge Metadata 中输出 `constraint_name` / `on_delete` / `on_update`。
 
 ### JSON refs 8 个结构化字段
 
