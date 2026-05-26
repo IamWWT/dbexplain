@@ -78,6 +78,47 @@ _, err := pipe.Exec(ctx)
 
 ---
 
+## execute 只读查询
+
+`dbexplain` 提供 `execute` 子命令，支持对 Redis 实例执行只读原生命令，安全地将结果输出到终端。
+
+### 查询格式
+
+空格分隔的原生 Redis 命令，例如：
+- `GET mykey`
+- `HGETALL myhash`
+- `SCAN 0 MATCH user:* COUNT 100`
+- `LRANGE mylist 0 10`
+- `ZRANGE myzset 0 -1 WITHSCORES`
+
+### 校验机制
+
+- **内置只读命令白名单**：工具内部维护了 30+ 个 Redis 只读命令的白名单，包括 `GET`、`HGET`、`HGETALL`、`HMGET`、`HKEYS`、`HVALS`、`HLEN`、`HEXISTS`、`SCAN`、`LRANGE`、`LLEN`、`LINDEX`、`ZRANGE`、`ZRANGEBYSCORE`、`ZCARD`、`ZSCORE`、`ZRANK`、`SMEMBERS`、`SCARD`、`SISMEMBER`、`TTL`、`PTTL`、`TYPE`、`EXISTS`、`STRLEN`、`PING`、`DBSIZE`、`RANDOMKEY` 等。
+- **写命令拒绝**：任何写命令（`SET`、`DEL`、`HSET`、`LPUSH`、`SADD`、`ZADD` 等）将被拒绝，返回 `READ_ONLY_VIOLATION` 错误。
+- **注意**：Redis 校验不经过 `sqlguard` 模块，使用内部独立的白名单校验。
+
+### 自动 LIMIT 追加
+
+不适用。原生 Redis 命令各有自己的数据量控制机制（如 `SCAN` 的 `COUNT` 参数、`LRANGE` 的起止索引），工具不会修改命令本身。
+
+### 超时控制
+
+通过 `go-redis` 客户端上下文超时（Go `context.WithTimeout`）控制整体执行时长。
+
+### 执行方式
+
+使用 `go-redis` 的 `Do()` 方法，将用户输入的命令作为第一个参数传入，后续参数由 `go-redis` 自动解析和处理。
+
+### 输出格式
+
+所有结果统一以单列 `result` 展示，值格式化为字符串。对于 Hash 或 List 等多值类型，结果以简洁的字符串形式呈现。
+
+### 最大行数控制
+
+由 `--limit` 命令行标志控制，默认值为 1000。截断在客户端侧完成，对超出的结果行直接丢弃。
+
+---
+
 ## 二、常见问题与排障
 
 ### 2.1 连接超时或认证失败

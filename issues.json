@@ -575,6 +575,116 @@
       "description": "Once encrypted config adoption is sufficient, remove plaintext .env loading. Only support .enc encrypted files. Break-glass: --allow-plaintext flag for migration period.",
       "labels": ["security", "breaking-change", "future"],
       "created": "2026-05-22"
+    },
+    {
+      "id": "ISSUE-054",
+      "title": "[v0.0.7] SQLite INTEGER PRIMARY KEY nullable 修复",
+      "status": "closed",
+      "closed": "2026-05-26",
+      "priority": "low",
+      "category": "bug",
+      "description": "sqlite.go:92 将 c.Nullable = notnull == 0 修正为 c.Nullable = notnull == 0 && pk == 0。SQLite 的 INTEGER PRIMARY KEY 列 PRAGMA table_info 返回 notnull=0 但 pk>0，修正前被误标为 nullable。",
+      "file": "src/connector/sqlite.go",
+      "created": "2026-05-26"
+    },
+    {
+      "id": "ISSUE-055",
+      "title": "[v0.0.7] 日志目录回退机制",
+      "status": "closed",
+      "closed": "2026-05-26",
+      "priority": "high",
+      "category": "feature",
+      "description": "当 /var/log/dbexplain 不可写时（容器/非特权用户），自动回退到 $XDG_STATE_HOME/dbexplain/logs → $HOME/.local/state/dbexplain/logs → os.TempDir()/dbexplain/logs。新增 resolveLogDir() 辅助函数。",
+      "file": "src/main.go",
+      "created": "2026-05-26"
+    },
+    {
+      "id": "ISSUE-056",
+      "title": "[v0.0.7] ForeignKey 补全 on_delete/on_update 字段",
+      "status": "closed",
+      "closed": "2026-05-26",
+      "priority": "high",
+      "category": "feature",
+      "description": "schema.ForeignKey 新增 OnDelete/OnUpdate 字段。SQLite PRAGMA foreign_key_list 已提供但之前未存储；MySQL 新增 information_schema.REFERENTIAL_CONSTRAINTS 查询；PostgreSQL 追加 pg_constraint.confupdtype/confdeltype。jsonFK 序列化同步新增 on_delete/on_update。",
+      "file": "src/schema/types.go, src/connector/sqlite.go, src/connector/mysql.go, src/connector/postgres.go, src/render/render.go",
+      "created": "2026-05-26"
+    },
+    {
+      "id": "ISSUE-057",
+      "title": "[v0.0.7] JSON refs 结构化字段增强",
+      "status": "closed",
+      "closed": "2026-05-26",
+      "priority": "high",
+      "category": "feature",
+      "description": "jsonRef 新增 8 个结构化字段（from_instance/from_db/from_table/from_col/to_instance/to_db/to_table/to_col），便于程序化消费。保留 from/to 字符串字段向后兼容。",
+      "file": "src/render/render.go",
+      "created": "2026-05-26"
+    },
+    {
+      "id": "ISSUE-058",
+      "title": "[v0.0.7] 全链路密码安全审计",
+      "status": "closed",
+      "closed": "2026-05-26",
+      "priority": "critical",
+      "category": "security",
+      "description": "审查所有 8 个 connector + render.go + main.go 输出路径：JSON 输出（Redacted DSN）、label 字段（无密码）、日志文件（Redacted）、-context 输出（仅表名，无连接信息）。确认全链路无密码泄露。",
+      "file": "src/connector/*.go, src/render/render.go, src/main.go",
+      "created": "2026-05-26"
+    },
+    {
+      "id": "ISSUE-059",
+      "title": "[v0.0.7] Go 模块化发布",
+      "status": "closed",
+      "closed": "2026-05-26",
+      "priority": "critical",
+      "category": "feature",
+      "description": "模块路径从 dbexplain 改为 github.com/IamWWT/dbexplain，18 文件 44 行 import 全部更新。新建 src/core/ 包导出 Collect/CollectToGraph/CollectToJSON 公共 API，VeinMap 等 Go 项目可直接 import。新增 src/core/graph.go 提供 BuildGraph() 将 schema.Instance 转为 IR Graph。",
+      "file": "src/go.mod, src/core/collector.go, src/core/graph.go, 18 .go files",
+      "created": "2026-05-26"
+    },
+    {
+      "id": "ISSUE-060",
+      "title": "[v0.0.7] 只读查询执行 -execute 子命令",
+      "status": "closed",
+      "closed": "2026-05-26",
+      "priority": "critical",
+      "category": "feature",
+      "description": "新增 execute 子命令用于安全执行只读查询。sqlguard 包（SQL 只读校验、多语句检测、自动 LIMIT 注入）、query 包（Queryable 接口 + 查询结果类型 + QueryLock 并发控制）、9 个 connector 全部实现 ExecQuery——SQL 类（MySQL/PG/GaussDB/SQLite/ClickHouse）走 sqlguard + database/sql，ES 走 _sql REST 端点，Redis 30+ 命令白名单，MongoDB find/aggregate JSON，Qdrant scroll/count JSON。详见 docs/EXECUTE.md。后续：--human 表格输出（ISSUE-062）、CLI 案例库（ISSUE-063）。",
+      "file": "src/sqlguard/, src/query/, src/connector/mysql.go, src/connector/postgres.go, src/connector/sqlite.go, src/connector/clickhouse.go, src/connector/query.go, src/execute.go",
+      "created": "2026-05-26"
+    },
+    {
+      "id": "ISSUE-061",
+      "title": "[v0.0.8] execute 细粒度安全策略 — 表/列/语句级访问控制",
+      "status": "open",
+      "priority": "high",
+      "category": "feature",
+      "description": "在 .env 中新增安全相关变量，对 dbexplain execute 实施细粒度访问控制，阻止敏感数据通过查询暴露。三个维度：(1) 表级禁止 — 指定不可查询的表（如 user_credentials, payment_log），sqlguard 解析 SQL 中引用的表名并拒绝命中黑名单的查询；(2) 列级禁止 — 指定表中不可查询的字段（如 users.password_hash, orders.card_number），检测 SELECT 子句中的列引用并拒绝；(3) 语句级禁止 — 指定禁止执行的特定语句模式（精确匹配或正则），完全阻止匹配的查询执行。变量可全局生效或按 label 限定范围。需与现有 sqlguard 动词白名单/多语句检测/LIMIT 注入协同工作，放在 sqlguard Validate 之后、ExecQuery 之前作为第二层过滤。",
+      "file": "src/sqlguard/ (扩展), src/main.go (.env 变量解析)",
+      "labels": ["security", "v0.0.8"],
+      "created": "2026-05-26"
+    },
+    {
+      "id": "ISSUE-062",
+      "title": "[v0.0.7] execute --human 表格输出",
+      "status": "closed",
+      "closed": "2026-05-26",
+      "priority": "medium",
+      "category": "feature",
+      "description": "execute 新增 --human 参数，查询结果以 ASCII 表格渲染（类 mysql/pg CLI 风格），替代默认 JSON。NULL 值标注、自动列宽对齐。9 种数据库通用。formatHuman() 在 execute.go 中实现。注意：--human 必须在 SQL 之前（Go flag 限制）。",
+      "file": "src/execute.go",
+      "created": "2026-05-26"
+    },
+    {
+      "id": "ISSUE-063",
+      "title": "[v0.0.7] CLI 案例库与全局文档更新",
+      "status": "closed",
+      "closed": "2026-05-26",
+      "priority": "medium",
+      "category": "docs",
+      "description": "文档更新：(1) 新建 docs/CLI_EXAMPLES.md — 7 数据源 13 条实测查询命令，全部经本环境验证通过；(2) 9 份 DB 文档补全 execute 章节（GAUSSDB.md/SQLITE.md/QDRANT.md 新建，6 份已有文档新增 execute 小节）；(3) EXECUTE.md 新增 9-DB 执行行为速览索引表；(4) README.md/README_EN.md 重构——DSN 格式前置、使用方式拆分 Schema采集/只读查询/列出数据库/参考手册四个子节、截图归入 execute 小节；(5) CHANGELOG 中英双语新增 --human + CLI_EXAMPLES 条目；(6) RELEASE_WECHAT_v0.0.7.md 新增 --human 输出示例和 CLI_EXAMPLES 链接。",
+      "file": "docs/CLI_EXAMPLES.md, docs/GAUSSDB.md, docs/SQLITE.md, docs/QDRANT.md, docs/EXECUTE.md, docs/MYSQL.md, docs/POSTGRESQL.md, docs/CLICKHOUSE.md, docs/REDIS.md, docs/MONGO.md, docs/ELASTICSEARCH.md, README.md, README_EN.md, CHANGELOG.md, CHANGELOG_EN.md, docs/RELEASE_WECHAT_v0.0.7.md",
+      "created": "2026-05-26"
     }
   ]
 }

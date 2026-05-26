@@ -69,7 +69,7 @@
 - 包命名遵循 Go 惯例（小写、单字母单词）
 - 领域特有描述使用中文注释
 - 导出符号使用英文命名
-- 密码自动脱敏：`DSN.Redacted()` 将 `:password@` 替换为 `:***@`
+- 密码自动脱敏：`DSN.Redacted()` 将 `user:password@` 替换为 `{dbuser}:{dbpassword}@`
 
 ### 8. Deterministic Only（确定性输出）
 

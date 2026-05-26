@@ -1,5 +1,63 @@
 # Changelog
 
+## v0.0.7 (2026-05-26)
+
+### Go Module Publishing (REQ-1)
+- **Module path**: `module dbexplain` → `module github.com/IamWWT/dbexplain`, Go-standards compliant
+- **18 files, 44 import lines** updated to full module path
+- **Public API**: New `src/core/` package exporting `Collect()` / `CollectToGraph()` / `CollectToJSON()`, directly importable by Go projects like VeinMap
+- **IR Graph builder**: `src/core/graph.go` — `BuildGraph()` converts schema.Instance to IR Graph (nodes + columns + edges)
+
+### Schema Enhancements (REQ-2, REQ-3, REQ-6, REQ-7)
+- **ForeignKey completion**: Added `OnDelete` / `OnUpdate` fields (CASCADE, SET NULL, RESTRICT, NO ACTION)
+- **SQLite FK collection**: Existing on_update/on_delete from `PRAGMA foreign_key_list` now correctly stored in ForeignKey struct
+- **MySQL FK enrichment**: Added `information_schema.REFERENTIAL_CONSTRAINTS` query for DELETE_RULE / UPDATE_RULE
+- **PostgreSQL FK enrichment**: FK query now includes `confupdtype` / `confdeltype`, with `pgFKAction()` mapping single-char codes to readable strings
+- **JSON refs enhancement**: `jsonRef` now includes 8 structured fields (from_instance/from_db/from_table/from_col/to_instance/to_db/to_table/to_col), while preserving from/to for backward compatibility
+- **IR Graph edge metadata**: `BuildGraph()` outputs constraint_name / on_delete / on_update in Edge Metadata
+
+### Bug Fixes (REQ-5)
+- **SQLite INTEGER PRIMARY KEY nullable fix**: Changed `c.Nullable = notnull == 0` to `c.Nullable = notnull == 0 && pk == 0`, preventing SQLite auto-increment PKs from being incorrectly marked nullable
+
+### Runtime Resiliency (REQ-4)
+- **Log directory fallback**: When `/var/log/dbexplain` is not writable, auto-fallback to `$XDG_STATE_HOME` → `$HOME/.local/state` → `os.TempDir()`, fixing log write failures in containers/non-root environments
+- **`resolveLogDir()`**: New multi-level fallback helper function
+
+### Security Audit (REQ-8)
+- **Full-chain password audit**: Reviewed all 8 connectors + render.go + main.go output paths
+- Confirmed zero password leakage across JSON output (Redacted DSN), label fields, log files (Redacted), and -context output (name-only)
+
+### Read-Only Query Execution (REQ-10)
+- **`dbexplain execute`**: New execute subcommand for sandboxed read-only queries, returning structured data tables (output format fully separated from schema collection JSON)
+- **sqlguard read-only validation**: New `src/sqlguard/` package with triple-layer protection — verb whitelist (SELECT/EXPLAIN/WITH/SHOW/DESCRIBE/DESC/PRAGMA), multi-statement detection (rejects semicolon concatenation), auto LIMIT injection (appends `LIMIT 1000` when missing)
+- **query execution engine**: New `src/query/` package defining `Queryable` interface (separate from `Connector`), `QueryResult`/`ExecuteOpts` unified types, `QueryLock` per-label concurrent mutex
+- **All 9 database types covered**: 5 SQL databases (MySQL/PostgreSQL/GaussDB/SQLite/ClickHouse) use sqlguard validation + `database/sql` execution; Elasticsearch supports standard SQL via `_sql` REST endpoint
+- **Non-SQL native query support**:
+  - Elasticsearch: `_sql` REST endpoint, returns `{"columns": [...], "rows": [...]}`
+  - MongoDB: JSON format `{"find":"collection","filter":{...},"limit":100}` / `{"aggregate":"collection","pipeline":[...]}`
+  - Redis: Space-separated native commands, 30+ command whitelist (GET/HGETALL/SCAN/PING etc.), rejects SET/DEL write ops
+  - Qdrant: JSON format `{"scroll":"collection_name","limit":100}` / `{"count":"collection_name"}`
+- **Query routing**: `isSQLKind()` routes by DSN type — SQL types through sqlguard, non-SQL types through per-connector internal whitelists
+- **Dual timeout protection**: Application context timeout + database-level statement timeout (MySQL `max_execution_time` / PG `statement_timeout` / CH `max_execution_time`)
+- **Security documentation**: New `docs/EXECUTE.md` covering security architecture, output format, usage examples, and CONSTITUTION compliance
+- **`--human` table output**: New `--human` flag for execute — renders query results as ASCII table (MySQL/pg CLI style) instead of default JSON. NULL values clearly displayed, auto-width columns. Works across all 9 database types
+- **CLI example library**: New `docs/CLI_EXAMPLES.md` covering 7 active data sources with 13 executable queries, all verified against the live environment
+
+### Security Enhancements
+- **Redacted() credential sanitization fix**: URL-encoded passwords (e.g. `%23`) no longer leak; both username and password sanitized to `{dbuser}:{dbpassword}` placeholders, replacing the old `user:***` format
+- **`dbexplain list` subcommand**: Lists INDEX/LABEL/KIND/HOST:PORT/DATABASE mapping for all configured databases, zero credential exposure, encrypted `.env` auto-decrypted
+- **`-env` DSN mapping summary**: Before collection, prints `DB1 → label (kind://{dbuser}:{dbpassword}@host/db)` mapping for confirming `--db N` / `--label` correspondence
+
+### Test Coverage (v0.0.7 Reinforcement)
+- **sqlguard unit tests**: 28 cases — Validate() full verb whitelist/blacklist, multi-statement edges/empty queries/leading whitespace/parenthesized CTEs; AutoLimit() appends/skips/trailing semicolons/case-insensitive detection
+- **query unit tests**: 15 cases — QueryLock lock/unlock/concurrent mutex/multi-label independent/re-entry verification/scale testing
+- **MongoDB/Redis live verification**: openim-redis:6389 + video-redis:6379 + mongo-test:27017 end-to-end execute testing completed
+- **Bug fix**: Redis ExecQuery Do() argument omission (command name not passed to go-redis, fixed)
+- **Total test cases**: 231+ → 120 unit (dsn:33 + schema:44 + sqlguard:28 + query:15) + 111 integration/CLI
+
+### Tracking Issues
+- **ISSUE-054 ~ ISSUE-060**: 7 new requirement tracking issues for v0.0.7
+
 ## v0.0.6 (2026-05-21)
 
 ### Config Encryption

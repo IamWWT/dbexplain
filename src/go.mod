@@ -1,4 +1,4 @@
-module dbexplain
+module github.com/IamWWT/dbexplain
 
 go 1.26
 

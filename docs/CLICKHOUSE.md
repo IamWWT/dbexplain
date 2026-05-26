@@ -107,6 +107,38 @@ if err == nil {
 
 ---
 
+## execute 只读查询
+
+`dbexplain` 提供 `execute` 子命令，支持对 ClickHouse 实例执行只读 SQL 查询，安全地将结果以表格形式输出到终端。
+
+### 查询格式
+
+标准 SQL 语句，支持 `SELECT`、`EXPLAIN`、`WITH`（CTE）等只读操作。
+
+### 校验机制
+
+- **SQLGuard 动词白名单**：所有查询经过 `sqlguard` 模块校验，仅允许 `SELECT`、`EXPLAIN`、`WITH`、`SHOW`、`DESCRIBE`、`DESC`、`PRAGMA` 七类只读动词通过。任何写操作语句将被拒绝。
+- **多语句检测**：禁止分号分隔的多条 SQL 语句，防止注入绕过。
+
+### 自动 LIMIT 追加
+
+- `SELECT`、`WITH`、`EXPLAIN` 语句未显式包含 `LIMIT` 时，自动追加 `LIMIT 1000`，防止大结果集。
+
+### 超时控制
+
+- **数据库层**：在查询末尾追加 `SETTINGS max_execution_time=N`（N 为秒数），由 ClickHouse 内核限制单次查询最大执行时间。
+- **应用层**：HTTP 客户端整体超时兜底。
+
+### 执行方式
+
+通过 HTTP POST 发送查询到 ClickHouse `/` 端点，请求体标记 `FORMAT JSON` 以获取结构化 JSON 响应。响应解析为标准的 `meta`（列元数据）、`data`（行数据）、`rows`（行数统计）结构。
+
+### 最大行数控制
+
+由 `--limit` 命令行标志控制，默认值为 1000。截断在客户端侧完成，对超出部分直接丢弃。
+
+---
+
 ## 二、常见问题与排障
 
 ### 2.1 连接超时或 HTTP 错误

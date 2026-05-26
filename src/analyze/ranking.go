@@ -4,7 +4,7 @@ import (
 	"math"
 	"sort"
 
-	"dbexplain/schema"
+	"github.com/IamWWT/dbexplain/schema"
 )
 
 // TableScore holds a deterministic importance score for a table.

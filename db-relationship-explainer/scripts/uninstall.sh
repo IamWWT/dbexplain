@@ -2,7 +2,7 @@
 set -e
 
 # ============================================================
-# dbexplain v0.0.6 — Uninstaller (Linux / macOS)
+# dbexplain v0.0.7 — Uninstaller (Linux / macOS)
 # ============================================================
 # Removes the dbexplain binary, config directory,
 # and optionally legacy DBPROBE_ENV_FILE entries from shell profiles.
@@ -13,7 +13,7 @@ set -e
 #   bash uninstall.sh --help        Show this help
 # ============================================================
 
-VERSION="v0.0.6"
+VERSION="v0.0.7"
 TOOL_NAME="dbexplain"
 
 SYSTEM_INSTALL_DIR="/usr/local/bin"

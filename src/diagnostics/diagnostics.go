@@ -16,8 +16,8 @@ import (
 	"fmt"
 	"strings"
 
-	"dbexplain/capabilities"
-	"dbexplain/schema"
+	"github.com/IamWWT/dbexplain/capabilities"
+	"github.com/IamWWT/dbexplain/schema"
 )
 
 // Severity classifies the importance of a diagnostic finding.

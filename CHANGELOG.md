@@ -1,5 +1,63 @@
 # 变更日志
 
+## v0.0.7 (2026-05-26)
+
+### Go 模块化发布 (REQ-1)
+- **模块路径**: `module dbexplain` → `module github.com/IamWWT/dbexplain`，符合 Go 模块规范
+- **18 个文件 44 行 import 路径**全部替换为完整模块路径
+- **公共 API**: 新建 `src/core/` 包，导出 `Collect()` / `CollectToGraph()` / `CollectToJSON()` 三个函数，VeinMap 等 Go 项目可直接 import 调用
+- **IR Graph 构建器**: `src/core/graph.go` — `BuildGraph()` 将 schema.Instance 转为 IR Graph（节点+列+边）
+
+### Schema 增强 (REQ-2, REQ-3, REQ-6, REQ-7)
+- **ForeignKey 补全**: 新增 `OnDelete` / `OnUpdate` 字段（CASCADE、SET NULL、RESTRICT、NO ACTION）
+- **SQLite FK 采集**: `PRAGMA foreign_key_list` 中原有的 on_update/on_delete 数据现已正确存入 ForeignKey 结构
+- **MySQL FK 补全**: 新增 `information_schema.REFERENTIAL_CONSTRAINTS` 查询，获取 DELETE_RULE / UPDATE_RULE
+- **PostgreSQL FK 补全**: FK 查询追加 `confupdtype` / `confdeltype` 列，`pgFKAction()` 将单字符码映射为可读字符串
+- **JSON refs 增强**: `jsonRef` 新增 8 个结构化字段（from_instance/from_db/from_table/from_col/to_instance/to_db/to_table/to_col），同时保留 from/to 向后兼容
+- **IR Graph 边元数据增强**: `BuildGraph()` 在 Edge Metadata 中输出 constraint_name / on_delete / on_update
+
+### Bug 修复 (REQ-5)
+- **SQLite INTEGER PRIMARY KEY nullable 修复**: 将 `c.Nullable = notnull == 0` 修正为 `c.Nullable = notnull == 0 && pk == 0`，SQLite 自增主键不再误标为 nullable
+
+### 运行环境增强 (REQ-4)
+- **日志目录回退**: `/var/log/dbexplain` 不可写时，自动回退到 `$XDG_STATE_HOME` → `$HOME/.local/state` → `os.TempDir()`，解决容器/非特权用户环境日志写入失败问题
+- **`resolveLogDir()`**: 新增多级回退辅助函数
+
+### 安全审计 (REQ-8)
+- **全链路密码审计**: 审查 8 个 connector + render.go + main.go 所有输出路径
+- 确认 JSON 输出（Redacted DSN）、label 字段（无密码）、日志文件（Redacted）、-context 输出（name-only）全链路无密码泄露
+
+### 只读查询执行 (REQ-10)
+- **`dbexplain execute`**: 新增 execute 子命令，在沙箱保护下执行只读查询，返回结构化数据表（与 schema 采集 JSON 格式完全分离）
+- **sqlguard 只读校验**: 新建 `src/sqlguard/` 包，三层防护——动词白名单（SELECT/EXPLAIN/WITH/SHOW/DESCRIBE/DESC/PRAGMA）、多语句检测（拒绝分号拼接）、自动 LIMIT 注入（无 LIMIT 时追加 `LIMIT 1000`）
+- **query 查询引擎**: 新建 `src/query/` 包，定义 `Queryable` 接口（独立于 `Connector`）、`QueryResult`/`ExecuteOpts` 统一类型、`QueryLock` per-label 并发互斥
+- **9 种数据库全覆盖**: 5 种 SQL 数据库（MySQL/PostgreSQL/GaussDB/SQLite/ClickHouse）走 sqlguard 校验 + `database/sql` 执行，Elasticsearch 通过 `_sql` REST 端点支持标准 SQL
+- **非 SQL 数据库原生查询支持**:
+  - Elasticsearch: `_sql` REST 端点，响应 `{"columns": [...], "rows": [...]}`
+  - MongoDB: JSON 格式 `{"find":"collection","filter":{...},"limit":100}` / `{"aggregate":"collection","pipeline":[...]}`
+  - Redis: 空间分隔原生命令，30+ 命令白名单（GET/HGETALL/SCAN/PING 等），拒绝 SET/DEL 等写操作
+  - Qdrant: JSON 格式 `{"scroll":"collection_name","limit":100}` / `{"count":"collection_name"}`
+- **查询路由机制**: `isSQLKind()` 根据 DSN 类型决定校验路径，SQL 类走 sqlguard，非 SQL 类各连接器内部白名单验证
+- **双超时保护**: 应用层 context 超时 + 数据库层语句超时（MySQL `max_execution_time` / PG `statement_timeout` / CH `max_execution_time`）
+- **安全文档**: 新建 `docs/EXECUTE.md`，全面记录安全架构、输出格式、使用示例和 CONSTITUTION 合规情况
+- **`--human` 表格输出**: execute 新增 `--human` 参数，查询结果以 ASCII 表格渲染（类 mysql/pg CLI 风格），替代默认 JSON。NULL 值清晰标注，自动列宽对齐。9 种数据库通用
+- **CLI 案例库**: 新建 `docs/CLI_EXAMPLES.md`，覆盖 7 个有数据的数据源共 13 条可执行查询，全部经本环境实测验证
+
+### 安全增强
+- **Redacted() 凭证脱敏修复**: URL 编码密码（如 `%23`）不再泄露；用户名和密码同时脱敏为 `{dbuser}:{dbpassword}` 占位符，替代原来的 `user:***` 格式
+- **`dbexplain list` 子命令**: 列出所有已配置数据库的 INDEX/LABEL/KIND/HOST:PORT/DATABASE 映射表，零凭证暴露，加密 `.env` 自动解密
+- **`-env` DSN 映射摘要**: 采集开始前打印 `DB1 → label (kind://{dbuser}:{dbpassword}@host/db)` 映射，方便确认 `--db N` / `--label` 对应关系
+
+### 测试覆盖 (v0.0.7 补强)
+- **sqlguard 单元测试**: 28 用例 — Validate() 全部动词白/黑名单、多语句边界/空查询/空白前导/括号 CTE；AutoLimit() 追加/跳过/尾部分号/大小写检测
+- **query 单元测试**: 15 用例 — QueryLock 加锁/解锁/并发互斥/多标签独立/重入验证/规模测试
+- **MongoDB/Redis 实机验证**: openim-redis:6389 + video-redis:6379 + mongo-test:27017 完成端到端 execute 测试
+- **Bug 修复**: Redis ExecQuery Do() 参数遗漏（命令名未传入 go-redis，已修复）
+- **总测试用例**: 231+ → 120 单元 (dsn:33 + schema:44 + sqlguard:28 + query:15) + 111 集成/CLI
+
+### 跟踪问题
+- **ISSUE-054 ~ ISSUE-060**: v0.0.7 新增 7 个需求跟踪 issue
+
 ## v0.0.6 (2026-05-21)
 
 ### 配置加密

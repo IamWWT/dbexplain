@@ -98,7 +98,40 @@ func (d *DSN) Redacted() string {
 	if d.Password == "" {
 		return d.Raw
 	}
-	return strings.Replace(d.Raw, ":"+d.Password+"@", ":***@", 1)
+
+	// Find the password in the raw DSN by locating the ":password@" pattern.
+	// We search for both the decoded and raw forms to handle URL-encoded
+	// characters (e.g. %23 vs #).
+	//
+	// Strategy: find the last '@' that separates userinfo from host,
+	// then work backwards to find the ':' before the password.
+	schemeEnd := strings.Index(d.Raw, "://")
+	if schemeEnd < 0 {
+		return d.Raw
+	}
+	afterScheme := d.Raw[schemeEnd+3:]
+
+	// Find the last '@' (host separator)
+	lastAt := strings.LastIndex(afterScheme, "@")
+	if lastAt < 0 {
+		return d.Raw
+	}
+	userinfo := afterScheme[:lastAt]
+
+	// Find the last ':' in userinfo (password separator)
+	colonPos := strings.LastIndex(userinfo, ":")
+	if colonPos < 0 {
+		return d.Raw // no password
+	}
+
+	// Redact credentials with descriptive placeholders
+	redactedUserinfo := "{dbpassword}" // no username
+	if colonPos > 0 {
+		redactedUserinfo = "{dbuser}:{dbpassword}"
+	}
+
+	redacted := d.Raw[:schemeEnd+3] + redactedUserinfo + afterScheme[lastAt:]
+	return redacted
 }
 
 // SQLitePath extracts file path for sqlite.

@@ -51,6 +51,45 @@ func collectMongoCollectionMeta(...) *schema.Table {
 
 ---
 
+## execute 只读查询
+
+`dbexplain` 提供 `execute` 子命令，支持对 MongoDB 实例执行只读查询，以 JSON 格式描述查询意图，安全地将结果以表格形式输出到终端。
+
+### 查询格式
+
+JSON 格式，支持两种操作：
+- **find**：`{"find":"collection","filter":{...},"limit":100}`
+- **aggregate**：`{"aggregate":"collection","pipeline":[...]}`
+
+### 校验机制
+
+- **内置操作白名单**：只允许 `find` 和 `aggregate` 两种操作，且每个 JSON 请求必须精确指定其一。
+- **拒绝其它操作**：任何包含 `insert`、`update`、`delete`、`drop` 等操作的请求将被拒绝。
+- **注意**：MongoDB 校验不经过 `sqlguard` 模块，使用内部独立的白名单校验。
+
+### 自动 LIMIT 追加
+
+- 若 JSON 中未显式指定 `limit` 字段，工具使用 `--limit` 标志值（默认 1000）自动填充。
+- 对 `aggregate` 请求，工具在 pipeline 末尾自动追加 `{"$limit": N}` 阶段，确保聚合结果可控。
+
+### 超时控制
+
+通过 MongoDB Go 驱动的上下文超时（Go `context.WithTimeout`）控制整体执行时长。
+
+### 执行方式
+
+使用 `mongo-go-driver` 的 `Find` 或 `Aggregate` 方法，配合 BSON 解码，将文档结果展平输出。
+
+### 输出格式
+
+BSON 文档的键值对被展平为行/列结构，每个字段映射为一列，便于终端表格呈现。
+
+### 最大行数控制
+
+由 `--limit` 命令行标志控制，默认值为 1000。
+
+---
+
 ## 二、常见认证错误与排障
 
 ### 2.1 典型错误信息

@@ -11,9 +11,10 @@ import (
 	"time"
 
 	"github.com/elastic/go-elasticsearch/v8"
-	"dbexplain/capabilities"
-	"dbexplain/dsn"
-	"dbexplain/schema"
+	"github.com/IamWWT/dbexplain/capabilities"
+	"github.com/IamWWT/dbexplain/dsn"
+	"github.com/IamWWT/dbexplain/query"
+	"github.com/IamWWT/dbexplain/schema"
 )
 
 func init() {
@@ -121,6 +122,99 @@ func (esConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instance, e
 
 	inst.Databases = append(inst.Databases, database)
 	return inst, nil
+}
+
+// ExecQuery implements query.Queryable for Elasticsearch via _sql endpoint.
+// ES supports standard SQL since v6.3 — read-only-only, validated by sqlguard.
+func (esConnector) ExecQuery(ctx context.Context, opts query.ExecuteOpts) (*query.QueryResult, error) {
+	host := opts.DSN.Host
+	if host == "" {
+		host = "127.0.0.1"
+	}
+	port := opts.DSN.Port
+	if port == "" {
+		port = "9200"
+	}
+	scheme := "http"
+	if opts.DSN.TLS {
+		scheme = "https"
+	}
+
+	// Build _sql request
+	sqlBody := map[string]interface{}{
+		"query": opts.SQL,
+	}
+	if opts.MaxRows > 0 {
+		sqlBody["fetch_size"] = opts.MaxRows
+	}
+	bodyBytes, _ := json.Marshal(sqlBody)
+
+	reqURL := fmt.Sprintf("%s://%s:%s/_sql", scheme, host, port)
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", reqURL, strings.NewReader(string(bodyBytes)))
+	if err != nil {
+		return nil, fmt.Errorf("es sql request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	if opts.DSN.User != "" {
+		httpReq.SetBasicAuth(opts.DSN.User, opts.DSN.Password)
+	}
+
+	httpCli := &http.Client{Timeout: time.Duration(opts.Timeout+5) * time.Second}
+	if opts.DSN.TLS {
+		httpCli.Transport = &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		}
+	}
+
+	start := time.Now()
+	resp, err := httpCli.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("es sql: %w", err)
+	}
+	defer resp.Body.Close()
+	rbody, _ := io.ReadAll(resp.Body)
+
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("es sql HTTP %d: %s", resp.StatusCode, string(rbody))
+	}
+
+	var esResp struct {
+		Columns []struct {
+			Name string `json:"name"`
+			Type string `json:"type"`
+		} `json:"columns"`
+		Rows [][]interface{} `json:"rows"`
+	}
+	if err := json.Unmarshal(rbody, &esResp); err != nil {
+		return nil, fmt.Errorf("es sql parse: %w\nbody: %s", err, string(rbody[:min(300, len(rbody))]))
+	}
+
+	result := &query.QueryResult{}
+	for _, col := range esResp.Columns {
+		result.Columns = append(result.Columns, query.ColumnInfo{Name: col.Name, Type: col.Type})
+	}
+	for i, row := range esResp.Rows {
+		if i >= opts.MaxRows {
+			result.Truncated = true
+			break
+		}
+		sr := make([]*string, len(row))
+		for j, v := range row {
+			if v == nil {
+				sr[j] = nil
+			} else {
+				s := fmt.Sprintf("%v", v)
+				sr[j] = &s
+			}
+		}
+		result.Rows = append(result.Rows, sr)
+	}
+	result.RowCount = len(result.Rows)
+	if len(esResp.Rows) > opts.MaxRows {
+		result.RowCount = opts.MaxRows
+	}
+	result.ExecutionTime = time.Since(start).String()
+	return result, nil
 }
 
 func getESMapping(ctx context.Context, client *elasticsearch.Client, indexName string) (map[string]map[string]interface{}, error) {

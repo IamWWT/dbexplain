@@ -8,9 +8,10 @@ import (
 	"time"
 
 	_ "github.com/glebarez/go-sqlite"
-	"dbexplain/capabilities"
-	"dbexplain/dsn"
-	"dbexplain/schema"
+	"github.com/IamWWT/dbexplain/capabilities"
+	"github.com/IamWWT/dbexplain/dsn"
+	"github.com/IamWWT/dbexplain/query"
+	"github.com/IamWWT/dbexplain/schema"
 )
 
 func init() {
@@ -89,7 +90,7 @@ func fillSQLiteTable(ctx context.Context, db *sql.DB, t *schema.Table, redactedD
 		if err := colRows.Scan(&cid, &c.Name, &c.Type, &notnull, &dflt, &pk); err != nil {
 			continue
 		}
-		c.Nullable = notnull == 0
+		c.Nullable = notnull == 0 && pk == 0
 		c.IsPrimary = pk > 0
 		if dflt.Valid {
 			c.Default = dflt.String
@@ -160,6 +161,8 @@ func fillSQLiteTable(ctx context.Context, db *sql.DB, t *schema.Table, redactedD
 				fk = &schema.ForeignKey{
 					Name:     strings.Join([]string{t.Name, from, table}, "_"),
 					RefTable: table,
+					OnDelete: onDelete,
+					OnUpdate: onUpdate,
 				}
 				fkMap[id] = fk
 				t.ForeignKeys = append(t.ForeignKeys, fk)
@@ -168,6 +171,29 @@ func fillSQLiteTable(ctx context.Context, db *sql.DB, t *schema.Table, redactedD
 			fk.RefColumns = append(fk.RefColumns, to)
 		}
 	}
+}
+
+// ExecQuery implements query.Queryable for SQLite.
+func (sqliteConnector) ExecQuery(ctx context.Context, opts query.ExecuteOpts) (*query.QueryResult, error) {
+	path := opts.DSN.SQLitePath()
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		return nil, fmt.Errorf("sqlite open: %w", err)
+	}
+	defer db.Close()
+
+	runCtx := ctx
+	if opts.Timeout > 0 {
+		var cancel context.CancelFunc
+		runCtx, cancel = context.WithTimeout(ctx, time.Duration(opts.Timeout)*time.Second)
+		defer cancel()
+	}
+
+	result, err := executeSQLQuery(runCtx, db, opts.SQL, opts.MaxRows)
+	if err != nil {
+		return nil, fmt.Errorf("sqlite query: %w", err)
+	}
+	return result, nil
 }
 
 func fetchSQLiteSampleRow(ctx context.Context, db *sql.DB, table string) (map[string]string, error) {

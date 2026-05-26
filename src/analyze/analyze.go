@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	"dbexplain/capabilities"
-	"dbexplain/diagnostics"
-	"dbexplain/schema"
+	"github.com/IamWWT/dbexplain/capabilities"
+	"github.com/IamWWT/dbexplain/diagnostics"
+	"github.com/IamWWT/dbexplain/schema"
 )
 
 type Result struct {

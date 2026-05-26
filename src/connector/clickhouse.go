@@ -10,9 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"dbexplain/capabilities"
-	"dbexplain/dsn"
-	"dbexplain/schema"
+	"github.com/IamWWT/dbexplain/capabilities"
+	"github.com/IamWWT/dbexplain/dsn"
+	"github.com/IamWWT/dbexplain/query"
+	"github.com/IamWWT/dbexplain/schema"
 )
 
 func init() {
@@ -285,6 +286,86 @@ func (c *chHTTP) query(ctx context.Context, sql string) ([]byte, error) {
 		return nil, fmt.Errorf("clickhouse HTTP %d: %s", resp.StatusCode, string(body))
 	}
 	return body, nil
+}
+
+// ExecQuery implements query.Queryable for ClickHouse via HTTP.
+func (clickhouseConnector) ExecQuery(ctx context.Context, opts query.ExecuteOpts) (*query.QueryResult, error) {
+	host := opts.DSN.Host
+	if host == "" {
+		host = "127.0.0.1"
+	}
+	port := opts.DSN.Port
+	if port == "" {
+		port = "8123"
+	}
+	base := fmt.Sprintf("http://%s:%s", host, port)
+	cli := &chHTTP{
+		base:    base,
+		user:    opts.DSN.User,
+		pass:    opts.DSN.Password,
+		httpCli: &http.Client{Timeout: time.Duration(opts.Timeout+5) * time.Second},
+	}
+
+	// Build query with optional max_execution_time
+	sql := opts.SQL
+	if opts.Timeout > 0 {
+		sql = fmt.Sprintf("%s SETTINGS max_execution_time=%d", sql, opts.Timeout)
+	}
+
+	start := time.Now()
+	result := &query.QueryResult{}
+
+	// Execute as FORMAT JSON (returns meta+data+rows structure)
+	body, err := cli.query(ctx, sql+" FORMAT JSON")
+	if err != nil {
+		return nil, fmt.Errorf("clickhouse query: %w", err)
+	}
+
+	var resp struct {
+		Meta []struct {
+			Name string `json:"name"`
+			Type string `json:"type"`
+		} `json:"meta"`
+		Data []map[string]interface{} `json:"data"`
+		Rows uint64                   `json:"rows"`
+	}
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return nil, fmt.Errorf("clickhouse response parse: %w\nbody: %s", err, string(body[:min(300, len(body))]))
+	}
+
+	for _, m := range resp.Meta {
+		result.Columns = append(result.Columns, query.ColumnInfo{Name: m.Name, Type: m.Type})
+	}
+
+	colNames := make([]string, len(result.Columns))
+	for i, c := range result.Columns {
+		colNames[i] = c.Name
+	}
+
+	total := int(resp.Rows)
+	for i, row := range resp.Data {
+		if i >= opts.MaxRows {
+			result.Truncated = true
+			break
+		}
+		sr := make([]*string, len(colNames))
+		for j, col := range colNames {
+			v, ok := row[col]
+			if !ok || v == nil {
+				sr[j] = nil
+			} else {
+				s := fmt.Sprintf("%v", v)
+				sr[j] = &s
+			}
+		}
+		result.Rows = append(result.Rows, sr)
+	}
+	result.RowCount = total
+	if total > opts.MaxRows {
+		result.RowCount = opts.MaxRows
+	}
+	result.ExecutionTime = time.Since(start).String()
+	return result, nil
 }
 
 func escCH(s string) string {

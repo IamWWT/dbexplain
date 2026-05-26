@@ -10,9 +10,10 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
-	"dbexplain/capabilities"
-	"dbexplain/dsn"
-	"dbexplain/schema"
+	"github.com/IamWWT/dbexplain/capabilities"
+	"github.com/IamWWT/dbexplain/dsn"
+	"github.com/IamWWT/dbexplain/query"
+	"github.com/IamWWT/dbexplain/schema"
 )
 
 func init() {
@@ -487,6 +488,96 @@ func isSecuritySensitive(pattern string) bool {
 		}
 	}
 	return false
+}
+
+// redisReadOps is the set of Redis read-only commands allowed by ExecQuery.
+var redisReadOps = map[string]bool{
+	"GET": true, "MGET": true, "GETRANGE": true,
+	"HGET": true, "HGETALL": true, "HKEYS": true, "HVALS": true,
+	"HLEN": true, "HEXISTS": true,
+	"LRANGE": true, "LLEN": true, "LINDEX": true,
+	"SMEMBERS": true, "SCARD": true, "SISMEMBER": true,
+	"ZRANGE": true, "ZRANGEBYSCORE": true, "ZCARD": true, "ZSCORE": true, "ZRANK": true,
+	"SCAN": true, "HSCAN": true, "SSCAN": true, "ZSCAN": true,
+	"TYPE": true, "TTL": true, "PTTL": true, "EXISTS": true,
+	"STRLEN": true, "XLEN": true, "XRANGE": true, "XREVRANGE": true,
+	"PING": true, "ECHO": true,
+}
+
+// ExecQuery implements query.Queryable for Redis.
+// Accepts space-separated Redis read-only commands:
+//
+//	GET mykey
+//	HGETALL hashkey
+//	SCAN 0 MATCH user:* COUNT 100
+//	LRANGE mylist 0 -1
+func (redisConnector) ExecQuery(ctx context.Context, opts query.ExecuteOpts) (*query.QueryResult, error) {
+	sql := strings.TrimSpace(opts.SQL)
+	if sql == "" {
+		return nil, fmt.Errorf("READ_ONLY_VIOLATION: empty redis command")
+	}
+
+	parts := strings.Fields(sql)
+	cmd := strings.ToUpper(parts[0])
+
+	if !redisReadOps[cmd] {
+		return nil, fmt.Errorf("READ_ONLY_VIOLATION: redis command %q is not allowed (read-only only)", cmd)
+	}
+
+	rdb, _, err := newRedisClient(opts.DSN)
+	if err != nil {
+		return nil, fmt.Errorf("redis connect: %w", err)
+	}
+	defer rdb.Close()
+
+	// Build args as []interface{} with command as first element
+	args := make([]interface{}, len(parts))
+	args[0] = parts[0] // Redis command is case-insensitive, go-redis handles normalisation
+	for i, p := range parts[1:] {
+		args[i+1] = p
+	}
+
+	start := time.Now()
+	result := &query.QueryResult{
+		Columns: []query.ColumnInfo{{Name: "result", Type: "string"}},
+	}
+
+	// Use Do() for generic command execution
+	val, err := rdb.Do(ctx, args...).Result()
+	if err != nil {
+		return nil, fmt.Errorf("redis %s: %w", cmd, err)
+	}
+
+	// Format the result as rows
+	rows := formatRedisResult(val)
+	for i, row := range rows {
+		if i >= opts.MaxRows {
+			result.Truncated = true
+			break
+		}
+		result.Rows = append(result.Rows, []*string{&row})
+	}
+	result.RowCount = len(result.Rows)
+	result.ExecutionTime = time.Since(start).String()
+	return result, nil
+}
+
+// formatRedisResult converts a Redis response to a string slice.
+func formatRedisResult(val interface{}) []string {
+	switch v := val.(type) {
+	case string:
+		return []string{v}
+	case int64:
+		return []string{fmt.Sprintf("%d", v)}
+	case []interface{}:
+		var out []string
+		for _, item := range v {
+			out = append(out, fmt.Sprintf("%v", item))
+		}
+		return out
+	default:
+		return []string{fmt.Sprintf("%v", v)}
+	}
 }
 
 func parseRedisInfo(info string) map[string]string {

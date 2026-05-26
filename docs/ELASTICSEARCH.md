@@ -85,6 +85,37 @@ for field, props := range mapping {
 
 ---
 
+## execute 只读查询
+
+`dbexplain` 提供 `execute` 子命令，支持对 Elasticsearch 实例执行只读 SQL 查询（利用 ES `_sql` REST 端点，ES 6.3+ 支持），安全地将结果以表格形式输出到终端。
+
+### 查询格式
+
+标准 SQL 语句，支持 `SELECT`、`EXPLAIN`、`WITH`（CTE）等只读操作。SQL 查询会被转译为 ES 内部的 DSL 查询执行。
+
+### 校验机制
+
+- **SQLGuard 动词白名单**：所有查询经过 `sqlguard` 模块校验，按 SQL 语义进行只读动词白名单验证。
+- **多语句检测**：禁止分号分隔的多条 SQL 语句。
+
+### 自动 LIMIT 追加
+
+- `SELECT`、`WITH`、`EXPLAIN` 语句未显式包含 `LIMIT` 时，自动追加 `LIMIT 1000`，防止大结果集。
+
+### 超时控制
+
+通过 HTTP 客户端超时控制整体执行时长。
+
+### 执行方式
+
+通过 HTTP POST 发送 JSON 请求体 `{"query": "...", "fetch_size": N}` 到 Elasticsearch 的 `/_sql` 端点。认证方式为 HTTP Basic Auth（若 DSN 中提供了凭据）。TLS 连接默认跳过证书验证（`InsecureSkipVerify=true`，诊断工具权衡）。
+
+### 最大行数控制
+
+由 `--limit` 命令行标志控制，通过 `fetch_size` 参数传递给 ES `_sql` 端点。
+
+---
+
 ## 二、常见问题与排障
 
 ### 2.1 连接超时或认证失败

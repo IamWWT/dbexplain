@@ -6,8 +6,8 @@ import (
 	"os"
 	"strings"
 
-	"dbexplain/analyze"
-	"dbexplain/schema"
+	"github.com/IamWWT/dbexplain/analyze"
+	"github.com/IamWWT/dbexplain/schema"
 )
 
 func noColor() bool {
@@ -383,13 +383,25 @@ type jsonFK struct {
 	RefDB       string   `json:"ref_db,omitempty"`
 	RefTable    string   `json:"ref_table"`
 	RefColumns  []string `json:"ref_columns"`
+	OnDelete    string   `json:"on_delete,omitempty"`
+	OnUpdate    string   `json:"on_update,omitempty"`
 }
 
 type jsonRef struct {
+	// deprecating — use structured fields below
 	From       string `json:"from"`
 	To         string `json:"to"`
-	Inferred   bool   `json:"inferred"`
-	Confidence int    `json:"confidence"`
+	// structured fields
+	FromInstance string `json:"from_instance"`
+	FromDB       string `json:"from_db"`
+	FromTable    string `json:"from_table"`
+	FromCol      string `json:"from_col"`
+	ToInstance   string `json:"to_instance"`
+	ToDB         string `json:"to_db"`
+	ToTable      string `json:"to_table"`
+	ToCol        string `json:"to_col"`
+	Inferred     bool   `json:"inferred"`
+	Confidence   int    `json:"confidence"`
 }
 
 type jsonGroup struct {
@@ -463,6 +475,7 @@ func buildJSONResult(r *analyze.Result) *jsonResult {
 						Name: fk.Name, Columns: fk.Columns,
 						RefInstance: fk.RefInstance, RefDB: fk.RefDB,
 						RefTable: fk.RefTable, RefColumns: fk.RefColumns,
+						OnDelete: fk.OnDelete, OnUpdate: fk.OnUpdate,
 					})
 				}
 				jd.Tables = append(jd.Tables, jt)
@@ -474,9 +487,17 @@ func buildJSONResult(r *analyze.Result) *jsonResult {
 
 	for _, ref := range r.Refs {
 		jr.Refs = append(jr.Refs, jsonRef{
-			From: qualify(ref.FromInstance, ref.FromDB, ref.FromTable, ref.FromCol),
-			To:   qualify(ref.ToInstance, ref.ToDB, ref.ToTable, ref.ToCol),
-			Inferred: ref.Inferred, Confidence: ref.Confidence,
+			From:         qualify(ref.FromInstance, ref.FromDB, ref.FromTable, ref.FromCol),
+			To:           qualify(ref.ToInstance, ref.ToDB, ref.ToTable, ref.ToCol),
+			FromInstance: ref.FromInstance,
+			FromDB:       ref.FromDB,
+			FromTable:    ref.FromTable,
+			FromCol:      ref.FromCol,
+			ToInstance:   ref.ToInstance,
+			ToDB:         ref.ToDB,
+			ToTable:      ref.ToTable,
+			ToCol:        ref.ToCol,
+			Inferred:     ref.Inferred, Confidence: ref.Confidence,
 		})
 	}
 

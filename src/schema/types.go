@@ -114,6 +114,8 @@ type ForeignKey struct {
 	RefDB       string
 	RefTable    string
 	RefColumns  []string
+	OnDelete    string // CASCADE, SET NULL, RESTRICT, NO ACTION, etc.
+	OnUpdate    string // CASCADE, SET NULL, RESTRICT, NO ACTION, etc.
 }
 
 // Ref is a resolved cross-table edge used in relationship graph.

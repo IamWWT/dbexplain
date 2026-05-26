@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"runtime/debug"
 
-	"dbexplain/dsn"
-	"dbexplain/schema"
+	"github.com/IamWWT/dbexplain/dsn"
+	"github.com/IamWWT/dbexplain/schema"
 )
 
 // CollectSafe 包装采集调用，捕获 panic 并转换为错误

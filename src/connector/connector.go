@@ -4,9 +4,9 @@ import (
 	"context"
 	"log"
 
-	"dbexplain/capabilities"
-	"dbexplain/dsn"
-	"dbexplain/schema"
+	"github.com/IamWWT/dbexplain/capabilities"
+	"github.com/IamWWT/dbexplain/dsn"
+	"github.com/IamWWT/dbexplain/schema"
 )
 
 type LoggerKey struct{}

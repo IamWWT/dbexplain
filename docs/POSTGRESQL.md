@@ -110,6 +110,38 @@ fkRows, err := db.QueryContext(ctx, `
 
 ---
 
+## execute 只读查询
+
+`dbexplain` 提供 `execute` 子命令，支持对 PostgreSQL 实例执行只读 SQL 查询，安全地将结果以表格形式输出到终端。
+
+### 查询格式
+
+标准 SQL 语句，支持 `SELECT`、`EXPLAIN`、`WITH`（CTE）、`SHOW` 等只读操作。
+
+### 校验机制
+
+- **SQLGuard 动词白名单**：所有查询经过 `sqlguard` 模块校验，仅允许 `SELECT`、`EXPLAIN`、`WITH`、`SHOW`、`DESCRIBE`、`DESC`、`PRAGMA` 七类只读动词通过。任何写操作语句将被拒绝。
+- **多语句检测**：禁止分号分隔的多条 SQL 语句，防止注入绕过。
+
+### 自动 LIMIT 追加
+
+- `SELECT`、`WITH`、`EXPLAIN` 语句未显式包含 `LIMIT` 时，自动追加 `LIMIT 1000`，防止大结果集耗竭内存。
+
+### 超时控制
+
+- **数据库层**：执行前通过 `SET statement_timeout = 'Ns'`（N 为秒数）设置 PostgreSQL 语句级超时，超时查询由数据库内核自动取消。
+- **应用层**：通过 Go `context.WithTimeout` 设置应用级超时。
+
+### 执行方式
+
+使用 Go 标准库 `database/sql` 统一接口，底层驱动为 `lib/pq` 纯 Go 实现 PostgreSQL 协议。GaussDB 共用同一连接器，行为完全一致。
+
+### 最大行数控制
+
+由 `--limit` 命令行标志控制，默认值为 1000。超出该行数的结果将被截断。
+
+---
+
 ## 二、常见问题与排障
 
 ### 2.1 连接被拒绝或认证失败

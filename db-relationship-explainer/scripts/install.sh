@@ -2,7 +2,7 @@
 set -e
 
 # ============================================================
-# dbexplain v0.0.6 — One-click installer (Linux / macOS)
+# dbexplain v0.0.7 — One-click installer (Linux / macOS)
 # ============================================================
 # Installs the dbexplain binary system-wide and optionally
 # deploys the AI Agent skill to supported platforms.
@@ -16,7 +16,7 @@ set -e
 #   bash install.sh --help              Show this help
 # ============================================================
 
-VERSION="v0.0.6"
+VERSION="v0.0.7"
 REPO="IamWWT/understand_dbs_skills"
 TOOL_NAME="dbexplain"
 
@@ -340,6 +340,7 @@ print_success() {
     echo "  Config : ${ENV_FILE}"
     echo ""
     echo "  Quick test : dbexplain --version"
+    echo "  List DBs  : dbexplain list -env"
     echo "  Edit config: nano ${ENV_FILE}"
     echo "  Run        : dbexplain -env"
     echo ""

@@ -22,7 +22,7 @@ SKILL_MD_ZH="${SKILL_DIR}/SKILL_ZH.md"
 SKILL_MD_EN="${SKILL_DIR}/SKILL_EN.md"
 ENV_EXAMPLE="${SKILL_DIR}/.env.dbexplain.example"
 SKILL_NAME="db-relationship-explainer"
-VERSION="v0.0.6"
+VERSION="v0.0.7"
 LANG="zh"        # default: Chinese
 LANG_VIA_CLI=""  # non-empty when --lang was passed on command line
 
@@ -517,7 +517,7 @@ update_installations() {
   echo ""
   info "Updated ${updated} installation(s)."
   echo ""
-  echo -e "  Run ${BOLD}bash install_skill_for_all_platform.sh --verify${NC} to confirm."
+  echo -e "  Run ${BOLD}bash install-skill.sh --verify${NC} to confirm."
 }
 
 # ─── Help ────────────────────────────────────────────────────
@@ -526,12 +526,12 @@ show_help() {
   echo "db-relationship-explainer Skill Installer  ${VERSION}"
   echo ""
   echo "Usage:"
-  echo "  bash install_skill_for_all_platform.sh              Interactive install"
-  echo "  bash install_skill_for_all_platform.sh --update            Update all found installations"
-  echo "  bash install_skill_for_all_platform.sh --update <dir>      Update a specific installation directory"
-  echo "  bash install_skill_for_all_platform.sh --verify            Verify all found install(s)"
-  echo "  bash install_skill_for_all_platform.sh --verify <dir>      Verify a specific installation"
-  echo "  bash install_skill_for_all_platform.sh --help              This help"
+  echo "  bash install-skill.sh              Interactive install"
+  echo "  bash install-skill.sh --update            Update all found installations"
+  echo "  bash install-skill.sh --update <dir>      Update a specific installation directory"
+  echo "  bash install-skill.sh --verify            Verify all found install(s)"
+  echo "  bash install-skill.sh --verify <dir>      Verify a specific installation"
+  echo "  bash install-skill.sh --help              This help"
   echo ""
   echo "Options:"
   echo "  --lang zh|en    SKILL language: zh=中文 (default), en=English"
@@ -604,11 +604,12 @@ main() {
       echo -e "  ${BOLD}Next steps:${NC}"
       echo -e "    1. Create config: cp .env.dbexplain.example ~/.config/dbexplain/.env.dbexplain"
       echo -e "       Then edit ~/.config/dbexplain/.env.dbexplain with your real DB credentials."
-      echo -e "    2. Encrypt config (recommended):"
+      echo -e "    2. List configured DBs: dbexplain list -env"
+      echo -e "    3. Encrypt config (recommended):"
       echo -e "         dbexplain encrypt ~/.config/dbexplain/.env.dbexplain"
       echo -e "         rm ~/.config/dbexplain/.env.dbexplain"
       echo -e "         dbexplain -env"
-      echo -e "    3. Verify —— ${BOLD}bash install_skill_for_all_platform.sh --verify${NC}"
+      echo -e "    4. Verify —— ${BOLD}bash install-skill.sh --verify${NC}"
       echo ""
       ;;
     *)

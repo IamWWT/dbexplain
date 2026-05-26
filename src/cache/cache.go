@@ -18,7 +18,7 @@ import (
 	"strings"
 	"time"
 
-	"dbexplain/schema"
+	"github.com/IamWWT/dbexplain/schema"
 )
 
 // Fingerprint is a deterministically computed signature of a table's schema.

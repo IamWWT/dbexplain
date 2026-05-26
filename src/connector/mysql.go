@@ -8,9 +8,10 @@ import (
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
-	"dbexplain/capabilities"
-	"dbexplain/dsn"
-	"dbexplain/schema"
+	"github.com/IamWWT/dbexplain/capabilities"
+	"github.com/IamWWT/dbexplain/dsn"
+	"github.com/IamWWT/dbexplain/query"
+	"github.com/IamWWT/dbexplain/schema"
 )
 
 func init() {
@@ -215,6 +216,29 @@ func fillMySQLTable(ctx context.Context, db *sql.DB, dbName string, t *schema.Ta
 		logf(ctx, "[mysql] FK query failed for %s: %v", t.Name, err)
 	}
 
+	// fetch FK on_delete/on_update rules from REFERENTIAL_CONSTRAINTS
+	if len(t.ForeignKeys) > 0 {
+		ruleRows, err := db.QueryContext(ctx, `
+			SELECT CONSTRAINT_NAME, DELETE_RULE, UPDATE_RULE
+			FROM information_schema.REFERENTIAL_CONSTRAINTS
+			WHERE CONSTRAINT_SCHEMA=? AND TABLE_NAME=?`, dbName, t.Name)
+		if err == nil {
+			defer ruleRows.Close()
+			for ruleRows.Next() {
+				var cName, delRule, updRule string
+				if err := ruleRows.Scan(&cName, &delRule, &updRule); err != nil {
+					continue
+				}
+				for _, fk := range t.ForeignKeys {
+					if fk.Name == cName {
+						fk.OnDelete = delRule
+						fk.OnUpdate = updRule
+					}
+				}
+			}
+		}
+	}
+
 	// 操作语义采集 (Phase 3) — performance_schema 可能不可用，静默跳过
 	collectMySQLOpStats(ctx, db, dbName, t)
 }
@@ -301,6 +325,34 @@ func buildMySQLDSN(d *dsn.DSN) string {
 
 func quoteMySQL(name string) string {
 	return "`" + strings.ReplaceAll(name, "`", "``") + "`"
+}
+
+// ExecQuery implements query.Queryable for MySQL.
+func (mysqlConnector) ExecQuery(ctx context.Context, opts query.ExecuteOpts) (*query.QueryResult, error) {
+	connStr := buildMySQLDSN(opts.DSN)
+	db, err := sql.Open("mysql", connStr)
+	if err != nil {
+		return nil, fmt.Errorf("mysql open: %w", err)
+	}
+	defer db.Close()
+
+	// Set max execution time if timeout specified
+	if opts.Timeout > 0 {
+		db.ExecContext(ctx, fmt.Sprintf("SET SESSION max_execution_time=%d", opts.Timeout*1000))
+	}
+
+	runCtx := ctx
+	if opts.Timeout > 0 {
+		var cancel context.CancelFunc
+		runCtx, cancel = context.WithTimeout(ctx, time.Duration(opts.Timeout)*time.Second)
+		defer cancel()
+	}
+
+	result, err := executeSQLQuery(runCtx, db, opts.SQL, opts.MaxRows)
+	if err != nil {
+		return nil, fmt.Errorf("mysql query: %w", err)
+	}
+	return result, nil
 }
 
 func isMySQLSystemDB(name string) bool {

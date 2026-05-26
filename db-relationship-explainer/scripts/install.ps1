@@ -1,5 +1,5 @@
 # ============================================================
-# dbexplain v0.0.6 — One-click installer (Windows PowerShell)
+# dbexplain v0.0.7 — One-click installer (Windows PowerShell)
 # ============================================================
 # Installs the dbexplain binary and optionally deploys
 # the AI Agent skill.
@@ -22,7 +22,7 @@ param(
     [switch]$Help
 )
 
-$VERSION = "v0.0.6"
+$VERSION = "v0.0.7"
 $REPO = "IamWWT/understand_dbs_skills"
 $TOOL_NAME = "dbexplain"
 $BINARY_DOWNLOAD = "dbexplain-windows-amd64.exe"
@@ -255,6 +255,7 @@ Write-Host "  Binary : $DestBin"
 Write-Host "  Config : $EnvFilePath"
 Write-Host ""
 Write-Host "  Quick test : dbexplain --version"
+Write-Host "  List DBs  : dbexplain list -env"
 Write-Host "  Edit config: notepad $EnvFilePath"
 Write-Host "  Run        : dbexplain -env"
 Write-Host ""

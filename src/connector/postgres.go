@@ -8,9 +8,10 @@ import (
 	"time"
 
 	_ "github.com/lib/pq"
-	"dbexplain/capabilities"
-	"dbexplain/dsn"
-	"dbexplain/schema"
+	"github.com/IamWWT/dbexplain/capabilities"
+	"github.com/IamWWT/dbexplain/dsn"
+	"github.com/IamWWT/dbexplain/query"
+	"github.com/IamWWT/dbexplain/schema"
 )
 
 func init() {
@@ -246,9 +247,10 @@ func fillPGTable(ctx context.Context, db *sql.DB, schemaName, baseName string, t
 		logf(ctx, "[postgres] index query failed for %s: %v", t.Name, err)
 	}
 
-	// foreign keys
+	// foreign keys (including on_delete/on_update from pg_constraint)
 	fkRows, err := db.QueryContext(ctx, `
-		SELECT c.conname, a.attname, c2.relname, a2.attname
+		SELECT c.conname, a.attname, c2.relname, a2.attname,
+		       c.confupdtype, c.confdeltype
 		FROM pg_constraint c
 		JOIN pg_class c1 ON c1.oid=c.conrelid
 		JOIN pg_class c2 ON c2.oid=c.confrelid
@@ -260,12 +262,18 @@ func fillPGTable(ctx context.Context, db *sql.DB, schemaName, baseName string, t
 		fkMap := map[string]*schema.ForeignKey{}
 		for fkRows.Next() {
 			var name, col, refTable, refCol string
-			if err := fkRows.Scan(&name, &col, &refTable, &refCol); err != nil {
+			var onUpdateChar, onDeleteChar string
+			if err := fkRows.Scan(&name, &col, &refTable, &refCol, &onUpdateChar, &onDeleteChar); err != nil {
 				continue
 			}
 			fk, ok := fkMap[name]
 			if !ok {
-				fk = &schema.ForeignKey{Name: name, RefTable: refTable}
+				fk = &schema.ForeignKey{
+					Name:     name,
+					RefTable: refTable,
+					OnUpdate: pgFKAction(onUpdateChar),
+					OnDelete: pgFKAction(onDeleteChar),
+				}
 				fkMap[name] = fk
 				t.ForeignKeys = append(t.ForeignKeys, fk)
 			}
@@ -331,4 +339,51 @@ func buildPGDSN(d *dsn.DSN) string {
 	}
 	return fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s connect_timeout=5",
 		host, port, d.User, d.Password, dbname, sslmode)
+}
+
+// ExecQuery implements query.Queryable for PostgreSQL and GaussDB.
+func (postgresConnector) ExecQuery(ctx context.Context, opts query.ExecuteOpts) (*query.QueryResult, error) {
+	connStr := buildPGDSN(opts.DSN)
+	db, err := sql.Open("postgres", connStr)
+	if err != nil {
+		return nil, fmt.Errorf("postgres open: %w", err)
+	}
+	defer db.Close()
+
+	// Set statement timeout if specified
+	if opts.Timeout > 0 {
+		db.ExecContext(ctx, fmt.Sprintf("SET statement_timeout = '%ds'", opts.Timeout))
+	}
+
+	runCtx := ctx
+	if opts.Timeout > 0 {
+		var cancel context.CancelFunc
+		runCtx, cancel = context.WithTimeout(ctx, time.Duration(opts.Timeout)*time.Second)
+		defer cancel()
+	}
+
+	result, err := executeSQLQuery(runCtx, db, opts.SQL, opts.MaxRows)
+	if err != nil {
+		return nil, fmt.Errorf("postgres query: %w", err)
+	}
+	return result, nil
+}
+
+// pgFKAction maps pg_constraint FK action codes to human-readable strings.
+// 'a'=NO ACTION, 'r'=RESTRICT, 'c'=CASCADE, 'n'=SET NULL, 'd'=SET DEFAULT
+func pgFKAction(code string) string {
+	switch code {
+	case "a":
+		return "NO ACTION"
+	case "r":
+		return "RESTRICT"
+	case "c":
+		return "CASCADE"
+	case "n":
+		return "SET NULL"
+	case "d":
+		return "SET DEFAULT"
+	default:
+		return code
+	}
 }

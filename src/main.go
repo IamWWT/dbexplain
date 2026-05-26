@@ -19,18 +19,18 @@ import (
 
 	"github.com/joho/godotenv"
 
-	"dbexplain/analyze"
-	"dbexplain/capabilities"
-	"dbexplain/connector"
-	"dbexplain/cache"
-	ctxcompress "dbexplain/context"
-	"dbexplain/crypto"
-	"dbexplain/dsn"
-	"dbexplain/render"
-	"dbexplain/schema"
+	"github.com/IamWWT/dbexplain/analyze"
+	"github.com/IamWWT/dbexplain/capabilities"
+	"github.com/IamWWT/dbexplain/connector"
+	"github.com/IamWWT/dbexplain/cache"
+	ctxcompress "github.com/IamWWT/dbexplain/context"
+	"github.com/IamWWT/dbexplain/crypto"
+	"github.com/IamWWT/dbexplain/dsn"
+	"github.com/IamWWT/dbexplain/render"
+	"github.com/IamWWT/dbexplain/schema"
 )
 
-var version = "v0.0.6"
+var version = "v0.0.7"
 
 type dsnEntry struct {
 	raw    string // DSN string
@@ -69,6 +69,12 @@ func main() {
 			return
 		case "all":
 			handleAllManual(os.Args[2:])
+			return
+		case "execute":
+			handleExecute(os.Args[2:])
+			return
+		case "list":
+			handleList(os.Args[2:])
 			return
 		}
 	}
@@ -131,15 +137,17 @@ func main() {
 		}
 	}
 
-	logDir := *logDirFlag
-	if err := os.MkdirAll(logDir, 0755); err != nil {
-		log.Fatalf("create log dir: %v", err)
-	}
+	logDir := resolveLogDir(*logDirFlag)
 
 	// 过滤
 	entries = filterDSNs(entries, *includeFilter, *excludeFilter, logDir)
 	if len(entries) == 0 {
 		log.Fatal("no DSNs provided (or all filtered out). Use -dsn, -env, or -config")
+	}
+
+	// Print DSN mapping summary when loaded from .env (helps users map --db N to labels)
+	if *useEnv && !*jsonOut {
+		printDSNMapping(entries)
 	}
 
 	var dsns []string
@@ -558,6 +566,120 @@ func sanitizeErr(err error) error {
 	return fmt.Errorf("%s", msg)
 }
 
+// printDSNMapping prints a concise summary of DSN entries with their env keys,
+// so users can map --db <N> to the correct label even when .env is encrypted.
+// Output format: "  DB1 → label  (kind://user:***@host:port/db)"
+func printDSNMapping(entries []dsnEntry) {
+	hasEnvKeys := false
+	for _, e := range entries {
+		if e.envKey != "" {
+			hasEnvKeys = true
+			break
+		}
+	}
+	if !hasEnvKeys {
+		return
+	}
+
+	fmt.Fprintf(os.Stderr, "\n> DSN mapping:\n")
+	for _, e := range entries {
+		parsed, err := dsn.ParseDSN(e.raw)
+		if err != nil {
+			continue
+		}
+		key := e.envKey
+		if key == "" {
+			key = "—"
+		}
+		label := parsed.Label
+		if label == "" {
+			label = "(no label)"
+		}
+		redacted := parsed.Redacted()
+		fmt.Fprintf(os.Stderr, "  %-4s → %-20s  %s\n", key, label, redacted)
+	}
+	fmt.Fprintln(os.Stderr)
+}
+
+// ─── list 子命令 ───────────────────────────────────────────────
+// handleList prints a table of all configured DSNs from .env/config,
+// showing DB index, label, kind, host:port, and database — so users
+// know which --db N or --label to use, even when .env is encrypted.
+
+func handleList(args []string) {
+	fs := flag.NewFlagSet("list", flag.ExitOnError)
+	envMode := fs.Bool("env", true, "Load from .env config file")
+	dsnFlag := fs.String("dsn", "", "Direct DSN string (repeatable)")
+	configFile := fs.String("config", "", "JSON config file path")
+	fs.Parse(args)
+
+	var entries []dsnEntry
+
+	if *configFile != "" {
+		for _, raw := range loadFromConfig(*configFile) {
+			entries = append(entries, dsnEntry{raw: raw})
+		}
+	}
+
+	if *dsnFlag != "" {
+		entries = append(entries, dsnEntry{raw: *dsnFlag})
+	}
+
+	if *envMode && *configFile == "" && *dsnFlag == "" {
+		configPath := findConfigFile()
+		if configPath == "" {
+			fmt.Fprintln(os.Stderr, "  no config file found. Create .env.dbexplain (or .env.dbexplain.enc) in",
+				configDirDisplay(), "or current directory.")
+			os.Exit(1)
+		}
+		if err := loadEnvFile(configPath); err != nil {
+			fmt.Fprintf(os.Stderr, "ERROR: load config %s: %v\n", configPath, sanitizeErr(err))
+			os.Exit(1)
+		}
+		entries = append(entries, loadFromEnv()...)
+	}
+
+	if len(entries) == 0 {
+		fmt.Fprintln(os.Stderr, "  no DSNs found. Use -env, -dsn, or -config.")
+		os.Exit(1)
+	}
+
+	fmt.Println()
+	fmt.Println("  Available databases:")
+	fmt.Println()
+
+	// Header
+	fmt.Printf("  %-6s %-22s %-17s %-24s %s\n", "INDEX", "LABEL", "KIND", "HOST:PORT", "DATABASE")
+	fmt.Println("  " + strings.Repeat("─", 90))
+
+	for _, e := range entries {
+		parsed, err := dsn.ParseDSN(e.raw)
+		if err != nil {
+			continue
+		}
+		key := e.envKey
+		if key == "" {
+			key = "—"
+		}
+		label := parsed.Label
+		if label == "" {
+			label = "(no label)"
+		}
+		hostPort := parsed.Host
+		if parsed.Port != "" {
+			hostPort += ":" + parsed.Port
+		}
+		dbName := parsed.DBName
+		if dbName == "" {
+			dbName = "(n/a)"
+		}
+		fmt.Printf("  %-6s %-22s %-17s %-24s %s\n", key, label, parsed.Kind, hostPort, dbName)
+	}
+	fmt.Println()
+	fmt.Println("  Use --db <INDEX> or --label <LABEL> with execute subcommand.")
+	fmt.Println()
+}
+
 func loadFromEnv() []dsnEntry {
 	var entries []envEntry
 
@@ -697,6 +819,39 @@ func encryptionKeyPath() string {
 		return ""
 	}
 	return filepath.Join(dir, ".encryption_key")
+}
+
+// resolveLogDir creates the log directory, falling back if the primary path is not writable.
+// Order: requested path → $XDG_STATE_HOME/dbexplain/logs → $HOME/.local/state/dbexplain/logs → os.TempDir()/dbexplain/logs
+// Returns the resolved log directory path.
+func resolveLogDir(requested string) string {
+	// 1. Try the requested path (default: /var/log/dbexplain)
+	if err := os.MkdirAll(requested, 0755); err == nil {
+		return requested
+	}
+
+	candidates := []string{}
+	// 2. $XDG_STATE_HOME/dbexplain/logs
+	if d := os.Getenv("XDG_STATE_HOME"); d != "" {
+		candidates = append(candidates, filepath.Join(d, "dbexplain", "logs"))
+	}
+	// 3. $HOME/.local/state/dbexplain/logs
+	if homeDir, err := os.UserHomeDir(); err == nil {
+		candidates = append(candidates, filepath.Join(homeDir, ".local", "state", "dbexplain", "logs"))
+	}
+	// 4. os.TempDir()/dbexplain/logs
+	candidates = append(candidates, filepath.Join(os.TempDir(), "dbexplain", "logs"))
+
+	for _, dir := range candidates {
+		if err := os.MkdirAll(dir, 0755); err == nil {
+			log.Printf("log directory: %s (requested %s not writable)", dir, requested)
+			return dir
+		}
+	}
+
+	// All failed — use stderr only (each DSN goroutine already falls back to stderr)
+	log.Printf("no writable log directory found; logging to stderr only")
+	return os.TempDir()
 }
 
 // readEncryptionKey returns the password for decrypting password-mode .enc files.
@@ -920,16 +1075,20 @@ func printHelp(lang string) {
 	fmt.Fprint(out, p(
 		"\ndbexplain — Database Context Compiler  "+version+"\n\n"+
 			"Usage:\n"+
-			"  dbexplain [flags]             Collect & analyze database schemas\n"+
-			"  dbexplain encrypt <file>      Encrypt .env config with machine fingerprint\n"+
-			"  dbexplain <dbtype>            Database-specific reference (e.g. mysql, redis)\n"+
-			"  dbexplain all                 Full reference manual\n\n",
+			"  dbexplain [flags]              Collect & analyze database schemas\n"+
+			"  dbexplain list                 List all configured databases\n"+
+			"  dbexplain execute <query>      Run read-only query (SQL / JSON / native)\n"+
+			"  dbexplain encrypt <file>       Encrypt .env config with machine fingerprint\n"+
+			"  dbexplain <dbtype>             Database-specific reference (e.g. mysql, redis)\n"+
+			"  dbexplain all                  Full reference manual\n\n",
 		"\ndbexplain — Database Context Compiler  "+version+"\n\n"+
 			"Usage:\n"+
-			"  dbexplain [flags]             Collect & analyze database schemas\n"+
-			"  dbexplain encrypt <file>      Encrypt .env config with machine fingerprint\n"+
-			"  dbexplain <dbtype>            Database-specific reference (e.g. mysql, redis)\n"+
-			"  dbexplain all                 Full reference manual\n\n",
+			"  dbexplain [flags]              Collect & analyze database schemas\n"+
+			"  dbexplain list                 List all configured databases\n"+
+			"  dbexplain execute <query>      Run read-only query (SQL / JSON / native)\n"+
+			"  dbexplain encrypt <file>       Encrypt .env config with machine fingerprint\n"+
+			"  dbexplain <dbtype>             Database-specific reference (e.g. mysql, redis)\n"+
+			"  dbexplain all                  Full reference manual\n\n",
 	))
 
 	fmt.Fprint(out, p(
@@ -960,22 +1119,36 @@ func printHelp(lang string) {
 
 	fmt.Fprint(out, p(
 		"Examples:\n"+
-			"  dbexplain -env                  Scan all databases from config\n"+
-			"  dbexplain encrypt config.env    Encrypt config file\n"+
-			"  dbexplain mysql                 MySQL reference manual\n"+
-			"  dbexplain all                   Full reference manual\n"+
-			"  dbexplain all --filter redis    Search manual by keyword\n\n",
+			"  dbexplain -env                    Scan all databases from config\n"+
+			"  dbexplain list                    List configured databases (DB index → label)\n"+
+			"  dbexplain execute -env --db 1     Run SQL query on first database\n"+
+			"    'SELECT COUNT(*) FROM users'\n"+
+			"  dbexplain encrypt config.env      Encrypt config file\n"+
+			"  dbexplain mysql                   MySQL reference manual\n"+
+			"  dbexplain all                     Full reference manual\n"+
+			"  dbexplain all --filter redis      Search manual by keyword\n\n",
 		"Examples:\n"+
-			"  dbexplain -env                  Scan all databases from config\n"+
-			"  dbexplain encrypt config.env    Encrypt config file\n"+
-			"  dbexplain mysql                 MySQL reference manual\n"+
-			"  dbexplain all                   Full reference manual\n"+
-			"  dbexplain all --filter redis    Search manual by keyword\n\n",
+			"  dbexplain -env                    Scan all databases from config\n"+
+			"  dbexplain list                    List configured databases (DB index → label)\n"+
+			"  dbexplain execute -env --db 1     Run SQL query on first database\n"+
+			"    'SELECT COUNT(*) FROM users'\n"+
+			"  dbexplain encrypt config.env      Encrypt config file\n"+
+			"  dbexplain mysql                   MySQL reference manual\n"+
+			"  dbexplain all                     Full reference manual\n"+
+			"  dbexplain all --filter redis      Search manual by keyword\n\n",
 	))
 
 	fmt.Fprint(out, p(
-		"See: dbexplain encrypt -h  |  dbexplain <type> -h  |  dbexplain all -h\n",
-		"See: dbexplain encrypt -h  |  dbexplain <type> -h  |  dbexplain all -h\n",
+		"See:\n"+
+			"  dbexplain list -h       list subcommand help\n"+
+			"  dbexplain execute -h    execute subcommand help\n"+
+			"  dbexplain encrypt -h    encrypt subcommand help\n"+
+			"  dbexplain all -h        full manual help\n",
+		"See:\n"+
+			"  dbexplain list -h       list subcommand help\n"+
+			"  dbexplain execute -h    execute subcommand help\n"+
+			"  dbexplain encrypt -h    encrypt subcommand help\n"+
+			"  dbexplain all -h        full manual help\n",
 	))
 }
 
@@ -1291,6 +1464,130 @@ DESCRIPTION
 
     issues[] fields:
       severity (warn|info), table, message
+`))
+
+	fmt.Print(p(`
+
+─── 列出可用数据库 ───────────────────────────────────────────
+
+    子命令:
+
+      dbexplain list
+
+    列出当前环境中所有已配置的数据库连接（从 .env / .env.dbexplain /
+    .env.dbexplain.enc 加载）。支持加密配置文件自动解密。
+
+    输出字段:
+      INDEX    DB 索引（用于 --db N）
+      LABEL    DSN 标签（用于 --label）
+      KIND     数据库类型
+      HOST:PORT  主机与端口
+      DATABASE   数据库名
+
+    密码安全:
+      此命令仅显示元数据（标签/类型/主机/库名），不输出 DSN 连接串、
+      密码或任何凭证信息。加密配置文件的内容不会被解密显示。
+
+    示例:
+      dbexplain list                    # 列出 .env 中所有数据库
+      dbexplain list --config db.json   # 从 JSON 配置文件列出
+
+─── LIST CONFIGURED DATABASES ─────────────────────────────────
+
+    Subcommand:
+
+      dbexplain list
+
+    Lists all configured database connections from .env / .env.dbexplain /
+    .env.dbexplain.enc. Supports automatic decryption of encrypted configs.
+
+    Output fields:
+      INDEX    DB index (for --db N)
+      LABEL    DSN label (for --label)
+      KIND     Database type
+      HOST:PORT  Host and port
+      DATABASE   Database name
+
+    Password safety:
+      Only metadata (label/type/host/dbname) is displayed. No DSN connection
+      strings, passwords, or credentials are ever exposed. Encrypted config
+      content is never decrypted for display.
+
+    Examples:
+      dbexplain list                    # List all databases from .env
+      dbexplain list --config db.json   # List from JSON config file
+
+─── 只读查询执行 ──────────────────────────────────────────────
+
+    子命令:
+      dbexplain execute [flags] <query>
+
+    在沙箱保护下执行只读 SQL/原生查询，返回结构化数据表。
+    输出格式与 schema 采集 (instances/refs) 完全分离 (columns/rows)。
+
+    参数:
+      -env                      从配置文件加载 DSN
+      -dsn <string>             直接指定连接串
+      -config <file>            JSON 配置文件
+      --label <name>            按 label 匹配 DSN
+      --db <N>                  按 DB 编号匹配 (DB1=1)
+      --limit <N>               最大返回行数 (默认 1000)
+      --timeout <N>             查询超时秒数 (默认 30)
+      --explain                 包裹 EXPLAIN 返回查询计划
+
+    SQL 查询 (MySQL/PG/GaussDB/SQLite/ClickHouse/ES):
+      dbexplain execute -env --label shop-db 'SELECT COUNT(*) FROM orders'
+      dbexplain execute -env --db 1 --explain 'SELECT * FROM users WHERE id=1'
+      dbexplain execute -env --label es 'SHOW TABLES'
+
+    非 SQL 原生查询:
+      dbexplain execute -env --label mongo '{"find":"users","filter":{},"limit":10}'
+      dbexplain execute -env --label redis 'GET user:1001'
+      dbexplain execute -env --label qdrant '{"count":"documents"}'
+
+    安全保护:
+      • SQL 三层校验 — 动词白名单 + 多语句检测 + 自动 LIMIT
+      • 非 SQL 内部白名单 — Redis 30+ 命令，MongoDB find/aggregate
+      • 并发互斥 — 同一 label 同时仅一个查询
+      • 双超时 — 应用层 context + 数据库层语句超时
+      • 密码脱敏 — 查询结果不含任何连接信息或密码
+`,
+		`
+
+─── READ-ONLY QUERY EXECUTION ─────────────────────────────────
+
+    Subcommand:
+      dbexplain execute [flags] <query>
+
+    Run sandboxed read-only SQL/native queries with structured data output.
+    Output format is fully separated from schema collection (columns/rows vs instances/refs).
+
+    Flags:
+      -env                      Load DSNs from config file
+      -dsn <string>             Direct DSN connection string
+      -config <file>            JSON config file
+      --label <name>            Match DSN by label
+      --db <N>                  Match DSN by DB index (DB1=1)
+      --limit <N>               Max rows returned (default 1000)
+      --timeout <N>             Query timeout in seconds (default 30)
+      --explain                 Wrap with EXPLAIN for query plan
+
+    SQL queries (MySQL/PG/GaussDB/SQLite/ClickHouse/ES):
+      dbexplain execute -env --label shop-db 'SELECT COUNT(*) FROM orders'
+      dbexplain execute -env --db 1 --explain 'SELECT * FROM users WHERE id=1'
+      dbexplain execute -env --label es 'SHOW TABLES'
+
+    Non-SQL native queries:
+      dbexplain execute -env --label mongo '{"find":"users","filter":{},"limit":10}'
+      dbexplain execute -env --label redis 'GET user:1001'
+      dbexplain execute -env --label qdrant '{"count":"documents"}'
+
+    Security:
+      • SQL triple-layer check — verb whitelist + multi-statement detect + auto LIMIT
+      • Non-SQL internal whitelist — Redis 30+ commands, MongoDB find/aggregate
+      • Concurrent mutex — only one query per label at a time
+      • Dual timeout — application context + database statement timeout
+      • Password redaction — query results contain no connection info or passwords
 `))
 
 	fmt.Print(p(`

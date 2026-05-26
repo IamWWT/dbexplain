@@ -153,9 +153,11 @@ func TestRedacted(t *testing.T) {
 		raw  string
 		want string
 	}{
-		{raw: "mysql://user:secret@host/db", want: "mysql://user:***@host/db"},
-		{raw: "postgres://admin:p@ss@host:5432/db", want: "postgres://admin:***@host:5432/db"},
-		{raw: "redis://:mypwd@host:6379/0", want: "redis://:***@host:6379/0"},
+		{raw: "mysql://user:secret@host/db", want: "mysql://{dbuser}:{dbpassword}@host/db"},
+		{raw: "postgres://admin:p@ss@host:5432/db", want: "postgres://{dbuser}:{dbpassword}@host:5432/db"},
+		{raw: "redis://:mypwd@host:6379/0", want: "redis://{dbpassword}@host:6379/0"},
+		{raw: "redis://default:Pwd1Open2%23IMD@host:6389/0", want: "redis://{dbuser}:{dbpassword}@host:6389/0"},
+		{raw: "mongodb://user:p%40ss@host:27017/db", want: "mongodb://{dbuser}:{dbpassword}@host:27017/db"},
 		{raw: "clickhouse://host/db", want: "clickhouse://host/db"},
 	}
 

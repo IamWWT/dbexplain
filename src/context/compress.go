@@ -16,9 +16,9 @@ import (
 	"sort"
 	"strings"
 
-	"dbexplain/analyze"
-	"dbexplain/diagnostics"
-	"dbexplain/schema"
+	"github.com/IamWWT/dbexplain/analyze"
+	"github.com/IamWWT/dbexplain/diagnostics"
+	"github.com/IamWWT/dbexplain/schema"
 )
 
 // ── Summary ──

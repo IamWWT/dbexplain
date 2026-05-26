@@ -111,6 +111,39 @@ ORDER BY k.CONSTRAINT_NAME, k.ORDINAL_POSITION
 
 ---
 
+## execute 只读查询
+
+`dbexplain` 提供 `execute` 子命令，支持对 MySQL 实例执行只读 SQL 查询，安全地将结果以表格形式输出到终端。
+
+### 查询格式
+
+标准 SQL 语句，支持 `SELECT`、`EXPLAIN`、`WITH`（CTE）、`SHOW`、`DESCRIBE`/`DESC`、`PRAGMA` 等只读操作。
+
+### 校验机制
+
+- **SQLGuard 动词白名单**：所有查询在到达数据库之前，先经过 `sqlguard` 模块的语句动词白名单校验，仅允许 `SELECT`、`EXPLAIN`、`WITH`、`SHOW`、`DESCRIBE`、`DESC`、`PRAGMA` 七类只读动词通过。任何包含 `INSERT`、`UPDATE`、`DELETE`、`DROP`、`ALTER` 等写操作的语句将被拒绝。
+- **多语句检测**：禁止分号分隔的多条 SQL 语句，防止通过 `SELECT 1; DROP TABLE ...` 等方式绕过白名单。
+
+### 自动 LIMIT 追加
+
+- 若 `SELECT`、`WITH`、`EXPLAIN` 语句中未显式包含 `LIMIT` 子句，工具会自动追加 `LIMIT 1000`，防止全量数据刷屏或大结果集耗竭内存。
+- `SHOW`、`DESCRIBE` 等命令不追加 LIMIT，因其返回行数天然可控。
+
+### 超时控制
+
+- **数据库层**：执行前通过 `SET SESSION max_execution_time=N000`（N 为毫秒数）设置 MySQL 会话级最大执行时间，查询超时将由 MySQL Server 主动终止。
+- **应用层**：通过 Go `context.WithTimeout` 设置应用级超时，双重保障避免长时间阻塞。
+
+### 执行方式
+
+使用 Go 标准库 `database/sql` 统一接口，底层驱动为 `go-sql-driver/mysql`，通过参数化查询执行。
+
+### 最大行数控制
+
+由 `--limit` 命令行标志控制，默认值为 1000。超出该行数的结果将被截断。
+
+---
+
 ## 二、常见问题与排障
 
 ### 2.1 连接被拒绝或认证失败

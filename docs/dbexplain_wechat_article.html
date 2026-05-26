@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>dbexplain v0.0.6 发布推文</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700;900&family=JetBrains+Mono:wght@400;600&display=swap');
+
+  :root {
+    --ink: #1a1a1a;
+    --paper: #faf8f4;
+    --rust: #c0392b;
+    --rust-light: #e74c3c;
+    --gold: #d4a84b;
+    --gold-light: #f0c040;
+    --muted: #6b6560;
+    --border: #d8d0c4;
+    --code-bg: #1e1e1e;
+    --code-fg: #d4d4d4;
+    --green: #2ecc71;
+    --blue: #3498db;
+    --tag-bg: #f0ece4;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'Noto Serif SC', 'Source Han Serif SC', 'SimSun', serif;
+    font-size: 15px;
+    line-height: 1.9;
+    max-width: 680px;
+    margin: 0 auto;
+    padding: 40px 24px 80px;
+  }
+
+  /* ── 顶部装饰线 ── */
+  .top-rule {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 32px;
+  }
+  .top-rule .line { flex: 1; height: 2px; background: var(--ink); }
+  .top-rule .dot { width: 6px; height: 6px; background: var(--rust); border-radius: 50%; }
+
+  /* ── 标签行 ── */
+  .tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 20px;
+  }
+  .tag {
+    background: var(--tag-bg);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    padding: 3px 10px;
+    letter-spacing: 0.05em;
+  }
+
+  /* ── 主标题 ── */
+  h1.headline {
+    font-size: 28px;
+    font-weight: 900;
+    line-height: 1.3;
+    letter-spacing: -0.01em;
+    margin-bottom: 8px;
+    color: var(--ink);
+  }
+  h1.headline em {
+    font-style: normal;
+    color: var(--rust);
+    border-bottom: 3px solid var(--rust);
+    padding-bottom: 1px;
+  }
+
+  /* ── 副标题 ── */
+  .subtitle {
+    font-size: 13px;
+    color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 0.03em;
+    margin-bottom: 36px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  /* ── 引言块 ── */
+  .lede {
+    font-size: 16px;
+    font-weight: 600;
+    line-height: 1.8;
+    color: var(--ink);
+    padding: 20px 24px;
+    border-left: 4px solid var(--rust);
+    background: #fdf5f5;
+    margin-bottom: 40px;
+  }
+
+  /* ── 章节标题 ── */
+  h2.section {
+    font-size: 20px;
+    font-weight: 700;
+    margin: 44px 0 16px;
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+  }
+  h2.section .num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--rust);
+    letter-spacing: 0.15em;
+    font-weight: 400;
+    text-transform: uppercase;
+  }
+
+  h3.subsection {
+    font-size: 15px;
+    font-weight: 700;
+    margin: 28px 0 10px;
+    color: var(--ink);
+    padding-left: 12px;
+    border-left: 3px solid var(--gold);
+  }
+
+  /* ── 正文段落 ── */
+  p { margin-bottom: 14px; }
+
+  strong { color: var(--ink); font-weight: 700; }
+  em { font-style: italic; color: var(--muted); }
+
+  /* ── 代码块 ── */
+  pre {
+    background: var(--code-bg);
+    color: var(--code-fg);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    line-height: 1.7;
+    padding: 18px 20px;
+    margin: 16px 0;
+    overflow-x: auto;
+    border-left: 3px solid var(--rust);
+    position: relative;
+  }
+  pre .comment { color: #6a9955; }
+  pre .cmd { color: var(--gold-light); }
+  pre .flag { color: #9cdcfe; }
+  pre .str { color: #ce9178; }
+  code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12.5px;
+    background: #f0ece4;
+    padding: 1px 6px;
+    color: var(--rust);
+  }
+
+  /* ── 特性卡片网格 ── */
+  .feature-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin: 20px 0;
+  }
+  .feature-card {
+    border: 1px solid var(--border);
+    padding: 14px 16px;
+    background: white;
+  }
+  .feature-card .icon { font-size: 20px; margin-bottom: 6px; }
+  .feature-card .title { font-weight: 700; font-size: 13px; margin-bottom: 4px; }
+  .feature-card .desc { font-size: 12px; color: var(--muted); line-height: 1.6; }
+
+  /* ── 对比表格 ── */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0;
+    font-size: 13px;
+  }
+  th {
+    background: var(--ink);
+    color: white;
+    padding: 8px 12px;
+    text-align: left;
+    font-weight: 600;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.05em;
+  }
+  td {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  tr:nth-child(even) td { background: #f7f3ed; }
+  .badge-yes { color: #27ae60; font-weight: 700; }
+  .badge-partial { color: var(--gold); font-weight: 700; }
+
+  /* ── 数字亮点栏 ── */
+  .stats-row {
+    display: flex;
+    gap: 0;
+    margin: 28px 0;
+    border: 1px solid var(--border);
+  }
+  .stat {
+    flex: 1;
+    padding: 20px 16px;
+    text-align: center;
+    border-right: 1px solid var(--border);
+  }
+  .stat:last-child { border-right: none; }
+  .stat .number {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 30px;
+    font-weight: 700;
+    color: var(--rust);
+    display: block;
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+  .stat .label { font-size: 11px; color: var(--muted); letter-spacing: 0.05em; }
+
+  /* ── 流程步骤 ── */
+  .steps { margin: 16px 0; }
+  .step {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+    margin-bottom: 12px;
+  }
+  .step-num {
+    min-width: 28px;
+    height: 28px;
+    background: var(--rust);
+    color: white;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .step-content { font-size: 14px; line-height: 1.7; }
+  .step-content strong { color: var(--rust); }
+
+  /* ── 加密安全展示 ── */
+  .security-block {
+    background: #0d1117;
+    color: #c9d1d9;
+    padding: 20px;
+    margin: 20px 0;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    line-height: 1.8;
+    border-left: 3px solid var(--green);
+  }
+  .security-block .label { color: #8b949e; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 10px; }
+  .security-block .key { color: #79c0ff; }
+  .security-block .val { color: #a5d6ff; }
+  .security-block .ok { color: var(--green); }
+  .security-block .warn { color: #f0c040; }
+
+  /* ── 分隔线 ── */
+  .divider {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin: 40px 0;
+    color: var(--muted);
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    font-family: 'JetBrains Mono', monospace;
+    text-transform: uppercase;
+  }
+  .divider::before, .divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* ── 尾部 ── */
+  .footer {
+    margin-top: 56px;
+    padding-top: 24px;
+    border-top: 2px solid var(--ink);
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+  .footer .links { display: flex; flex-direction: column; gap: 4px; }
+  .footer .links a {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--muted);
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .footer .links a:hover { color: var(--rust); }
+  .footer .brand {
+    font-size: 11px;
+    color: var(--muted);
+    text-align: right;
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 0.08em;
+  }
+
+  /* ── 引用注意框 ── */
+  .callout {
+    background: #fffbf0;
+    border: 1px solid var(--gold);
+    border-left: 4px solid var(--gold);
+    padding: 14px 18px;
+    font-size: 13px;
+    color: #5a4a00;
+    margin: 16px 0;
+    line-height: 1.7;
+  }
+  .callout::before { content: '⚠ '; font-weight: 700; }
+
+  /* ── 支持矩阵 ── */
+  .db-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin: 16px 0;
+  }
+  .db-item {
+    border: 1px solid var(--border);
+    padding: 10px 12px;
+    font-size: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .db-item .db-name {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+    color: var(--ink);
+    font-size: 13px;
+  }
+  .db-item .db-note { color: var(--muted); font-size: 11px; }
+
+  @media (max-width: 500px) {
+    .feature-grid { grid-template-columns: 1fr; }
+    .stats-row { flex-direction: column; }
+    .stat { border-right: none; border-bottom: 1px solid var(--border); }
+    .stat:last-child { border-bottom: none; }
+    .db-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+
+<div class="top-rule">
+  <div class="line"></div>
+  <div class="dot"></div>
+  <div class="dot"></div>
+  <div class="dot"></div>
+  <div class="line"></div>
+</div>
+
+<div class="tags">
+  <span class="tag">开源工具</span>
+  <span class="tag">AI Agent</span>
+  <span class="tag">数据库安全</span>
+  <span class="tag">Go</span>
+  <span class="tag">v0.0.5 + v0.0.6</span>
+</div>
+
+<h1 class="headline">AI 时代，你的数据库密码<br>还在裸奔吗？<em>dbexplain</em> 来了</h1>
+
+<div class="subtitle">
+  dbexplain v0.0.5 + v0.0.6 合并发布 · 2026年5月 · Apache License
+</div>
+
+<div class="lede">
+  当大家把 MySQL、Redis、Elasticsearch 的连接串直接扔进 <code>.env</code> 文件，再交给 AI Agent 去消费时，有没有想过：那个明文密码，一旦服务器被入侵，就是一览无余的？
+</div>
+
+<p>过去几个月，<strong>AI Agent 与数据库的协作</strong>已经从"未来趋势"变成了"当下日常"。Claude Code、Cursor、DeepSeek 这些工具都在通过 Skill / Tool 机制直接调用数据库分析工具。但随之而来的安全隐患，大多数开发者选择了视而不见。</p>
+
+<p><strong>dbexplain</strong> 是一个专为 AI Agent 设计的数据库 Schema 上下文生成工具——零依赖、支持 9 种数据库、只读安全。这次 v0.0.5 + v0.0.6 合并发布，带来了三件大事。</p>
+
+<div class="stats-row">
+  <div class="stat">
+    <span class="number">9</span>
+    <span class="label">支持数据库类型</span>
+  </div>
+  <div class="stat">
+    <span class="number">133+</span>
+    <span class="label">测试用例全通过</span>
+  </div>
+  <div class="stat">
+    <span class="number">13</span>
+    <span class="label">Bug 修复</span>
+  </div>
+  <div class="stat">
+    <span class="number">0</span>
+    <span class="label">外部运行时依赖</span>
+  </div>
+</div>
+
+<div class="divider">重磅一</div>
+
+<h2 class="section"><span class="num">01</span>配置文件硬件绑定加密</h2>
+
+<p>这是本次发布最核心的安全特性。<code>v0.0.6</code> 新增 <code>encrypt</code> 子命令，将数据库密码与<strong>机器硬件指纹绑定加密</strong>。加密后的 <code>.enc</code> 文件，离开了这台机器就无法解密——即使攻击者拿到文件也没用。</p>
+
+<div class="security-block">
+  <div class="label">加密技术栈</div>
+  <span class="key">算法</span>   &nbsp;<span class="val">XChaCha20-Poly1305 (AEAD)  </span><span class="ok">← 认证加密，防篡改</span><br>
+  <span class="key">密钥派生</span>&nbsp;<span class="val">SHA-256（机器指纹哈希）</span><br>
+  <span class="key">迭代次数</span>&nbsp;<span class="val">PBKDF2-HMAC-SHA256 × 100,000</span><span class="warn"> ← 密码增强模式</span><br>
+  <span class="key">文件权限</span>&nbsp;<span class="val">0600</span><br>
+  <span class="key">CGO</span>    &nbsp;&nbsp;<span class="val">CGO_ENABLED=0  </span><span class="ok">← 全平台纯 Go 编译</span>
+</div>
+
+<h3 class="subsection">使用极其简单，三步完成</h3>
+
+<div class="steps">
+  <div class="step">
+    <div class="step-num">1</div>
+    <div class="step-content"><strong>加密明文配置</strong>：<code>dbexplain encrypt ~/.config/dbexplain/.env.dbexplain</code></div>
+  </div>
+  <div class="step">
+    <div class="step-num">2</div>
+    <div class="step-content"><strong>删除明文文件</strong>：<code>rm ~/.config/dbexplain/.env.dbexplain</code>（这步不能省！）</div>
+  </div>
+  <div class="step">
+    <div class="step-num">3</div>
+    <div class="step-content"><strong>正常使用</strong>：<code>dbexplain -env</code>，工具自动发现 <code>.enc</code> 文件并解密，对用户完全透明</div>
+  </div>
+</div>
+
+<div class="callout">
+  加密后务必删除明文 <code>.env.dbexplain</code> 文件，否则工具会优先匹配明文文件，加密形同虚设。
+</div>
+
+<p>机器指纹跨平台采集：Linux 读 <code>/etc/machine-id</code>，macOS 读 <code>sysctl hw.uuid</code>，Windows 读注册表 MachineGuid。各数据源独立采集，多重兜底。</p>
+
+<p>还支持<strong>密码增强模式</strong>——密码 + 机器指纹双重保护。密码写入 <code>.encryption_key</code> 文件（权限 600），运行时自动读取，同样无需人工干预。</p>
+
+<h3 class="subsection">为什么这件事很重要？</h3>
+
+<div class="feature-grid">
+  <div class="feature-card">
+    <div class="icon">🛡️</div>
+    <div class="title">纵深防御</div>
+    <div class="desc">即使服务器被入侵，攻击者拿到 .enc 文件也无法在其他机器解密使用</div>
+  </div>
+  <div class="feature-card">
+    <div class="icon">✅</div>
+    <div class="title">合规友好</div>
+    <div class="desc">满足等保、GDPR 对"敏感凭证静态加密"的要求，无需额外方案</div>
+  </div>
+  <div class="feature-card">
+    <div class="icon">🤖</div>
+    <div class="title">AI Agent 安全</div>
+    <div class="desc">Agent 只调用工具，绝不接触明文密码；加密文件由用户自行管理</div>
+  </div>
+  <div class="feature-card">
+    <div class="icon">⚡</div>
+    <div class="title">零运维负担</div>
+    <div class="desc">加密一次，之后每次 dbexplain -env 自动解密，完全透明</div>
+  </div>
+</div>
+
+<div class="divider">重磅二</div>
+
+<h2 class="section"><span class="num">02</span>CLI 子命令层级重构</h2>
+
+<p>原来的命令行是扁平的参数堆，用过的人都懂那种感受——<code>-h</code> 出来密密麻麻一页，完全不知道从哪下手。这次彻底重构为清晰的子命令结构：</p>
+
+<pre><span class="comment"># 新命令结构</span>
+<span class="cmd">dbexplain</span> <span class="flag">[flags]</span>           <span class="comment"># 采集和分析数据库 Schema</span>
+<span class="cmd">dbexplain</span> encrypt &lt;file&gt;    <span class="comment"># 加密 .env 配置</span>
+<span class="cmd">dbexplain</span> &lt;dbtype&gt;          <span class="comment"># 数据库专用参考手册</span>
+<span class="cmd">dbexplain</span> all               <span class="comment"># 完整参考手册（替代 --manual）</span>
+<span class="cmd">dbexplain</span> all <span class="flag">--filter</span> redis <span class="comment"># 关键词过滤</span></pre>
+
+<p>每种数据库现在有独立子命令，输出该数据库专属的参考手册（DSN 格式、采集机制、安全策略、完整示例）：</p>
+
+<pre><span class="cmd">dbexplain</span> mysql       <span class="comment"># MySQL 专属手册</span>
+<span class="cmd">dbexplain</span> redis       <span class="comment"># Redis 专属手册</span>
+<span class="cmd">dbexplain</span> es          <span class="comment"># Elasticsearch（别名 es）</span>
+<span class="cmd">dbexplain</span> pg          <span class="comment"># PostgreSQL（别名 pg）</span></pre>
+
+<div class="divider">重磅三</div>
+
+<h2 class="section"><span class="num">03</span>一键安装，开箱即用</h2>
+
+<p>过去需要把二进制和配置文件放在同一目录，在 CI/CD 或多环境下非常麻烦。现在一条命令搞定全局安装 + AI Skill 部署：</p>
+
+<pre><span class="comment"># 克隆并安装（Linux/macOS）</span>
+<span class="cmd">git clone</span> <span class="str">https://github.com/IamWWT/understand_dbs_skills.git</span>
+<span class="cmd">cd</span> understand_dbs_skills
+<span class="cmd">bash</span> db-relationship-explainer/scripts/install.sh
+
+<span class="comment"># 安装英文 Skill 版本</span>
+<span class="cmd">bash</span> db-relationship-explainer/scripts/install.sh <span class="flag">--lang en</span>
+
+<span class="comment"># Windows PowerShell</span>
+<span class="cmd">.\db-relationship-explainer\scripts\install.ps1</span></pre>
+
+<p>安装后 <code>dbexplain</code> 直接进系统 PATH，配置文件按 XDG 规范存放在 <code>~/.config/dbexplain/</code>。安装脚本完成后自动引导用户执行加密三步曲。</p>
+
+<p>Skill 同时拆分为 <strong>SKILL_ZH.md</strong>（中文）和 <strong>SKILL_EN.md</strong>（英文），适配 Claude Code、DeepSeek、AixCoding 等平台。</p>
+
+<div class="divider">工具定位</div>
+
+<h2 class="section"><span class="num">04</span>它到底解决什么问题？</h2>
+
+<p>一句话：<strong>让 AI Agent 读懂你的数据库，同时不暴露任何秘密</strong>。</p>
+
+<p>当你问 Claude Code "帮我优化这条 SQL" 或者 "分析用户表和订单表的关系"，AI 需要先理解数据库结构。传统做法是把 Schema DDL 手动粘贴给 AI——繁琐、容易遗漏、还可能带上密码。</p>
+
+<p>dbexplain 的工作流是：只读扫描 → 生成结构上下文（JSON 或文本） → 喂给 AI Agent。全程不需要 AI 接触任何连接凭证。</p>
+
+<pre><span class="comment"># 扫描所有数据源，输出 AI 友好的 JSON 上下文</span>
+<span class="cmd">dbexplain</span> <span class="flag">-env -json</span>
+
+<span class="comment"># 生成压缩的 AI 上下文文件</span>
+<span class="cmd">dbexplain</span> <span class="flag">-env --context</span> <span class="str">./ai-context/</span>
+
+<span class="comment"># 增量检测 Schema 变更</span>
+<span class="cmd">dbexplain</span> <span class="flag">-env --cache</span> schema_cache.json</pre>
+
+<h3 class="subsection">支持 9 种数据库</h3>
+
+<div class="db-grid">
+  <div class="db-item">
+    <span class="db-name">MySQL</span>
+    <span class="db-note">InnoDB/MyISAM，外键推断</span>
+  </div>
+  <div class="db-item">
+    <span class="db-name">PostgreSQL</span>
+    <span class="db-note">多 Schema，pgvector</span>
+  </div>
+  <div class="db-item">
+    <span class="db-name">GaussDB</span>
+    <span class="db-note">兼容 pg 协议</span>
+  </div>
+  <div class="db-item">
+    <span class="db-name">ClickHouse</span>
+    <span class="db-note">排序键/分区键</span>
+  </div>
+  <div class="db-item">
+    <span class="db-name">SQLite</span>
+    <span class="db-note">纯 Go，零 CGO</span>
+  </div>
+  <div class="db-item">
+    <span class="db-name">Redis</span>
+    <span class="db-note">键模式推断，集群</span>
+  </div>
+  <div class="db-item">
+    <span class="db-name">MongoDB</span>
+    <span class="db-note">近似文档数，零风险</span>
+  </div>
+  <div class="db-item">
+    <span class="db-name">Elasticsearch</span>
+    <span class="db-note">索引映射，HTTPS</span>
+  </div>
+  <div class="db-item">
+    <span class="db-name">Qdrant</span>
+    <span class="db-note">向量集合元数据</span>
+  </div>
+</div>
+
+<div class="divider">本次修复</div>
+
+<h2 class="section"><span class="num">05</span>13 项 Bug 修复（值得认真看）</h2>
+
+<p>两个版本累计修复了 13 个问题（ISSUE-040～052），其中有两个安全级别较高：</p>
+
+<table>
+  <thead>
+    <tr><th>级别</th><th>Issue</th><th>问题描述</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong style="color:#c0392b">CRITICAL</strong></td>
+      <td>040</td>
+      <td>.env 真实凭证已从 Git 历史中移除，.gitignore 规则到位</td>
+    </tr>
+    <tr>
+      <td><strong style="color:#e67e22">HIGH</strong></td>
+      <td>052</td>
+      <td>Windows 记事本保存的 .env 含 UTF-8 BOM 导致解析失败，godotenv 错误消息泄露密码——均已修复</td>
+    </tr>
+    <tr>
+      <td><strong style="color:#e67e22">HIGH</strong></td>
+      <td>051</td>
+      <td>-json -o 输出的 JSON 含 UTF-8 BOM，导致 jq/python 解析失败</td>
+    </tr>
+    <tr>
+      <td><strong style="color:#3498db">MEDIUM</strong></td>
+      <td>047</td>
+      <td>GaussDB 实例被错误报告为 "postgres"，现已正确识别</td>
+    </tr>
+    <tr>
+      <td><strong style="color:#3498db">MEDIUM</strong></td>
+      <td>048</td>
+      <td>JSON 输出缺少 seq_scan、idx_scan 等操作统计字段</td>
+    </tr>
+    <tr>
+      <td><strong style="color:#27ae60">LOW</strong></td>
+      <td>049</td>
+      <td>MySQL 两次 SHOW INDEX 合并为一次，减少网络往返</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>特别值得一提的是 ISSUE-052：密码被 godotenv 库的错误消息暴露，这种"无意识的信息泄露"在很多项目里都存在却鲜被关注。</p>
+
+<div class="divider">写在最后</div>
+
+<p>在 Agentic AI 快速落地的当下，安全往往是最后被考虑的环节。dbexplain 的这次更新，实际上是在回答一个更大的问题：</p>
+
+<p><strong>当 AI Agent 需要与生产数据库交互时，凭证管理的最佳实践是什么？</strong></p>
+
+<p>硬件绑定加密给出了一个务实的答案：不依赖复杂的密钥管理基础设施，不增加运维负担，让密码天然绑定在它该存在的机器上。</p>
+
+<p>项目处于早期阶段，欢迎试用、反馈、提 Issue。</p>
+
+<div class="footer">
+  <div class="links">
+    <a href="https://github.com/IamWWT/understand_dbs_skills">
+      ⬡ github.com/IamWWT/understand_dbs_skills
+    </a>
+    <a href="https://github.com/IamWWT/understand_dbs_skills/blob/main/docs/TEST_v0.0.6.md">
+      ⬡ 完整测试报告 TEST_v0.0.6.md
+    </a>
+    <a href="https://github.com/IamWWT/understand_dbs_skills/blob/main/CHANGELOG.md">
+      ⬡ CHANGELOG.md
+    </a>
+  </div>
+  <div class="brand">
+    dbexplain<br>
+    Make Databases AI-Readable<br>
+    Apache © 2026 WWT
+  </div>
+</div>
+
+</body>
+</html>

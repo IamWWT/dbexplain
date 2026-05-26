@@ -16,7 +16,7 @@ import (
 	"sort"
 	"strings"
 
-	"dbexplain/ir"
+	"github.com/IamWWT/dbexplain/ir"
 )
 
 // ID is a helper to construct canonical node IDs.
