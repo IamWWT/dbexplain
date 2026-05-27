@@ -7,158 +7,85 @@
         <mxCell id="1" parent="0" />
 
         <!-- Title -->
-        <mxCell id="title" value="SKILL Usage: Data Interaction Flow" style="text;html=1;fontSize=20;fontStyle=1;align=center;verticalAlign=middle;fontColor=#333333;" vertex="1" parent="1">
-          <mxGeometry x="300" y="15" width="500" height="35" as="geometry" />
+        <mxCell id="title" value="dbexplain Skill: AI Agent + Tool Interaction" style="text;html=1;fontSize=20;fontStyle=1;align=center;verticalAlign=middle;fontColor=#333333;" vertex="1" parent="1">
+          <mxGeometry x="200" y="15" width="550" height="35" as="geometry" />
         </mxCell>
 
-        <!-- ===== Swimlane: LLM Reasoning Boundary ===== -->
-        <mxCell id="sw-llm" value="LLM Reasoning Boundary (AI Agent: interpretation + explanation)" style="swimlane;startSize=28;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1;fontSize=11;swimlaneFillColor=#dae8fc;" vertex="1" parent="1">
-          <mxGeometry x="30" y="65" width="530" height="650" as="geometry" />
+        <!-- ===== Swimlane: AI Agent ===== -->
+        <mxCell id="sw-ai" value="AI Agent (LLM Reasoning — interprets + explains)" style="swimlane;startSize=28;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1;fontSize=11;swimlaneFillColor=#dae8fc;fontColor=#333333;" vertex="1" parent="1">
+          <mxGeometry x="30" y="65" width="520" height="480" as="geometry" />
         </mxCell>
 
-        <!-- ===== Swimlane: Deterministic Boundary ===== -->
-        <mxCell id="sw-det" value="Deterministic Boundary (dbexplain: facts only, no inference)" style="swimlane;startSize=28;fillColor=#ffe6cc;strokeColor=#d79b00;fontStyle=1;fontSize=11;swimlaneFillColor=#ffe6cc;" vertex="1" parent="1">
-          <mxGeometry x="590" y="65" width="540" height="650" as="geometry" />
+        <!-- ===== Swimlane: dbexplain ===== -->
+        <mxCell id="sw-tool" value="dbexplain (Deterministic Execution — facts only, no inference)" style="swimlane;startSize=28;fillColor=#ffe6cc;strokeColor=#d79b00;fontStyle=1;fontSize=11;swimlaneFillColor=#ffe6cc;fontColor=#333333;" vertex="1" parent="1">
+          <mxGeometry x="580" y="65" width="340" height="480" as="geometry" />
         </mxCell>
 
-        <!-- ===== Column Headers ===== -->
-        <mxCell id="hdr-user" value="User" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#333333;strokeColor=#333333;fontColor=#ffffff;fontSize=13;fontStyle=1;" vertex="1" parent="1">
-          <mxGeometry x="50" y="105" width="100" height="30" as="geometry" />
+        <!-- ===== Step 1: User Request ===== -->
+        <mxCell id="s1-num" value="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#333333;strokeColor=#333333;fontColor=#ffffff;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="120" width="24" height="24" as="geometry" />
         </mxCell>
-        <mxCell id="hdr-agent" value="AI Agent" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#333333;strokeColor=#333333;fontColor=#ffffff;fontSize=13;fontStyle=1;" vertex="1" parent="1">
-          <mxGeometry x="230" y="105" width="120" height="30" as="geometry" />
-        </mxCell>
-        <mxCell id="hdr-skill" value="SKILL.md" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#333333;strokeColor=#333333;fontColor=#ffffff;fontSize=13;fontStyle=1;" vertex="1" parent="1">
-          <mxGeometry x="410" y="105" width="110" height="30" as="geometry" />
-        </mxCell>
-        <mxCell id="hdr-tool" value="dbexplain Binary" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#333333;strokeColor=#333333;fontColor=#ffffff;fontSize=13;fontStyle=1;" vertex="1" parent="1">
-          <mxGeometry x="620" y="105" width="180" height="30" as="geometry" />
-        </mxCell>
-        <mxCell id="hdr-db" value="Database(s)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#333333;strokeColor=#333333;fontColor=#ffffff;fontSize=13;fontStyle=1;" vertex="1" parent="1">
-          <mxGeometry x="920" y="105" width="160" height="30" as="geometry" />
-        </mxCell>
-
-        <!-- ===== Step 1: User Prompt ===== -->
-        <mxCell id="s1-label" value="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#333333;strokeColor=#333333;fontColor=#ffffff;fontSize=11;fontStyle=1;" vertex="1" parent="1">
-          <mxGeometry x="30" y="160" width="22" height="22" as="geometry" />
-        </mxCell>
-        <mxCell id="s1-user" value="Prompt: "Analyze the database"" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;" vertex="1" parent="1">
-          <mxGeometry x="60" y="158" width="180" height="35" as="geometry" />
-        </mxCell>
-        <mxCell id="e-s1" value="User input" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;fontSize=8;fontColor=#666666;" edge="1" parent="1" source="s1-user" target="hdr-agent">
-          <mxGeometry relative="1" as="geometry" />
+        <mxCell id="s1-box" value="User: &quot;Analyze this database&quot;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="75" y="118" width="200" height="40" as="geometry" />
         </mxCell>
 
         <!-- ===== Step 2: AI reads SKILL.md ===== -->
-        <mxCell id="s2-label" value="2" style="ellipse;whiteSpace=wrap;html=1;fillColor=#333333;strokeColor=#333333;fontColor=#ffffff;fontSize=11;fontStyle=1;" vertex="1" parent="1">
-          <mxGeometry x="30" y="215" width="22" height="22" as="geometry" />
+        <mxCell id="s2-num" value="2" style="ellipse;whiteSpace=wrap;html=1;fillColor=#333333;strokeColor=#333333;fontColor=#ffffff;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="195" width="24" height="24" as="geometry" />
         </mxCell>
-        <mxCell id="s2-agent" value="Trigger match: load SKILL.md&#xa;(read instructions §1-§7)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;" vertex="1" parent="1">
-          <mxGeometry x="230" y="210" width="210" height="40" as="geometry" />
+        <mxCell id="s2-box" value="AI loads SKILL.md&#xa;→ reads install + usage instructions" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="75" y="190" width="240" height="45" as="geometry" />
         </mxCell>
-        <mxCell id="e-s2a" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0;exitY=0.5;entryX=1;entryY=0.5;" edge="1" parent="1" source="s2-agent" target="hdr-skill">
-          <mxGeometry relative="1" as="geometry" />
-        </mxCell>
-        <mxCell id="s2-skill" value="SKILL.md sections:&#xa;§1 Install tool §2 Principles&#xa;§3 Usage modes §4 Params&#xa;§5 DSN format §6 Exec flow&#xa;§7 Troubleshooting" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=8;align=left;spacingLeft=6;" vertex="1" parent="1">
-          <mxGeometry x="400" y="262" width="175" height="75" as="geometry" />
-        </mxCell>
-        <mxCell id="e-s2b" value="reads" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=0;entryX=0.5;entryY=1;fontSize=8;fontColor=#666666;" edge="1" parent="1" source="s2-skill" target="hdr-skill">
+
+        <!-- Arrow S1 → S2 -->
+        <mxCell id="e-s1-s2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=2;strokeColor=#82b366;" edge="1" parent="1" source="s1-box" target="s2-box">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
 
-        <!-- ===== Step 3: Agent checks/installs tool ===== -->
-        <mxCell id="s3-label" value="3" style="ellipse;whiteSpace=wrap;html=1;fillColor=#333333;strokeColor=#333333;fontColor=#ffffff;fontSize=11;fontStyle=1;" vertex="1" parent="1">
-          <mxGeometry x="30" y="355" width="22" height="22" as="geometry" />
+        <!-- ===== Step 3: AI invokes dbexplain (cross to tool lane) ===== -->
+        <mxCell id="s3-num" value="3" style="ellipse;whiteSpace=wrap;html=1;fillColor=#333333;strokeColor=#333333;fontColor=#ffffff;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="270" width="24" height="24" as="geometry" />
         </mxCell>
-        <mxCell id="s3-agent" value="Check: dbexplain in PATH?&#xa;If not: bash scripts/install.sh" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=9;" vertex="1" parent="1">
-          <mxGeometry x="230" y="350" width="210" height="40" as="geometry" />
+        <mxCell id="s3-ai" value="AI executes command:&#xa;dbexplain -dsn 'mysql://...'" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="75" y="268" width="240" height="42" as="geometry" />
         </mxCell>
-        <mxCell id="e-s3" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="s3-agent" target="hdr-tool">
+        <mxCell id="s3-tool" value="Parse DSN → Connect DB (read-only)&#xa;Collect schema + stats&#xa;SHOW / SELECT / PRAGMA / SCAN / INFO" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="600" y="265" width="250" height="52" as="geometry" />
+        </mxCell>
+
+        <!-- Arrow S2 → S3-AI -->
+        <mxCell id="e-s2-s3" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=2;strokeColor=#6c8ebf;" edge="1" parent="1" source="s2-box" target="s3-ai">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
 
-        <!-- ===== Step 4: Agent invokes dbexplain ===== -->
-        <mxCell id="s4-label" value="4" style="ellipse;whiteSpace=wrap;html=1;fillColor=#333333;strokeColor=#333333;fontColor=#ffffff;fontSize=11;fontStyle=1;" vertex="1" parent="1">
-          <mxGeometry x="30" y="415" width="22" height="22" as="geometry" />
-        </mxCell>
-        <mxCell id="s4-agent" value="Execute: dbexplain -dsn '...'&#xa;or dbexplain -env" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;" vertex="1" parent="1">
-          <mxGeometry x="230" y="410" width="210" height="40" as="geometry" />
-        </mxCell>
-        <mxCell id="s4-tool" value="Parse flags → load config&#xa;→ filter DSNs → concurrent&#xa;Collect() per DSN" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=9;" vertex="1" parent="1">
-          <mxGeometry x="620" y="410" width="180" height="45" as="geometry" />
-        </mxCell>
-        <mxCell id="e-s4" value="shell exec" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;fontSize=8;fontColor=#666666;" edge="1" parent="1" source="s4-agent" target="s4-tool">
+        <!-- Arrow S3-AI → S3-Tool (boundary cross) -->
+        <mxCell id="e-s3-cross" value="shell exec" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeWidth=2;strokeColor=#b85450;fontSize=9;fontColor=#b85450;" edge="1" parent="1" source="s3-ai" target="s3-tool">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
 
-        <!-- ===== AI Context Output (sidebar) ===== -->
-        <mxCell id="ctx-box" value="AI Context&#xa;(-context flag)&#xa;&#xa;summary.json&#xa;topology.json&#xa;diagnostics.json&#xa;chunks/*.md" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#999999;dashed=1;fontSize=8;align=left;spacingLeft=6;" vertex="1" parent="1">
-          <mxGeometry x="50" y="470" width="140" height="110" as="geometry" />
+        <!-- ===== Step 4: dbexplain outputs ===== -->
+        <mxCell id="s4-num" value="4" style="ellipse;whiteSpace=wrap;html=1;fillColor=#333333;strokeColor=#333333;fontColor=#ffffff;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="590" y="355" width="24" height="24" as="geometry" />
         </mxCell>
-        <mxCell id="e-ctx" value="-context writes files" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0;exitY=0.5;entryX=1;entryY=0.5;fontSize=8;fontColor=#666666;dashed=1;" edge="1" parent="1" source="s4-tool" target="ctx-box">
-          <mxGeometry relative="1" as="geometry">
-            <Array as="points">
-              <mxPoint x="580" y="432" />
-              <mxPoint x="580" y="525" />
-            </Array>
-          </mxGeometry>
+        <mxCell id="s4-box" value="Analyze + Render pipeline&#xa;→ Output structured report (stdout)&#xa;Deterministic facts — no AI inference" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="625" y="350" width="225" height="52" as="geometry" />
         </mxCell>
 
-        <!-- ===== Step 5: Connect to DBs ===== -->
-        <mxCell id="s5-label" value="5" style="ellipse;whiteSpace=wrap;html=1;fillColor=#333333;strokeColor=#333333;fontColor=#ffffff;fontSize=11;fontStyle=1;" vertex="1" parent="1">
-          <mxGeometry x="600" y="480" width="22" height="22" as="geometry" />
-        </mxCell>
-        <mxCell id="s5-tool" value="Connect (read-only):&#xa;SHOW/SELECT/PRAGMA/SCAN/INFO&#xa;→ Collect schema + stats" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=9;" vertex="1" parent="1">
-          <mxGeometry x="630" y="478" width="200" height="45" as="geometry" />
-        </mxCell>
-        <mxCell id="s5-db" value="MySQL: information_schema&#xa;PostgreSQL: pg_catalog&#xa;SQLite: sqlite_master&#xa;ClickHouse: system.*&#xa;Redis: SCAN + INFO&#xa;ES: _cat/_mapping&#xa;Mongo: ListCollections&#xa;Qdrant: ListCollections" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=8;align=left;spacingLeft=6;" vertex="1" parent="1">
-          <mxGeometry x="910" y="470" width="175" height="110" as="geometry" />
-        </mxCell>
-        <mxCell id="e-s5a" value="read-only queries" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;fontSize=8;fontColor=#666666;" edge="1" parent="1" source="s5-tool" target="s5-db">
-          <mxGeometry relative="1" as="geometry" />
-        </mxCell>
-        <mxCell id="e-s5b" value="rows + metadata" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=1;fontSize=8;fontColor=#666666;dashed=1;" edge="1" parent="1" source="s5-db" target="s5-tool">
-          <mxGeometry relative="1" as="geometry">
-            <Array as="points">
-              <mxPoint x="997" y="590" />
-              <mxPoint x="730" y="590" />
-            </Array>
-          </mxGeometry>
-        </mxCell>
-
-        <!-- ===== Step 6: Analyze Pipeline ===== -->
-        <mxCell id="s6-label" value="6" style="ellipse;whiteSpace=wrap;html=1;fillColor=#333333;strokeColor=#333333;fontColor=#ffffff;fontSize=11;fontStyle=1;" vertex="1" parent="1">
-          <mxGeometry x="600" y="555" width="22" height="22" as="geometry" />
-        </mxCell>
-        <mxCell id="s6-tool" value="Pipeline: analyze → FK extraction&#xa;+ inference + clustering&#xa;+ ranking + diagnostics → render" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=9;" vertex="1" parent="1">
-          <mxGeometry x="630" y="555" width="230" height="50" as="geometry" />
-        </mxCell>
-
-        <!-- ===== Step 7: Output to AI ===== -->
-        <mxCell id="s7-label" value="7" style="ellipse;whiteSpace=wrap;html=1;fillColor=#333333;strokeColor=#333333;fontColor=#ffffff;fontSize=11;fontStyle=1;" vertex="1" parent="1">
-          <mxGeometry x="600" y="625" width="22" height="22" as="geometry" />
-        </mxCell>
-        <mxCell id="s7-tool" value="stdout: Markdown/JSON report&#xa;(deterministic facts only)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;" vertex="1" parent="1">
-          <mxGeometry x="630" y="620" width="210" height="40" as="geometry" />
-        </mxCell>
-        <mxCell id="s7-agent" value="AI reads structured report →&#xa;applies reasoning → generates&#xa;human-readable explanation" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=9;" vertex="1" parent="1">
-          <mxGeometry x="230" y="620" width="210" height="45" as="geometry" />
-        </mxCell>
-        <mxCell id="e-s7" value="stdout pipe" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0;exitY=0.5;entryX=1;entryY=0.5;fontSize=8;fontColor=#666666;dashed=1;" edge="1" parent="1" source="s7-tool" target="s7-agent">
+        <!-- Arrow S3-TOOL → S4 -->
+        <mxCell id="e-s3-s4" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=2;strokeColor=#b85450;" edge="1" parent="1" source="s3-tool" target="s4-box">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
 
-        <!-- ===== Step 8: Response to User ===== -->
-        <mxCell id="s8-label" value="8" style="ellipse;whiteSpace=wrap;html=1;fillColor=#333333;strokeColor=#333333;fontColor=#ffffff;fontSize=11;fontStyle=1;" vertex="1" parent="1">
-          <mxGeometry x="30" y="675" width="22" height="22" as="geometry" />
+        <!-- ===== Step 5: AI reads + responds (back to AI lane) ===== -->
+        <mxCell id="s5-num" value="5" style="ellipse;whiteSpace=wrap;html=1;fillColor=#333333;strokeColor=#333333;fontColor=#ffffff;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="440" width="24" height="24" as="geometry" />
         </mxCell>
-        <mxCell id="s8-agent" value="Natural language response with&#xa;table cards, relationships, diagnostics" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=9;" vertex="1" parent="1">
-          <mxGeometry x="230" y="673" width="210" height="35" as="geometry" />
+        <mxCell id="s5-box" value="AI reads structured report&#xa;→ applies reasoning + interpretation&#xa;→ generates human-readable explanation" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="75" y="435" width="260" height="52" as="geometry" />
         </mxCell>
-        <mxCell id="s8-user" value="User receives&#xa;DB explanation" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;" vertex="1" parent="1">
-          <mxGeometry x="60" y="673" width="130" height="35" as="geometry" />
-        </mxCell>
-        <mxCell id="e-s8" value="response" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0;exitY=0.5;entryX=1;entryY=0.5;fontSize=8;fontColor=#666666;" edge="1" parent="1" source="s8-agent" target="s8-user">
+
+        <!-- Arrow S4 → S5 (boundary cross back) -->
+        <mxCell id="e-s4-s5" value="stdout pipe" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;strokeWidth=2;strokeColor=#6c8ebf;fontSize=9;fontColor=#6c8ebf;dashed=1;" edge="1" parent="1" source="s4-box" target="s5-box">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
 

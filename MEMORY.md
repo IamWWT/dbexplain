@@ -31,12 +31,12 @@
 | 关系分析 + 聚类 + 问题检测 | `src/analyze/analyze.go` |
 | 终端美化 + JSON 输出 | `src/render/render.go` |
 | 构建脚本 | `src/build.sh` |
-| CLI 安装脚本 (Linux/macOS) | `db-relationship-explainer/scripts/install.sh` |
-| CLI 安装脚本 (Windows) | `db-relationship-explainer/scripts/install.ps1` |
-| CLI 卸载脚本 (Linux/macOS) | `db-relationship-explainer/scripts/uninstall.sh` |
-| CLI 卸载脚本 (Windows) | `db-relationship-explainer/scripts/uninstall.ps1` |
-| Skill 安装脚本 | `db-relationship-explainer/scripts/install-skill.sh` |
-| Skill 卸载脚本 | `db-relationship-explainer/scripts/uninstall-skill.sh` |
+| CLI 安装脚本 (Linux/macOS) | `dbexplain-skill/scripts/install.sh` |
+| CLI 安装脚本 (Windows) | `dbexplain-skill/scripts/install.ps1` |
+| CLI 卸载脚本 (Linux/macOS) | `dbexplain-skill/scripts/uninstall.sh` |
+| CLI 卸载脚本 (Windows) | `dbexplain-skill/scripts/uninstall.ps1` |
+| Skill 安装脚本 | `dbexplain-skill/scripts/install-skill.sh` |
+| Skill 卸载脚本 | `dbexplain-skill/scripts/uninstall-skill.sh` |
 | CHANGELOG（中文） | `CHANGELOG.md` |
 | 测试文档 | `docs/TEST_v0.0.6.md` |
 | CHANGELOG（英文） | `CHANGELOG_EN.md` |
@@ -101,7 +101,7 @@ scheme://[user[:pass]@]host[:port][/dbname][?label=别名&其他参数]
 
 ## 已知限制与待办
 
-所有已知问题跟踪在 `issues.json`（39 条，33 closed，1 pending-evaluation，1 wontfix，4 open/feature）。
+所有已知问题跟踪在 `issues.json`（63 条，57 closed，1 wontfix，5 open）。
 
 **v0.0.4 已关闭（ISSUE-022 ~ ISSUE-032）：** IR v1 架构、Capability 重构、统一诊断、Importance Ranking、Context Compression、Delta Scan、Operational Stats、Windows 编码兼容。
 
@@ -111,7 +111,9 @@ scheme://[user[:pass]@]host[:port][/dbname][?label=别名&其他参数]
 
 **v0.0.7 已关闭：** Go 模块化发布（`github.com/IamWWT/dbexplain`）、公共 API（`src/core/` 导出 `Collect()`/`CollectToGraph()`/`CollectToJSON()`）、IR Graph 构建器（`BuildGraph()`）、ForeignKey 补全（OnDelete/OnUpdate，SQLite/MySQL/PostgreSQL 全覆盖）、SQLite INTEGER PRIMARY KEY nullable 修复、日志目录多级回退（`resolveLogDir()`）、全链路密码审计、只读查询执行引擎（`execute` 子命令 + sqlguard 沙箱）、9 数据库查询全覆盖。
 
-**当前开放（ISSUE-033 ~ ISSUE-035）：** Phase 4 LLM 生态集成、GaussDB/TDSQL 兼容性确认、GBase/HBase/OceanBase 评估。
+**v0.0.8 已关闭：** 细粒度安全策略引擎（`src/policy/` 包 — 表级/列级/语句级访问控制，支持 SQL + 非 SQL 所有数据库类型）、GaussDB/TDSQL 兼容性确认文档。
+
+**当前开放（ISSUE-033, ISSUE-035, ISSUE-042, ISSUE-043, ISSUE-053）：** Phase 4 LLM 生态集成、GBase/HBase/OceanBase 评估、Elasticsearch TLS InsecureSkipVerify、ClickHouse 密码 URL 参数明文传输、移除明文 .env 支持评估。
 
 ## 新增 Connector 模板
 

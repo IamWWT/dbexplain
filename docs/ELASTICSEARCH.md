@@ -24,7 +24,7 @@ res, err := client.Info(client.Info.WithContext(infoCtx))
 - **超时控制**：所有与 ES 的交互均通过独立的 `context.WithTimeout` 派生子上下文，确保单次操作不会无限挂起。  
 - **连接复用**：`MaxIdleConnsPerHost` 设为 2，避免在采集多个索引时耗尽文件描述符。  
 - **健康检查**：使用 `client.Info` 获取集群信息，若返回错误或状态码异常，则终止采集并输出错误。  
-- **TLS 支持**：通过 DSN scheme `elasticsearchs://` 或参数 `?tls=true` 启用 HTTPS。TLS 证书验证默认跳过（`InsecureSkipVerify`），适合内网诊断场景。
+- **TLS 支持**：通过 DSN scheme `elasticsearchs://` 或参数 `?tls=true` 启用 HTTPS。默认验证证书，诊断环境可追加 `?tls-skip-verify=true` 跳过验证。
 
 ### 1.2 索引列表获取与过滤
 
@@ -108,7 +108,7 @@ for field, props := range mapping {
 
 ### 执行方式
 
-通过 HTTP POST 发送 JSON 请求体 `{"query": "...", "fetch_size": N}` 到 Elasticsearch 的 `/_sql` 端点。认证方式为 HTTP Basic Auth（若 DSN 中提供了凭据）。TLS 连接默认跳过证书验证（`InsecureSkipVerify=true`，诊断工具权衡）。
+通过 HTTP POST 发送 JSON 请求体 `{"query": "...", "fetch_size": N}` 到 Elasticsearch 的 `/_sql` 端点。认证方式为 HTTP Basic Auth（若 DSN 中提供了凭据）。TLS 连接默认验证证书，诊断环境可追加 `?tls-skip-verify=true` 跳过验证。
 
 ### 最大行数控制
 

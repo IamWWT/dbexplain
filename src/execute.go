@@ -11,6 +11,7 @@ import (
 
 	"github.com/IamWWT/dbexplain/connector"
 	"github.com/IamWWT/dbexplain/dsn"
+	"github.com/IamWWT/dbexplain/policy"
 	"github.com/IamWWT/dbexplain/query"
 	"github.com/IamWWT/dbexplain/sqlguard"
 )
@@ -49,7 +50,7 @@ func handleExecute(args []string) {
 
 	parsed, err := dsn.ParseDSN(entries[0].raw)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "ERROR: invalid DSN: %v\n", err)
+		fmt.Fprintf(os.Stderr, "ERROR: invalid DSN: %v\n", sanitizeErr(err))
 		os.Exit(1)
 	}
 
@@ -57,6 +58,20 @@ func handleExecute(args []string) {
 	// (Redis, MongoDB, Qdrant) do their own validation in ExecQuery.
 	if isSQLKind(parsed.Kind) {
 		if err := sqlguard.Validate(sqlArg); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+	}
+
+	// Fine-grained policy check (applies to ALL database kinds)
+	policies := policy.Load(entries[0].envKey)
+	if isSQLKind(parsed.Kind) {
+		if err := policies.CheckSQL(sqlArg); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+	} else {
+		if err := policies.CheckNative(sqlArg, parsed.Kind); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
@@ -114,6 +129,9 @@ func handleExecute(args []string) {
 		os.Exit(1)
 	}
 
+	// Apply post-execution column masking (replaces sensitive values)
+	policies.ApplyMask(result)
+
 	// Output
 	if *human {
 		fmt.Print(formatHuman(result))
@@ -125,6 +143,39 @@ func handleExecute(args []string) {
 			os.Exit(1)
 		}
 	}
+}
+
+// sanitizeCell strips ANSI escape codes and control characters from cell values
+// to prevent terminal injection. Allows tab, newline, and printable characters.
+func sanitizeCell(s string) string {
+	var b strings.Builder
+	for i := 0; i < len(s); i++ {
+		// Strip ANSI escape sequences: ESC + '[' + parameters + letter
+		if s[i] == 27 {
+			if i+1 < len(s) && s[i+1] == '[' {
+				i += 2 // skip ESC and '['
+				for ; i < len(s); i++ {
+					if (s[i] >= 'A' && s[i] <= 'Z') || (s[i] >= 'a' && s[i] <= 'z') {
+						break
+					}
+				}
+				continue
+			}
+			// lone ESC without '[' — just skip it
+			continue
+		}
+		// Allow tab, newline, carriage return
+		if s[i] == '\t' || s[i] == '\n' || s[i] == '\r' {
+			b.WriteByte(s[i])
+			continue
+		}
+		// Strip other control characters (0-31, 127)
+		if s[i] < 32 || s[i] == 127 {
+			continue
+		}
+		b.WriteByte(s[i])
+	}
+	return b.String()
 }
 
 // formatHuman renders a QueryResult as an ASCII table for human consumption.
@@ -147,7 +198,7 @@ func formatHuman(r *query.QueryResult) string {
 			if cell == nil {
 				strRow[j] = "NULL"
 			} else {
-				strRow[j] = *cell
+				strRow[j] = sanitizeCell(*cell)
 			}
 		}
 		strRows[i] = strRow
@@ -163,6 +214,13 @@ func formatHuman(r *query.QueryResult) string {
 			if len(cell) > widths[i] {
 				widths[i] = len(cell)
 			}
+		}
+	}
+	// Cap column widths to prevent OOM from huge cell values
+	const maxColWidth = 256
+	for i := range widths {
+		if widths[i] > maxColWidth {
+			widths[i] = maxColWidth
 		}
 	}
 
@@ -183,6 +241,9 @@ func formatHuman(r *query.QueryResult) string {
 		var b strings.Builder
 		b.WriteByte('|')
 		for i, cell := range cells {
+			if len(cell) > widths[i] {
+				cell = cell[:widths[i]-1] + "…"
+			}
 			fmt.Fprintf(&b, " %-*s |", widths[i], cell)
 		}
 		b.WriteByte('\n')
@@ -220,11 +281,12 @@ func resolveDSNEntries(envMode *bool, dsnFlag, configFile, label *string, dbInde
 			fmt.Fprintln(os.Stderr, "ERROR: no config file found")
 			os.Exit(1)
 		}
-		if err := loadEnvFile(configPath); err != nil {
+		envEntries, err := loadEnvFile(configPath)
+		if err != nil {
 			fmt.Fprintf(os.Stderr, "ERROR: load config %s: %v\n", configPath, sanitizeErr(err))
 			os.Exit(1)
 		}
-		entries = append(entries, loadFromEnv()...)
+		entries = append(entries, envEntries...)
 	}
 
 	if *configFile != "" {

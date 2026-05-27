@@ -92,8 +92,9 @@ func AutoLimit(sql string, maxRows int) string {
 		return sql
 	}
 
-	// Don't add LIMIT if one already exists
-	if strings.Contains(upper, "LIMIT ") || strings.Contains(upper, "LIMIT\t") || strings.Contains(upper, "LIMIT\n") {
+	// Don't add LIMIT if one already exists at the outer level
+	// (ignore LIMIT inside subqueries to prevent bypass via SELECT * FROM (SELECT ... LIMIT 99999))
+	if hasOuterLimit(upper) {
 		return sql
 	}
 
@@ -107,6 +108,33 @@ func AutoLimit(sql string, maxRows int) string {
 	sql = strings.TrimSpace(sql)
 
 	return fmt.Sprintf("%s LIMIT %d", sql, maxRows)
+}
+
+// hasOuterLimit checks if a LIMIT clause exists at the top level of a query,
+// ignoring LIMITs inside parenthesized subqueries. This prevents the auto-limit
+// from being bypassed by placing a large LIMIT inside a subquery.
+func hasOuterLimit(upper string) bool {
+	depth := 0
+	var stripped strings.Builder
+	for _, ch := range upper {
+		switch ch {
+		case '(':
+			depth++
+		case ')':
+			if depth > 0 {
+				depth--
+			}
+		default:
+			if depth == 0 {
+				stripped.WriteRune(ch)
+			}
+		}
+	}
+	outer := stripped.String()
+	return strings.Contains(outer, "LIMIT ") ||
+		strings.Contains(outer, "LIMIT\t") ||
+		strings.Contains(outer, "LIMIT\n") ||
+		strings.Contains(outer, "LIMIT\r")
 }
 
 // splitStatements does a basic count of statements by splitting on semicolons.

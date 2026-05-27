@@ -45,7 +45,7 @@ func (esConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instance, e
 	if d.TLS {
 		scheme = "https"
 		transport.TLSClientConfig = &tls.Config{
-			InsecureSkipVerify: true, // 诊断工具可接受
+			InsecureSkipVerify: d.TLSSkipVerify,
 		}
 	}
 
@@ -162,7 +162,7 @@ func (esConnector) ExecQuery(ctx context.Context, opts query.ExecuteOpts) (*quer
 	httpCli := &http.Client{Timeout: time.Duration(opts.Timeout+5) * time.Second}
 	if opts.DSN.TLS {
 		httpCli.Transport = &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: opts.DSN.TLSSkipVerify},
 		}
 	}
 

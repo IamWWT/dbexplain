@@ -59,6 +59,9 @@ AI 时代数据库的"真值基座"。
 
 更多架构愿景见 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) 和 [`CONSTITUTION.md`](CONSTITUTION.md)。
 
+![dbexplain 架构总览](docs/assets/architecture.drawio.png)
+*4 阶段流水线：INPUT（连接配置）→ COLLECT（9 种 DB 模式抽取）→ ANALYZE（FK 推断/排序/诊断/IR Graph）→ OUTPUT（Markdown/JSON/上下文文件）*
+
 ---
 
 ## 快速开始
@@ -72,8 +75,8 @@ AI 时代数据库的"真值基座"。
 ```bash
 git clone https://github.com/IamWWT/dbexplain.git
 cd dbexplain
-bash db-relationship-explainer/scripts/install.sh          # 中文 Skill
-bash db-relationship-explainer/scripts/install.sh --lang en  # English skill
+bash dbexplain-skill/scripts/install.sh          # 中文 Skill
+bash dbexplain-skill/scripts/install.sh --lang en  # English skill
 ```
 
 脚本会自动检测系统和架构（`uname -s`/`uname -m`），从 GitHub Releases 下载对应二进制。
@@ -86,28 +89,28 @@ bash db-relationship-explainer/scripts/install.sh --lang en  # English skill
 
 ```bash
 # 在有网络的机器上下载（以 Linux amd64 为例）
-wget https://github.com/IamWWT/dbexplain/releases/download/v0.0.7/dbexplain-linux-amd64
+wget https://github.com/IamWWT/dbexplain/releases/download/v0.0.8/dbexplain-linux-amd64
 
 # 复制到离线环境后安装
-bash db-relationship-explainer/scripts/install.sh --offline ./dbexplain-linux-amd64
+bash dbexplain-skill/scripts/install.sh --offline ./dbexplain-linux-amd64
 ```
 
 仅安装工具、不部署 Skill：
 
 ```bash
-bash db-relationship-explainer/scripts/install.sh --offline ./dbexplain-linux-amd64 --no-skill
+bash dbexplain-skill/scripts/install.sh --offline ./dbexplain-linux-amd64 --no-skill
 ```
 
 #### 手动下载二进制
 
 ```bash
 # Linux amd64
-wget https://github.com/IamWWT/dbexplain/releases/download/v0.0.7/dbexplain-linux-amd64
+wget https://github.com/IamWWT/dbexplain/releases/download/v0.0.8/dbexplain-linux-amd64
 chmod +x dbexplain-linux-amd64
 sudo mv dbexplain-linux-amd64 /usr/local/bin/dbexplain
 
 # macOS Apple Silicon
-wget https://github.com/IamWWT/dbexplain/releases/download/v0.0.7/dbexplain-darwin-arm64
+wget https://github.com/IamWWT/dbexplain/releases/download/v0.0.8/dbexplain-darwin-arm64
 chmod +x dbexplain-darwin-arm64
 sudo mv dbexplain-darwin-arm64 /usr/local/bin/dbexplain
 
@@ -123,8 +126,8 @@ dbexplain --version
 ```powershell
 git clone https://github.com/IamWWT/dbexplain.git
 cd dbexplain
-.\db-relationship-explainer\scripts\install.ps1           # 中文 Skill
-.\db-relationship-explainer\scripts\install.ps1 -Lang en   # English skill
+.\dbexplain-skill\scripts\install.ps1           # 中文 Skill
+.\dbexplain-skill\scripts\install.ps1 -Lang en   # English skill
 ```
 
 脚本会自动下载 `dbexplain-windows-amd64.exe` 到 `%LOCALAPPDATA%\dbexplain\`，并添加到用户 PATH。
@@ -133,7 +136,7 @@ cd dbexplain
 
 ```powershell
 # 在有网络的机器上下载
-Invoke-WebRequest -Uri "https://github.com/IamWWT/dbexplain/releases/download/v0.0.7/dbexplain-windows-amd64.exe" -OutFile "dbexplain-windows-amd64.exe"
+Invoke-WebRequest -Uri "https://github.com/IamWWT/dbexplain/releases/download/v0.0.8/dbexplain-windows-amd64.exe" -OutFile "dbexplain-windows-amd64.exe"
 
 # 复制到离线环境后，放到 %LOCALAPPDATA%\dbexplain\dbexplain.exe
 # 然后把目录添加到用户 PATH
@@ -150,6 +153,9 @@ cd src && go mod tidy && bash build.sh
 ```
 
 编译产物在 `release/` 目录（linux/darwin/windows × amd64/arm64 共 5 个）。
+
+![dbexplain 部署拓扑](docs/assets/deployment.drawio.png)
+*三步安装：GitHub Releases → install.sh → 三个目标（二进制 /usr/local/bin、配置 ~/.config、Skill ~/.agents）*
 
 ### 安装后配置
 
@@ -231,6 +237,7 @@ scheme://[用户:密码@]主机[:端口][/库名][?label=别名&参数...]
 | `cluster=true` | Redis | 集群模式，自动扫描所有分片 |
 | `tls=true` | ES, Redis | 启用 TLS |
 | `sslmode=<mode>` | PostgreSQL | SSL 模式：`disable`/`require`/`verify-ca`/`verify-full` |
+| `tls-skip-verify=true` | ES | 跳过 TLS 证书验证（诊断环境） |
 | `authSource=<db>` | MongoDB | 认证数据库名 |
 
 ### 配置文件搜索优先级（`-env` 模式）
@@ -339,7 +346,9 @@ dbexplain execute -env --label qdrant '{"count":"docs"}'                # Qdrant
 dbexplain execute -env --db 3 --human "SELECT * FROM users LIMIT 5"
 ```
 
-![list + execute --human 示例](docs/assets/dbexplain-list-execute-eg1.png)
+![list + execute --human 示例](docs/assets/install-offline-verify-2.png)
+
+![dbexplain 使用示例](docs/assets/usages.png)
 
 > 更多查询案例见 [`docs/CLI_EXAMPLES.md`](docs/CLI_EXAMPLES.md)，安全机制详见 [`docs/EXECUTE.md`](docs/EXECUTE.md)。
 
@@ -382,6 +391,7 @@ dbexplain qdrant              # Qdrant
 | `-o <file>` | 写入文件（文本模式自动添加 UTF-8 BOM） |
 | `--log-dir <dir>` | 日志输出目录（默认 `/var/log/dbexplain`） |
 | `-timeout <duration>` | 每 DSN 超时（默认 20s） |
+| `--conn N` | Schema 采集最大并发连接数（默认 10） |
 | `--version` | 输出版本号 |
 | `--human` | 人类友好输出（含上下文标记） |
 | `--context <dir>` | 写入 AI 上下文文件到目录（summary.json / topology.json / diagnostics.json / chunks/） |
@@ -401,72 +411,45 @@ dbexplain qdrant              # Qdrant
 
 ---
 
-## 输出示例
-
-```
-> Instances (2)
-  shop-db                    mysql    1 db(s), 5 tables
-  cache                      redis    1 db(s), 3 tables
-
-> shop-db  /  mydb
-  orders [InnoDB] ~42,000 rows  核心订单表
-────────────────────────────────────────────
-  name       type          flags    comment
-  ─────────  ────────────  ───────  ────────────
-  id         int(11)       PK NN
-  user_id    int(11)       NN       标识符
-  total      decimal(10,2) NN       金额/数量
-  created_at datetime      NN       时间
-  indexes: IDX(user_id)
-
-> Relationships (3 explicit FK, 2 inferred)
-  shop-db/mydb.orders(user_id) ──FK──> shop-db/mydb.users(id)
-
-> Issues (2)
-  [!] shop-db/mydb/orders  FK column "user_id" has no index
-  [i] cache/db0/session:{hex}  no TTL on security-sensitive key
-```
-
-![终端运行示例](docs/assets/explain-test-dsn+env.png)
-
----
-
 ## 作为 AI Skill 使用
 
 `install.sh` 默认同时安装工具和 Skill，支持 `--lang zh|en` 选择语言。也可分开操作：
 
 ```bash
 # 一键安装（工具 + Skill，在线）
-bash db-relationship-explainer/scripts/install.sh
-bash db-relationship-explainer/scripts/install.sh --lang en   # 英文 Skill
+bash dbexplain-skill/scripts/install.sh
+bash dbexplain-skill/scripts/install.sh --lang en   # 英文 Skill
 
 # 一键安装（工具 + Skill，离线）
-bash db-relationship-explainer/scripts/install.sh --offline ./dbexplain-linux-amd64
+bash dbexplain-skill/scripts/install.sh --offline ./dbexplain-linux-amd64
 
 # 仅安装工具，不部署 Skill
-bash db-relationship-explainer/scripts/install.sh --no-skill
+bash dbexplain-skill/scripts/install.sh --no-skill
 
 # 仅部署 Skill（工具已安装时）
 # --lang zh 安装中文版，--lang en 安装英文版
-bash db-relationship-explainer/scripts/install-skill.sh
-bash db-relationship-explainer/scripts/install-skill.sh --lang en
+bash dbexplain-skill/scripts/install-skill.sh
+bash dbexplain-skill/scripts/install-skill.sh --lang en
 
 # 更新已安装的 Skill
-bash db-relationship-explainer/scripts/install-skill.sh --update
+bash dbexplain-skill/scripts/install-skill.sh --update
 
 # 验证安装
-bash db-relationship-explainer/scripts/install-skill.sh --verify
+bash dbexplain-skill/scripts/install-skill.sh --verify
 
 # 卸载 Skill
-bash db-relationship-explainer/scripts/uninstall-skill.sh
+bash dbexplain-skill/scripts/uninstall-skill.sh
 
 # 卸载工具
-bash db-relationship-explainer/scripts/uninstall.sh
+bash dbexplain-skill/scripts/uninstall.sh
 ```
 
-![Skill 安装管理](docs/assets/skill_install_mgr.png)
+![skill和工具安装](docs/assets/install-offline-1.png)
 
-> 支持 Claude Code、DeepSeek、AixCoding、Agents 等平台。详见 [`docs/DEPLOY_SKILLS.md`](docs/DEPLOY_SKILLS.md)。
+![AI Agent + dbexplain 交互流程](docs/assets/skill-interaction.drawio.png)
+*5 步交互流程：① 用户提问 → ② AI 加载 SKILL.md → ③ AI 调用 dbexplain 采集模式 → ④ dbexplain 输出确定性报告 → ⑤ AI 解释给用户*
+
+> 支持 Claude Code、DeepSeek、AixCoding、Agents 等平台。详见 [`docs/DEPLOY.md`](docs/DEPLOY.md)。
 
 ---
 
@@ -487,8 +470,10 @@ bash db-relationship-explainer/scripts/uninstall.sh
 - **SQL 只读校验** (`sqlguard`)：动词白名单 + 多语句检测 + 自动 LIMIT 注入，拒绝 DROP/INSERT/UPDATE/DELETE
 - **非 SQL 白名单**：Redis 30+ 命令白名单，MongoDB find/aggregate 白名单，Qdrant scroll/count 白名单
 - **查询路由**：`isSQLKind()` 按数据库类型分流校验，SQL 类走 sqlguard，非 SQL 类各连接器内部验证
+- **细粒度访问控制**：表级/列级/语句级拒绝策略 (`DENY_TABLES`/`DENY_COLUMNS`/`DENY_STATEMENTS`)；列值脱敏 (`MASK_COLUMNS`)
 - **并发互斥**：per-label `TryLock`，同一 label 同时只有一个查询执行
 - **双超时**：应用层 context + 数据库层语句超时
+- **输出安全**：终端输出剥离 ANSI 转义和控制字符；列宽上限 256 字符
 - **凭据保护**：查询结果 JSON 不包含任何连接信息或密码
 
 > 详见 [`docs/EXECUTE.md`](docs/EXECUTE.md)
@@ -509,7 +494,7 @@ bash db-relationship-explainer/scripts/uninstall.sh
 ## 开发
 
 - **语言**：Go 1.26+
-- **构建**：`CGO_ENABLED=0 go build -ldflags="-s -w -X main.version=v0.0.7"`
+- **构建**：`CGO_ENABLED=0 go build -ldflags="-s -w -X main.version=v0.0.8"`
 - **测试**：`go test ./...`（DSN 解析 + 字段推断）
 - **交叉编译**：`bash build.sh`（linux/darwin/windows × amd64/arm64）
 
@@ -523,14 +508,18 @@ bash db-relationship-explainer/scripts/uninstall.sh
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | 架构愿景与发展路线 |
 | [`docs/EXECUTE.md`](docs/EXECUTE.md) | 只读查询执行（安全架构、9-DB 验证） |
 | [`docs/CLI_EXAMPLES.md`](docs/CLI_EXAMPLES.md) | CLI 查询案例库（13 条实测命令） |
-| [`docs/DEPLOY_SKILLS.md`](docs/DEPLOY_SKILLS.md) | Skill 部署指南（多平台集成） |
-| [`docs/DEPLOY_SRC.md`](docs/DEPLOY_SRC.md) | 源码编译部署 |
+| [`docs/DEPLOY.md`](docs/DEPLOY.md) | 部署指南（源码编译 + 工具安装 + Skill 部署） |
 | [`docs/MYSQL.md`](docs/MYSQL.md) | MySQL 字段推断、索引/外键采集 |
 | [`docs/POSTGRESQL.md`](docs/POSTGRESQL.md) | PostgreSQL pg_catalog、SSL、多 Schema |
+| [`docs/GAUSSDB.md`](docs/GAUSSDB.md) | GaussDB PostgreSQL 协议兼容 |
 | [`docs/CLICKHOUSE.md`](docs/CLICKHOUSE.md) | ClickHouse HTTP、排序键/分区键 |
+| [`docs/SQLITE.md`](docs/SQLITE.md) | SQLite INTEGER PRIMARY KEY、CGO-free |
 | [`docs/REDIS.md`](docs/REDIS.md) | Redis 键空间分析、风险诊断 |
 | [`docs/MONGO.md`](docs/MONGO.md) | MongoDB 认证排障、只读元数据 |
 | [`docs/ELASTICSEARCH.md`](docs/ELASTICSEARCH.md) | Elasticsearch 索引映射、HTTPS |
+| [`docs/QDRANT.md`](docs/QDRANT.md) | Qdrant 向量集合元数据 |
+| [`docs/POLICY.md`](docs/POLICY.md) | 细粒度访问控制策略（表/列/语句级） |
+| [`docs/SECURITY_CHECKLIST.md`](docs/SECURITY_CHECKLIST.md) | 安全检查手册（发布前必读） |
 | [`CHANGELOG.md`](CHANGELOG.md) | 版本变更记录（中文） |
 | [`CHANGELOG_EN.md`](CHANGELOG_EN.md) | 版本变更记录（英文） |
 | [`README_EN.md`](README_EN.md) | English README |
@@ -540,4 +529,4 @@ bash db-relationship-explainer/scripts/uninstall.sh
 
 ## License
 
-Apache 2.0 © 2025-2026 WWT
+Apache 2.0 © 2026 WWT

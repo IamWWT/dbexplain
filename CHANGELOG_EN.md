@@ -1,5 +1,53 @@
 # Changelog
 
+## v0.0.8 (2026-05-27)
+
+### Security Policy Engine (ISSUE-061)
+- **Fine-grained access control**: New `src/policy/` package with 3-level deny — statement-level (substring match), table-level (table/collection/key name extraction), column-level (`table.column` reference matching), providing a second layer of access control after `sqlguard` validation and before query execution
+- **All 9 database types covered**: SQL types (MySQL/PostgreSQL/GaussDB/SQLite/ClickHouse/Elasticsearch) support all 3 levels; MongoDB/Qdrant support statement+collection level; Redis supports statement+key level (with wildcard matching)
+- **Global + per-DSN config**: `DENY_TABLES`/`DENY_COLUMNS`/`DENY_STATEMENTS` support global config and `DB<n>_` prefix for per-DSN appending
+- **Column value masking**: `MASK_COLUMNS` replaces sensitive column values post-execution (e.g. `password_hash=***`), as an alternative to hard blocking. Supports glob matching, works across all database types
+- **Dedicated documentation**: New `docs/POLICY.md` with per-database deny rules and configuration examples
+- **Unit tests**: 39 test cases (Load/CheckSQL/CheckNative/Extract full coverage) + 10+ regression tests for security bypass vectors
+
+### Credential Protection
+- **DSN error sanitization**: New `sanitizeErr()` function redacts passwords from DSN parse errors before stderr output, preventing credential leakage from malformed DSN strings
+- **OS env isolation**: `loadEnvFile()` refactored to return `[]dsnEntry` directly, eliminating DSN password residue in process environment from the `os.Setenv`→`os.Getenv` round-trip. Non-DSN config items unaffected
+- **ClickHouse header-based auth**: `chHTTP.query()` auth changed from URL query params to `X-ClickHouse-User`/`X-ClickHouse-Key` request headers, preventing password leakage in HTTP logs or Referer headers (closes ISSUE-043)
+
+### Policy Bypass Prevention
+- **Quoted identifier normalization**: `extractTableNames()`/`extractColumnRefs()` pre-process via `normalizeIdentifiers()`, stripping backtick/double-quote/bracket quotes before extraction. Prevents ``SELECT * FROM `sensitive` `` from bypassing table-level deny
+- **Whitespace normalization**: `CheckSQL()`/`CheckNative()` pre-process via `normalizeWhitespace()`, collapsing all whitespace sequences to single spaces. Prevents `DROP  TABLE` from bypassing statement-level patterns
+- **Redis glob rewrite**: `filepath.Match` treats `/` as path separator, so `CONVERSATION:*` didn't match `CONVERSATION:abc/123`. Replaced with custom `globMatch()` that treats all characters equally
+- **Subquery LIMIT hardening**: `AutoLimit()` uses `hasOuterLimit()` which strips parenthesized subquery content before LIMIT detection. Prevents `SELECT * FROM (SELECT ... LIMIT 99999) AS t` from bypassing auto-injection
+
+### Output Safety
+- **Terminal injection defense**: `--human` output sanitized via `sanitizeCell()`, stripping ANSI escape sequences (ESC+`[...`+letter) and control characters (0x00-0x1F, 0x7F), preserving tab/newline/CR. JSON output uses Go `json.Encoder` native escaping, no extra handling needed. Applies to all 9 database types
+- **Column width cap**: `formatHuman()` caps column width at `maxColWidth=256`, truncating oversized cells with `…` indicator. `--human` only, prevents oversized cells from overwhelming terminal/memory
+
+### Connectivity & Concurrency
+- **ES TLS verification parameterized**: New DSN parameter `?tls-skip-verify=true` replaces hardcoded `InsecureSkipVerify` (closes ISSUE-042). ES help docs updated
+- **Schema collection concurrency limit**: New `--conn N` flag (default 10), using channel semaphore to limit concurrent schema collection goroutines
+
+### CLI & Diagnostics
+- **`list` index alignment**: `dbexplain list` INDEX column changed from `envKey` (DB1/DB2) to sequential numbers (1/2/3), aligning with `execute --db N` 1-based positional index
+- **Malformed glob warnings**: Added `log.Printf` warnings for `globMatch()` and `filepath.Match()` error-drops in `policy.go`, making misconfigured patterns discoverable
+
+### Documentation Updates
+- `docs/POLICY.md`: Security policy engine documentation (new)
+- `docs/EXECUTE.md`: Security architecture section expanded with bypass prevention and output safety
+- `docs/SECURITY_CHECKLIST.md`: 10+ new check items (credential protection/input validation/runtime safety/transport security)
+- `docs/CLICKHOUSE.md`: Auth method updated (URL params → request headers)
+- `docs/ELASTICSEARCH.md`: TLS description updated (hardcoded skip → `?tls-skip-verify=true` parameter)
+- `src/execute_test.go`: 13 new test cases (sanitizeCell/formatHuman full coverage)
+- Deleted `docs/TEST_v0.0.7.md`, created `docs/TEST_v0.0.8.md`
+
+### Tracking Issues
+- **ISSUE-061**: Fine-grained security policy engine (implemented in v0.0.8)
+- **ISSUE-034**: GaussDB/TDSQL compatibility documentation (implemented in v0.0.8)
+- **ISSUE-042**: ES InsecureSkipVerify hardcoded (v0.0.8 closed)
+- **ISSUE-043**: ClickHouse URL password leak (v0.0.8 closed)
+
 ## v0.0.7 (2026-05-26)
 
 ### Go Module Publishing (REQ-1)

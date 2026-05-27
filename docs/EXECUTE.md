@@ -100,6 +100,51 @@ if !ok {
 - DSN 密码在错误消息中自动脱敏（`Redacted()`）
 - 查询结果 JSON **不包含**任何连接信息或凭据
 
+### 6. 细粒度访问控制 (`policy` 包，v0.0.8+)
+
+在 sqlguard 动词白名单校验之后，增加第二层访问控制——表级/列级/语句级拒绝策略。适用于**所有数据库类型**（SQL + 非SQL），通过 `.env` 文件配置。
+
+**三层次策略（从快到慢）：**
+
+| 层级 | 检测方法 | SQL 数据库 | MongoDB/Qdrant | Redis |
+|------|---------|-----------|---------------|-------|
+| 语句级 | 子串匹配 (case-insensitive) | ✅ | ✅ | ✅ |
+| 表级 | 从 SQL/JSON 提取表名 | ✅ | ✅ (从 JSON) | — |
+| 列级 | 提取 table.column 引用 | ✅ | — | — |
+
+**配置格式：**
+
+```env
+# 全局策略（所有 DSN 生效）
+DENY_TABLES=sensitive_data,audit_log
+DENY_COLUMNS=users.password_hash,orders.card_number
+DENY_STATEMENTS=DROP TABLE,ALTER TABLE,FLUSHALL
+
+# 按 DSN 索引追加策略
+DB1_DENY_TABLES=internal_audit
+DB5_DENY_STATEMENTS=FLUSHALL,CONFIG,SHUTDOWN
+DB7_DENY_TABLES=system.users
+```
+
+**策略检查位置：** `sqlguard.Validate()` → `policy.CheckSQL()`/`CheckNative()` → `AutoLimit()` → `ExecQuery()`
+
+**错误输出：**
+```
+ACCESS_DENIED: table "audit_log" is not allowed for query
+ACCESS_DENIED: column "users.password_hash" is not allowed for query
+ACCESS_DENIED: query matches denied statement pattern "FLUSHALL"
+```
+
+**表级提取规则：** SQL 提取 `FROM`/`JOIN`/`TABLE` 后的标识符；MongoDB/Qdrant 从 JSON `"find"`/`"aggregate"`/`"scroll"`/`"count"` 字段提取集合名。
+
+**列级提取规则：** 提取 `table.column` 或 `schema.table.column` 引用，自动过滤 SQL 关键字和数字假阳性。三节名称（`schema.table.column`）同时匹配二节 deny 规则（`table.column`）。
+
+**安全加固（防绕过）：**
+- 引用标识符归一化（`normalizeIdentifiers`）：剥离反引号/双引号/方括号后再提取，`` SELECT * FROM `sensitive` `` 不再绕过表级拒绝
+- 空白字符归一化（`normalizeWhitespace`）：所有空白折叠为单空格，`DROP  TABLE` 不再绕过语句级拒绝
+- SQL 注释剥离（`stripSQLComments`）：`--` 和 `/* */` 注释在提取前移除
+- 子查询 LIMIT 检测（`hasOuterLimit`）：剥离括号内子查询内容后再检测 LIMIT 存在性
+
 ---
 
 ## 输出格式
@@ -137,6 +182,9 @@ if !ok {
 | 写操作 (MongoDB) | `READ_ONLY_VIOLATION` | `mongo query must specify "find" or "aggregate"` |
 | 多语句 | `READ_ONLY_VIOLATION` | `multiple statements detected (2)` |
 | 格式错误 (非SQL) | `READ_ONLY_VIOLATION` | `qdrant query must specify "scroll" or "count"` |
+| 安全策略拒绝 (表) | `ACCESS_DENIED` | `table "audit_log" is not allowed for query` |
+| 安全策略拒绝 (列) | `ACCESS_DENIED` | `column "users.password_hash" is not allowed for query` |
+| 安全策略拒绝 (语句) | `ACCESS_DENIED` | `query matches denied statement pattern "FLUSHALL"` |
 | 并发冲突 | `CONCURRENT_LIMIT` | `a query is already running for label "my-db"` |
 | 查询失败 | `QUERY_ERROR` | `connection refused` |
 
@@ -221,12 +269,18 @@ else:
 |---------|---------|---------|
 | SQL 只读校验 | sqlguard.Validate() 动词白名单 + 多语句检测 | 防止 SQL 数据篡改/注入 |
 | 非 SQL 只读校验 | 各连接器内部白名单（Redis 命令、MongoDB 操作、Qdrant 操作） | 防止非 SQL 数据库篡改 |
+| 细粒度访问控制 | policy.Load() + CheckSQL()/CheckNative() | 表级/列级/语句级按需拒绝 |
+| 策略防绕过 | normalizeIdentifiers + normalizeWhitespace + stripSQLComments | 防引用标识符/空白/注释绕过策略检测 |
 | 自动 LIMIT | AutoLimit() 追加 LIMIT N（SQL 类） | 防止全表扫描 |
+| 子查询 LIMIT 防绕过 | hasOuterLimit() 剥离括号内容后检测 | 防子查询内嵌 LIMIT 绕过自动注入 |
 | 数据库超时 | max_execution_time/statement_timeout | 防止慢查询阻塞 |
 | 并发互斥 | TryLock per-label | 防止并发压力 |
-| 凭据保护 | Redacted() + 查询结果不含 DSN | 防止密码泄露 |
+| 凭据保护 | Redacted() + sanitizeErr() + 查询结果不含 DSN | 防止密码泄露 |
+| OS 环境隔离 | loadEnvFile() 直接返回 entries，不经过 os.Setenv | 防止 DSN 密码残留进程环境变量 |
 | 查询路由 | isSQLKind() 按数据库类型分流校验 | 防止 SQL 校验器误判原生命令 |
 | 沙箱隔离 | 每次新建连接 + 独立 context | 连接故障不影响其他操作 |
+| 终端注入防御 | sanitizeCell() 剥离 ANSI 转义和控制字符 (仅 `--human`，全 9 种数据库) | 防止恶意数据注入终端命令 |
+| 列宽防护 | maxColWidth=256 截断超长 cell (仅 `--human`，全 9 种数据库) | 防止巨量 cell 撑爆终端/内存 |
 
 ---
 
@@ -251,6 +305,7 @@ else:
 
 | 文件 | 职责 |
 |------|------|
+| `src/policy/policy.go` | 细粒度访问控制：表级/列级/语句级拒绝策略 |
 | `src/sqlguard/sqlguard.go` | SQL 只读校验、多语句检测、自动 LIMIT |
 | `src/query/types.go` | Queryable 接口、QueryResult 类型、QueryLock 并发控制 |
 | `src/connector/query.go` | executeSQLQuery() 通用 database/sql 查询执行 |

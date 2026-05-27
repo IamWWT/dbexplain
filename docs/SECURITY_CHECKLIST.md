@@ -32,6 +32,9 @@
 | ISSUE-041 | `src/logs/` 暴露数据库名 | `.gitignore` 增加规则 |
 | ISSUE-052 | godotenv 错误消息泄露完整 DSN | `sanitizeErr()` 脱敏处理 |
 | v0.0.4 bug | `filterDSNs` skip 消息用 `e.raw` 泄漏密码 | 改用 `parsed.Redacted()` |
+| v0.0.8 A4 | `os.Setenv` 传递 DSN 密码到进程环境 | `loadEnvFile()` 直接返回 `[]dsnEntry`，消除 OS env 中间人 |
+| v0.0.8 C9 | ClickHouse URL 查询参数传密码，HTTP 日志可能泄露 | 改为 `X-ClickHouse-User`/`X-ClickHouse-Key` 请求头 |
+| v0.0.8 A1 | DSN 解析错误消息含未脱敏密码 | 新增 `sanitizeErr()` 统一脱敏 |
 
 ---
 
@@ -65,6 +68,11 @@
 - [ ] **配置文件** — 畸形 JSON/ENV 文件有友好错误提示，不暴露系统路径
 - [ ] **命令行参数** — `--include`/`--exclude` 等过滤参数对特殊字符安全（逗号分隔正常）
 - [ ] **数据库名/表名** — 包含特殊字符的标识符正确处理（反引号/双引号转义）
+- [ ] **SQL 注释剥离** — `extractTableNames()`/`extractColumnRefs()` 前必须先 `stripSQLComments()` 去除 `--` 和 `/* */` 注释，防止注释内嵌敏感表名绕过检测
+- [ ] **引用标识符归一化** — `normalizeIdentifiers()` 剥离反引号/双引号/方括号引用后提取，防止引用标识符绕过策略匹配
+- [ ] **空白字符归一化** — `CheckSQL()`/`CheckNative()` 使用 `normalizeWhitespace()` 折叠所有空白后匹配，防止变体空白绕过语句级策略
+- [ ] **子查询 LIMIT 绕过** — `AutoLimit()` 使用 `hasOuterLimit()` 剥离括号内容后检测 LIMIT，防止子查询内部 LIMIT 绕过自动注入
+- [ ] **Redis 通配符** — `globMatch()` 替代 `filepath.Match`，确保 `/` 不截断 `*` 通配符匹配
 - [ ] **文件路径** — `--log-dir`、`--context`、`--cache`、`-o` 等路径参数防止路径遍历
 
 ---
@@ -73,10 +81,12 @@
 
 ### 检查项
 
-- [ ] **TLS/SSL** — MySQL/PostgreSQL/ClickHouse 的 TLS 配置正确
+- [ ] **TLS/SSL** — MySQL/PostgreSQL/ClickHouse/ES 的 TLS 配置正确
   - MySQL: `tls=<config>` 参数生效
   - PostgreSQL: `sslmode` 参数生效
-- [ ] **已知限制追踪** — ISSUE-042 (ES InsecureSkipVerify)、ISSUE-043 (ClickHouse URL 密码) 未退化
+  - ES/Redis: `?tls=true` 启用 HTTPS
+- [ ] **ES 证书验证** — `?tls-skip-verify=true` 需显式启用（不再默认跳过），仅限诊断环境
+- [ ] **ClickHouse 鉴权** — 使用 `X-ClickHouse-User`/`X-ClickHouse-Key` 请求头而非 URL 参数，避免密码在 HTTP 日志中泄露
 
 ---
 
@@ -89,6 +99,8 @@
 - [ ] **连接隔离** — 每实例独立连接，单实例 panic 不影响其他实例
 - [ ] **超时控制** — 所有数据库连接有合理的连接/读写超时
 - [ ] **并发安全** — sync.Map 或 mutex 保护共享状态
+- [ ] **终端注入防御** — `formatHuman()` 中单元格值经过 `sanitizeCell()` 剥离 ANSI 转义序列和控制字符（仅 `--human` 输出，覆盖全部 9 种数据库；JSON 输出经 Go `json.Encoder` 原生转义，无需额外处理）
+- [ ] **列宽上限** — `formatHuman()` 列宽 cap 于 256 字符，超长 cell 截断并追加 `…`（仅 `--human` 输出，覆盖全部 9 种数据库）
 
 ---
 

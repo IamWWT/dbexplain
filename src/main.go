@@ -30,7 +30,7 @@ import (
 	"github.com/IamWWT/dbexplain/schema"
 )
 
-var version = "v0.0.7"
+var version = "v0.0.8"
 
 type dsnEntry struct {
 	raw    string // DSN string
@@ -101,6 +101,7 @@ func main() {
 	outputFile := flag.String("o", "", "write output to file")
 	logDirFlag := flag.String("log-dir", "/var/log/dbexplain", "directory for log files (filter.log, <label>.log)")
 	perDSNTimeout := flag.Duration("timeout", 20*time.Second, "per-DSN collect timeout")
+	maxConcurrent := flag.Int("conn", 10, "max concurrent connections for schema collection")
 	showVersion := flag.Bool("version", false, "print version and exit")
 	showManual := flag.Bool("manual", false, "print comprehensive manual and exit")
 	language := flag.String("language", userLang, "manual language: zh (Chinese) or en (English)")
@@ -126,10 +127,12 @@ func main() {
 		if configPath == "" {
 			log.Fatal("no config file found. Create .env.dbexplain (or .env.dbexplain.enc) in " + configDirDisplay() + " or current directory.")
 		}
-		if err := loadEnvFile(configPath); err != nil {
+		envEntries, err := loadEnvFile(configPath)
+		if err != nil {
 			log.Printf("warning: load config %s: %v", configPath, sanitizeErr(err))
+		} else {
+			entries = append(entries, envEntries...)
 		}
-		entries = append(entries, loadFromEnv()...)
 	}
 	if *configFile != "" {
 		for _, raw := range loadFromConfig(*configFile) {
@@ -164,15 +167,20 @@ func main() {
 
 	startAll := time.Now() // 记录总开始时间
 
+	// Semaphore to limit concurrent connections
+	sem := make(chan struct{}, *maxConcurrent)
+
 	for i, rawDSN := range dsns {
 		i := i
 		rawDSN := rawDSN
 		wg.Add(1)
+		sem <- struct{}{} // acquire (blocks if at capacity)
 		go func() {
 			defer wg.Done()
+			defer func() { <-sem }() // release
 			parsed, err := dsn.ParseDSN(rawDSN)
 			if err != nil {
-				log.Printf("invalid DSN: %v (DSN redacted)", err)
+				log.Printf("invalid DSN: %v", sanitizeErr(err))
 				return
 			}
 			label := parsed.Label
@@ -506,11 +514,15 @@ type envEntry struct {
 }
 
 // loadEnvFile reads and parses an env file, stripping UTF-8 BOM if present.
-// Uses godotenv.Unmarshal() so the file content is loaded into the environment.
-func loadEnvFile(path string) error {
+// loadEnvFile reads a .env file and loads its contents.
+// Non-DSN entries (policy vars like DENY_TABLES, MASK_COLUMNS) are set as OS env vars
+// so policy.Load() can read them via os.Getenv.
+// DSN entries (DB1=..., DB2=...) are returned directly to avoid leaking passwords
+// into the process environment (/proc/[pid]/environ, child process inheritance).
+func loadEnvFile(path string) ([]dsnEntry, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	// Strip UTF-8 BOM (e.g. from Windows Notepad saving as UTF-8 with BOM)
 	data = bytes.TrimPrefix(data, []byte{0xEF, 0xBB, 0xBF})
@@ -519,24 +531,41 @@ func loadEnvFile(path string) error {
 	if len(data) > 0 && (data[0] == crypto.ModeMachine || data[0] == crypto.ModePassword) {
 		machineID, err := crypto.MachineID()
 		if err != nil {
-			return fmt.Errorf("compute machine fingerprint for config %s: %w", path, err)
+			return nil, fmt.Errorf("compute machine fingerprint for config %s: %w", path, err)
 		}
 		password := readEncryptionKey()
 		plaintext, err := crypto.DecryptBytes(data, machineID, password)
 		if err != nil {
-			return fmt.Errorf("decrypt config %s: %w", path, sanitizeErr(err))
+			return nil, fmt.Errorf("decrypt config %s: %w", path, sanitizeErr(err))
 		}
 		data = plaintext
 	}
 
 	envMap, err := godotenv.UnmarshalBytes(data)
 	if err != nil {
-		return err
+		return nil, err
 	}
+	var entries []envEntry
 	for k, v := range envMap {
+		// DSN entries: return directly, do NOT set in OS env (password leak prevention)
+		if strings.HasPrefix(k, "DB") {
+			numStr := k[2:]
+			if idx, err := strconv.Atoi(numStr); err == nil && idx > 0 {
+				entries = append(entries, envEntry{idx, k, v})
+				continue
+			}
+		}
+		// Non-DSN entries (policy configs): set in OS env for policy.Load()
 		os.Setenv(k, v)
 	}
-	return nil
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].idx < entries[j].idx
+	})
+	var result []dsnEntry
+	for _, e := range entries {
+		result = append(result, dsnEntry{raw: e.val, envKey: e.key})
+	}
+	return result, nil
 }
 
 // sanitizeErr redacts passwords from error messages to prevent credential leaks.
@@ -632,11 +661,12 @@ func handleList(args []string) {
 				configDirDisplay(), "or current directory.")
 			os.Exit(1)
 		}
-		if err := loadEnvFile(configPath); err != nil {
+		envEntries, err := loadEnvFile(configPath)
+		if err != nil {
 			fmt.Fprintf(os.Stderr, "ERROR: load config %s: %v\n", configPath, sanitizeErr(err))
 			os.Exit(1)
 		}
-		entries = append(entries, loadFromEnv()...)
+		entries = append(entries, envEntries...)
 	}
 
 	if len(entries) == 0 {
@@ -652,14 +682,10 @@ func handleList(args []string) {
 	fmt.Printf("  %-6s %-22s %-17s %-24s %s\n", "INDEX", "LABEL", "KIND", "HOST:PORT", "DATABASE")
 	fmt.Println("  " + strings.Repeat("─", 90))
 
-	for _, e := range entries {
+	for i, e := range entries {
 		parsed, err := dsn.ParseDSN(e.raw)
 		if err != nil {
 			continue
-		}
-		key := e.envKey
-		if key == "" {
-			key = "—"
 		}
 		label := parsed.Label
 		if label == "" {
@@ -673,44 +699,11 @@ func handleList(args []string) {
 		if dbName == "" {
 			dbName = "(n/a)"
 		}
-		fmt.Printf("  %-6s %-22s %-17s %-24s %s\n", key, label, parsed.Kind, hostPort, dbName)
+		fmt.Printf("  %-6d %-22s %-17s %-24s %s\n", i+1, label, parsed.Kind, hostPort, dbName)
 	}
 	fmt.Println()
 	fmt.Println("  Use --db <INDEX> or --label <LABEL> with execute subcommand.")
 	fmt.Println()
-}
-
-func loadFromEnv() []dsnEntry {
-	var entries []envEntry
-
-	for _, env := range os.Environ() {
-		eqIdx := strings.Index(env, "=")
-		if eqIdx < 0 {
-			continue
-		}
-		key := env[:eqIdx]
-		val := env[eqIdx+1:]
-
-		if !strings.HasPrefix(key, "DB") {
-			continue
-		}
-		numStr := key[2:]
-		idx, err := strconv.Atoi(numStr)
-		if err != nil || idx <= 0 {
-			continue
-		}
-		entries = append(entries, envEntry{idx, key, val})
-	}
-
-	sort.Slice(entries, func(i, j int) bool {
-		return entries[i].idx < entries[j].idx
-	})
-
-	var result []dsnEntry
-	for _, e := range entries {
-		result = append(result, dsnEntry{raw: e.val, envKey: e.key})
-	}
-	return result
 }
 
 func loadFromConfig(filename string) []string {
@@ -1107,6 +1100,7 @@ func printHelp(lang string) {
 			"  -json, --human, -o <file>     Output format\n"+
 			"  --context <dir>, --cache <f>  AI context / delta scan\n"+
 			"  --log-dir <dir>, -timeout d   Logs / timeout (default /var/log/dbexplain, 20s)\n"+
+			"  --conn N                     Max concurrent connections (default 10)\n"+
 			"  --language zh|en, --version   Language / version\n\n",
 		"Flags (dbexplain [flags]):\n"+
 			"  -dsn, -env, -config           Input sources\n"+
@@ -1114,6 +1108,7 @@ func printHelp(lang string) {
 			"  -json, --human, -o <file>     Output format\n"+
 			"  --context <dir>, --cache <f>  AI context / delta scan\n"+
 			"  --log-dir <dir>, -timeout d   Logs / timeout (default /var/log/dbexplain, 20s)\n"+
+			"  --conn N                     Max concurrent connections (default 10)\n"+
 			"  --language zh|en, --version   Language / version\n\n",
 	))
 
@@ -2139,7 +2134,8 @@ func printManualElasticsearch(p func(string, string) string) {
     别名: elasticsearch, es, elasticsearchs
 
     特有参数:
-      tls=true        启用 HTTPS (InsecureSkipVerify, 诊断工具可接受)
+      tls=true              启用 HTTPS
+      tls-skip-verify=true  跳过证书验证 (仅诊断环境)
 
     采集机制:
       • 索引列表 — Cat Indices API: 获取所有索引名
@@ -2175,7 +2171,8 @@ func printManualElasticsearch(p func(string, string) string) {
     Aliases: elasticsearch, es, elasticsearchs
 
     Specific parameters:
-      tls=true        Enable HTTPS (InsecureSkipVerify, acceptable for diagnostics)
+      tls=true              Enable HTTPS
+      tls-skip-verify=true  Skip certificate verification (diagnostic only)
 
     Collection mechanism:
       • Index list  — Cat Indices API: get all index names

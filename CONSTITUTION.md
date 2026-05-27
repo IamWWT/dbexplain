@@ -8,7 +8,7 @@
 
 ### 消费方
 
-- **AI Agent**：通过 `db-relationship-explainer/SKILL.md` 定义的技能接口调用，Agent 读取 stdout 中的 Markdown 报告或 `-json` 输出的结构化数据
+- **AI Agent**：通过 `dbexplain-skill/SKILL.md` 定义的技能接口调用，Agent 读取 stdout 中的 Markdown 报告或 `-json` 输出的结构化数据
 - **人类运维/DBA**：直接在终端执行，阅读格式化报告或 JSON 输出进行数据库巡检和结构分析
 
 ### 核心交付物

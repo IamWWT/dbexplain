@@ -1,5 +1,53 @@
 # 变更日志
 
+## v0.0.8 (2026-05-27)
+
+### 安全策略引擎 (ISSUE-061)
+- **细粒度访问控制**: 新增 `src/policy/` 包，三层拒绝策略——语句级（子串匹配）、表级（表名/集合名/Key名提取）、列级（`table.column` 引用匹配），在 `sqlguard` 校验之后、查询执行之前提供第二层访问控制
+- **9 种数据库全覆盖**: SQL 类（MySQL/PostgreSQL/GaussDB/SQLite/ClickHouse/Elasticsearch）支持全部三层策略；MongoDB/Qdrant 支持语句+集合级；Redis 支持语句+Key 级（含通配符匹配）
+- **全局+按 DSN 配置**: `DENY_TABLES`/`DENY_COLUMNS`/`DENY_STATEMENTS` 支持全局配置和 `DB<n>_` 前缀按 DSN 追加
+- **列值屏蔽**: `MASK_COLUMNS` 执行后替换敏感列值（如 `password_hash=***`），替代硬阻断。支持通配符匹配，所有数据库通用
+- **专用文档**: 新建 `docs/POLICY.md`，按 9 种数据库逐一说明禁用规则和配置方式
+- **单元测试**: 39 测试用例（Load/CheckSQL/CheckNative/Extract 全覆盖）+ 10+ 安全绕过回归用例
+
+### 凭据保护
+- **DSN 错误消息脱敏**: 新增 `sanitizeErr()` 函数，DSN 解析错误中的密码在输出到 stderr 前统一脱敏，防止畸形 DSN 泄露凭据
+- **OS 环境变量隔离**: `loadEnvFile()` 重构为直接返回 `[]dsnEntry`，消除通过 `os.Setenv`→`os.Getenv` 传递 DSN 密码的中间窗口。非 DSN 配置项不受影响
+- **ClickHouse 请求头鉴权**: `chHTTP.query()` 鉴权方式从 URL 查询参数改为 `X-ClickHouse-User`/`X-ClickHouse-Key` 请求头，防止密码在 HTTP 日志或 Referer 头中泄露（关闭 ISSUE-043）
+
+### 策略绕过防护
+- **引用标识符归一化**: `extractTableNames()`/`extractColumnRefs()` 新增 `normalizeIdentifiers()` 预处理，剥离反引号/双引号/方括号后再提取，防止 ``SELECT * FROM `sensitive` `` 绕过表级拒绝
+- **空白字符归一化**: `CheckSQL()`/`CheckNative()` 新增 `normalizeWhitespace()`，将所有空白序列折叠为单空格后匹配，防止 `DROP  TABLE` 绕过语句级策略
+- **Redis 通配符重写**: `filepath.Match` 将 `/` 视为路径分隔符导致 `CONVERSATION:*` 不匹配 `CONVERSATION:abc/123`。自实现 `globMatch()` 对所有字符等同对待
+- **子查询 LIMIT 防绕过**: `AutoLimit()` 新增 `hasOuterLimit()`，剥离括号内子查询内容后再检测 LIMIT，防止 `SELECT * FROM (SELECT ... LIMIT 99999) AS t` 绕过自动注入
+
+### 输出安全
+- **终端注入防御**: `--human` 输出新增 `sanitizeCell()`，剥离 ANSI 转义序列（ESC+`[...`+字母）及控制字符（0x00-0x1F、0x7F），保留 tab/换行/回车。JSON 输出由 Go `json.Encoder` 原生处理，无需额外防护。覆盖全部 9 种数据库
+- **列宽上限**: `formatHuman()` 新增 `maxColWidth=256`，超长 cell 截断并追加 `…` 标识。仅 `--human` 生效，防止巨量 cell 撑爆终端/内存
+
+### 连接与并发
+- **ES 证书验证参数化**: 新增 DSN 参数 `?tls-skip-verify=true`，替代全局硬编码 `InsecureSkipVerify`（关闭 ISSUE-042）。ES 帮助文档同步更新
+- **Schema 采集并发限流**: 新增 `--conn N` 参数（默认 10），使用 channel 信号量限制 schema 采集的并发 goroutine 数
+
+### CLI 与诊断
+- **`list` 索引对齐**: `dbexplain list` 的 INDEX 列从 `envKey`（DB1/DB2）改为纯序号（1/2/3），与 `execute --db N` 的 1-based 位置索引一致
+- **Malformed glob 告警**: `policy.go` 中 `globMatch()` 和 `filepath.Match()` 错误忽略处增加 `log.Printf` 警告输出，便于发现配置错误
+
+### 文档更新
+- `docs/POLICY.md`: 安全策略引擎完整文档（新建）
+- `docs/EXECUTE.md`: 安全架构章节补充策略防绕过、输出安全说明
+- `docs/SECURITY_CHECKLIST.md`: 新增 10+ 安全检查项（凭据保护/输入验证/运行时安全/传输安全）
+- `docs/CLICKHOUSE.md`: 认证方式更新（URL 参数 → 请求头）
+- `docs/ELASTICSEARCH.md`: TLS 描述更新（硬编码跳过 → `?tls-skip-verify=true` 参数化）
+- `src/execute_test.go`: 新增 13 个测试用例（sanitizeCell/formatHuman 全覆盖）
+- 删除 `docs/TEST_v0.0.7.md`，新建 `docs/TEST_v0.0.8.md`
+
+### 跟踪问题
+- **ISSUE-061**: 细粒度安全策略引擎（v0.0.8 已实现）
+- **ISSUE-034**: GaussDB/TDSQL 兼容性文档（v0.0.8 已实现）
+- **ISSUE-042**: ES InsecureSkipVerify 硬编码（v0.0.8 已关闭）
+- **ISSUE-043**: ClickHouse URL 密码泄露（v0.0.8 已关闭）
+
 ## v0.0.7 (2026-05-26)
 
 ### Go 模块化发布 (REQ-1)

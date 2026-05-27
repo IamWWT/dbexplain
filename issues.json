@@ -206,7 +206,7 @@
       "priority": "low",
       "category": "docs",
       "description": "SKILL.md 已添加 -include/-exclude 文档，但可能需要回顾确认所有 v0.0.3 新增能力（Redis cluster 支持、ES HTTPS 支持、DSN 过滤）是否都已记录到 SKILL.md 的 AI Agent 使用指南中。",
-      "file": "db-relationship-explainer/SKILL.md",
+      "file": "dbexplain-skill/SKILL.md",
       "created": "2026-05-19"
     },
     {
@@ -358,18 +358,19 @@
       "priority": "low",
       "category": "feature",
       "description": "与主流 AI Agent 生态集成：Claude Code Skill（已有）、Cursor 集成、OpenHands 集成、Aider 集成。提供标准化的 Agent Context 输出格式，让各平台 AI Agent 无缝消费 IR。",
-      "file": "db-relationship-explainer/SKILL.md (扩展)",
+      "file": "dbexplain-skill/SKILL.md (扩展)",
       "created": "2026-05-20"
     },
     {
       "id": "ISSUE-034",
       "title": "[Phase 3] GaussDB/TDSQL 操作语义元数据兼容性确认",
-      "status": "open",
+      "status": "closed",
       "priority": "medium",
       "category": "compat",
       "description": "GaussDB(PG兼容)和TDSQL(MySQL兼容)的操作语义表结构可能与原生PG/MySQL不同。需有实际环境用户确认： GaussDB — pg_stat_user_tables字段名/计数器语义是否一致、pg_stat_statements扩展是否存在、是否有WDR替代方案； TDSQL — performance_schema.table_io_waits_summary_by_table在分布式版本是否反映全局统计、events_statements_summary_by_digest在分片查询下的行为。兜底机制已设计：查询失败时跳过该数据源并记录日志，因子权重自动重新归一化。",
       "file": "src/connector/postgres.go, src/connector/mysql.go",
-      "created": "2026-05-20"
+      "created": "2026-05-20",
+      "closed": "2026-05-27"
     },
     {
       "id": "ISSUE-035",
@@ -422,7 +423,7 @@
       "priority": "high",
       "category": "feature",
       "description": "基于 ISSUE-038 的全局安装改造，Skill 相关文件需相应调整：(1) SKILL.md 中更新 .env 文件路径说明，指向新的默认配置路径 ~/.config/dbexplain/.env.dbexplain；(2) SKILL.md 中更新使用示例，反映全局安装后的调用方式（直接 dbexplain 而非 ./dbexplain-linux-amd64）；(3) install_skill_for_all_platform.sh 中更新工具路径检测逻辑，优先查找 PATH 中的 dbexplain，其次查找本地二进制；(4) 确保 Claude Code / Cursor / AixCoding / Agents 等各平台 Skill 安装后能正确找到全局安装的二进制和配置文件；(5) uninstall_skill_for_all_platform.sh 同步更新卸载逻辑。",
-      "file": "db-relationship-explainer/SKILL.md, install_skill_for_all_platform.sh, uninstall_skill_for_all_platform.sh",
+      "file": "dbexplain-skill/SKILL.md, install_skill_for_all_platform.sh, uninstall_skill_for_all_platform.sh",
       "created": "2026-05-20"
     },
     {
@@ -450,7 +451,8 @@
     {
       "id": "ISSUE-042",
       "title": "[v0.0.5] Elasticsearch TLS InsecureSkipVerify 绕过证书验证",
-      "status": "open",
+      "status": "closed",
+      "closed": "2026-05-27",
       "priority": "medium",
       "category": "security",
       "description": "elasticsearch.go:47 使用 tls.Config{InsecureSkipVerify: true} 禁用 TLS 证书验证，容易遭受中间人攻击。短期内作为诊断工具可接受（已文档化），长期需支持 TLS 证书配置选项（--tls-ca-file 或 ?tls-ca=path）。",
@@ -460,7 +462,8 @@
     {
       "id": "ISSUE-043",
       "title": "[v0.0.5] ClickHouse 密码通过 URL 查询参数明文传输",
-      "status": "open",
+      "status": "closed",
+      "closed": "2026-05-27",
       "priority": "medium",
       "category": "security",
       "description": "clickhouse.go:269 将密码作为 URL 查询参数（params.Set(\"password\", c.pass)），可能被 HTTP 代理/负载均衡器日志记录。应改用 HTTP Basic Auth Header 传递认证信息。",
@@ -573,7 +576,11 @@
       "priority": "medium",
       "category": "security",
       "description": "Once encrypted config adoption is sufficient, remove plaintext .env loading. Only support .enc encrypted files. Break-glass: --allow-plaintext flag for migration period.",
-      "labels": ["security", "breaking-change", "future"],
+      "labels": [
+        "security",
+        "breaking-change",
+        "future"
+      ],
       "created": "2026-05-22"
     },
     {
@@ -656,13 +663,17 @@
     {
       "id": "ISSUE-061",
       "title": "[v0.0.8] execute 细粒度安全策略 — 表/列/语句级访问控制",
-      "status": "open",
+      "status": "closed",
       "priority": "high",
       "category": "feature",
       "description": "在 .env 中新增安全相关变量，对 dbexplain execute 实施细粒度访问控制，阻止敏感数据通过查询暴露。三个维度：(1) 表级禁止 — 指定不可查询的表（如 user_credentials, payment_log），sqlguard 解析 SQL 中引用的表名并拒绝命中黑名单的查询；(2) 列级禁止 — 指定表中不可查询的字段（如 users.password_hash, orders.card_number），检测 SELECT 子句中的列引用并拒绝；(3) 语句级禁止 — 指定禁止执行的特定语句模式（精确匹配或正则），完全阻止匹配的查询执行。变量可全局生效或按 label 限定范围。需与现有 sqlguard 动词白名单/多语句检测/LIMIT 注入协同工作，放在 sqlguard Validate 之后、ExecQuery 之前作为第二层过滤。",
       "file": "src/sqlguard/ (扩展), src/main.go (.env 变量解析)",
-      "labels": ["security", "v0.0.8"],
-      "created": "2026-05-26"
+      "labels": [
+        "security",
+        "v0.0.8"
+      ],
+      "created": "2026-05-26",
+      "closed": "2026-05-27"
     },
     {
       "id": "ISSUE-062",

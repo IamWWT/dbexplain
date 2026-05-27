@@ -59,6 +59,9 @@ The "ground truth layer" for databases in the AI era.
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) and [`CONSTITUTION.md`](CONSTITUTION.md) for the full architecture vision.
 
+![dbexplain Architecture](docs/assets/architecture.drawio.png)
+*4-stage pipeline: INPUT (Connection & Config) → COLLECT (9-DB schema extraction) → ANALYZE (FK inference/ranking/diagnostics/IR Graph) → OUTPUT (Markdown/JSON/context files)*
+
 ---
 
 ## Quick Start
@@ -72,8 +75,8 @@ One command for global tool install + AI Skill deployment:
 ```bash
 git clone https://github.com/IamWWT/dbexplain.git
 cd dbexplain
-bash db-relationship-explainer/scripts/install.sh            # Chinese skill
-bash db-relationship-explainer/scripts/install.sh --lang en  # English skill
+bash dbexplain-skill/scripts/install.sh            # Chinese skill
+bash dbexplain-skill/scripts/install.sh --lang en  # English skill
 ```
 
 The script auto-detects your OS and architecture (via `uname -s`/`uname -m`) and downloads the matching binary from GitHub Releases.
@@ -86,28 +89,28 @@ Pre-download the binary for your platform, then install with `--offline`:
 
 ```bash
 # Download on a machine with internet (Linux amd64 example)
-wget https://github.com/IamWWT/dbexplain/releases/download/v0.0.7/dbexplain-linux-amd64
+wget https://github.com/IamWWT/dbexplain/releases/download/v0.0.8/dbexplain-linux-amd64
 
 # Copy to offline environment, then:
-bash db-relationship-explainer/scripts/install.sh --offline ./dbexplain-linux-amd64
+bash dbexplain-skill/scripts/install.sh --offline ./dbexplain-linux-amd64
 ```
 
 Tool only, no Skill:
 
 ```bash
-bash db-relationship-explainer/scripts/install.sh --offline ./dbexplain-linux-amd64 --no-skill
+bash dbexplain-skill/scripts/install.sh --offline ./dbexplain-linux-amd64 --no-skill
 ```
 
 #### Manual Binary Download
 
 ```bash
 # Linux amd64
-wget https://github.com/IamWWT/dbexplain/releases/download/v0.0.7/dbexplain-linux-amd64
+wget https://github.com/IamWWT/dbexplain/releases/download/v0.0.8/dbexplain-linux-amd64
 chmod +x dbexplain-linux-amd64
 sudo mv dbexplain-linux-amd64 /usr/local/bin/dbexplain
 
 # macOS Apple Silicon
-wget https://github.com/IamWWT/dbexplain/releases/download/v0.0.7/dbexplain-darwin-arm64
+wget https://github.com/IamWWT/dbexplain/releases/download/v0.0.8/dbexplain-darwin-arm64
 chmod +x dbexplain-darwin-arm64
 sudo mv dbexplain-darwin-arm64 /usr/local/bin/dbexplain
 
@@ -123,8 +126,8 @@ In PowerShell:
 ```powershell
 git clone https://github.com/IamWWT/dbexplain.git
 cd dbexplain
-.\db-relationship-explainer\scripts\install.ps1              # Chinese skill
-.\db-relationship-explainer\scripts\install.ps1 -Lang en     # English skill
+.\dbexplain-skill\scripts\install.ps1              # Chinese skill
+.\dbexplain-skill\scripts\install.ps1 -Lang en     # English skill
 ```
 
 The script downloads `dbexplain-windows-amd64.exe` to `%LOCALAPPDATA%\dbexplain\` and adds it to your user PATH.
@@ -133,7 +136,7 @@ The script downloads `dbexplain-windows-amd64.exe` to `%LOCALAPPDATA%\dbexplain\
 
 ```powershell
 # Download on a machine with internet
-Invoke-WebRequest -Uri "https://github.com/IamWWT/dbexplain/releases/download/v0.0.7/dbexplain-windows-amd64.exe" -OutFile "dbexplain-windows-amd64.exe"
+Invoke-WebRequest -Uri "https://github.com/IamWWT/dbexplain/releases/download/v0.0.8/dbexplain-windows-amd64.exe" -OutFile "dbexplain-windows-amd64.exe"
 
 # Copy to offline environment, place at:
 # %LOCALAPPDATA%\dbexplain\dbexplain.exe
@@ -151,6 +154,9 @@ cd src && go mod tidy && bash build.sh
 ```
 
 Binaries are generated in `release/` (linux/darwin/windows × amd64/arm64, 5 targets).
+
+![dbexplain Deployment](docs/assets/deployment.drawio.png)
+*3-step install: GitHub Releases → install.sh → 3 targets (binary /usr/local/bin, config ~/.config, skill ~/.agents)*
 
 ### Post-Install Config
 
@@ -232,6 +238,7 @@ scheme://[user:password@]host[:port][/dbname][?label=alias&params...]
 | `cluster=true` | Redis | Cluster mode, auto-scan all shards |
 | `tls=true` | ES, Redis | Enable TLS |
 | `sslmode=<mode>` | PostgreSQL | SSL mode: `disable`/`require`/`verify-ca`/`verify-full` |
+| `tls-skip-verify=true` | ES | Skip TLS certificate verification (diagnostic use) |
 | `authSource=<db>` | MongoDB | Authentication database name |
 
 ### Config File Search Order (`-env` mode)
@@ -340,7 +347,9 @@ dbexplain execute -env --label qdrant '{"count":"docs"}'                # Qdrant
 dbexplain execute -env --db 3 --human "SELECT * FROM users LIMIT 5"
 ```
 
-![list + execute --human example](docs/assets/dbexplain-list-execute-eg1.png)
+![list + execute --human example](docs/assets/install-offline-verify-2.png)
+
+![dbexplain usage example](docs/assets/usages.png)
 
 > More examples in [`docs/CLI_EXAMPLES.md`](docs/CLI_EXAMPLES.md); security architecture in [`docs/EXECUTE.md`](docs/EXECUTE.md).
 
@@ -383,6 +392,7 @@ dbexplain qdrant              # Qdrant
 | `-o <file>` | Write output to file (text mode: auto UTF-8 BOM) |
 | `--log-dir <dir>` | Log output directory (default `/var/log/dbexplain`) |
 | `-timeout <duration>` | Per-DSN timeout (default 20s) |
+| `--conn N` | Max concurrent connections for schema collection (default 10) |
 | `--version` | Print version |
 | `--human` | Human-friendly output with context markers |
 | `--context <dir>` | Write AI context files to directory (summary.json / topology.json / diagnostics.json / chunks/) |
@@ -402,72 +412,45 @@ dbexplain qdrant              # Qdrant
 
 ---
 
-## Output Example
-
-```
-> Instances (2)
-  shop-db                    mysql    1 db(s), 5 tables
-  cache                      redis    1 db(s), 3 tables
-
-> shop-db  /  mydb
-  orders [InnoDB] ~42,000 rows  Core order table
-----------------------------------------------------
-  name       type          flags    comment
-  ---------  ------------  -------  ------------
-  id         int(11)       PK NN
-  user_id    int(11)       NN       identifier
-  total      decimal(10,2) NN       amount/quantity
-  created_at datetime      NN       timestamp
-  indexes: IDX(user_id)
-
-> Relationships (3 explicit FK, 2 inferred)
-  shop-db/mydb.orders(user_id) --FK--> shop-db/mydb.users(id)
-
-> Issues (2)
-  [!] shop-db/mydb/orders  FK column "user_id" has no index
-  [i] cache/db0/session:{hex}  no TTL on security-sensitive key
-```
-
-![Terminal example](docs/assets/explain-test-dsn+env.png)
-
----
-
 ## AI Skill Integration
 
 `install.sh` installs both tool and skill by default, with `--lang zh|en` for language. Or run separately:
 
 ```bash
 # One-click (tool + skill, online)
-bash db-relationship-explainer/scripts/install.sh
-bash db-relationship-explainer/scripts/install.sh --lang en   # English skill
+bash dbexplain-skill/scripts/install.sh
+bash dbexplain-skill/scripts/install.sh --lang en   # English skill
 
 # One-click (tool + skill, offline)
-bash db-relationship-explainer/scripts/install.sh --offline ./dbexplain-linux-amd64
+bash dbexplain-skill/scripts/install.sh --offline ./dbexplain-linux-amd64
 
 # Tool only, skip skill deployment
-bash db-relationship-explainer/scripts/install.sh --no-skill
+bash dbexplain-skill/scripts/install.sh --no-skill
 
 # Skill only (when tool is already installed)
 # --lang zh for Chinese, --lang en for English
-bash db-relationship-explainer/scripts/install-skill.sh
-bash db-relationship-explainer/scripts/install-skill.sh --lang en
+bash dbexplain-skill/scripts/install-skill.sh
+bash dbexplain-skill/scripts/install-skill.sh --lang en
 
 # Update installed skill
-bash db-relationship-explainer/scripts/install-skill.sh --update
+bash dbexplain-skill/scripts/install-skill.sh --update
 
 # Verify installation
-bash db-relationship-explainer/scripts/install-skill.sh --verify
+bash dbexplain-skill/scripts/install-skill.sh --verify
 
 # Uninstall skill
-bash db-relationship-explainer/scripts/uninstall-skill.sh
+bash dbexplain-skill/scripts/uninstall-skill.sh
 
 # Uninstall tool
-bash db-relationship-explainer/scripts/uninstall.sh
+bash dbexplain-skill/scripts/uninstall.sh
 ```
 
-![Skill install](docs/assets/skill_install_mgr.png)
+![Skill and Tool install](docs/assets/install-offline-1.png)
 
-> Supports Claude Code, DeepSeek, AixCoding, Agents, and more. See [`docs/DEPLOY_SKILLS.md`](docs/DEPLOY_SKILLS.md).
+![AI Agent + dbexplain Interaction](docs/assets/skill-interaction.drawio.png)
+*5-step flow: ① User asks → ② AI loads SKILL.md → ③ AI invokes dbexplain to collect schema → ④ dbexplain outputs deterministic report → ⑤ AI explains to user*
+
+> Supports Claude Code, DeepSeek, AixCoding, Agents, and more. See [`docs/DEPLOY.md`](docs/DEPLOY.md).
 
 ---
 
@@ -488,8 +471,10 @@ The `execute` subcommand runs user SQL/native queries under sandbox protection, 
 - **SQL read-only validation** (`sqlguard`): Verb whitelist + multi-statement detection + auto LIMIT injection; rejects DROP/INSERT/UPDATE/DELETE
 - **Non-SQL whitelist**: Redis 30+ command whitelist, MongoDB find/aggregate whitelist, Qdrant scroll/count whitelist
 - **Query routing**: `isSQLKind()` routes by database type; SQL via sqlguard, non-SQL via per-connector internal validation
+- **Fine-grained access control**: Table/column/statement-level deny policies (`DENY_TABLES`/`DENY_COLUMNS`/`DENY_STATEMENTS`); column value masking (`MASK_COLUMNS`)
 - **Concurrent mutex**: per-label `TryLock`, only one query at a time per label
 - **Dual timeout**: Application context + database-level statement timeout
+- **Output safety**: Terminal output strips ANSI escape and control chars; column width capped at 256 chars
 - **Credential protection**: Query result JSON contains no connection info or passwords
 
 > See [`docs/EXECUTE.md`](docs/EXECUTE.md) for details
@@ -510,7 +495,7 @@ No core code changes needed — fully compliant with the open/closed principle.
 ## Development
 
 - **Language**: Go 1.26+
-- **Build**: `CGO_ENABLED=0 go build -ldflags="-s -w -X main.version=v0.0.7"`
+- **Build**: `CGO_ENABLED=0 go build -ldflags="-s -w -X main.version=v0.0.8"`
 - **Test**: `go test ./...` (DSN parsing + field inference)
 - **Cross-compile**: `bash build.sh` (linux/darwin/windows × amd64/arm64)
 
@@ -524,14 +509,18 @@ No core code changes needed — fully compliant with the open/closed principle.
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Architecture vision and roadmap |
 | [`docs/EXECUTE.md`](docs/EXECUTE.md) | Read-only query execution (security architecture, 9-DB verification) |
 | [`docs/CLI_EXAMPLES.md`](docs/CLI_EXAMPLES.md) | CLI query examples (13 verified commands across 7 data sources) |
-| [`docs/DEPLOY_SKILLS.md`](docs/DEPLOY_SKILLS.md) | Skill deployment guide (multi-platform) |
-| [`docs/DEPLOY_SRC.md`](docs/DEPLOY_SRC.md) | Source build deployment |
+| [`docs/DEPLOY.md`](docs/DEPLOY.md) | Deployment guide (source build + tool install + Skill deploy) |
 | [`docs/MYSQL.md`](docs/MYSQL.md) | MySQL field inference, index/FK collection |
 | [`docs/POSTGRESQL.md`](docs/POSTGRESQL.md) | PostgreSQL pg_catalog, SSL, multi-schema |
+| [`docs/GAUSSDB.md`](docs/GAUSSDB.md) | GaussDB PostgreSQL protocol compatible |
 | [`docs/CLICKHOUSE.md`](docs/CLICKHOUSE.md) | ClickHouse HTTP, sort/partition keys |
+| [`docs/SQLITE.md`](docs/SQLITE.md) | SQLite INTEGER PRIMARY KEY, CGO-free |
 | [`docs/REDIS.md`](docs/REDIS.md) | Redis keyspace analysis, risk diagnostics |
 | [`docs/MONGO.md`](docs/MONGO.md) | MongoDB auth troubleshooting, read-only metadata |
 | [`docs/ELASTICSEARCH.md`](docs/ELASTICSEARCH.md) | Elasticsearch index mappings, HTTPS |
+| [`docs/QDRANT.md`](docs/QDRANT.md) | Qdrant vector collection metadata |
+| [`docs/POLICY.md`](docs/POLICY.md) | Fine-grained access control policy (table/column/statement level) |
+| [`docs/SECURITY_CHECKLIST.md`](docs/SECURITY_CHECKLIST.md) | Security checklist (pre-release must-read) |
 | [`CHANGELOG.md`](CHANGELOG.md) | Changelog (Chinese) |
 | [`CHANGELOG_EN.md`](CHANGELOG_EN.md) | Changelog (English) |
 | [`issues.json`](issues.json) | Issue tracking |
@@ -540,4 +529,4 @@ No core code changes needed — fully compliant with the open/closed principle.
 
 ## License
 
-Apache 2.0 © 2025-2026 WWT
+Apache 2.0 © 2026 WWT

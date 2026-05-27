@@ -18,6 +18,7 @@ type DSN struct {
 	Cluster  bool // ?cluster=true (Redis Cluster)
 	TLS      bool // ?tls=true (ES/Redis HTTPS)
 	SSLMode  string // ?sslmode=require|disable (PostgreSQL)
+	TLSSkipVerify bool // ?tls-skip-verify=true (ES/Redis)
 }
 
 // ParseDSN accepts: scheme://[user[:pass]@]host[:port][/dbname][?label=alias]
@@ -76,6 +77,9 @@ func ParseDSN(raw string) (*DSN, error) {
 	}
 	if v := u.Query().Get("tls"); v == "true" || v == "1" {
 		d.TLS = true
+	}
+	if v := u.Query().Get("tls-skip-verify"); v == "true" || v == "1" {
+		d.TLSSkipVerify = true
 	}
 	if v := u.Query().Get("sslmode"); v != "" {
 		d.SSLMode = v

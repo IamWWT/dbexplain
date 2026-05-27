@@ -19,7 +19,7 @@ if err := cli.ping(ctx); err != nil { ... }
 ```
 
 - **纯 HTTP 接口**：ClickHouse 原生支持 HTTP 查询（默认 8123 端口），无需安装驱动或 CGO。  
-- **认证**：通过 URL 查询参数 `user` 和 `password` 传递凭据，与原生 ClickHouse HTTP 认证一致。  
+- **认证**：通过请求头 `X-ClickHouse-User` 和 `X-ClickHouse-Key` 传递凭据，避免 HTTP 日志/Referer 头中泄露密码。  
 - **超时设置**：HTTP 客户端整体超时 10 秒，每次查询均受此限制，避免长时间阻塞。  
 - **安全 ping**：执行 `SELECT 1` 验证连通性，失败则终止采集并返回错误。
 

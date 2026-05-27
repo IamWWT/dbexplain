@@ -1,6 +1,6 @@
 # dbexplain CLI 查询案例库
 
-> 所有查询均已在本环境（v0.0.7, 9 数据源）跑通验证。`--human` 用于可读表格输出，不加则为 JSON（供 AI Agent 消费）。
+> 所有查询均已在本环境（v0.0.8, 9 数据源）跑通验证。`--human` 用于可读表格输出，不加则为 JSON（供 AI Agent 消费）。
 
 ---
 
@@ -201,6 +201,52 @@ dbexplain execute -env --db 6 --timeout 60 --limit 500 --human \
 dbexplain list -env
 ```
 
+### 安全策略控制 (v0.0.8+)
+
+可在 `.env` 或 `~/.config/dbexplain/.env.dbexplain` 中添加安全策略，限制查询范围：
+
+```env
+# 禁止查询敏感表
+DENY_TABLES=sensitive_data,audit_log
+
+# 禁止查询敏感字段（硬阻断）
+DENY_COLUMNS=users.password_hash,orders.card_number
+
+# 禁止执行危险语句
+DENY_STATEMENTS=DROP TABLE,ALTER TABLE,FLUSHALL
+
+# 列值屏蔽：替代硬阻断，将敏感列值替换为指定文本（执行后替换）
+MASK_COLUMNS=password_hash=***,card_number=****,email=REDACTED
+```
+
+```bash
+# 策略会拦截对禁用表的访问
+dbexplain execute -env --db 1 "SELECT * FROM sensitive_data"
+# → ACCESS_DENIED: table "sensitive_data" is not allowed for query
+
+# 策略会拦截对禁用列的访问
+dbexplain execute -env --db 1 "SELECT users.password_hash FROM users"
+# → ACCESS_DENIED: column "users.password_hash" is not allowed for query
+
+# 列值屏蔽：查询正常执行，但敏感列值被替换（硬阻断优先于屏蔽）
+MASK_COLUMNS=hostip=*** dbexplain execute -env --db 1 --human \
+  "SELECT hostip, device_type FROM testdb.iplist LIMIT 3"
+# → hostip 列显示 ***，device_type 保持原值
+
+# 屏蔽对所有数据库生效（含 MongoDB 等非 SQL）
+MASK_COLUMNS=user_id=*** dbexplain execute -env --db 9 --human \
+  '{"find":"user","filter":{},"limit":3}'
+# → user_id 列显示 ***
+
+# 支持通配符和 table. 前缀
+MASK_COLUMNS=testdb.iplist.hostip=REDACTED dbexplain execute -env --db 1 --human \
+  "SELECT hostip, device_type FROM testdb.iplist LIMIT 2"
+# → hostip 列显示 REDACTED
+
+# 正常查询不受影响
+dbexplain execute -env --db 1 --human "SELECT id, name FROM users"
+```
+
 ---
 
 ## 当前环境数据库一览
@@ -219,4 +265,4 @@ dbexplain list -env
 
 ---
 
-*案例库生成于 v0.0.7，全部查询已通过 --human 实测验证。*
+*案例库生成于 v0.0.7，安全策略和列值屏蔽于 v0.0.8 追加，全部查询已通过 --human 实测验证。*

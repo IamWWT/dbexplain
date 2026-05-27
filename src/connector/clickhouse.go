@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"strings"
 	"time"
 
@@ -263,19 +262,17 @@ func (c *chHTTP) queryRows(ctx context.Context, sql string) ([][]string, error) 
 
 func (c *chHTTP) query(ctx context.Context, sql string) ([]byte, error) {
 	u := c.base + "/"
-	if c.user != "" {
-		params := url.Values{}
-		params.Set("user", c.user)
-		if c.pass != "" {
-			params.Set("password", c.pass)
-		}
-		u += "?" + params.Encode()
-	}
 	req, err := http.NewRequestWithContext(ctx, "POST", u, strings.NewReader(sql))
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "text/plain")
+	if c.user != "" {
+		req.Header.Set("X-ClickHouse-User", c.user)
+		if c.pass != "" {
+			req.Header.Set("X-ClickHouse-Key", c.pass)
+		}
+	}
 	resp, err := c.httpCli.Do(req)
 	if err != nil {
 		return nil, err
