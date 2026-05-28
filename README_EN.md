@@ -2,7 +2,7 @@
 
 > **Database Context Compiler** — Deterministic ground truth for AI agents.
 
-`dbexplain` is a **zero-dependency, statically compiled** CLI tool. Given database connection strings, it auto-extracts table structures, columns, indexes, and foreign keys, outputting deterministic, verifiable relationship information — with zero AI inference or semantic guessing.
+`dbexplain` is a **single binary, zero runtime dependency** CLI tool. Download one file and run — no Python, Node, JDK, or shared libraries needed. Given database connection strings, it auto-extracts table structures, columns, indexes, and foreign keys, outputting deterministic, verifiable relationship information — with zero AI inference or semantic guessing.
 
 The "ground truth layer" for databases in the AI era.
 

@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -62,9 +63,11 @@ func handleExecute(args []string) {
 		os.Exit(1)
 	}
 
-	// CSV/xlsx: bypass sqlguard, use simple query parser
+	// CSV/xlsx: bypass sqlguard (SELECT * only — inherently read-only),
+	// but still enforce policy engine rules (DENY_TABLES, MASK_COLUMNS).
 	if parsed.Kind == "csv" || parsed.Kind == "tsv" || parsed.Kind == "xlsx" {
-		handleFileExecute(parsed, sqlArg, human, limit)
+		policies := policy.Load(entries[0].envKey)
+		handleFileExecute(parsed, sqlArg, human, limit, policies)
 		return
 	}
 
@@ -159,8 +162,21 @@ func handleExecute(args []string) {
 	}
 }
 
-// handleFileExecute handles execute for csv/xlsx — skips sqlguard and policy checks.
-func handleFileExecute(parsed *dsn.DSN, sqlArg string, human *bool, limit *int) {
+// handleFileExecute handles execute for csv/xlsx — skips sqlguard (SELECT * only),
+// but enforces policy engine rules for compliance scenarios.
+func handleFileExecute(parsed *dsn.DSN, sqlArg string, human *bool, limit *int, policies *policy.Config) {
+	// DENY_TABLES check: derive table name from DSN path (filename without extension)
+	if policies != nil && len(policies.DenyTables) > 0 {
+		if tableName := fileTableName(parsed); tableName != "" {
+			for _, denied := range policies.DenyTables {
+				if strings.EqualFold(tableName, denied) {
+					fmt.Fprintf(os.Stderr, "ACCESS_DENIED: table %q is not allowed for query\n", denied)
+					os.Exit(1)
+				}
+			}
+		}
+	}
+
 	c, err := connector.GetConnector(parsed.Kind)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
@@ -186,6 +202,11 @@ func handleFileExecute(parsed *dsn.DSN, sqlArg string, human *bool, limit *int) 
 		os.Exit(1)
 	}
 
+	// Apply post-execution column masking (replaces sensitive values)
+	if policies != nil {
+		policies.ApplyMask(result)
+	}
+
 	if *human {
 		fmt.Print(formatHuman(result))
 	} else {
@@ -196,6 +217,23 @@ func handleFileExecute(parsed *dsn.DSN, sqlArg string, human *bool, limit *int) 
 			os.Exit(1)
 		}
 	}
+}
+
+// fileTableName derives a table name from a file DSN's path (filename stem).
+//   csv:///tmp/orders.csv  → "orders"
+//   xlsx:///tmp/report.xlsx → "report"
+//   csv:///tmp/data_dir/   → "data_dir"
+func fileTableName(d *dsn.DSN) string {
+	path := d.FilePath()
+	if path == "" {
+		return ""
+	}
+	name := filepath.Base(path)
+	ext := filepath.Ext(name)
+	if ext != "" {
+		return name[:len(name)-len(ext)]
+	}
+	return name
 }
 
 // sanitizeCell strips ANSI escape codes and control characters from cell values

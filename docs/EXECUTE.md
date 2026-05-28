@@ -263,6 +263,12 @@ else:
 
 ---
 
+> **`--human` 位置说明**：可放在查询语句之前或之后，两种写法等价。例如：
+> ```bash
+> dbexplain execute -env --db 1 --human "SELECT * FROM users LIMIT 5"
+> dbexplain execute -env --db 1 "SELECT * FROM users LIMIT 5" --human
+> ```
+
 ## 安全设计要点
 
 | 安全特性 | 实现方式 | 防护目标 |
@@ -302,7 +308,7 @@ else:
 
 > **SQL 数据库**（上表前 6 种）通过 `isSQLKind()` 路由到 `sqlguard.Validate()` 进行动词白名单校验，并自动注入 `LIMIT 1000`。
 > **非 SQL 数据库**（上表后 3 种）跳过 sqlguard，由各连接器内部实现只读白名单。
-> **文件数据源**（CSV/TSV/XLSX）绕过 sqlguard 和策略引擎——文件本身只读，仅支持 `SELECT * [LIMIT N [OFFSET M]]`。
+> **文件数据源**（CSV/TSV/XLSX）绕过 sqlguard——文件本身只读，仅支持 `SELECT * [LIMIT N [OFFSET M]]`，但仍受策略引擎约束（`DENY_TABLES`、`MASK_COLUMNS`）。
 
 ## 架构文件清单
 

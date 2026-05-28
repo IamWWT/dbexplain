@@ -116,7 +116,7 @@ SELECT * LIMIT N OFFSET M   — 分页，跳过 M 行后返回 N 行
 
 - **不支持**: 列选择、WHERE 条件、JOIN、ORDER BY、GROUP BY、子查询
 - **不经过 sqlguard**: 文件查询绕过 SQL 沙箱校验（文件本身只读）
-- **不经过 Policy 引擎**: 文件查询不执行策略检查
+- **Policy 引擎**: 文件查询受 `DENY_TABLES`（文件名/目录名匹配）和 `MASK_COLUMNS`（列值屏蔽）约束
 - **XLSX 默认查询第一个 Sheet**: 不支持按 Sheet 名选择
 
 ### 执行示例
@@ -134,7 +134,19 @@ dbexplain execute -dsn 'xlsx:///tmp/report.xlsx?label=report' 'SELECT * LIMIT 10
 
 ---
 
-## 8. 构建要求
+## 8. 内存限制
+
+CSV/TSV/XLSX 连接器在采集和执行时**全量读取文件到内存**（`ReadAll()` / `GetRows()`），
+不支持流式读取。即使查询带 `LIMIT 1`，整个文件也会先读入内存再截断。
+
+建议：
+- 单文件行数 < 100 万行（约 500MB CSV）
+- 超大文件建议先拆分再查询
+- XLSX 文件建议 < 50MB
+
+---
+
+## 9. 构建要求
 
 ### CSV/TSV
 
@@ -150,7 +162,7 @@ dbexplain execute -dsn 'xlsx:///tmp/report.xlsx?label=report' 'SELECT * LIMIT 10
 
 ---
 
-## 9. CLI 帮助
+## 10. CLI 帮助
 
 ```bash
 # CSV/TSV 参考手册
@@ -164,7 +176,7 @@ dbexplain xlsx
 
 ---
 
-## 10. 与核心管道的集成
+## 11. 与核心管道的集成
 
 ```
 .env DSN → dsn.ParseDSN() → connector.GetConnector("csv"|"xlsx")
@@ -175,8 +187,8 @@ dbexplain xlsx
 ```
 
 - **Schema 采集**: 通过 `-env`/`-dsn` 加载，与数据库 DSN 完全对等
-- **Execute 查询**: 通过 `dbexplain execute` 入口，专用分支 `handleFileExecute()` 跳过 sqlguard/Policy
-- **json / --human**: 输出格式与数据库查询完全一致
+- **Execute 查询**: 通过 `dbexplain execute` 入口，专用分支 `handleFileExecute()` 跳过 sqlguard（SELECT * 只读），但受 Policy 引擎约束（`DENY_TABLES`、`MASK_COLUMNS`）
+- **json / --human**: 输出格式与数据库查询完全一致；`--human` 可放在查询语句之前或之后
 
 ---
 

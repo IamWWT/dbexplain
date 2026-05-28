@@ -2,7 +2,7 @@
 
 > **Database Context Compiler** — Deterministic ground truth for AI agents.
 
-`dbexplain` 是一个**零依赖、静态编译**的命令行工具。给定数据库连接串，自动提取表结构、列、索引、外键，输出确定性、可证实的关系信息——不包含任何 AI 推理或语义猜测。
+`dbexplain` 是一个**单二进制、零运行时依赖**的命令行工具。下载一个文件即可运行——不需 Python、Node、JDK 或任何外部动态库。给定数据库连接串，自动提取表结构、列、索引、外键，输出确定性、可证实的关系信息——不包含任何 AI 推理或语义猜测。
 
 AI 时代数据库的"真值基座"。
 

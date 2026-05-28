@@ -1,6 +1,7 @@
 # dbexplain CLI 查询案例库
 
 > 所有查询均已在本环境（v0.0.9, 15 数据源）跑通验证。`--human` 用于可读表格输出，不加则为 JSON（供 AI Agent 消费）。
+> `--human` 可放在查询语句之前或之后：`dbexplain execute -env --db 1 --human "SELECT 1"` 与 `dbexplain execute -env --db 1 "SELECT 1" --human` 等价。
 
 ---
 
