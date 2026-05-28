@@ -101,6 +101,22 @@ func (c *Config) CheckSQL(sql string) error {
 				}
 			}
 		}
+
+		// SELECT * 没有显式列引用，但可能选择了被禁止的列
+		// 如果 DENY_COLUMNS=table.column，且查询是 SELECT * FROM table，则拦截
+		normalized := normalizeWhitespace(sql)
+		if matchStarSelect(normalized) {
+			tables := extractTableNames(sql)
+			for _, denied := range c.DenyColumns {
+				if deniedTable, _, ok := strings.Cut(denied, "."); ok {
+					for _, t := range tables {
+						if strings.EqualFold(t, deniedTable) {
+							return &ErrDenied{Level: "column", Target: denied, SQL: sql}
+						}
+					}
+				}
+			}
+		}
 	}
 
 	return nil
@@ -134,6 +150,28 @@ func (c *Config) CheckNative(query string, kind string) error {
 			for _, denied := range c.DenyTables {
 				if strings.EqualFold(col, denied) {
 					return &ErrDenied{Level: "table", Target: denied, SQL: query}
+				}
+			}
+		}
+
+		// Column-level: MongoDB/Qdrant 原生查询默认返回所有字段
+		// 相当于 SQL 的 SELECT *。如果 DENY_COLUMNS=collection.field 匹配
+		// 且查询没有投影(projection)来排除该字段，则拦截
+		if len(c.DenyColumns) > 0 {
+			for _, col := range collections {
+				for _, denied := range c.DenyColumns {
+					deniedCol, field, hasField := strings.Cut(denied, ".")
+					if !hasField {
+						continue
+					}
+					if !strings.EqualFold(col, deniedCol) {
+						continue
+					}
+					// 检查是否有投影排除该字段
+					if hasProjection(query) && fieldIsProjectedOut(query, field) {
+						continue
+					}
+					return &ErrDenied{Level: "column", Target: denied, SQL: query}
 				}
 			}
 		}
@@ -267,20 +305,36 @@ func (c *Config) ApplyMask(result *query.QueryResult) {
 }
 
 // extractTableNames finds table names in SQL: after FROM, JOIN, UPDATE, INTO, TABLE.
+// Returns both bare table names and schema-qualified names (schema.table),
+// so DENY_TABLES can match either the table name or the schema name.
 // Handles quoted identifiers (backtick, double-quote, bracket) and SQL comments
 // by normalizing the SQL before extraction.
 func extractTableNames(sql string) []string {
 	sql = stripSQLComments(sql)
 	sql = normalizeIdentifiers(sql)
-	re := regexp.MustCompile(`(?i)\b(?:FROM|JOIN|UPDATE|INTO|TABLE)\s+(?:\w+\.)?(\w+)`)
+	// Capture optional schema prefix + table name as a single group
+	re := regexp.MustCompile(`(?i)\b(?:FROM|JOIN|UPDATE|INTO|TABLE)\s+(\w+(?:\.\w+)?)`)
 	matches := re.FindAllStringSubmatch(sql, -1)
 	seen := make(map[string]bool)
 	var tables []string
 	for _, m := range matches {
-		name := m[1]
-		if !seen[name] {
-			seen[name] = true
-			tables = append(tables, name)
+		full := m[1] // e.g. "information_schema.TABLES" or just "iplist"
+		if !seen[full] {
+			seen[full] = true
+			tables = append(tables, full)
+		}
+		// Also add the bare table name for direct table-level matching
+		if schema, table, ok := strings.Cut(full, "."); ok {
+			if !seen[table] {
+				seen[table] = true
+				tables = append(tables, table)
+			}
+			// Also add the schema name so DENY_TABLES=information_schema
+			// blocks SELECT * FROM information_schema.TABLES
+			if !seen[schema] {
+				seen[schema] = true
+				tables = append(tables, schema)
+			}
 		}
 	}
 	return tables
@@ -338,6 +392,20 @@ func extractJSONCollectionNames(query string) []string {
 		}
 	}
 	return names
+}
+
+// hasProjection checks if a MongoDB JSON query includes a "projection" field.
+func hasProjection(query string) bool {
+	return regexp.MustCompile(`"projection"\s*:`).MatchString(query)
+}
+
+// fieldIsProjectedOut checks if a field is explicitly excluded (set to 0 or false)
+// in a MongoDB projection. Returns false if the field is included (set to 1 or true)
+// or if projection state is ambiguous.
+func fieldIsProjectedOut(query string, field string) bool {
+	// Match "field":0 or "field":false patterns in projection
+	re := regexp.MustCompile(`"` + regexp.QuoteMeta(field) + `"\s*:\s*(0|false)`)
+	return re.MatchString(query)
 }
 
 // extractRedisKeys extracts the first key argument from Redis read commands.
@@ -527,6 +595,13 @@ func normalizeIdentifiers(sql string) string {
 		}
 	}
 	return result.String()
+}
+
+// matchStarSelect checks if a normalized SQL query uses SELECT * (no explicit column list).
+// This is used to detect queries that may select denied columns without naming them.
+func matchStarSelect(normalizedSQL string) bool {
+	re := regexp.MustCompile(`(?i)\ASELECT\s+\*\s+FROM\b`)
+	return re.MatchString(normalizedSQL)
 }
 
 // isSQLKeyword returns true for common SQL keywords to filter false positives.

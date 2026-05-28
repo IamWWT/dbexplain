@@ -1,6 +1,6 @@
 # dbexplain CLI 查询案例库
 
-> 所有查询均已在本环境（v0.0.8, 9 数据源）跑通验证。`--human` 用于可读表格输出，不加则为 JSON（供 AI Agent 消费）。
+> 所有查询均已在本环境（v0.0.9, 15 数据源）跑通验证。`--human` 用于可读表格输出，不加则为 JSON（供 AI Agent 消费）。
 
 ---
 
@@ -148,16 +148,34 @@ dbexplain execute -env --db 7 --human \
 ## 8. Qdrant — 向量数据库
 
 ```bash
-# scroll 遍历 collection 数据
+# scroll 遍历 Qdrant 数据
 dbexplain execute -env --db 4 --human \
-  '{"scroll":"<collection_name>","limit":20}'
+  '{"scroll":"runbooks","limit":20}'
 
-# count 统计
+# count 统计（480 points）
 dbexplain execute -env --db 4 --human \
-  '{"count":"<collection_name>"}'
+  '{"count":"runbooks"}'
 ```
 
-> 当前环境 Qdrant 无 collection，替换 `<collection_name>` 为实际名称后可用。
+> 当前环境 Qdrant 有 2 个 collections：`mcp_tools` 和 `runbooks`（480 points）。
+
+---
+
+## 9. CSV 文件处理
+
+```bash
+# Schema 采集
+dbexplain -dsn "csv:///tmp/dbexplain-test/users.csv?label=csv-users" --human
+
+# 查询全部行
+dbexplain execute -dsn "csv:///tmp/dbexplain-test/users.csv?label=csv-users" "SELECT *" --human
+
+# 带 LIMIT/OFFSET
+dbexplain execute -dsn "csv:///tmp/dbexplain-test/users.csv?label=csv-users" "SELECT * LIMIT 1 OFFSET 1" --human
+```
+
+> CSV 仅支持 `SELECT * [LIMIT N [OFFSET M]]`，不支持 WHERE/JOIN/ORDER BY/列选择。
+> TSV 和 XLSX 用法与 CSV 相同。
 
 ---
 
@@ -201,7 +219,7 @@ dbexplain execute -env --db 6 --timeout 60 --limit 500 --human \
 dbexplain list -env
 ```
 
-### 安全策略控制 (v0.0.8+)
+### 安全策略控制 (v0.0.9+)
 
 可在 `.env` 或 `~/.config/dbexplain/.env.dbexplain` 中添加安全策略，限制查询范围：
 
@@ -253,16 +271,22 @@ dbexplain execute -env --db 1 --human "SELECT id, name FROM users"
 
 | DB | Label | Kind | 关键表/集合 | 数据量 |
 |----|-------|------|-----------|--------|
-| DB1 | aiops-mysql | mysql | testdb.iplist | 12 行 |
-| DB2 | aiops-clickhouse | clickhouse | ai_obs.otel_traces, tool_registry | 532 / 61 |
-| DB3 | aiops-sqlite | sqlite | rules, hit_logs | 10 / 0 |
-| DB4 | qdrant-test | qdrant | (空) | 0 |
-| DB5 | es-test | elasticsearch | runbooks | 5 |
-| DB6 | video-pg | postgres | public.abnormal_events, cameras, video_descriptions | 有数据 |
-| DB7 | openim-redis | redis | CONVERSATION:*, MSG_CACHE:*, ... | 有数据 |
-| DB8 | video-redis | redis | (空) | 0 |
-| DB9 | mongo-test | mongodb | user | 5 |
+| DB1 | aiops-mysql | mysql | testdb.iplist, port | 12 / 30 行 |
+| DB2 | aiops-clickhouse | clickhouse | ai_obs.otel_traces, tool_registry | 2 数据库 |
+| DB3 | intentapparatus-sqlite | sqlite | rules, hit_logs | 5+ 表 |
+| DB4 | aiops-qdrant | qdrant | mcp_tools, runbooks | 480 points |
+| DB5 | aiops-es | elasticsearch | runbooks 等 | 17 索引 |
+| DB6 | video-pg | postgres | public.abnormal_events, cameras | 5+ 表 |
+| DB7 | openim-redis | redis | CONVERSATION:*, MSG_CACHE:* | 有数据 |
+| DB8 | video-redis | redis | _server_info | 有数据 |
+| DB9 | openim-mongo | mongodb | user, system.users | 5+ collections |
+| DB10 | veinmap-sqlite | sqlite | 4 表 | 有数据 |
+| DB11 | tsf-xlsx | xlsx | 3 sheets | 45+14+6 行 |
+| DB12 | tdmq-xlsx | xlsx | 1 sheet | 有数据 |
+| DB13 | csv-users | csv | users | 3 行 |
+| DB14 | csv-test-data | csv | users, products, types | 3 表 |
+| DB15 | tsv-test-data | tsv | data | 2 行 |
 
 ---
 
-*案例库生成于 v0.0.7，安全策略和列值屏蔽于 v0.0.8 追加，全部查询已通过 --human 实测验证。*
+*案例库持续更新中。v0.0.9 新增 CSV/TSV/XLSX 文件处理、Qdrant 实际数据验证。全部查询已通过 --human 实测验证。*

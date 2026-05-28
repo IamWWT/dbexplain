@@ -48,6 +48,8 @@ AI 时代数据库的"真值基座"。
 | Elasticsearch | `elasticsearch://` | 索引映射、HTTPS |
 | MongoDB | `mongodb://` | 近似文档数、零数据风险 |
 | Qdrant | `qdrant://` | 向量集合元数据 |
+| CSV/TSV | `csv://` `tsv://` | 本地文件，单文件/目录/Glob，编码自动检测 |
+| Excel | `xlsx://` | Excel 文件，每个 Sheet 作为表，标准构建即包含 |
 
 > 各数据库详细机制、安全策略、排障指南见 [`docs/`](docs/) 专项手册。
 
@@ -60,7 +62,7 @@ AI 时代数据库的"真值基座"。
 更多架构愿景见 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) 和 [`CONSTITUTION.md`](CONSTITUTION.md)。
 
 ![dbexplain 架构总览](docs/assets/architecture.drawio.png)
-*4 阶段流水线：INPUT（连接配置）→ COLLECT（9 种 DB 模式抽取）→ ANALYZE（FK 推断/排序/诊断/IR Graph）→ OUTPUT（Markdown/JSON/上下文文件）*
+*4 阶段流水线：INPUT（连接配置）→ COLLECT（9 种 DB + CSV/XLSX 文件模式抽取）→ ANALYZE（FK 推断/排序/诊断/IR Graph）→ OUTPUT（Markdown/JSON/上下文文件）*
 
 ---
 
@@ -89,7 +91,7 @@ bash dbexplain-skill/scripts/install.sh --lang en  # English skill
 
 ```bash
 # 在有网络的机器上下载（以 Linux amd64 为例）
-wget https://github.com/IamWWT/dbexplain/releases/download/v0.0.8/dbexplain-linux-amd64
+wget https://github.com/IamWWT/dbexplain/releases/download/v0.0.9/dbexplain-linux-amd64
 
 # 复制到离线环境后安装
 bash dbexplain-skill/scripts/install.sh --offline ./dbexplain-linux-amd64
@@ -105,12 +107,12 @@ bash dbexplain-skill/scripts/install.sh --offline ./dbexplain-linux-amd64 --no-s
 
 ```bash
 # Linux amd64
-wget https://github.com/IamWWT/dbexplain/releases/download/v0.0.8/dbexplain-linux-amd64
+wget https://github.com/IamWWT/dbexplain/releases/download/v0.0.9/dbexplain-linux-amd64
 chmod +x dbexplain-linux-amd64
 sudo mv dbexplain-linux-amd64 /usr/local/bin/dbexplain
 
 # macOS Apple Silicon
-wget https://github.com/IamWWT/dbexplain/releases/download/v0.0.8/dbexplain-darwin-arm64
+wget https://github.com/IamWWT/dbexplain/releases/download/v0.0.9/dbexplain-darwin-arm64
 chmod +x dbexplain-darwin-arm64
 sudo mv dbexplain-darwin-arm64 /usr/local/bin/dbexplain
 
@@ -136,7 +138,7 @@ cd dbexplain
 
 ```powershell
 # 在有网络的机器上下载
-Invoke-WebRequest -Uri "https://github.com/IamWWT/dbexplain/releases/download/v0.0.8/dbexplain-windows-amd64.exe" -OutFile "dbexplain-windows-amd64.exe"
+Invoke-WebRequest -Uri "https://github.com/IamWWT/dbexplain/releases/download/v0.0.9/dbexplain-windows-amd64.exe" -OutFile "dbexplain-windows-amd64.exe"
 
 # 复制到离线环境后，放到 %LOCALAPPDATA%\dbexplain\dbexplain.exe
 # 然后把目录添加到用户 PATH
@@ -248,6 +250,8 @@ scheme://[用户:密码@]主机[:端口][/库名][?label=别名&参数...]
 4. `~/.config/dbexplain/.env.dbexplain`（Linux/macOS）或 `%USERPROFILE%\.config\dbexplain\.env.dbexplain`（Windows）
 5. `~/.config/dbexplain/.env.dbexplain.enc`（加密文件，自动解密）
 6. 当前目录 `.env`（向下兼容旧版）
+
+> 详细说明（搜索规则与二进制路径无关、CWD 决定行为）见 [docs/CONFIG_SEARCH.md](docs/CONFIG_SEARCH.md)。
 
 ### 配置模板
 
@@ -376,6 +380,8 @@ dbexplain redis               # Redis
 dbexplain elasticsearch       # Elasticsearch (别名: es)
 dbexplain mongodb             # MongoDB
 dbexplain qdrant              # Qdrant
+dbexplain csv                 # CSV/TSV 文件处理（含 DSN 格式、编码、查询限制）
+dbexplain xlsx                # Excel 文件处理（含构建要求）
 ```
 
 ### 参数速查
@@ -406,7 +412,7 @@ dbexplain qdrant              # Qdrant
 | `dbexplain execute <SQL>` | **只读查询执行**（沙箱保护）。SQL 类走 sqlguard 校验；非 SQL 类走原生格式。`--human` 切换表格输出 |
 | `dbexplain encrypt <file>` | 加密 `.env` 配置文件（机器指纹 / 密码双重模式） |
 | `dbexplain all` | 完整参考手册（支持 `--filter`、`--language`） |
-| `dbexplain <dbtype>` | 数据库专用参考手册。9 种类型：mysql, postgres/pg/postgresql, gaussdb, clickhouse/ch, sqlite/sqlite3, redis, mongodb, elasticsearch/es, qdrant |
+| `dbexplain <dbtype>` | 数据库/文件参考手册。10 种类型：mysql, postgres/pg/postgresql, gaussdb, clickhouse/ch, sqlite/sqlite3, redis, mongodb, elasticsearch/es, qdrant, csv, xlsx |
 | `dbexplain -h` | 显示简洁结构化帮助概览 |
 
 ---
@@ -494,7 +500,7 @@ bash dbexplain-skill/scripts/uninstall.sh
 ## 开发
 
 - **语言**：Go 1.26+
-- **构建**：`CGO_ENABLED=0 go build -ldflags="-s -w -X main.version=v0.0.8"`
+- **构建**：`CGO_ENABLED=0 go build -ldflags="-s -w -X main.version=v0.0.9"`
 - **测试**：`go test ./...`（DSN 解析 + 字段推断）
 - **交叉编译**：`bash build.sh`（linux/darwin/windows × amd64/arm64）
 
@@ -519,6 +525,8 @@ bash dbexplain-skill/scripts/uninstall.sh
 | [`docs/ELASTICSEARCH.md`](docs/ELASTICSEARCH.md) | Elasticsearch 索引映射、HTTPS |
 | [`docs/QDRANT.md`](docs/QDRANT.md) | Qdrant 向量集合元数据 |
 | [`docs/POLICY.md`](docs/POLICY.md) | 细粒度访问控制策略（表/列/语句级） |
+| [`docs/FILE_PROCESSING.md`](docs/FILE_PROCESSING.md) | CSV/TSV/XLSX 文件处理（DSN 格式、编码、类型推断） |
+| [`docs/ISSUE-062.md`](docs/ISSUE-062.md) | v0.0.9 策略引擎修复记录（全字段查询绕过） |
 | [`docs/SECURITY_CHECKLIST.md`](docs/SECURITY_CHECKLIST.md) | 安全检查手册（发布前必读） |
 | [`CHANGELOG.md`](CHANGELOG.md) | 版本变更记录（中文） |
 | [`CHANGELOG_EN.md`](CHANGELOG_EN.md) | 版本变更记录（英文） |

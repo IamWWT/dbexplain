@@ -404,5 +404,6 @@ MASK_COLUMNS=password_hash=***,card_number=****-****-****-****,email=REDACTED
 
 | 版本 | 变更 |
 |------|------|
+| v0.0.9 | CSV/XLSX 文件数据源：绕过 sqlguard/策略引擎的只读查询，类型推断 |
 | v0.0.8 | 初始实现：三层策略 + 9 种数据库全覆盖 + Redis 通配符 key 匹配 + MASK_COLUMNS 列值屏蔽 |
 | v0.0.8 (审计) | 安全增强：`normalizeIdentifiers()` 防引用标识符绕过、`normalizeWhitespace()` 防空白字符绕过、`globMatch()` 替代 `filepath.Match` 防路径分隔符截断、`log.Printf` 警告 malformed glob 模式 |

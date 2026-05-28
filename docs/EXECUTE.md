@@ -100,7 +100,7 @@ if !ok {
 - DSN 密码在错误消息中自动脱敏（`Redacted()`）
 - 查询结果 JSON **不包含**任何连接信息或凭据
 
-### 6. 细粒度访问控制 (`policy` 包，v0.0.8+)
+### 6. 细粒度访问控制 (`policy` 包，v0.0.9+)
 
 在 sqlguard 动词白名单校验之后，增加第二层访问控制——表级/列级/语句级拒绝策略。适用于**所有数据库类型**（SQL + 非SQL），通过 `.env` 文件配置。
 
@@ -297,9 +297,12 @@ else:
 | Redis | ❌ | 内部 30+ 命令白名单 | go-redis context | [REDIS.md](REDIS.md) |
 | MongoDB | ❌ | 内部 find/aggregate 白名单 | driver context + `--limit` | [MONGO.md](MONGO.md) |
 | Qdrant | ❌ | 内部 scroll/count 白名单 | gRPC context | [QDRANT.md](QDRANT.md) |
+| CSV/TSV | ❌ | 无（文件只读） | — | [FILE_PROCESSING.md](FILE_PROCESSING.md) |
+| XLSX | ❌ | 无（文件只读） | — | [FILE_PROCESSING.md](FILE_PROCESSING.md) |
 
 > **SQL 数据库**（上表前 6 种）通过 `isSQLKind()` 路由到 `sqlguard.Validate()` 进行动词白名单校验，并自动注入 `LIMIT 1000`。
 > **非 SQL 数据库**（上表后 3 种）跳过 sqlguard，由各连接器内部实现只读白名单。
+> **文件数据源**（CSV/TSV/XLSX）绕过 sqlguard 和策略引擎——文件本身只读，仅支持 `SELECT * [LIMIT N [OFFSET M]]`。
 
 ## 架构文件清单
 
@@ -317,7 +320,9 @@ else:
 | `src/connector/mongo.go` | MongoDB JSON find/aggregate ExecQuery 实现 |
 | `src/connector/redis.go` | Redis 只读命令白名单 ExecQuery 实现 |
 | `src/connector/qdrant.go` | Qdrant scroll/count ExecQuery 实现 |
-| `src/execute.go` | CLI 入口：参数解析、DSN 匹配、查询路由、输出控制 |
+| `src/connector/csv.go` | CSV/TSV 文件 schema 采集 + 查询执行（SELECT * only） |
+| `src/connector/xlsx.go` | XLSX 文件 schema 采集 + 查询执行（SELECT * only） |
+| `src/execute.go` | CLI 入口：参数解析、DSN 匹配、查询路由、file 分发、输出控制 |
 
 ---
 

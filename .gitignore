@@ -7,6 +7,9 @@ src/.env
 .env.dbexplain.enc
 src/.env.enc
 src/.env.dbexplain.enc
+src/.env.dbexplain
+src/.env
+src/.env.bak
 *.enc
 
 # 日志
@@ -38,4 +41,4 @@ release-wechat.md
 docs/ALGORITHMS.md
 docs/SECURITY_CHECKLIST.md
 docs/RELEASE_WECHAT_v0.0.5.md
-docs/RELEASE_WECHAT_v0.0.8.md
+docs/RELEASE_WECHAT_v0.0.9.md

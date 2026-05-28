@@ -1,5 +1,5 @@
 # ============================================================
-# dbexplain v0.0.8 — Uninstaller (Windows PowerShell)
+# dbexplain v0.0.9 — Uninstaller (Windows PowerShell)
 # ============================================================
 # Removes the dbexplain binary, config directory,
 # and optionally legacy DBPROBE_ENV_FILE from user environment.
@@ -15,7 +15,7 @@ param(
     [switch]$Help
 )
 
-$VERSION = "v0.0.8"
+$VERSION = "v0.0.9"
 $InstallDir = "$env:LOCALAPPDATA\dbexplain"
 $ConfigDir = "$env:USERPROFILE\.config\dbexplain"
 $DestBin = Join-Path $InstallDir "dbexplain.exe"

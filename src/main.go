@@ -30,7 +30,7 @@ import (
 	"github.com/IamWWT/dbexplain/schema"
 )
 
-var version = "v0.0.8"
+var version = "v0.0.9"
 
 type dsnEntry struct {
 	raw    string // DSN string
@@ -64,7 +64,8 @@ func main() {
 			return
 		case "mysql", "postgres", "postgresql", "pg", "gaussdb",
 			"clickhouse", "ch", "sqlite", "sqlite3",
-			"redis", "mongodb", "elasticsearch", "es", "qdrant":
+			"redis", "mongodb", "elasticsearch", "es", "qdrant",
+			"csv", "tsv", "xlsx":
 			printDBManual(os.Args[1], os.Args[2:])
 			return
 		case "all":
@@ -93,6 +94,7 @@ func main() {
 	configFile := flag.String("config", "", "JSON config file with array of DSNs")
 	useEnv := flag.Bool("env", false, "use .env file (prefix DB1=, DB2=...)")
 	includeFilter := flag.String("include", "", "comma-separated kinds/labels/env-keys to include (e.g. mysql,redis or DB1,DB3)")
+	labelFilter := flag.String("label", "", "filter by label (alias for -include)")
 	excludeFilter := flag.String("exclude", "", "comma-separated kinds/labels/env-keys to exclude (e.g. mongodb,qdrant or DB5)")
 	jsonOut := flag.Bool("json", false, "output JSON")
 	humanOut := flag.Bool("human", false, "human-friendly output with context markers and visual separators")
@@ -107,6 +109,15 @@ func main() {
 	language := flag.String("language", userLang, "manual language: zh (Chinese) or en (English)")
 	filterFlag := flag.String("filter", "", "filter --manual output by keyword (case-insensitive)")
 	flag.Parse()
+
+	// --label is an alias for -include (schema collection also supports label filtering)
+	if *labelFilter != "" {
+		if *includeFilter != "" {
+			*includeFilter += "," + *labelFilter
+		} else {
+			*includeFilter = *labelFilter
+		}
+	}
 
 	if *showVersion {
 		fmt.Println("dbexplain", version)
@@ -142,6 +153,13 @@ func main() {
 
 	logDir := resolveLogDir(*logDirFlag)
 
+	// 将标准库 log 输出重定向到日志文件（捕获 Qdrant 等第三方库的警告）
+	logFile, err := os.OpenFile(filepath.Join(logDir, "dbexplain.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err == nil {
+		log.SetOutput(logFile)
+		defer logFile.Close()
+	}
+
 	// 过滤
 	entries = filterDSNs(entries, *includeFilter, *excludeFilter, logDir)
 	if len(entries) == 0 {
@@ -166,6 +184,16 @@ func main() {
 	var wg sync.WaitGroup
 
 	startAll := time.Now() // 记录总开始时间
+
+	// 采集汇总日志
+	collectLogFile, err := os.OpenFile(filepath.Join(logDir, "collect.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		log.Printf("create collect log: %v", err)
+		collectLogFile = os.Stderr
+	} else {
+		defer collectLogFile.Close()
+	}
+	collectLogger := log.New(collectLogFile, "", log.LstdFlags)
 
 	// Semaphore to limit concurrent connections
 	sem := make(chan struct{}, *maxConcurrent)
@@ -200,7 +228,7 @@ func main() {
 			collectCtx, cancel := context.WithTimeout(collectCtx, *perDSNTimeout)
 			defer cancel()
 
-			fmt.Fprintf(os.Stderr, "[采集中] %s\n", label)
+			logger.Printf("[采集中] %s", label)
 			start := time.Now()
 			inst, err := connector.Collect(collectCtx, rawDSN)
 			elapsed := time.Since(start)
@@ -215,15 +243,15 @@ func main() {
 			mu.Unlock()
 
 			nTables := totalTables(inst)
-			fmt.Fprintf(os.Stderr, "[完成] %s (%d 表) 耗时 %v\n", label, nTables, elapsed)
+			logger.Printf("[完成] %s (%d 表) 耗时 %v", label, nTables, elapsed)
 		}()
 	}
 
 	wg.Wait()
 	if len(instances) == 0 {
-		fmt.Fprintf(os.Stderr, "[!] 所有 DSN 采集均失败，报告为空。请检查日志: %s\n", logDir)
+		collectLogger.Printf("[!] 所有 DSN 采集均失败，报告为空。请检查日志: %s", logDir)
 	} else {
-		fmt.Fprintf(os.Stderr, "全部采集完成，总耗时 %v\n", time.Since(startAll))
+		collectLogger.Printf("全部采集完成，总耗时 %v", time.Since(startAll))
 	}
 
 	// 按数据库类型构建能力映射 (每种类型只查询一次)
@@ -978,6 +1006,9 @@ var dbSubcommands = map[string]func(func(string, string) string){
 	"elasticsearch": printManualElasticsearch,
 	"es":            printManualElasticsearch,
 	"qdrant":        printManualQdrant,
+	"csv":           printManualFile,
+	"tsv":           printManualFile,
+	"xlsx":          printManualXLSX,
 }
 
 // printDBManual prints the database-specific manual section for the given subcommand.
@@ -1087,24 +1118,26 @@ func printHelp(lang string) {
 	fmt.Fprint(out, p(
 		"Database types:\n"+
 			"  mysql, postgres/pg, gaussdb, clickhouse/ch, sqlite/sqlite3,\n"+
-			"  redis, mongodb, elasticsearch/es, qdrant\n\n",
+			"  redis, mongodb, elasticsearch/es, qdrant,\n"+
+			"  csv, tsv, xlsx\n\n",
 		"Database types:\n"+
 			"  mysql, postgres/pg, gaussdb, clickhouse/ch, sqlite/sqlite3,\n"+
-			"  redis, mongodb, elasticsearch/es, qdrant\n\n",
+			"  redis, mongodb, elasticsearch/es, qdrant,\n"+
+			"  csv, tsv, xlsx\n\n",
 	))
 
 	fmt.Fprint(out, p(
 		"Flags (dbexplain [flags]):\n"+
-			"  -dsn, -env, -config           Input sources\n"+
-			"  -include, -exclude            Filter by type/label/key\n"+
+			"  -dsn, -env, -config                 Input sources\n"+
+			"  -include, -exclude, -label          Filter by type/label/key\n"+
 			"  -json, --human, -o <file>     Output format\n"+
 			"  --context <dir>, --cache <f>  AI context / delta scan\n"+
 			"  --log-dir <dir>, -timeout d   Logs / timeout (default /var/log/dbexplain, 20s)\n"+
 			"  --conn N                     Max concurrent connections (default 10)\n"+
 			"  --language zh|en, --version   Language / version\n\n",
 		"Flags (dbexplain [flags]):\n"+
-			"  -dsn, -env, -config           Input sources\n"+
-			"  -include, -exclude            Filter by type/label/key\n"+
+			"  -dsn, -env, -config                 Input sources\n"+
+			"  -include, -exclude, -label          Filter by type/label/key\n"+
 			"  -json, --human, -o <file>     Output format\n"+
 			"  --context <dir>, --cache <f>  AI context / delta scan\n"+
 			"  --log-dir <dir>, -timeout d   Logs / timeout (default /var/log/dbexplain, 20s)\n"+
@@ -1292,6 +1325,8 @@ DESCRIPTION
       4. ` + configDirDisplay() + `.env.dbexplain（明文）
       5. ` + configDirDisplay() + `.env.dbexplain.enc（加密，自动解密）
       6. 当前目录 .env（向下兼容旧版）
+      搜索规则与二进制路径无关 —— findConfigFile() 编译在二进制内，
+      只依赖当前工作目录(CWD)和用户家目录，不关心二进制放在哪里。
       加密后务必删除明文配置文件，否则优先匹配明文。
       密码模式密码从 ` + configDirDisplay() + `.encryption_key 文件自动读取。
 `,
@@ -1316,6 +1351,8 @@ DESCRIPTION
       4. ` + configDirDisplay() + `.env.dbexplain (plaintext)
       5. ` + configDirDisplay() + `.env.dbexplain.enc (encrypted, auto-decrypt)
       6. .env in current directory (legacy backward compat)
+      Search order is independent of binary location — findConfigFile() is compiled
+      into the binary, depends only on CWD and user home directory, not on binary path.
       Delete plaintext config after encryption, or it will take priority.
       Password-mode key is auto-read from ` + configDirDisplay() + `.encryption_key.
 `))
@@ -1329,6 +1366,7 @@ DESCRIPTION
     -env                  从配置文件加载 DSN (格式: DB<n>=<DSN>, 搜索优先级见 DSN 格式章节)
     -include <filter>     仅包含匹配的 DSN (按类型/label/env编号, 逗号分隔)
     -exclude <filter>     排除匹配的 DSN (格式同 -include)
+    -label <name>         按 label 过滤 (等效于 -include)
     -json                 输出 JSON 格式 (适合程序消费)
     -human                人类友好输出：带上下文标记 [table=] [pattern=] 和视觉分隔
     -o <file>             将报告写入文件 (自动添加 UTF-8 BOM)
@@ -1350,6 +1388,7 @@ DESCRIPTION
     -env                  Load DSNs from config file (format: DB<n>=<DSN>, search order see DSN FORMAT)
     -include <filter>     Only include matching DSNs (by kind/label/env-key, comma-sep)
     -exclude <filter>     Exclude matching DSNs (same format as -include)
+    -label <name>         Filter by label (alias for -include)
     -json                 Output JSON format (for programmatic consumption)
     -human                Human-friendly output: context markers [table=] [pattern=] etc.
     -o <file>             Write report to file (auto-prepends UTF-8 BOM)
@@ -1378,6 +1417,9 @@ DESCRIPTION
     elasticsearch    9200      Cat Indices            索引映射
     mongodb          27017     ListCollections        近似文档数
     qdrant           6334      gRPC                   集合向量维度
+    csv              -         文件首行/采样            列名+类型推断
+    tsv              -         文件首行/采样            列名+类型推断
+    xlsx             -         excelize 库             多Sheet、列名+类型推断
 `,
 		`
 
@@ -1394,6 +1436,9 @@ DESCRIPTION
     elasticsearch    9200     Cat Indices            Index mappings
     mongodb          27017    ListCollections        Estimated doc counts
     qdrant           6334     gRPC                   Collection vector dimensions
+    csv              -        File header/sampling    Column names + type inference
+    tsv              -        File header/sampling    Column names + type inference
+    xlsx             -        excelize library        Multi-sheet, column names + type inference
 `))
 
 	// ─── Per-database sections ───
@@ -2315,5 +2360,121 @@ func printManualQdrant(p func(string, string) string) {
 
     Example:
       dbexplain -dsn 'qdrant://:my-api-key@127.0.0.1:6334?label=my-qdrant'
+`))
+}
+
+func printManualFile(p func(string, string) string) {
+	fmt.Fprint(os.Stdout, p(`
+
+─── CSV/TSV 文件 ───────────────────────────────────────────
+
+    DSN 格式:
+      csv:///文件路径?label=别名[&encoding=gbk][&delimiter=,]
+      tsv:///文件路径?label=别名[&delimiter=%09]
+      csv:///目录路径/?label=别名
+      csv:///通配/表达/式/*.csv?label=别名
+
+    说明:
+      CSV/TSV 文件以文件系统路径作为 DSN，无需数据库连接。
+      文件全量读取到内存（不适合超大文件）。
+
+    采集机制:
+      • 单文件 — 首行作列名，采样推断列类型
+      • 目录 — 扫描所有 .csv / .tsv 文件
+      • Glob — 通配符表达式匹配文件
+      • 编码 — 默认 UTF-8，可通过 ?encoding=gbk 指定 GBK
+
+    查询限制:
+      • 仅支持 SELECT * [LIMIT N [OFFSET M]]
+      • 不支持 WHERE/JOIN/ORDER BY
+
+    示例:
+      dbexplain -dsn 'csv:///tmp/data.csv?label=csv-test'
+      dbexplain execute -dsn 'csv:///tmp/data.csv?label=csv-test' 'SELECT * LIMIT 5'
+      dbexplain -dsn 'tsv:///tmp/data.tsv?label=tsv&delimiter=%09'
+
+`,
+		`
+
+─── CSV/TSV Files ──────────────────────────────────────────
+
+    DSN format:
+      csv:///file/path?label=alias[&encoding=gbk][&delimiter=,]
+      tsv:///file/path?label=alias[&delimiter=%09]
+      csv:///directory/path/?label=alias
+      csv:///glob/pattern/*.csv?label=alias
+
+    Description:
+      CSV/TSV files use filesystem paths as DSNs — no database needed.
+      Files are read into memory entirely (not suitable for huge files).
+
+    Collection:
+      • Single file — first row as column names, type inference by sampling
+      • Directory — scans all .csv / .tsv files
+      • Glob — wildcard-pattern file matching
+      • Encoding — default UTF-8, ?encoding=gbk for GBK
+
+    Query limitations:
+      • Only SELECT * [LIMIT N [OFFSET M]] supported
+      • WHERE/JOIN/ORDER BY not supported
+
+    Examples:
+      dbexplain -dsn 'csv:///tmp/data.csv?label=csv-test'
+      dbexplain execute -dsn 'csv:///tmp/data.csv?label=csv-test' 'SELECT * LIMIT 5'
+      dbexplain -dsn 'tsv:///tmp/data.tsv?label=tsv&delimiter=%09'
+
+`))
+}
+
+func printManualXLSX(p func(string, string) string) {
+	fmt.Fprint(os.Stdout, p(`
+
+─── Excel (.xlsx) 文件 ─────────────────────────────────────
+
+    DSN 格式:
+      xlsx:///文件路径?label=别名
+
+    说明:
+      Excel 文件支持已内建于主模块 (github.com/xuri/excelize/v2)。
+      每个 Sheet 作为一张"表"。
+      标准构建 (bash build.sh) 即包含 xlsx 功能。
+
+    采集机制:
+      • 遍历所有 Sheet
+      • 首行作列名，采样推断列类型
+      • 行数统计
+
+    查询限制:
+      • 默认查询第一个 Sheet
+      • 仅支持 SELECT * [LIMIT N [OFFSET M]]
+
+    示例:
+      dbexplain -dsn 'xlsx:///tmp/report.xlsx?label=report'
+
+`,
+		`
+
+─── Excel (.xlsx) Files ────────────────────────────────────
+
+    DSN format:
+      xlsx:///file/path?label=alias
+
+    Description:
+      Excel support is built into the main module (github.com/xuri/excelize/v2).
+      Each sheet is a "table".
+      Standard build (bash build.sh) includes xlsx support.
+
+    Collection:
+      • Iterate all sheets
+      • First row as column names, type inference by sampling
+      • Row count
+
+    Query limitations:
+      • Queries the first sheet by default
+      • Only SELECT * [LIMIT N [OFFSET M]] supported
+
+    Example:
+      dbexplain -dsn 'xlsx:///tmp/report.xlsx?label=report'
+
 `))
 }

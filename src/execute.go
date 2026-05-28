@@ -31,6 +31,14 @@ func handleExecute(args []string) {
 	human := fs.Bool("human", false, "Human-readable table output (default: JSON)")
 	fs.Parse(args)
 
+	// Go flag.FlagSet stops at first non-flag arg (the SQL query).
+	// Allow flags like --human after the query for convenience.
+	for _, a := range fs.Args() {
+		if a == "--human" {
+			*human = true
+		}
+	}
+
 	sqlArg := fs.Arg(0)
 	if sqlArg == "" {
 		fmt.Fprintln(os.Stderr, "READ_ONLY_VIOLATION: empty query")
@@ -52,6 +60,12 @@ func handleExecute(args []string) {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "ERROR: invalid DSN: %v\n", sanitizeErr(err))
 		os.Exit(1)
+	}
+
+	// CSV/xlsx: bypass sqlguard, use simple query parser
+	if parsed.Kind == "csv" || parsed.Kind == "tsv" || parsed.Kind == "xlsx" {
+		handleFileExecute(parsed, sqlArg, human, limit)
+		return
 	}
 
 	// Only validate SQL for SQL-based connectors. Native connectors
@@ -133,6 +147,45 @@ func handleExecute(args []string) {
 	policies.ApplyMask(result)
 
 	// Output
+	if *human {
+		fmt.Print(formatHuman(result))
+	} else {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		if err := enc.Encode(result); err != nil {
+			fmt.Fprintf(os.Stderr, "ERROR: json encode: %v\n", err)
+			os.Exit(1)
+		}
+	}
+}
+
+// handleFileExecute handles execute for csv/xlsx — skips sqlguard and policy checks.
+func handleFileExecute(parsed *dsn.DSN, sqlArg string, human *bool, limit *int) {
+	c, err := connector.GetConnector(parsed.Kind)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
+		os.Exit(1)
+	}
+
+	q, ok := c.(query.Queryable)
+	if !ok {
+		fmt.Fprintf(os.Stderr, "QUERY_NOT_SUPPORTED: %s does not support query execution\n", parsed.Kind)
+		os.Exit(1)
+	}
+
+	ctx := context.Background()
+	opts := query.ExecuteOpts{
+		DSN:     parsed,
+		SQL:     sqlArg,
+		MaxRows: *limit,
+	}
+
+	result, err := q.ExecQuery(ctx, opts)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "QUERY_ERROR: %v\n", err)
+		os.Exit(1)
+	}
+
 	if *human {
 		fmt.Print(formatHuman(result))
 	} else {

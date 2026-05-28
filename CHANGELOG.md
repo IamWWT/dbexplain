@@ -1,5 +1,44 @@
 # 变更日志
 
+## v0.0.9 (2026-05-28)
+
+### CSV/TSV/XLSX 文件处理
+- **CSV/TSV 文件 Schema 采集**: 新增 `csv://` / `tsv://` DSN 方案，支持单文件、目录扫描、Glob 通配符（`*`/`?`/`[`）三种路径模式。首行作列名，采样推断列类型（INTEGER > FLOAT > DATE > TEXT）
+- **XLSX 文件 Schema 采集**: 新增 `xlsx://` DSN 方案，遍历所有 Sheet 作为表。内建于主模块，标准构建即包含（`github.com/xuri/excelize/v2` 为永久依赖）
+- **文件编码支持**: UTF-8 默认，`?encoding=gbk` 参数支持 GBK/GB2312/GB18030 编码
+- **自定义分隔符**: CSV 默认逗号，TSV 默认制表符，支持 `?delimiter=tab|pipe|semicolon` 覆盖
+- **类型推断共享**: 新建 `connector/infer.go`，按 INTEGER → FLOAT → DATE → TEXT 优先级判定列类型
+- **只读查询执行**: `execute` 子命令支持 CSV/TSV/XLSX——仅 `SELECT * [LIMIT N [OFFSET M]]`，不支持 WHERE/JOIN/ORDER BY。文件查询绕过 sqlguard 沙箱和策略引擎（文件即为只读）
+- **CLI 帮助子命令**: `dbexplain csv` / `dbexplain xlsx` 输出中英双语专项参考手册
+
+### 文档更新
+- `docs/FILE_PROCESSING.md`: CSV/TSV/XLSX 文件处理专项文档（新建）
+- `test/`: 分层测试文档目录（新建，12 个文件覆盖所有功能）
+- `README.md` / `README_EN.md`: 支持数据源新增 CSV/XLSX 条目；更新下载 URL 版本号
+- 所有安装/卸载脚本版本号同步更新
+
+### 输出日志优化
+- **采集进度消息路由**: `[采集中]` / `[完成]` 从 stderr 移至 per-label 日志文件（`/var/log/dbexplain/<label>.log`），不再污染 `--json` / `--human` 输出
+- **第三方库警告重定向**: `log.SetOutput()` 将 Qdrant 等第三方库的 stderr 警告重定向到 `/var/log/dbexplain/dbexplain.log`
+- **采集汇总日志**: 新增 `collect.log`，记录全部 DSN 采集完成时长或失败汇总
+
+### CLI 与 UX
+- **`--human` 可放查询语句后**: Go flag 遇到 SQL 位置参数后停止解析，`execute "SELECT 1" --human` 在扫描 `fs.Args()` 后正确生效
+- **`--label` 全局标志**: schema 采集模式新增 `--label` 作为 `-include` 别名，与 execute 子命令行为一致
+
+### 策略引擎修复 (ISSUE-062)
+- **`DENY_TABLES=schema` Schema 前缀匹配修复**: `extractTableNames()` 原先只提取 `TABLES`（丢弃 `information_schema.`），导致 `DENY_TABLES=information_schema` 不生效。修复为提取全限定名 `information_schema.TABLES` 并拆分为 schema + table 两部分分别匹配
+- **`DENY_COLUMNS=table.col` 全字段查询绕过修复**: SQL `SELECT * FROM table` 无显式列引用绕过列级检查。新增 `matchStarSelect()` 检测 `SELECT *` 并匹配表前缀
+- **MongoDB/Qdrant 原生查询列级绕过修复**: `CheckNative()` 原先跳过列级检查。`{"find":"collection"}` 全字段返回时检查 `DENY_COLUMNS=collection.field` 是否匹配，除非投影已排除该字段
+
+### 单二进制架构（合并）
+- 合并 `build_excel.sh` + `src_excel` 子模块进入主模块，`github.com/xuri/excelize/v2` 为永久编译依赖
+- 单二进制 41MB，零运行时依赖，xlsx 贡献约 2.1MB（~5%）
+
+### 版本跟踪
+- 版本号: v0.0.9
+- 新增数据源类型: CSV/TSV/XLSX 文件
+
 ## v0.0.8 (2026-05-27)
 
 ### 安全策略引擎 (ISSUE-061)

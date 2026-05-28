@@ -78,7 +78,7 @@ bash dbexplain-skill/scripts/install.sh --lang en  # English Skill
 
 ```bash
 # 在有网络的机器上下载
-wget https://github.com/IamWWT/dbexplain/releases/download/v0.0.8/dbexplain-linux-amd64
+wget https://github.com/IamWWT/dbexplain/releases/download/v0.0.9/dbexplain-linux-amd64
 
 # 复制到离线环境后安装
 bash dbexplain-skill/scripts/install.sh --offline ./dbexplain-linux-amd64

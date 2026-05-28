@@ -1,5 +1,44 @@
 # Changelog
 
+## v0.0.9 (2026-05-28)
+
+### CSV/TSV/XLSX File Processing
+- **CSV/TSV Schema Collection**: New `csv://` / `tsv://` DSN schemes supporting 3 path modes — single file, directory scan, and glob patterns (`*`/`?`/`[`). First row as column names, sampled type inference (INTEGER > FLOAT > DATE > TEXT)
+- **XLSX Schema Collection**: New `xlsx://` DSN scheme iterating all sheets as tables. Built into main module, standard build includes it (`github.com/xuri/excelize/v2` is a permanent dependency)
+- **Encoding Support**: UTF-8 default, `?encoding=gbk` parameter for GBK/GB2312/GB18030 encoded files
+- **Custom Delimiter**: CSV defaults to comma, TSV defaults to tab, overridable via `?delimiter=tab|pipe|semicolon`
+- **Shared Type Inference**: New `connector/infer.go` with priority-ordered column type detection (INTEGER → FLOAT → DATE → TEXT)
+- **Read-only Query Execution**: `execute` subcommand supports CSV/TSV/XLSX — `SELECT * [LIMIT N [OFFSET M]]` only. File queries bypass sqlguard sandbox and policy engine (files are inherently read-only)
+- **CLI Help Subcommands**: `dbexplain csv` / `dbexplain xlsx` print bilingual reference manuals
+
+### Documentation
+- `docs/FILE_PROCESSING.md`: Dedicated CSV/TSV/XLSX file processing documentation (new)
+- `test/`: Layered test documentation directory (new, 12 files covering all features)
+- `README.md` / `README_EN.md`: Added CSV/XLSX entries to supported data sources; updated download URL versions
+- All install/uninstall scripts version strings updated
+
+### Output Log Optimization
+- **Progress messages routed to log files**: `[采集中]` / `[完成]` moved from stderr to per-label log files (`/var/log/dbexplain/<label>.log`), no longer polluting `--json` / `--human` output
+- **Third-party library warnings redirected**: `log.SetOutput()` redirects Qdrant client etc. stderr warnings to `/var/log/dbexplain/dbexplain.log`
+- **Collection summary log**: New `collect.log` recording total collection duration or failure summary
+
+### CLI & UX
+- **`--human` after query**: Go flag stops at first non-flag arg; `execute "SELECT 1" --human` now works by scanning `fs.Args()` after parse
+- **`--label` global flag**: Schema collection mode now supports `--label` as alias for `-include`, consistent with execute subcommand
+
+### Policy Engine Fixes (ISSUE-062)
+- **`DENY_TABLES=schema` prefix matching**: `extractTableNames()` previously only extracted `TABLES` (dropping `information_schema.`), making `DENY_TABLES=information_schema` ineffective. Fixed to capture fully-qualified names `information_schema.TABLES` and split into schema + table parts
+- **`DENY_COLUMNS=table.col` wildcard query bypass**: SQL `SELECT * FROM table` had no explicit column refs, bypassing column-level checks. Added `matchStarSelect()` to detect `SELECT *` and match table prefixes
+- **MongoDB/Qdrant native query column bypass**: `CheckNative()` previously skipped column-level checks. `{"find":"collection"}` returning all fields now checks `DENY_COLUMNS=collection.field`, unless the projection excludes that field
+
+### Single Binary Architecture (Merge)
+- Merged `build_excel.sh` + `src_excel` sub-module into main module, `github.com/xuri/excelize/v2` as permanent compile dependency
+- Single binary ~41MB, zero runtime dependencies, xlsx adds ~2.1MB (~5%)
+
+### Version Tracking
+- Version: v0.0.9
+- New data source types: CSV/TSV/XLSX files
+
 ## v0.0.8 (2026-05-27)
 
 ### Security Policy Engine (ISSUE-061)

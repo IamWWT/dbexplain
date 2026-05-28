@@ -48,6 +48,8 @@ The "ground truth layer" for databases in the AI era.
 | Elasticsearch | `elasticsearch://` | Index mappings, HTTPS |
 | MongoDB | `mongodb://` | Approximate doc count, zero data risk |
 | Qdrant | `qdrant://` | Vector collection metadata |
+| CSV/TSV | `csv://` `tsv://` | Local files, single file/directory/glob, encoding detection |
+| Excel | `xlsx://` | Excel files, each sheet as a table, included in standard build |
 
 > See [`docs/`](docs/) for per-database details, safety mechanisms, and troubleshooting guides.
 
@@ -60,7 +62,7 @@ The "ground truth layer" for databases in the AI era.
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) and [`CONSTITUTION.md`](CONSTITUTION.md) for the full architecture vision.
 
 ![dbexplain Architecture](docs/assets/architecture.drawio.png)
-*4-stage pipeline: INPUT (Connection & Config) → COLLECT (9-DB schema extraction) → ANALYZE (FK inference/ranking/diagnostics/IR Graph) → OUTPUT (Markdown/JSON/context files)*
+*4-stage pipeline: INPUT (Connection & Config) → COLLECT (9-DB + CSV/XLSX file schema extraction) → ANALYZE (FK inference/ranking/diagnostics/IR Graph) → OUTPUT (Markdown/JSON/context files)*
 
 ---
 
@@ -89,7 +91,7 @@ Pre-download the binary for your platform, then install with `--offline`:
 
 ```bash
 # Download on a machine with internet (Linux amd64 example)
-wget https://github.com/IamWWT/dbexplain/releases/download/v0.0.8/dbexplain-linux-amd64
+wget https://github.com/IamWWT/dbexplain/releases/download/v0.0.9/dbexplain-linux-amd64
 
 # Copy to offline environment, then:
 bash dbexplain-skill/scripts/install.sh --offline ./dbexplain-linux-amd64
@@ -105,12 +107,12 @@ bash dbexplain-skill/scripts/install.sh --offline ./dbexplain-linux-amd64 --no-s
 
 ```bash
 # Linux amd64
-wget https://github.com/IamWWT/dbexplain/releases/download/v0.0.8/dbexplain-linux-amd64
+wget https://github.com/IamWWT/dbexplain/releases/download/v0.0.9/dbexplain-linux-amd64
 chmod +x dbexplain-linux-amd64
 sudo mv dbexplain-linux-amd64 /usr/local/bin/dbexplain
 
 # macOS Apple Silicon
-wget https://github.com/IamWWT/dbexplain/releases/download/v0.0.8/dbexplain-darwin-arm64
+wget https://github.com/IamWWT/dbexplain/releases/download/v0.0.9/dbexplain-darwin-arm64
 chmod +x dbexplain-darwin-arm64
 sudo mv dbexplain-darwin-arm64 /usr/local/bin/dbexplain
 
@@ -136,7 +138,7 @@ The script downloads `dbexplain-windows-amd64.exe` to `%LOCALAPPDATA%\dbexplain\
 
 ```powershell
 # Download on a machine with internet
-Invoke-WebRequest -Uri "https://github.com/IamWWT/dbexplain/releases/download/v0.0.8/dbexplain-windows-amd64.exe" -OutFile "dbexplain-windows-amd64.exe"
+Invoke-WebRequest -Uri "https://github.com/IamWWT/dbexplain/releases/download/v0.0.9/dbexplain-windows-amd64.exe" -OutFile "dbexplain-windows-amd64.exe"
 
 # Copy to offline environment, place at:
 # %LOCALAPPDATA%\dbexplain\dbexplain.exe
@@ -249,6 +251,8 @@ scheme://[user:password@]host[:port][/dbname][?label=alias&params...]
 4. `~/.config/dbexplain/.env.dbexplain` (Linux/macOS) or `%USERPROFILE%\.config\dbexplain\.env.dbexplain` (Windows)
 5. `~/.config/dbexplain/.env.dbexplain.enc` (encrypted, auto-decrypt)
 6. `.env` in current directory (legacy backward compat)
+
+> See [docs/CONFIG_SEARCH.md](docs/CONFIG_SEARCH.md) for details (search order is independent of binary location, CWD determines behavior).
 
 ### Config Template
 
@@ -377,6 +381,8 @@ dbexplain redis               # Redis
 dbexplain elasticsearch       # Elasticsearch (alias: es)
 dbexplain mongodb             # MongoDB
 dbexplain qdrant              # Qdrant
+dbexplain csv                 # CSV/TSV file processing (DSN format, encoding, query limits)
+dbexplain xlsx                # Excel file processing (build requirements)
 ```
 
 ### Option Reference
@@ -407,7 +413,7 @@ dbexplain qdrant              # Qdrant
 | `dbexplain execute <SQL>` | **Read-only query execution** (sandboxed). SQL types: sqlguard validation; non-SQL: native format. `--human` for table output |
 | `dbexplain encrypt <file>` | Encrypt `.env` config file (machine fingerprint / password dual mode) |
 | `dbexplain all` | Full reference manual (supports `--filter`, `--language`) |
-| `dbexplain <dbtype>` | Database-specific reference manual. 9 types: mysql, postgres/pg/postgresql, gaussdb, clickhouse/ch, sqlite/sqlite3, redis, mongodb, elasticsearch/es, qdrant |
+| `dbexplain <dbtype>` | Database/file-specific reference manual. 10 types: mysql, postgres/pg/postgresql, gaussdb, clickhouse/ch, sqlite/sqlite3, redis, mongodb, elasticsearch/es, qdrant, csv, xlsx |
 | `dbexplain -h` | Show compact structured help overview |
 
 ---
@@ -495,7 +501,7 @@ No core code changes needed — fully compliant with the open/closed principle.
 ## Development
 
 - **Language**: Go 1.26+
-- **Build**: `CGO_ENABLED=0 go build -ldflags="-s -w -X main.version=v0.0.8"`
+- **Build**: `CGO_ENABLED=0 go build -ldflags="-s -w -X main.version=v0.0.9"`
 - **Test**: `go test ./...` (DSN parsing + field inference)
 - **Cross-compile**: `bash build.sh` (linux/darwin/windows × amd64/arm64)
 
@@ -520,6 +526,8 @@ No core code changes needed — fully compliant with the open/closed principle.
 | [`docs/ELASTICSEARCH.md`](docs/ELASTICSEARCH.md) | Elasticsearch index mappings, HTTPS |
 | [`docs/QDRANT.md`](docs/QDRANT.md) | Qdrant vector collection metadata |
 | [`docs/POLICY.md`](docs/POLICY.md) | Fine-grained access control policy (table/column/statement level) |
+| [`docs/FILE_PROCESSING.md`](docs/FILE_PROCESSING.md) | CSV/TSV/XLSX file processing (DSN format, encoding, type inference) |
+| [`docs/ISSUE-062.md`](docs/ISSUE-062.md) | v0.0.9 policy engine fix record (wildcard query bypass) |
 | [`docs/SECURITY_CHECKLIST.md`](docs/SECURITY_CHECKLIST.md) | Security checklist (pre-release must-read) |
 | [`CHANGELOG.md`](CHANGELOG.md) | Changelog (Chinese) |
 | [`CHANGELOG_EN.md`](CHANGELOG_EN.md) | Changelog (English) |

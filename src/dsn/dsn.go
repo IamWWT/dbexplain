@@ -3,6 +3,8 @@ package dsn
 import (
 	"fmt"
 	"net/url"
+	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -55,6 +57,12 @@ func ParseDSN(raw string) (*DSN, error) {
 			d.TLS = true
 		}
 		d.Kind = "elasticsearch"
+	case "csv":
+		d.Kind = "csv"
+	case "tsv":
+		d.Kind = "csv" // tsv reuses csv connector with ?delimiter=\t
+	case "xlsx":
+		d.Kind = "xlsx"
 	default:
 		return nil, fmt.Errorf("unsupported scheme %q", scheme)
 	}
@@ -146,4 +154,41 @@ func (d *DSN) SQLitePath() string {
 		after = after[:i]
 	}
 	return after
+}
+
+// FilePath extracts the filesystem path for file-based connectors (csv, xlsx).
+func (d *DSN) FilePath() string {
+	// Extract path from the raw DSN using "://" as separator (not d.Kind,
+	// because tsv → kind="csv" but raw starts with "tsv://").
+	schemeEnd := strings.Index(d.Raw, "://")
+	if schemeEnd < 0 {
+		return d.Raw
+	}
+	after := d.Raw[schemeEnd+3:]
+	if i := strings.Index(after, "?"); i >= 0 {
+		after = after[:i]
+	}
+	after, _ = url.PathUnescape(after)
+	// Windows: csv:///C:/path → /C:/path → C:/path
+	if runtime.GOOS == "windows" && len(after) >= 3 &&
+		after[0] == '/' && after[2] == ':' {
+		after = after[1:]
+	}
+	return filepath.FromSlash(after)
+}
+
+// DSNParam returns the value of a query parameter from the raw DSN string.
+func (d *DSN) DSNParam(key string) string {
+	after := d.Raw
+	if i := strings.Index(after, "?"); i >= 0 {
+		q := after[i+1:]
+		for _, pair := range strings.Split(q, "&") {
+			kv := strings.SplitN(pair, "=", 2)
+			if len(kv) == 2 && kv[0] == key {
+				v, _ := url.QueryUnescape(kv[1])
+				return v
+			}
+		}
+	}
+	return ""
 }
