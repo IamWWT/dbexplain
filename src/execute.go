@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/IamWWT/dbexplain/capabilities"
 	"github.com/IamWWT/dbexplain/connector"
 	"github.com/IamWWT/dbexplain/dsn"
 	"github.com/IamWWT/dbexplain/policy"
@@ -46,8 +47,32 @@ func handleExecute(args []string) {
 		os.Exit(1)
 	}
 
-	// Resolve DSN first (needed to determine SQL vs native)
-	entries := resolveDSNEntries(envMode, dsnFlag, configFile, label, dbIndex)
+	// Resolve DSN — gather ALL entries before label filter (needed for JOIN source resolution)
+	var allEntries []dsnEntry
+	if *envMode {
+		configPath := findConfigFile()
+		if configPath == "" {
+			fmt.Fprintln(os.Stderr, "ERROR: no config file found")
+			os.Exit(1)
+		}
+		envEntries, err := loadEnvFile(configPath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "ERROR: load config %s: %v\n", configPath, sanitizeErr(err))
+			os.Exit(1)
+		}
+		allEntries = append(allEntries, envEntries...)
+	}
+	if *configFile != "" {
+		for _, raw := range loadFromConfig(*configFile) {
+			allEntries = append(allEntries, dsnEntry{raw: raw})
+		}
+	}
+	if *dsnFlag != "" {
+		allEntries = append(allEntries, dsnEntry{raw: *dsnFlag})
+	}
+
+	// Now filter by label/dbIndex to select the primary DSN for this query
+	entries := filterEntries(allEntries, label, dbIndex)
 	if len(entries) == 0 {
 		fmt.Fprintln(os.Stderr, "ERROR: no matching DSN found")
 		os.Exit(1)
@@ -63,17 +88,27 @@ func handleExecute(args []string) {
 		os.Exit(1)
 	}
 
-	// CSV/xlsx: bypass sqlguard (SELECT * only — inherently read-only),
+	// Get connector early — used for capability-based routing.
+	c, err := connector.GetConnector(parsed.Kind)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
+		os.Exit(1)
+	}
+	caps := capabilities.FromProvider(c)
+	isSQL := caps.Has(capabilities.CapSQL)
+	isFile := caps.Has(capabilities.CapFile)
+
+	// File datasources (CSV, XLSX): bypass sqlguard (SELECT * only — inherently read-only),
 	// but still enforce policy engine rules (DENY_TABLES, MASK_COLUMNS).
-	if parsed.Kind == "csv" || parsed.Kind == "tsv" || parsed.Kind == "xlsx" {
+	if isFile {
 		policies := policy.Load(entries[0].envKey)
-		handleFileExecute(parsed, sqlArg, human, limit, policies)
+		handleFileExecute(parsed, sqlArg, human, limit, policies, allEntries)
 		return
 	}
 
 	// Only validate SQL for SQL-based connectors. Native connectors
 	// (Redis, MongoDB, Qdrant) do their own validation in ExecQuery.
-	if isSQLKind(parsed.Kind) {
+	if isSQL {
 		if err := sqlguard.Validate(sqlArg); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
@@ -82,7 +117,7 @@ func handleExecute(args []string) {
 
 	// Fine-grained policy check (applies to ALL database kinds)
 	policies := policy.Load(entries[0].envKey)
-	if isSQLKind(parsed.Kind) {
+	if isSQL {
 		if err := policies.CheckSQL(sqlArg); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
@@ -96,7 +131,7 @@ func handleExecute(args []string) {
 
 	// Apply auto-limit and optional EXPLAIN wrapping (SQL only)
 	var sql string
-	if isSQLKind(parsed.Kind) {
+	if isSQL {
 		if *explain {
 			sql = "EXPLAIN " + sqlArg
 		} else {
@@ -113,13 +148,6 @@ func handleExecute(args []string) {
 		os.Exit(1)
 	}
 	defer queryLock.Unlock(lockLabel)
-
-	// Get connector
-	c, err := connector.GetConnector(parsed.Kind)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
-		os.Exit(1)
-	}
 
 	// Check if connector supports Queryable
 	q, ok := c.(query.Queryable)
@@ -164,7 +192,8 @@ func handleExecute(args []string) {
 
 // handleFileExecute handles execute for csv/xlsx — skips sqlguard (SELECT * only),
 // but enforces policy engine rules for compliance scenarios.
-func handleFileExecute(parsed *dsn.DSN, sqlArg string, human *bool, limit *int, policies *policy.Config) {
+// allEntries provides all env DSN entries for JOIN source resolution.
+func handleFileExecute(parsed *dsn.DSN, sqlArg string, human *bool, limit *int, policies *policy.Config, allEntries []dsnEntry) {
 	// DENY_TABLES check: derive table name from DSN path (filename without extension)
 	if policies != nil && len(policies.DenyTables) > 0 {
 		if tableName := fileTableName(parsed); tableName != "" {
@@ -194,6 +223,13 @@ func handleFileExecute(parsed *dsn.DSN, sqlArg string, human *bool, limit *int, 
 		DSN:     parsed,
 		SQL:     sqlArg,
 		MaxRows: *limit,
+	}
+
+	// Resolve JOIN sources: load data from additional DSNs referenced in SQL
+	if detectJoinQuick(sqlArg) && len(allEntries) > 1 {
+		if joinTables, err := resolveJoinSources(sqlArg, allEntries); err == nil && len(joinTables) > 0 {
+			opts.ExtraTables = joinTables
+		}
 	}
 
 	result, err := q.ExecQuery(ctx, opts)
@@ -362,37 +398,12 @@ func formatHuman(r *query.QueryResult) string {
 	return out.String()
 }
 
-// resolveDSNEntries gathers DSN entries from env/config/dsn flags.
-func resolveDSNEntries(envMode *bool, dsnFlag, configFile, label *string, dbIndex *int) []dsnEntry {
-	var entries []dsnEntry
-
-	if *envMode {
-		configPath := findConfigFile()
-		if configPath == "" {
-			fmt.Fprintln(os.Stderr, "ERROR: no config file found")
-			os.Exit(1)
-		}
-		envEntries, err := loadEnvFile(configPath)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "ERROR: load config %s: %v\n", configPath, sanitizeErr(err))
-			os.Exit(1)
-		}
-		entries = append(entries, envEntries...)
-	}
-
-	if *configFile != "" {
-		for _, raw := range loadFromConfig(*configFile) {
-			entries = append(entries, dsnEntry{raw: raw})
-		}
-	}
-
-	if *dsnFlag != "" {
-		entries = append(entries, dsnEntry{raw: *dsnFlag})
-	}
+// filterEntries filters DSN entries by label or dbIndex.
+func filterEntries(entries []dsnEntry, label *string, dbIndex *int) []dsnEntry {
+	var filtered []dsnEntry
 
 	// Filter by label
 	if *label != "" {
-		var filtered []dsnEntry
 		for _, e := range entries {
 			d, err := dsn.ParseDSN(e.raw)
 			if err == nil && d.Label == *label {
@@ -404,7 +415,7 @@ func resolveDSNEntries(envMode *bool, dsnFlag, configFile, label *string, dbInde
 
 	// Filter by db index
 	if *dbIndex > 0 {
-		var filtered []dsnEntry
+		// Re-slice from entries filtered by label
 		for i, e := range entries {
 			if i+1 == *dbIndex {
 				filtered = append(filtered, e)
@@ -416,12 +427,148 @@ func resolveDSNEntries(envMode *bool, dsnFlag, configFile, label *string, dbInde
 	return entries
 }
 
-// isSQLKind returns true for database kinds that accept SQL syntax.
-func isSQLKind(kind string) bool {
-	switch kind {
-	case "mysql", "postgres", "gaussdb", "sqlite", "clickhouse", "elasticsearch":
-		return true
-	default:
-		return false
+// --- JOIN source resolution ---
+
+// detectJoinQuick does a fast string check for JOIN in SQL.
+func detectJoinQuick(sql string) bool {
+	upper := strings.ToUpper(strings.TrimSpace(sql))
+	words := strings.Fields(upper)
+	for _, w := range words {
+		if w == "JOIN" {
+			return true
+		}
 	}
+	return false
 }
+
+// resolveJoinSources scans SQL for table references after FROM and JOIN,
+// matches them to DSN entries (by label or filename), and loads their data.
+func resolveJoinSources(sql string, entries []dsnEntry) ([]query.ExtraTable, error) {
+	// Extract table names from SQL
+	tables := extractTableNames(sql)
+	if len(tables) == 0 {
+		return nil, nil
+	}
+
+	var extras []query.ExtraTable
+
+	for _, tableName := range tables {
+		matched := false
+		for _, entry := range entries {
+			d, err := dsn.ParseDSN(entry.raw)
+			if err != nil {
+				continue
+			}
+
+			// Match by label or filename
+			dsnLabel := d.Label
+			dsnFile := fileTableName(d)
+
+			if strings.EqualFold(tableName, dsnLabel) || strings.EqualFold(tableName, dsnFile) {
+				// Skip if this is the primary DSN (already loaded)
+				if matched {
+					continue
+				}
+
+				// Load data
+				switch d.Kind {
+				case "csv", "tsv":
+					delimiter := connector.GetDelimiter(d)
+					encoding := d.DSNParam("encoding")
+					if encoding == "" {
+						encoding = "utf-8"
+					}
+					rows, header, err := connector.ReadCSVFile(d.FilePath(), delimiter, encoding)
+					if err != nil {
+						continue
+					}
+					extras = append(extras, query.ExtraTable{
+						Alias:  tableName,
+						Header: header,
+						Rows:   rows,
+					})
+					matched = true
+
+				case "xlsx":
+					header, rows, err := connector.ReadXLSXFile(d.FilePath())
+					if err != nil {
+						continue
+					}
+					extras = append(extras, query.ExtraTable{
+						Alias:  tableName,
+						Header: header,
+						Rows:   rows,
+					})
+					matched = true
+				}
+			}
+		}
+	}
+
+	return extras, nil
+}
+
+// extractTableNames extracts table names from FROM and JOIN clauses using simple string parsing.
+// e.g., "SELECT * FROM pb_touch_ops t JOIN t_sec_org o ON t.org_refno = o.org_refno"
+// returns: ["pb_touch_ops", "t_sec_org"]
+func extractTableNames(sql string) []string {
+	upper := strings.ToUpper(strings.TrimSpace(sql))
+	var tables []string
+	seen := make(map[string]bool)
+
+	// Find FROM clause
+	fromIdx := strings.Index(upper, "FROM ")
+	if fromIdx < 0 {
+		return nil
+	}
+
+	// Extract table name after FROM
+	afterFrom := strings.TrimSpace(sql[fromIdx+5:])
+	firstWord := nextWord(afterFrom)
+	if firstWord != "" && !seen[firstWord] {
+		tables = append(tables, firstWord)
+		seen[firstWord] = true
+	}
+
+	// Find all JOIN clauses
+	searchFrom := fromIdx + 5
+	for {
+		joinIdx := strings.Index(upper[searchFrom:], " JOIN ")
+		if joinIdx < 0 {
+			break
+		}
+		joinIdx += searchFrom + 6 // skip " JOIN "
+		afterJoin := strings.TrimSpace(sql[joinIdx:])
+		joinWord := nextWord(afterJoin)
+		if joinWord != "" && !seen[joinWord] {
+			tables = append(tables, joinWord)
+			seen[joinWord] = true
+		}
+		searchFrom = joinIdx + len(joinWord)
+	}
+
+	// Remove the primary table (first one) — it's already loaded via DSN
+	if len(tables) > 1 {
+		return tables[1:]
+	}
+	if len(tables) == 1 {
+		// If only one table found (no JOIN), return empty
+		// This means the SQL has a FROM but no JOIN — not our concern
+		return nil
+	}
+	return tables
+}
+
+// nextWord extracts the first word from a SQL fragment.
+func nextWord(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return ""
+	}
+	end := strings.IndexAny(s, " \t\n\r")
+	if end < 0 {
+		return s
+	}
+	return s[:end]
+}
+

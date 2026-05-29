@@ -1,126 +1,84 @@
-# L9: CLI 帮助测试
+# L3: CLI 帮助与子命令验证
 
-> 验证所有 CLI 子命令、帮助手册和版本输出。
+> 验证 `--version`、`-h`、`dbexplain all`、子命令手册等 CLI 功能。
 
-## 9.1 版本输出
+---
+
+## 前置条件
 
 ```bash
 cd src
-go run . --version
+BIN="../release/dbexplain-linux-amd64"
 ```
 
-实际输出:
-```
-dbexplain v0.0.9
-```
-
-## 9.2 简洁帮助
+## 9.1 版本号
 
 ```bash
-go run . -h
-# 预期: 显示使用方式、全局标志、数据库类型、示例
+$BIN --version
+# 预期: dbexplain v0.1.0
 ```
 
-## 9.3 完整手册
+## 9.2 简短帮助
 
 ```bash
-go run . all
-# 预期: 中英文双语完整手册，包含所有子命令、DSN 格式、输出格式
+$BIN -h 2>&1 | head -20
+# 预期: 包含 version v0.1.0、Usage、Database types（含 csv/tsv/xlsx）
 ```
 
+## 9.3 完整手册 (中文)
+
 ```bash
-go run . all --language en
-# 预期: 英文版完整手册
+$BIN all 2>&1 | head -20
+# 预期: 手册版本 v0.1.0
 ```
 
-## 9.4 数据库专项手册
+## 9.4 完整手册 (英文)
 
 ```bash
-for db in mysql postgres gaussdb clickhouse sqlite redis mongodb elasticsearch qdrant csv xlsx; do
+$BIN all --language en 2>&1 | head -20
+```
+
+## 9.5 手册关键字过滤
+
+```bash
+$BIN all --filter redis 2>&1 | head -10
+# 预期: 仅显示 Redis 相关章节
+```
+
+## 9.6 全部数据库子命令
+
+```bash
+for db in mysql postgres gaussdb clickhouse sqlite redis mongodb elasticsearch qdrant csv tsv xlsx; do
   echo "=== $db ==="
-  go run . $db 2>&1 | head -3
+  $BIN "$db" 2>&1 | grep -m1 "v0.1.0"
 done
-# 预期: 每个数据库/文件类型都输出对应的专项手册摘要
+# 预期: 12/12 全部包含 v0.1.0
 ```
 
-实际输出 (csv 示例):
-```
-=== csv ===
-CSV/TSV Manual
-==============
-# CSV/TSV File Processing
-...
-```
-
-## 9.5 数据库手册别名
+## 9.7 别名子命令
 
 ```bash
-go run . pg
-# 预期: 同 postgres 手册
-
-go run . ch
-# 预期: 同 clickhouse 手册
-
-go run . es
-# 预期: 同 elasticsearch 手册
-
-go run . sqlite3
-# 预期: 同 sqlite 手册
+for alias in pg postgresql ch sqlite3 es; do
+  echo "=== $alias ==="
+  $BIN "$alias" 2>&1 | grep -m1 "v0.1.0"
+done
+# 预期: 5/5 全部包含 v0.1.0
 ```
 
-## 9.6 列表子命令
+## 9.8 execute -h
 
 ```bash
-go run . list -env
-# 预期: 显示 15 个 DSN 的 INDEX/LABEL/KIND/HOST:PORT/DATABASE 映射表
+$BIN execute -h 2>&1 | head -15
 ```
 
-## 9.7 Execute 子命令帮助
+## 9.9 list -h
 
 ```bash
-go run . execute -h
-# 预期: 显示 execute 子命令的参数说明（--env、--label、--db、--dsn、--limit、--timeout、--explain、--human）
+$BIN list -h 2>&1 | head -10
 ```
 
-## 9.8 Encrypt 子命令帮助
+## 9.10 encrypt -h
 
 ```bash
-go run . encrypt -h
-# 预期: 显示加密子命令的参数说明
-```
-
-## 9.9 --filter 手册过滤
-
-```bash
-go run . all --filter redis
-# 预期: 仅显示包含 "redis" 的手册内容
-
-go run . all --filter "SSL"
-# 预期: 仅显示包含 "SSL" 的手册内容（大小写不敏感）
-```
-
-## 9.10 --human 输出
-
-```bash
-go run . -env --label aiops-mysql --human
-# 预期: 带上下文标记的人类友好输出
-```
-
-## 9.11 JSON 输出
-
-```bash
-go run . -env --label aiops-mysql --json 2>/dev/null | python3 -c "import json,sys; d=json.load(sys.stdin); print(f'kind: {d.get(\"kind\",\"?\")}')"
-# 实际: kind: mysql
-```
-
-## 9.12 错误提示
-
-```bash
-# 无效子命令
-go run . invalid_subcommand 2>&1
-# 预期: 错误提示或帮助信息
-
-# 无效 DSN
-go run . -dsn "invalid://uri" 2>&1
-# 预期: 错误提示
+$BIN encrypt -h 2>&1 | head -10
 ```

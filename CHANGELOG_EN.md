@@ -1,5 +1,73 @@
 # Changelog
 
+## v0.1.0 (2026-05-29) — Deep Security Hardening & Architecture Alignment & File Query Engine
+
+### Security Fixes (P0)
+- **WITH CTE write bypass fix**: `WITH ... INSERT/UPDATE/DELETE ...` only checked first token (WITH), CTE body writes fully bypassed validation. Added `containsCTEWrite()` for deep CTE body scan, rejecting WITH queries containing write operations
+- **SELECT INTO bypass fix**: `SELECT * INTO new_table` starts with SELECT, bypassing read-only check. Added `isSelectInto()` to detect INTO TABLE clauses (excluding MySQL INTO @var), rejecting PostgreSQL DDL writes
+
+### Security Hardening (P1)
+- **ANALYZE/REINDEX removed from readOps**: `ANALYZE` writes to statistics tables, `REINDEX` locks tables rebuilding indexes. Moved from whitelist to blacklist
+- **SET SESSION connection pool race fix**: MySQL SET max_execution_time / PG SET statement_timeout executed on different connections than the subsequent query, rendering timeouts ineffective. `ExecQuery` now forces single-connection mode (`SetMaxOpenConns(1)`)
+- **matchStarSelect anchor fix**: Regex `\ASELECT` only matched start position; `WITH cte AS (SELECT * FROM t)` SELECT * was missed. Changed to `\bSELECT` for global matching
+- **Policy config leak fix**: `loadEnvFile()` used `os.Setenv` to pass policy config, leaking to `/proc/[pid]/environ`
+- **APP_ENCRYPTION_KEY cleanup**: `os.Unsetenv("APP_ENCRYPTION_KEY")` immediately after decryption, minimizing password exposure window
+
+### Correctness Fixes (P1-P2)
+- **PostgreSQL FK schema JOIN**: FK query was missing `pg_namespace` JOIN, causing FK results to mix between tables with the same name in different schemas
+- **PostgreSQL index parsing**: `strings.LastIndex(def, ")")` broke on function indexes (`lower(email)`) and INCLUDE columns. Added `extractIndexColumns()` with bracket depth tracking
+- **Cache atomic write**: `os.WriteFile` is non-atomic; process crash corrupts cache. Switched to temp file + `os.Rename()` atomic operation
+
+### PostgreSQL Multi-Schema Support
+- **Schema discovery**: `collectPGDB()` now queries `pg_namespace` for all non-system schemas, no longer hardcoded to `public` only
+- **Row count from pg_class**: Added `n_live_tup` collection via `pg_class.reltuples` for per-table row estimates
+
+### Architecture Alignment (Constitution Article 10)
+- **CapSQL/CapFile capabilities**: New `CapSQL` and `CapFile` constants in `capabilities.go`
+- **Unified connector declarations**: All 5 SQL connectors (MySQL/PostgreSQL/SQLite/ClickHouse/ES) declare `CapSQL`; CSV/XLSX declare `CapFile`
+- **isSQLKind() deleted**: Hardcoded kind switch in `execute.go` replaced by `capabilities.FromProvider(c).Has(capabilities.CapSQL)`, eliminating the constitutional anti-pattern of type-based branching
+- **New databases no longer need execute.go changes**: Just implement Connector + declare CapSQL, execute auto-routes correctly
+
+### JSON Output Format Change
+- **`instances` wrapper**: Schema collection JSON now wrapped in `{"instances": [...]}` envelope with `groups`, `issues`, `refs` top-level keys. The `dsn` field is no longer output per-instance
+- **Backward compat note**: Consumers reading `kind`/`label`/`databases` directly from the top level must update to read from `instances[0]`
+
+### Documentation Alignment (Phase D1-D5)
+- **24+ .md files aligned** with v0.1.0 code: version numbers, PostgreSQL schema scope, Qdrant TLS/execute, Redis readOps whitelist, data source counts, deprecated `--manual` references
+- **`docs/ALGORITHMS.md`**: Added `vector` and `file` capabilities; updated version status
+- **`docs/ARCHITECTURE.md`**: Replaced `--manual` with `all`/`<dbtype>`; updated directory structure
+- **`docs/POLICY.md`**: Added troubleshooting reference table (4 common issues)
+- **`README.md` / `README_EN.md`**: Simplified by ~62% (541→207 / 540→194 lines), moved detail to docs/
+- **`issues.json`**: Merged ISSUE-062.md content as ISSUE-064; resolved numbering collision
+
+### Test Framework Expansion
+- **`docs/test/12-capability-routing.md`**: New test suite covering CapSQL routing, PostgreSQL multi-schema, matchStarSelect with CTE, file data source policy, JSON instances wrapper format
+- **`docs/test/02-schema-collection.md`**: JSON validation updated for `instances` wrapper format
+- **`docs/test/11-end-to-end.md`**: JSON structure expectations aligned with v0.1.0 output format
+- All 15 DSN schema collection verified; all 8 unit test packages pass
+
+### File Query Engine (Pure Go In-Memory SQL Engine)
+- **`src/connector/filequery/` — 7 new files**: Pure Go dependency-free SQL engine for CSV/XLSX business analysis
+- **AST + Lexer + Recursive Descent Parser**: `ast.go` / `lexer.go` / `parser.go` — supports SELECT, WHERE, GROUP BY, ORDER BY, JOIN, LIMIT/OFFSET, aggregate functions, CAST/ABS/LIKE/IN/BETWEEN
+- **Hash JOIN engine**: Cross-file JOIN via hash index; column name disambiguation (qualified `t.col` vs unqualified); JOIN sources auto-loaded via `resolveJoinSources()` in execute.go
+- **Expression evaluator**: `evaluator.go` — comparison/arithmetic/LIKE/IN/AND/OR operators, column arithmetic, CAST type conversion
+- **Hash aggregation**: `aggregate.go` — SUM/AVG/COUNT/MAX/MIN aggregate functions
+- **44 unit tests**: Covering full grammar paths and edge cases
+- **Architecture consistent**: Connector interface unchanged, Queryable interface unchanged, CapFile tag unchanged, policy engine agnostic
+
+### QA Scenario Expansion (Q09-Q15)
+- **7 new business analysis scenarios**: GROUP BY + AVG, ORDER BY + LIMIT, CAST + column arithmetic, GROUP BY date, AND multi-condition, cross-file JOIN, nested arithmetic + ABS
+- **`testdata/qa/questions/Q09-Q15.md`**: New question files with business context + verification SQL + expected output
+- **`testdata/qa/.env.qa-touch-join`**: New cross-file JOIN test configuration
+- **`docs/test/13-file-query-engine.md`**: New L7 test document, 10/10 verification items passed
+
+### Bug Fixes
+- **CSV UTF-8 BOM auto-strip**: `readCSVData()` detects EF BB BF prefix, fixes first column `csmgr_refno` showing empty
+- **JOIN source DSN filtering fix**: `execute.go` was filtering by label before JOIN source resolution; changed to collect all entries then use `filterEntries()`
+- **JOIN alias overwrite fix**: `executor.go` added existence check on sources map, preventing nil overwrite when alias is missing
+- **Error visibility fix**: csv.go now passes through underlying parse errors instead of masking with ErrNotSupported
+- **`resolveDSNEntries()` removed**: Replaced by inline loading + `filterEntries()`
+
 ## v0.0.9 (2026-05-28)
 
 ### CSV/TSV/XLSX File Processing
@@ -13,7 +81,7 @@
 
 ### Documentation
 - `docs/FILE_PROCESSING.md`: Dedicated CSV/TSV/XLSX file processing documentation (new)
-- `test/`: Layered test documentation directory (new, 12 files covering all features)
+- `docs/test/`: Layered test documentation directory (new, 12 files covering all features)
 - `README.md` / `README_EN.md`: Added CSV/XLSX entries to supported data sources; updated download URL versions
 - All install/uninstall scripts version strings updated
 

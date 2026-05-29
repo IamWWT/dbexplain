@@ -30,7 +30,7 @@ import (
 	"github.com/IamWWT/dbexplain/schema"
 )
 
-var version = "v0.0.9"
+var version = "v0.1.0"
 
 type dsnEntry struct {
 	raw    string // DSN string
@@ -562,6 +562,8 @@ func loadEnvFile(path string) ([]dsnEntry, error) {
 			return nil, fmt.Errorf("compute machine fingerprint for config %s: %w", path, err)
 		}
 		password := readEncryptionKey()
+		// Clear encryption key from process environment immediately after use
+		os.Unsetenv("APP_ENCRYPTION_KEY")
 		plaintext, err := crypto.DecryptBytes(data, machineID, password)
 		if err != nil {
 			return nil, fmt.Errorf("decrypt config %s: %w", path, sanitizeErr(err))

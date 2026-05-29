@@ -22,7 +22,7 @@ for platform in "${PLATFORMS[@]}"; do
 
   echo "Building $base (GOOS=$GOOS GOARCH=$GOARCH)..."
   CGO_ENABLED=0 GOOS=$GOOS GOARCH=$GOARCH go build \
-    -ldflags="-s -w -X main.version=v0.0.9" -o "$out" .
+    -ldflags="-s -w -X main.version=v0.1.0" -o "$out" .
 
   # 校验架构正确性
   file "$out" | grep -q "$GOARCH" || {

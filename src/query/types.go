@@ -17,6 +17,14 @@ type ColumnInfo struct {
 	Type string `json:"type"`
 }
 
+// ExtraTable holds pre-loaded data for a JOIN source table.
+// Populated by execute.go before calling ExecQuery when the SQL contains JOIN.
+type ExtraTable struct {
+	Alias  string     // SQL alias used in FROM/JOIN clause
+	Header []string   // column names
+	Rows   [][]string // data rows (without header)
+}
+
 // QueryResult holds the result of an executed read-only query.
 // This is a data-table format, deliberately distinct from schema.Instance
 // to avoid confusion with the schema collection output.
@@ -35,6 +43,11 @@ type ExecuteOpts struct {
 	MaxRows  int
 	Timeout  int // seconds
 	Explain  bool
+
+	// ExtraTables provides pre-loaded data for multi-table queries (JOIN).
+	// Populated by execute.go when the SQL contains JOIN clauses.
+	// nil/empty for single-table queries.
+	ExtraTables []ExtraTable
 }
 
 // Queryable is an optional interface that relational connectors can implement.

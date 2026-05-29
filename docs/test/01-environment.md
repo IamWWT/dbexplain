@@ -1,90 +1,98 @@
-# L1: 环境验证
+# L1: 环境验证与静态分析
 
-> 验证编译环境、代码质量、单元测试和交叉编译能力。
+---
 
-## 1.1 Go 版本检查
+## 1.1 Go 版本
 
 ```bash
 go version
 # 预期: go 1.26+
 ```
 
-实际输出 (2026-05):
-```
-go version go1.26.2 linux/amd64
-```
-
 ## 1.2 编译验证
 
 ```bash
 cd src
-go build ./...
-# 预期: 无错误输出
+go build ./... && echo "build: OK" || echo "build: FAIL"
+go vet ./... && echo "vet: OK" || echo "vet: FAIL"
 ```
 
-注意: 如果遇到 proxy 超时，设置 `HTTPS_PROXY=http://127.0.0.1:7897/`:
+## 1.3 单元测试
+
 ```bash
-HTTPS_PROXY=http://127.0.0.1:7897/ go build ./...
+cd src && go test ./... -v -count=1 2>&1 | tail -20
 ```
 
-## 1.3 代码静态检查
+### DSN 解析 (dsn 包)
+
+| 测试函数 | 用例数 | 覆盖 |
+|---------|--------|------|
+| `TestParseDSN_Schemes` | 19 | 全部数据库类型 + alias + TLS + unsupported |
+| `TestParseDSN_QueryParams` | 8 | label/sslmode/cluster/tls/中文 |
+| `TestParseDSN_AutoLabel` | 1 | 无 label 自动生成 |
+| `TestRedacted` | 6 | 密码脱敏（含 @/URL编码/空密码/占位符） |
+| `TestParseDSN_EdgeCases` | 1 | 边界情况 |
+
+### 字段推断 (schema 包)
+
+| 测试函数 | 用例数 | 覆盖 |
+|---------|--------|------|
+| `TestInferComment` | 43 | 标识符/名称/时间/金额/状态/布尔/邮箱/电话/IP/URL/密钥等 |
+| `TestInferComment_Ordering` | 1 | 规则优先级验证 |
+
+### 安全策略 (policy 包)
+
+| 测试函数 | 用例数 | 覆盖 |
+|---------|--------|------|
+| 16 测试函数 | 39 | 全局/按DSN/表级/列级/语句级/原生/Mongo/Qdrant/Redis key |
+
+### SQL 只读校验 (sqlguard 包)
+
+| 测试函数 | 用例数 | 覆盖 |
+|---------|--------|------|
+| 13 测试函数 | 28 | 读动词/写动词/空查询/多语句/自动LIMIT/分号/首词提取 |
+
+### 查询并发控制 (query 包)
+
+| 测试函数 | 用例数 | 覆盖 |
+|---------|--------|------|
+| 9 测试函数 | 15 | Lock/Unlock/并发/多标签 |
+
+## 1.4 交叉编译
 
 ```bash
-cd src
-go vet ./...
-# 预期: 无警告输出
+cd src && bash build.sh
+# 预期: 5 个平台全部成功
 ```
 
-## 1.4 单元测试
+## 1.5 安全审计 — 敏感文件不被 Git 追踪
 
 ```bash
-cd src
-go test ./... -v -count=1 2>&1 | tail -40
-# 预期: 所有测试通过 (ok / PASS)
+# .env 文件不在 Git 中
+git ls-files src/.env
+# 预期: 空（无输出）
+
+# logs/ 目录不在 Git 中
+git ls-files src/logs/
+# 预期: 空
+
+# 加密文件不在 Git 中
+git ls-files '*.enc'
+# 预期: 空
 ```
 
-## 1.5 构建版本号验证
+## 1.6 Shell 脚本语法检查
 
 ```bash
-cd src
-go run . --version
-# 预期: dbexplain v0.0.9
+bash -n dbexplain-skill/scripts/install.sh && echo "install.sh OK"
+bash -n dbexplain-skill/scripts/uninstall.sh && echo "uninstall.sh OK"
+bash -n dbexplain-skill/scripts/install-skill.sh && echo "install-skill OK"
+bash -n dbexplain-skill/scripts/uninstall-skill.sh && echo "uninstall-skill OK"
 ```
 
-## 1.6 交叉编译 (build.sh)
+## 1.7 二进制版本确认
 
 ```bash
-cd src
-bash build.sh
-# 预期: 5 个平台二进制成功生成到 ../release/
-ls -la ../release/
-# 预期输出:
-#   dbexplain-linux-amd64
-#   dbexplain-linux-arm64
-#   dbexplain-darwin-amd64
-#   dbexplain-darwin-arm64
-#   dbexplain-windows-amd64.exe
-```
-
-## 1.7 数据结构验证
-
-```bash
-cd src
-# 验证 DSN 解析
-go test ./dsn/ -v -count=1
-# 验证 sqlguard
-go test ./sqlguard/ -v -count=1
-# 验证策略引擎
-go test ./policy/ -v -count=1
-# 验证 CSV 连接器
-go test ./connector/ -v -run CSV -count=1
-```
-
-## 1.8 代理环境说明
-
-本机 Go 模块代理位于 `127.0.0.1:7897`，所有 `go mod tidy` / `go build` / `go vet` 命令需加环境变量：
-
-```bash
-HTTPS_PROXY=http://127.0.0.1:7897/ go mod tidy
-HTTPS_PROXY=http://127.0.0.1:7897/ go build ./...
+./dbexplain --version
+# 预期: dbexplain v0.1.0
 ```

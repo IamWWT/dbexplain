@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/IamWWT/dbexplain/capabilities"
+	"github.com/IamWWT/dbexplain/connector/filequery"
 	"github.com/IamWWT/dbexplain/dsn"
 	"github.com/IamWWT/dbexplain/query"
 	"github.com/IamWWT/dbexplain/schema"
@@ -20,7 +21,7 @@ func init() {
 type xlsxConnector struct{}
 
 func (xlsxConnector) Capabilities() []capabilities.Capability {
-	return []capabilities.Capability{capabilities.CapRowCount}
+	return []capabilities.Capability{capabilities.CapRowCount, capabilities.CapFile}
 }
 
 // ---- excelize helpers ---- //
@@ -120,6 +121,19 @@ func xlsxGetSheetNames(path string) ([]string, error) {
 	return f.GetSheetList(), nil
 }
 
+// ReadXLSXFile is an exported wrapper for reading XLSX data, used by execute.go for JOIN source loading.
+// Returns (rows, header, error) — rows exclude the header row.
+func ReadXLSXFile(path string) ([]string, [][]string, error) {
+	sheets, err := xlsxCollectSheets(path)
+	if err != nil {
+		return nil, nil, err
+	}
+	if len(sheets) == 0 {
+		return nil, nil, fmt.Errorf("xlsx: no sheets found in %q", path)
+	}
+	return sheets[0].Columns, sheets[0].Rows, nil
+}
+
 // ---- Connector interface implementation ---- //
 
 func (xlsxConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instance, error) {
@@ -170,12 +184,46 @@ func (xlsxConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instance,
 
 func (xlsxConnector) ExecQuery(ctx context.Context, opts query.ExecuteOpts) (*query.QueryResult, error) {
 	path := opts.DSN.FilePath()
+
+	// Fast path: SELECT * [LIMIT N [OFFSET M]]
 	limit, offset := xlsxParseSelectStar(opts.SQL)
-	if limit < 0 {
+	if limit >= 0 {
+		return execXLSXSelectStar(path, limit, offset, opts.MaxRows)
+	}
+
+	// New path: filequery engine
+	sheets, err := xlsxCollectSheets(path)
+	if err != nil {
+		return nil, fmt.Errorf("xlsx: %w", err)
+	}
+	if len(sheets) == 0 {
+		return nil, fmt.Errorf("xlsx: no sheets in %q", path)
+	}
+
+	columns := sheets[0].Columns
+	allData := sheets[0].Rows
+
+	// Load extra tables for JOIN (if any)
+	extras := make([]filequery.NamedData, 0, len(opts.ExtraTables))
+	for _, et := range opts.ExtraTables {
+		extras = append(extras, filequery.NamedData{
+			Alias:  et.Alias,
+			Header: et.Header,
+			Rows:   et.Rows,
+		})
+	}
+
+	result, err := filequery.Execute(opts.SQL, columns, allData, extras, opts.MaxRows)
+	if err != nil {
 		return nil, &query.ErrNotSupported{Kind: "xlsx"}
 	}
+	return result, nil
+}
+
+// execXLSXSelectStar handles the fast SELECT * path for XLSX files.
+func execXLSXSelectStar(path string, limit, offset, maxRows int) (*query.QueryResult, error) {
 	if limit <= 0 {
-		limit = opts.MaxRows
+		limit = maxRows
 	}
 
 	sheetNames, err := xlsxGetSheetNames(path)

@@ -1,6 +1,6 @@
 name: dbexplain-skill
 description: >
-  数据库结构探查工具，支持 MySQL/PG/ClickHouse/SQLite/Redis/MongoDB/ES/Qdrant。
+  数据库结构探查工具，支持 MySQL/PG/ClickHouse/SQLite/Redis/MongoDB/ES/Qdrant、CSV/TSV/XLSX 文件。
   自动生成表结构/字段注释/跨库关系图谱/健康报告。
   支持只读查询（execute）与访问控制（policy）。
 user-invocable: true
@@ -20,7 +20,7 @@ trigger:
 - **Schema 采集**（`dbexplain -env`）：探查表/字段/类型/注释/跨库外键/健康评分，输出 `instances[]` + `refs[]`（JSON）
 - **只读查询**（`dbexplain execute`）：采集后执行 SELECT 验证数据，输出 `columns[]` + `rows[]`（JSON）
 
-此外支持：帮助手册（`dbexplain all`）、配置文件加密（`encrypt`）、增量变更检测（`-cache`）。
+此外支持：帮助手册（`dbexplain all`）、配置文件加密（`encrypt`）、增量变更检测（`--cache`）。
 
 ## 1. 核心规则
 

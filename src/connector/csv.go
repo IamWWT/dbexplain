@@ -16,6 +16,7 @@ import (
 	"golang.org/x/text/transform"
 
 	"github.com/IamWWT/dbexplain/capabilities"
+	"github.com/IamWWT/dbexplain/connector/filequery"
 	"github.com/IamWWT/dbexplain/dsn"
 	"github.com/IamWWT/dbexplain/query"
 	"github.com/IamWWT/dbexplain/schema"
@@ -28,7 +29,7 @@ func init() {
 type csvConnector struct{}
 
 func (csvConnector) Capabilities() []capabilities.Capability {
-	return []capabilities.Capability{capabilities.CapRowCount}
+	return []capabilities.Capability{capabilities.CapRowCount, capabilities.CapFile}
 }
 
 // Collect reads CSV/TSV files and returns schema metadata.
@@ -100,7 +101,8 @@ func (csvConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instance, 
 }
 
 // ExecQuery implements query.Queryable for CSV files.
-// v1 supports only: SELECT * [LIMIT N [OFFSET M]]
+// Supports SELECT * [LIMIT N [OFFSET M]] (fast path) and
+// SELECT col, ... WHERE ... GROUP BY ... ORDER BY ... JOIN ... (filequery engine).
 func (csvConnector) ExecQuery(ctx context.Context, opts query.ExecuteOpts) (*query.QueryResult, error) {
 	path := opts.DSN.FilePath()
 	delimiter := getDelimiter(opts.DSN)
@@ -109,14 +111,69 @@ func (csvConnector) ExecQuery(ctx context.Context, opts query.ExecuteOpts) (*que
 		encoding = "utf-8"
 	}
 
+	// Fast path: SELECT * [LIMIT N [OFFSET M]]
 	limit, offset := parseSelectStar(opts.SQL)
-	if limit < 0 {
-		return nil, &query.ErrNotSupported{Kind: "csv"}
+	if limit >= 0 {
+		return execCSVSelectStar(path, delimiter, encoding, limit, offset, opts.MaxRows)
 	}
 
-	// Use MaxRows from ExecuteOpts if no explicit LIMIT
+	// New path: filequery engine for all other SQL (WHERE, GROUP BY, ORDER BY, JOIN, etc.)
+	files, err := resolveCSVFiles(path)
+	if err != nil {
+		return nil, fmt.Errorf("csv: %w", err)
+	}
+	if len(files) == 0 {
+		return nil, fmt.Errorf("csv: no matching files for %q", path)
+	}
+
+	// Read data from all files
+	var allData [][]string
+	var columns []string
+	skipRows := 0
+	for _, f := range files {
+		data, cols, err := readCSVData(f, delimiter, encoding)
+		if err != nil {
+			return nil, fmt.Errorf("csv: %w", err)
+		}
+		if columns == nil {
+			columns = cols
+		}
+		// Skip header from each file after the first one
+		if skipRows == 0 {
+			data = data[1:] // skip header
+			skipRows = 1
+		} else {
+			data = data[1:]
+		}
+		allData = append(allData, data...)
+	}
+
+	if columns == nil {
+		return nil, fmt.Errorf("csv: empty result")
+	}
+
+	// Load extra tables for JOIN (if any)
+	extras := make([]filequery.NamedData, 0, len(opts.ExtraTables))
+	for _, et := range opts.ExtraTables {
+		extras = append(extras, filequery.NamedData{
+			Alias:  et.Alias,
+			Header: et.Header,
+			Rows:   et.Rows,
+		})
+	}
+	// Execute via filequery engine
+	result, err := filequery.Execute(opts.SQL, columns, allData, extras, opts.MaxRows)
+	if err != nil {
+		return nil, fmt.Errorf("csv query error: %w", err)
+	}
+	return result, nil
+}
+
+// execCSVSelectStar handles the fast SELECT * path for CSV files.
+func execCSVSelectStar(path string, delimiter rune, encoding string, limit, offset, maxRows int) (*query.QueryResult, error) {
+	// Use MaxRows if no explicit LIMIT
 	if limit <= 0 {
-		limit = opts.MaxRows
+		limit = maxRows
 	}
 
 	files, err := resolveCSVFiles(path)
@@ -312,7 +369,38 @@ func readCSVData(path string, delimiter rune, encoding string) ([][]string, []st
 		return nil, nil, fmt.Errorf("empty CSV file %q", path)
 	}
 
+	// Strip UTF-8 BOM (EF BB BF) from first column header
+	if len(records[0]) > 0 && len(records[0][0]) >= 3 &&
+		records[0][0][0] == 0xEF && records[0][0][1] == 0xBB && records[0][0][2] == 0xBF {
+		records[0][0] = records[0][0][3:]
+		for i := 1; i < len(records); i++ {
+			if len(records[i]) > 0 && len(records[i][0]) >= 3 &&
+				records[i][0][0] == 0xEF && records[i][0][1] == 0xBB && records[i][0][2] == 0xBF {
+				records[i][0] = records[i][0][3:]
+			}
+		}
+	}
+
 	return records, records[0], nil
+}
+
+// ReadCSVFile is an exported wrapper for readCSVData, used by execute.go for JOIN source loading.
+// Returns (allRecords, header, error) where allRecords[0] is the first data row (after header).
+func ReadCSVFile(path string, delimiter rune, encoding string) ([][]string, []string, error) {
+	records, header, err := readCSVData(path, delimiter, encoding)
+	if err != nil {
+		return nil, nil, err
+	}
+	// Skip header row — records[0] is the header
+	if len(records) > 1 {
+		return records[1:], header, nil
+	}
+	return nil, header, nil
+}
+
+// GetDelimiter is an exported wrapper for getDelimiter, used by execute.go for JOIN source loading.
+func GetDelimiter(d *dsn.DSN) rune {
+	return getDelimiter(d)
 }
 
 // tableName extracts a table name from a file path (filename without extension).

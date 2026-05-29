@@ -11,6 +11,7 @@ src/.env.dbexplain
 src/.env
 src/.env.bak
 *.enc
+testdata
 
 # 日志
 logs/
@@ -34,6 +35,9 @@ src/dbexplain.exe
 .claude
 .claude.resume
 dbexplain-skill/.claude
+
+# Qwen 专项测试 Skill（不对外发布）
+dbexplain-skill/SKILL_Qwen3.5-27B.md
 
 # 内部文件（不对外暴露）
 .github

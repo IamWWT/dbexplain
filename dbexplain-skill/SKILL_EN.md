@@ -1,8 +1,8 @@
 name: dbexplain-skill
 description: >
-  Database schema explorer supporting MySQL/PG/ClickHouse/SQLite/Redis/MongoDB/ES/Qdrant.
+  Database schema explorer supporting MySQL/PG/ClickHouse/SQLite/Redis/MongoDB/ES/Qdrant, CSV/TSV/XLSX files.
   Auto-generates table structures, field comments, cross-DB relationship graphs, health reports.
-  Supports read-only query execution (execute) and access control (policy).
+  Supports read-only query execution (execute, with CSV/XLSX file query engine: WHERE/GROUP BY/JOIN/aggregates/expressions) and access control (policy).
 user-invocable: true
 trigger:
   - "explain table structure"
@@ -19,7 +19,7 @@ trigger:
 - **Schema Collection** (`dbexplain -env`): inspects tables/fields/types/comments/cross-DB foreign keys/health score, outputs `instances[]` + `refs[]` (JSON)
 - **Read-Only Query** (`dbexplain execute`): runs SELECT to verify data after collection, outputs `columns[]` + `rows[]` (JSON)
 
-Also supports: help manual (`dbexplain all`), config encryption (`encrypt`), incremental change detection (`-cache`).
+Also supports: help manual (`dbexplain all`), config encryption (`encrypt`), incremental change detection (`--cache`).
 
 ## 1. Core Principles
 
@@ -123,6 +123,25 @@ dbexplain execute -env --label mongo '{"aggregate":"orders","pipeline":[{"$match
 dbexplain execute -env --label redis 'GET user:1001'
 dbexplain execute -env --label redis 'HGETALL session:abc'
 ```
+
+**CSV/XLSX files (v0.1.0+ file query engine):**
+File datasources support the full SELECT subset for business analysis without external tools:
+```bash
+# WHERE filter + column projection
+dbexplain execute -env --label touch-ops 'SELECT csmgr_refno, reach_rate FROM data WHERE reach_rate < 60' --human
+
+# GROUP BY + aggregation
+dbexplain execute -env --label touch-ops 'SELECT dept, AVG(rate) AS avg_rate FROM data GROUP BY dept ORDER BY avg_rate DESC' --human
+
+# Cross-file JOIN
+dbexplain execute -env --label touch-ops \
+  'SELECT o.org_name, AVG(t.reach_rate) FROM data t JOIN org o ON t.org_id = o.id GROUP BY o.org_name' --human
+
+# Column arithmetic + type cast
+dbexplain execute -env --label touch-ops \
+  'SELECT rm, CAST(channel_cnt AS FLOAT) / total_cnt * 100 AS pct FROM data WHERE total_cnt > 0' --human
+```
+File datasources are read-only (SELECT only); DROP/INSERT returns parse error.
 
 **Output:** Default JSON (for Agent analysis), add `--human` for terminal tables.
 

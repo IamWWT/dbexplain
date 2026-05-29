@@ -1,8 +1,8 @@
 name: dbexplain-skill
 description: >
-  数据库结构探查工具，支持 MySQL/PG/ClickHouse/SQLite/Redis/MongoDB/ES/Qdrant。
+  数据库结构探查工具，支持 MySQL/PG/ClickHouse/SQLite/Redis/MongoDB/ES/Qdrant、CSV/TSV/XLSX 文件。
   自动生成表结构/字段注释/跨库关系图谱/健康报告。
-  支持只读查询（execute）与访问控制（policy）。
+  支持只读查询（execute, 含 CSV/XLSX 文件查询引擎 WHERE/GROUP BY/JOIN/聚合/表达式）与访问控制（policy）。
 user-invocable: true
 trigger:
 
@@ -22,7 +22,7 @@ trigger:
 - **Schema 采集**（`dbexplain -env`）：探查表/字段/类型/注释/跨库外键/健康评分，输出 `instances[]` + `refs[]`（JSON）
 - **只读查询**（`dbexplain execute`）：采集后执行 SELECT 验证数据，输出 `columns[]` + `rows[]`（JSON）
 
-此外支持：帮助手册（`dbexplain all`）、配置文件加密（`encrypt`）、增量变更检测（`-cache`）。
+此外支持：帮助手册（`dbexplain all`）、配置文件加密（`encrypt`）、增量变更检测（`--cache`）。
 
 ## 1. 核心规则
 
@@ -126,6 +126,25 @@ dbexplain execute -env --label mongo '{"aggregate":"orders","pipeline":[{"$match
 dbexplain execute -env --label redis 'GET user:1001'
 dbexplain execute -env --label redis 'HGETALL session:abc'
 ```
+
+**CSV/XLSX 文件（v0.1.0+ 文件查询引擎）：**
+文件数据源支持完整 SELECT 子集，无需外部工具即可进行业务分析：
+```bash
+# WHERE 过滤 + 列投影
+dbexplain execute -env --label touch-ops 'SELECT csmgr_refno, reach_rate FROM data WHERE reach_rate < 60' --human
+
+# GROUP BY + 聚合
+dbexplain execute -env --label touch-ops 'SELECT dept, AVG(rate) AS avg_rate FROM data GROUP BY dept ORDER BY avg_rate DESC' --human
+
+# 跨文件 JOIN
+dbexplain execute -env --label touch-ops \
+  'SELECT o.org_name, AVG(t.reach_rate) FROM data t JOIN org o ON t.org_id = o.id GROUP BY o.org_name' --human
+
+# 列间算术 + 类型转换
+dbexplain execute -env --label touch-ops \
+  'SELECT rm, CAST(channel_cnt AS FLOAT) / total_cnt * 100 AS pct FROM data WHERE total_cnt > 0' --human
+```
+文件数据源只读（仅 SELECT），遇到 DROP/INSERT 会返回 parse error。
 
 **输出：** 默认 JSON（Agent 继续分析），加 `--human` 给用户看终端表格。
 

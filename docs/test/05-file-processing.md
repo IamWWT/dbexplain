@@ -1,194 +1,121 @@
-# L5: 文件处理测试
+# L6: 文件处理 (CSV/TSV/XLSX)
 
-> 验证 CSV/TSV/XLSX 文件的 Schema 采集与查询执行。
+> 验证 CSV、TSV、XLSX 文件的 Schema 采集和查询执行。
+
+---
 
 ## 前置条件
 
 ```bash
 cd src
-# 准备 CSV 测试数据
-mkdir -p /tmp/dbexplain-test
-echo 'name,age,city' > /tmp/dbexplain-test/users.csv
-echo 'Alice,30,Beijing' >> /tmp/dbexplain-test/users.csv
-echo 'Bob,25,Shanghai' >> /tmp/dbexplain-test/users.csv
-echo 'Charlie,35,Guangzhou' >> /tmp/dbexplain-test/users.csv
-
-echo 'id,product,price' > /tmp/dbexplain-test/products.csv
-echo '1,Widget A,9.99' >> /tmp/dbexplain-test/products.csv
-echo '2,Widget B,19.99' >> /tmp/dbexplain-test/products.csv
-
-printf 'name\tage\tcity\nAlice\t30\tBeijing\nBob\t25\tShanghai\n' > /tmp/dbexplain-test/data.tsv
-
-echo 'int_col,float_col,date_col,text_col' > /tmp/dbexplain-test/types.csv
-echo '1,3.14,2024-01-01,hello' >> /tmp/dbexplain-test/types.csv
-echo '2,2.718,2024-02-15,world' >> /tmp/dbexplain-test/types.csv
-
-# xlsx 所有二进制均包含（无需特殊构建）
-# export BIN=../release/dbexplain-linux-amd64
-# 或使用 go run .
-export BIN="go run ."
+BIN="../release/dbexplain-linux-amd64"
 ```
 
-## 5.1 CSV 单文件 Schema 采集
+> **配置优先级**：运行 `-env` 前确保 CWD 中有 `.env.dbexplain` 或设置 `DBPROBE_ENV_FILE=.env`。
+> 详见 [README.md](README.md#配置优先级说明) 和 [docs/CONFIG_SEARCH.md](../docs/CONFIG_SEARCH.md)。
+
+## 5.1 CSV — Schema 采集
 
 ```bash
-dbexplain -dsn "csv:///tmp/dbexplain-test/users.csv?label=csv-users" --human
+$BIN -dsn "csv:///tmp/dbexplain-test/users.csv?label=csv-users" --human 2>/dev/null | head -30
 ```
 
-实际结果: 采集结果包含表名 "users"，列名 name/age/city，类型推断 TEXT/INTEGER/TEXT。
-
-## 5.2 CSV 单文件查询执行
-
-### 全部行
+## 5.2 CSV — 查询全部
 
 ```bash
-dbexplain execute -dsn "csv:///tmp/dbexplain-test/users.csv?label=csv-users" "SELECT *" --human
+$BIN execute -dsn "csv:///tmp/dbexplain-test/users.csv?label=csv-users" "SELECT *" --human
 ```
 
-实际结果: 3 行数据（Alice, Bob, Charlie）。
-
-### LIMIT
+## 5.3 CSV — 带 LIMIT/OFFSET
 
 ```bash
-dbexplain execute -dsn "csv:///tmp/dbexplain-test/users.csv?label=csv-users" "SELECT * LIMIT 2" --human
-# 实际: 仅显示前 2 行
+$BIN execute -dsn "csv:///tmp/dbexplain-test/users.csv?label=csv-users" "SELECT * LIMIT 1 OFFSET 1" --human
 ```
 
-### LIMIT + OFFSET
+## 5.4 CSV — 环境变量 DSN
 
 ```bash
-dbexplain execute -dsn "csv:///tmp/dbexplain-test/users.csv?label=csv-users" "SELECT * LIMIT 1 OFFSET 1" --human
-# 实际: 跳过第 1 行，显示第 2 行（Bob）
+$BIN execute -env --db 13 "SELECT *" --human
 ```
 
-### JSON 输出
+## 5.5 CSV — 大文件采样
 
 ```bash
-dbexplain execute -dsn "csv:///tmp/dbexplain-test/users.csv?label=csv-users" "SELECT *"
-# 预期: JSON 格式的查询结果
+$BIN execute -env --db 14 "SELECT * LIMIT 5" --human
 ```
 
-## 5.3 CSV 目录采集
+## 5.6 TSV — Schema 采集
 
 ```bash
-dbexplain -dsn "csv:///tmp/dbexplain-test/?label=csv-dir" --human
-# 实际: 同时采集 users、products 两张表
+$BIN -dsn "tsv:///tmp/dbexplain-test/data.tsv?label=tsv-test" --human 2>/dev/null | head -20
 ```
 
-## 5.4 CSV Glob 通配符
+## 5.7 TSV — 查询
 
 ```bash
-dbexplain -dsn "csv:///tmp/dbexplain-test/*.csv?label=csv-glob" --human
-# 实际: 匹配全部 .csv 文件作为表（users, products, types）
+$BIN execute -dsn "tsv:///tmp/dbexplain-test/data.tsv?label=tsv-test" "SELECT *" --human
 ```
 
-## 5.5 TSV 文件
-
-### Schema 采集
+## 5.8 TSV — 环境变量 DSN
 
 ```bash
-dbexplain -dsn "tsv:///tmp/dbexplain-test/data.tsv?label=tsv-test" --human
-# 实际: 正确解析制表符分隔的文件
+$BIN execute -env --db 15 "SELECT *" --human
 ```
 
-### 查询执行
-
-```bash
-dbexplain execute -dsn "tsv:///tmp/dbexplain-test/data.tsv?label=tsv-test" "SELECT *" --human
-# 实际: 显示 2 行数据（Alice, Bob）
-```
-
-## 5.6 GBK 编码文件（如有）
-
-```bash
-# 如果存在 GBK 编码的文件
-dbexplain -dsn "csv:///path/to/gbk-file.csv?label=gbk-test&encoding=gbk" --human
-# 预期: 正确显示中文字段名和数据
-```
-
-## 5.7 类型推断验证
-
-```bash
-dbexplain -dsn "csv:///tmp/dbexplain-test/types.csv?label=types-test" --human
-```
-
-实际推断结果:
-| 列名 | 类型 |
-|------|------|
-| int_col | INTEGER |
-| float_col | FLOAT |
-| date_col | DATE |
-| text_col | TEXT |
-
-## 5.8 XLSX Schema 采集 (DB11 - TSF)
-
-```bash
-# XLSX Schema 采集 (DB11 - TSF)
-$BIN -env --label tsf-xlsx --human
-# 实际: 3 sheets (45+14+6 rows)，含中文列名
-```
-
-## 5.9 XLSX 查询执行 (DB11)
+## 5.9 XLSX — Schema 采集
 
 ```bash
 $BIN execute -env --label tsf-xlsx "SELECT * LIMIT 5" --human
-# 实际: 显示前 5 行数据，列名为原 Excel 中文表头（如"进程名称"、"模块名称"等）
 ```
 
-## 5.10 XLSX 多 Sheet (DB12 - TDMQ)
+## 5.10 XLSX — 多 Sheet 验证
 
 ```bash
-$BIN -env --label tdmq-xlsx --human
-# 实际: 1 sheet
+$BIN -env --label tsf-xlsx --json 2>/dev/null | python3 -c "
+import json,sys; d=json.load(sys.stdin)
+tables = d.get('databases',[{}])[0].get('tables',[])
+for t in tables:
+    print(f'  sheet={t[\"name\"]} columns={len(t.get(\"columns\",[]))} rows={t.get(\"row_count\",0)}')
+"
 ```
+
+## 5.11 XLSX — 另一文件
 
 ```bash
 $BIN execute -env --label tdmq-xlsx "SELECT * LIMIT 3" --human
-# 实际: 返回第一个 Sheet 的前 3 行
 ```
 
-## 5.11 查询限制验证
-
-### 不支持 WHERE
+## 5.12 文件 — 不支持的查询拒绝 (v0.1.0+)
 
 ```bash
-dbexplain execute -dsn "csv:///tmp/dbexplain-test/users.csv?label=csv-users" "SELECT * WHERE age > 30" 2>&1
-# 预期: 错误提示（不支持 WHERE）
+$BIN execute -env --db 13 "DROP TABLE users"
+# 预期: QUERY_ERROR (文件引擎只读，不接受 SELECT 以外的 SQL)
 ```
 
-### 不支持列选择
+## 5.13 文件查询引擎 (v0.1.0+) — WHERE 过滤
 
 ```bash
-dbexplain execute -dsn "csv:///tmp/dbexplain-test/users.csv?label=csv-users" "SELECT name FROM users" 2>&1
-# 预期: 错误提示（仅支持 SELECT *）
+# 使用包含数据的 CSV 测试 WHERE
+$BIN execute -env --label tsf-xlsx "SELECT * FROM xlsx WHERE name LIKE '%测试%' LIMIT 3" --human
 ```
 
-## 5.12 边界条件
-
-### 空文件
+## 5.14 文件查询引擎 (v0.1.0+) — GROUP BY + 聚合
 
 ```bash
-touch /tmp/dbexplain-test/empty.csv
-dbexplain -dsn "csv:///tmp/dbexplain-test/empty.csv?label=empty" --human
-# 预期: 可采集到空表结构（仅列头）
+# GROUP BY + 聚合函数
+$BIN execute -env --label tsf-xlsx "SELECT name, COUNT(*) AS cnt FROM xlsx GROUP BY name LIMIT 5" --human
 ```
 
-### 无头文件
+## 5.15 文件查询引擎 (v0.1.0+) — ORDER BY + LIMIT
 
 ```bash
-echo 'val1,val2,val3' > /tmp/dbexplain-test/noheader.csv
-echo 'a,b,c' >> /tmp/dbexplain-test/noheader.csv
-dbexplain -dsn "csv:///tmp/dbexplain-test/noheader.csv?label=noheader" --human
-# 预期: 首行仍然作列名处理
+$BIN execute -env --label tsf-xlsx "SELECT * FROM xlsx ORDER BY name DESC LIMIT 3" --human
 ```
 
-### 混合类型列
+> **注意**: v0.1.0+ 文件查询引擎支持完整的 SELECT 子集（WHERE/GROUP BY/ORDER BY/JOIN/聚合/表达式/CAST/ABS），不再限于 SELECT *。
 
-```bash
-echo 'mixed' > /tmp/dbexplain-test/mixed.csv
-echo 'hello' >> /tmp/dbexplain-test/mixed.csv
-echo '42' >> /tmp/dbexplain-test/mixed.csv
-echo '2024-01-01' >> /tmp/dbexplain-test/mixed.csv
-dbexplain -dsn "csv:///tmp/dbexplain-test/mixed.csv?label=mixed" --human
-# 预期: 因类型不一致推断为 TEXT
-```
+---
+
+## v0.1.0 兼容性
+
+v0.1.0 仅限于 `SELECT * [LIMIT N [OFFSET M]]`，5.12 测试项在 v0.1.0 中预期返回 `QUERY_NOT_SUPPORTED`。

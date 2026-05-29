@@ -1,5 +1,77 @@
 # 变更日志
 
+## v0.1.0 (深度安全加固 & 架构对齐 & 文件查询引擎)
+
+### 安全修复 (P0)
+- **WITH CTE 写操作绕过 sqlguard 修复**: `WITH ... INSERT/UPDATE/DELETE ...` 原先只检查第一个 token (WITH)，CTE 体中的写操作完全绕过校验。新增 `containsCTEWrite()` 深度扫描 CTE 体，拒绝含写操作的 WITH 查询
+- **SELECT INTO 绕道 sqlguard 修复**: `SELECT * INTO new_table` 用 SELECT 开头绕过只读校验。新增 `isSelectInto()` 检测 INTO 表子句（排除 MySQL INTO @var），拒绝 PostgreSQL DDL 写操作
+
+### 安全加固 (P1)
+- **ANALYZE/REINDEX 从 readOps 移除**: `ANALYZE` 写入统计表，`REINDEX` 锁表重建索引。从白名单移至黑名单
+- **SET SESSION 连接池竞态修复**: MySQL SET max_execution_time / PG SET statement_timeout 与后续查询在不同连接上执行导致超时失效。`ExecQuery` 现在强制单连接模式 (`SetMaxOpenConns(1)`)
+- **matchStarSelect 正则锚点修复**: 正则 `\ASELECT` 只匹配起始位置，`WITH cte AS (SELECT * FROM t) SELECT ...` 中的 `SELECT *` 被遗漏。改为 `\bSELECT` 全局匹配
+- **policy 配置泄漏修复**: `loadEnvFile()` 中用 `os.Setenv` 传递策略配置泄漏到 `/proc/[pid]/environ`
+- **APP_ENCRYPTION_KEY 清除**: 解密完成后立即 `os.Unsetenv("APP_ENCRYPTION_KEY")`，缩短密码在进程环境的暴露窗口
+
+### 正确性修复 (P1-P2)
+- **PostgreSQL FK schema JOIN**: FK 查询缺少 `pg_namespace` JOIN，不同 schema 的同名表 FK 结果混杂
+- **PostgreSQL 索引解析**: `strings.LastIndex(def, ")")` 对函数索引 (`lower(email)`) 和 INCLUDE 列解析错误。新增 `extractIndexColumns()` 带括号深度追踪
+- **cache 原子写入**: `os.WriteFile` 非原子写入、进程崩溃导致 cache 损坏。改为 temp file + `os.Rename()` 原子操作
+
+### PostgreSQL 多 Schema 支持
+- **Schema 发现**: `collectPGDB()` 改为查询 `pg_namespace` 获取所有非系统 schema，不再硬编码 `public`
+- **行数获取**: 新增 `pg_class.reltuples` → `n_live_tup` 采集，提供每表行数估计
+
+### 架构对齐 (宪法第 10 条落地)
+- **CapSQL 能力声明**: `capabilities.go` 新增 `CapSQL` 和 `CapFile` 常量
+- **Connector 统一声明**: 所有 5 个 SQL connector (MySQL/PostgreSQL/SQLite/ClickHouse/ES) 声明 `CapSQL`；CSV/XLSX 声明 `CapFile`
+- **isSQLKind() 删除**: `execute.go` 中硬编码的 kind switch 替换为 `capabilities.FromProvider(c).Has(capabilities.CapSQL)`，宪法禁止的类型分支模式已消除
+- **新增数据库不再需改 execute.go**: 只需实现 Connector + 声明 CapSQL，execute 自动正确路由
+
+### JSON 输出格式变更
+- **`instances` 包装**: Schema 采集 JSON 输出改为 `{"instances": [...]}` 顶级包装，新增 `groups`/`issues`/`refs` 顶级键。实例不再输出 `dsn` 字段
+- **向后兼容说明**: 直接读取顶层 `kind`/`label`/`databases` 的消费者需改为从 `instances[0]` 读取
+
+### 文档对齐 (Phase D1-D5)
+- **24+ .md 文件与 v0.1.0 代码对齐**: 版本号、PostgreSQL schema 范围、Qdrant TLS/execute、Redis readOps 白名单、数据源计数、`--manual` 弃用引用
+- **`docs/ALGORITHMS.md`**: 新增 `vector`/`file` 能力；更新版本状态表
+- **`docs/ARCHITECTURE.md`**: `--manual` 替换为 `all`/`<dbtype>`；更新目录结构
+- **`docs/POLICY.md`**: 新增排障参考表（4 种常见问题）
+- **`README.md` / `README_EN.md`**: 精简约 62%（541→207 / 540→194 行），详细内容引导至 docs/
+- **`issues.json`**: 合并 ISSUE-062.md 内容为 ISSUE-064；解决编号冲突
+
+### 测试框架扩展
+- **`docs/test/12-capability-routing.md`**: 新增测试套件覆盖 CapSQL 路由、PostgreSQL 多 Schema、matchStarSelect + CTE、文件数据源策略、JSON instances 包装格式
+- **`docs/test/02-schema-collection.md`**: JSON 验证适配 `instances` 包装格式
+- **`docs/test/11-end-to-end.md`**: JSON 结构预期与 v0.1.0 实际输出对齐
+- 全部 15 个 DSN Schema 采集经实机验证；全部 8 个单元测试包通过
+
+### 文件查询引擎 (纯 Go 内存 SQL 引擎)
+- **`src/connector/filequery/` 新增 7 文件**: 纯 Go 无外部依赖的 SQL 查询引擎，支持 CSV/XLSX 业务分析
+- **AST + 词法 + 递归下降解析**: `ast.go` / `lexer.go` / `parser.go` — 支持 SELECT、WHERE、GROUP BY、ORDER BY、JOIN、LIMIT/OFFSET、聚合函数、CAST/ABS/LIKE/IN/BETWEEN
+- **哈希 JOIN 引擎**: 跨文件 JOIN 通过哈希索引实现；列名消歧义（限定名 `t.col` vs 非限定）；JOIN 源通过 execute.go 的 `resolveJoinSources()` 自动加载
+- **表达式求值**: `evaluator.go` — 比较/算术/LIKE/IN/AND/OR 运算符、列间算术、CAST 类型转换
+- **哈希聚合**: `aggregate.go` — SUM/AVG/COUNT/MAX/MIN 聚合函数
+- **44 个单元测试**: 覆盖全部语法路径和边界情况
+- **架构一致**: Connector 接口不变、Queryable 接口不变、CapFile 标签不变、策略引擎不感知
+
+### QA 场景扩展 (Q09-Q15)
+- **7 个新业务分析场景**: 覆盖 GROUP BY + AVG、ORDER BY + LIMIT、CAST + 列间算术、GROUP BY date、AND 多条件、跨文件 JOIN、嵌套算术 + ABS
+- **`testdata/qa/questions/Q09-Q15.md`**: 新建问题文件，每个含业务背景 + 验证 SQL + 预期输出
+- **`testdata/qa/.env.qa-touch-join`**: 新增跨文件 JOIN 测试配置
+- **`docs/test/13-file-query-engine.md`**: 新建 L7 测试文档，10/10 验证项通过
+
+### 文件修复
+- **CSV UTF-8 BOM 自动剥离**: `readCSVData()` 检测 EF BB BF 前缀，修复首列 `csmgr_refno` 空值问题
+- **JOIN 源 DSN 过滤修复**: `execute.go` 原按 label 过滤后丢失 JOIN 源；改为收集所有 entries 再用 `filterEntries()` 筛选
+- **JOIN alias 覆盖 bug 修复**: `executor.go` 增加 sources 存在性检查，防止 alias 不存在时覆盖为 nil
+- **错误信息可见性修复**: csv.go 改为透传底层解析错误，不再用 ErrNotSupported 掩盖
+- **`resolveDSNEntries()` 删除**: 被内联加载 + `filterEntries()` 替代
+
+### 版本跟踪
+- 版本号: v0.1.0
+- 文档与代码间 38 处差异全部已修复
+
 ## v0.0.9 (2026-05-28)
 
 ### CSV/TSV/XLSX 文件处理
@@ -8,12 +80,12 @@
 - **文件编码支持**: UTF-8 默认，`?encoding=gbk` 参数支持 GBK/GB2312/GB18030 编码
 - **自定义分隔符**: CSV 默认逗号，TSV 默认制表符，支持 `?delimiter=tab|pipe|semicolon` 覆盖
 - **类型推断共享**: 新建 `connector/infer.go`，按 INTEGER → FLOAT → DATE → TEXT 优先级判定列类型
-- **只读查询执行**: `execute` 子命令支持 CSV/TSV/XLSX——仅 `SELECT * [LIMIT N [OFFSET M]]`，不支持 WHERE/JOIN/ORDER BY。文件查询绕过 sqlguard 沙箱和策略引擎（文件即为只读）
+- **只读查询执行**: `execute` 子命令支持 CSV/TSV/XLSX——仅 `SELECT * [LIMIT N [OFFSET M]]`，不支持 WHERE/JOIN/ORDER BY。文件查询绕过 sqlguard（文件天生只读）但仍受策略引擎约束（DENY_TABLES, MASK_COLUMNS）
 - **CLI 帮助子命令**: `dbexplain csv` / `dbexplain xlsx` 输出中英双语专项参考手册
 
 ### 文档更新
 - `docs/FILE_PROCESSING.md`: CSV/TSV/XLSX 文件处理专项文档（新建）
-- `test/`: 分层测试文档目录（新建，12 个文件覆盖所有功能）
+- `docs/test/`: 分层测试文档目录（新建，12 个文件覆盖所有功能）
 - `README.md` / `README_EN.md`: 支持数据源新增 CSV/XLSX 条目；更新下载 URL 版本号
 - 所有安装/卸载脚本版本号同步更新
 
