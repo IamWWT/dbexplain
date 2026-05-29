@@ -55,6 +55,13 @@
 - **44 个单元测试**: 覆盖全部语法路径和边界情况
 - **架构一致**: Connector 接口不变、Queryable 接口不变、CapFile 标签不变、策略引擎不感知
 
+### 文件查询引擎增强
+- **NULLS FIRST/LAST 排序**: ORDER BY 子句支持 `col DESC NULLS FIRST` / `col ASC NULLS LAST`；DESC 无方向默认为 NULLS FIRST、ASC 无方向默认为 NULLS LAST
+- **UNION / UNION ALL**: `parseSingleSelect()` 拆分后新增 `UnionStmt` AST 节点；`executeUnion()` + `mergeResults()` 实现：UNION ALL 直接拼接、UNION 行值哈希去重
+- **DISTINCT ON**: ORDER BY 排序后按指定列组保留首行；与 PostgreSQL 语义一致
+- **子查询 IN / NOT IN**: `SubqueryExpr` AST 节点 + `subqueryCache` 预计算缓存；`parseComparison()` 同时支持前缀 NOT (`NOT col IN (...)`) 和后缀 NOT (`col NOT IN (...)`)，以及 NOT LIKE / NOT BETWEEN
+- **66 个单元测试**（原 44 + 新增 22）：NULLS 词法/解析/执行、UNION ALL 解析/执行、UNION 去重、DISTINCT ON 解析/执行、子查询 IN/NOT IN 全链路
+
 ### QA 场景扩展 (Q09-Q15)
 - **7 个新业务分析场景**: 覆盖 GROUP BY + AVG、ORDER BY + LIMIT、CAST + 列间算术、GROUP BY date、AND 多条件、跨文件 JOIN、嵌套算术 + ABS
 - **`testdata/qa/questions/Q09-Q15.md`**: 新建问题文件，每个含业务背景 + 验证 SQL + 预期输出
@@ -67,6 +74,12 @@
 - **JOIN alias 覆盖 bug 修复**: `executor.go` 增加 sources 存在性检查，防止 alias 不存在时覆盖为 nil
 - **错误信息可见性修复**: csv.go 改为透传底层解析错误，不再用 ErrNotSupported 掩盖
 - **`resolveDSNEntries()` 删除**: 被内联加载 + `filterEntries()` 替代
+
+### 第三方分发包定型
+- **`testdata/account-manager-skill/`**: 独立于主项目的第三方分发包，QwenPaw agent 直接读取目录 SKILL.md 识别技能
+- **目录结构**: `SKILL.md` + `assets/`(5 平台预编译二进制) + `scripts/`(install/uninstall) + `references/`(表字段定义) + `.env.example`
+- **离线安装**: `bash scripts/install.sh --offline ./assets/dbexplain-linux-amd64`，不指定路径时自动检测 assets/
+- **SQL 能力透明化**: SKILL.md 从"不支持清单"改为"支持语法完整列表"，AI agent 无需猜测
 
 ### 版本跟踪
 - 版本号: v0.1.0

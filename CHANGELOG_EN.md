@@ -55,6 +55,19 @@
 - **44 unit tests**: Covering full grammar paths and edge cases
 - **Architecture consistent**: Connector interface unchanged, Queryable interface unchanged, CapFile tag unchanged, policy engine agnostic
 
+### File Query Engine Enhancements
+- **NULLS FIRST/LAST**: ORDER BY supports `col DESC NULLS FIRST` / `col ASC NULLS LAST`; DESC defaults to NULLS FIRST, ASC defaults to NULLS LAST when no direction specified
+- **UNION / UNION ALL**: `parseSingleSelect()` extracted; new `UnionStmt` AST node; `executeUnion()` + `mergeResults()` — UNION ALL concatenates, UNION deduplicates via row-value hash
+- **DISTINCT ON**: After ORDER BY sort, keeps first row per distinct ON column group; PostgreSQL-compatible semantics
+- **Subquery IN / NOT IN**: `SubqueryExpr` AST node + `subqueryCache` pre-computation cache; `parseComparison()` handles both prefix NOT (`NOT col IN (...)`) and postfix NOT (`col NOT IN (...)`), also NOT LIKE / NOT BETWEEN
+- **66 unit tests** (44 original + 22 new): NULLS lex/parse/exec, UNION ALL parse/exec, UNION dedup, DISTINCT ON parse/exec, subquery IN/NOT IN full pipeline
+
+### Third-Party Distribution Package
+- **`testdata/account-manager-skill/`**: Self-contained package for third-party customization; QwenPaw agent reads `SKILL.md` directly from directory
+- **Layout**: `SKILL.md` + `assets/`(5 pre-compiled platform binaries) + `scripts/`(install/uninstall) + `references/`(table specs) + `.env.example`
+- **Offline install**: `bash scripts/install.sh --offline ./assets/dbexplain-linux-amd64`; auto-detects in assets/ when no path specified
+- **SQL transparency**: SKILL.md switched from "unsupported list" to "complete supported syntax table" — AI agent never guesses
+
 ### QA Scenario Expansion (Q09-Q15)
 - **7 new business analysis scenarios**: GROUP BY + AVG, ORDER BY + LIMIT, CAST + column arithmetic, GROUP BY date, AND multi-condition, cross-file JOIN, nested arithmetic + ABS
 - **`testdata/qa/questions/Q09-Q15.md`**: New question files with business context + verification SQL + expected output
