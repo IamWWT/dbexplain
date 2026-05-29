@@ -39,6 +39,13 @@ const (
 	TOKEN_FALSE
 	TOKEN_NULL
 
+	// Phase I enhancements
+	TOKEN_UNION
+	TOKEN_ALL
+	TOKEN_NULLS
+	TOKEN_FIRST
+	TOKEN_LAST
+
 	// Identifiers & literals
 	TOKEN_IDENT    // column/table name
 	TOKEN_NUMBER   // integer or float
@@ -130,6 +137,16 @@ func tokenName(tt TokenType) string {
 		return "FALSE"
 	case TOKEN_NULL:
 		return "NULL"
+	case TOKEN_UNION:
+		return "UNION"
+	case TOKEN_ALL:
+		return "ALL"
+	case TOKEN_NULLS:
+		return "NULLS"
+	case TOKEN_FIRST:
+		return "FIRST"
+	case TOKEN_LAST:
+		return "LAST"
 	case TOKEN_IDENT:
 		return "IDENT"
 	case TOKEN_NUMBER:
@@ -196,6 +213,11 @@ var keywords = map[string]TokenType{
 	"TRUE":     TOKEN_TRUE,
 	"FALSE":    TOKEN_FALSE,
 	"NULL":     TOKEN_NULL,
+	"UNION":    TOKEN_UNION,
+	"ALL":      TOKEN_ALL,
+	"NULLS":    TOKEN_NULLS,
+	"FIRST":    TOKEN_FIRST,
+	"LAST":     TOKEN_LAST,
 }
 
 // Lexer tokenizes SQL input.

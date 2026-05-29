@@ -129,6 +129,20 @@ scheme://[user[:pass]@]host[:port][/dbname][?label=别名&其他参数]
 
 参考最小的 connector：`clickhouse.go` 或 `qdrant.go`
 
+## 分发包结构
+
+| 路径 | 内容 | 用途 |
+|------|------|------|
+| `release/` | 仅编译后的 5 平台二进制 | 纯介质目录，无任何其他文件 |
+| `testdata/account-manager-skill/` | SKILL.md + scripts/ + binaries + references/ + agents/ | **独立于本项目的第三方分发包**，self-contained，开箱即用 |
+
+**`testdata/account-manager-skill/` 设计要点**（记录于 2026-05-29）：
+- 完全独立于 dbexplain 主项目，专门给第三方定制开发
+- 包含全部 5 平台预编译二进制（dbexplain-linux-{amd64,arm64}, dbexplain-darwin-{amd64,arm64}, dbexplain-windows-amd64.exe）
+- 离线安装方式：`bash scripts/install.sh --offline ./dbexplain-linux-amd64`
+- install.sh 自动从本目录发现二进制，无需网络下载
+- 更新方式：重新编译 cp 二进制到此目录即可
+
 ## 隐私与安全
 
 - Agent **禁止**查看、读取、编辑 `.env` 文件

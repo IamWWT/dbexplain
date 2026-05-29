@@ -36,13 +36,9 @@ src/dbexplain.exe
 .claude.resume
 dbexplain-skill/.claude
 
-# Qwen 专项测试 Skill（不对外发布）
-dbexplain-skill/SKILL_Qwen3.5-27B.md
-
 # 内部文件（不对外暴露）
 .github
 release-wechat.md
 docs/ALGORITHMS.md
 docs/SECURITY_CHECKLIST.md
-docs/RELEASE_WECHAT_v0.0.5.md
 docs/RELEASE_WECHAT_v0.0.9.md

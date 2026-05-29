@@ -121,8 +121,21 @@ func JoinColMaps(leftHeader []string, leftAlias string, rightHeader []string, ri
 // Row is a list of string values.
 type Row []Value
 
+// SubqueryCache stores pre-computed result sets for subqueries.
+type SubqueryCache map[*SubqueryExpr]map[string]bool
+
 // Eval evaluates an expression against a given row.
 func Eval(expr Expr, row Row, colMap ColMap) (Value, error) {
+	return evalCached(expr, row, colMap, nil)
+}
+
+// EvalWithSubqueries evaluates an expression with subquery support.
+func EvalWithSubqueries(expr Expr, row Row, colMap ColMap, cache SubqueryCache) (Value, error) {
+	return evalCached(expr, row, colMap, cache)
+}
+
+// evalCached is the internal evaluator with optional subquery cache.
+func evalCached(expr Expr, row Row, colMap ColMap, cache SubqueryCache) (Value, error) {
 	switch e := expr.(type) {
 	case *ColumnRef:
 		if e.Col == "*" {
@@ -153,10 +166,10 @@ func Eval(expr Expr, row Row, colMap ColMap) (Value, error) {
 		return Value(e.Value), nil
 
 	case *BinaryExpr:
-		return evalBinary(e, row, colMap)
+		return evalBinaryCached(e, row, colMap, cache)
 
 	case *UnaryExpr:
-		right, err := Eval(e.Right, row, colMap)
+		right, err := evalCached(e.Right, row, colMap, cache)
 		if err != nil {
 			return "", err
 		}
@@ -174,15 +187,15 @@ func Eval(expr Expr, row Row, colMap ColMap) (Value, error) {
 		}
 
 	case *BetweenExpr:
-		val, err := Eval(e.Expr, row, colMap)
+		val, err := evalCached(e.Expr, row, colMap, cache)
 		if err != nil {
 			return "", err
 		}
-		low, err := Eval(e.Low, row, colMap)
+		low, err := evalCached(e.Low, row, colMap, cache)
 		if err != nil {
 			return "", err
 		}
-		high, err := Eval(e.High, row, colMap)
+		high, err := evalCached(e.High, row, colMap, cache)
 		if err != nil {
 			return "", err
 		}
@@ -202,48 +215,54 @@ func Eval(expr Expr, row Row, colMap ColMap) (Value, error) {
 	case *FuncCall:
 		return evalFuncCall(e, row, colMap)
 
+	case *SubqueryExpr:
+		if cache != nil {
+			return Value("1"), nil // presence in cache means non-empty result
+		}
+		return "", fmt.Errorf("subquery not pre-evaluated")
+
 	default:
 		return "", fmt.Errorf("unknown expression type %T", expr)
 	}
 }
 
-// evalBinary evaluates a binary expression.
-func evalBinary(e *BinaryExpr, row Row, colMap ColMap) (Value, error) {
+// evalBinaryCached evaluates a binary expression with optional subquery cache.
+func evalBinaryCached(e *BinaryExpr, row Row, colMap ColMap, cache SubqueryCache) (Value, error) {
 	switch strings.ToUpper(e.Op) {
 	case "AND":
-		left, err := Eval(e.Left, row, colMap)
+		left, err := evalCached(e.Left, row, colMap, cache)
 		if err != nil {
 			return "", err
 		}
 		if !left.Bool() {
 			return Value("false"), nil
 		}
-		right, err := Eval(e.Right, row, colMap)
+		right, err := evalCached(e.Right, row, colMap, cache)
 		if err != nil {
 			return "", err
 		}
 		return Value(boolVal(right.Bool())), nil
 
 	case "OR":
-		left, err := Eval(e.Left, row, colMap)
+		left, err := evalCached(e.Left, row, colMap, cache)
 		if err != nil {
 			return "", err
 		}
 		if left.Bool() {
 			return Value("true"), nil
 		}
-		right, err := Eval(e.Right, row, colMap)
+		right, err := evalCached(e.Right, row, colMap, cache)
 		if err != nil {
 			return "", err
 		}
 		return Value(boolVal(right.Bool())), nil
 
 	case "LIKE", "NOT LIKE":
-		left, err := Eval(e.Left, row, colMap)
+		left, err := evalCached(e.Left, row, colMap, cache)
 		if err != nil {
 			return "", err
 		}
-		right, err := Eval(e.Right, row, colMap)
+		right, err := evalCached(e.Right, row, colMap, cache)
 		if err != nil {
 			return "", err
 		}
@@ -254,24 +273,34 @@ func evalBinary(e *BinaryExpr, row Row, colMap ColMap) (Value, error) {
 		return Value(boolVal(match)), nil
 
 	case "IN", "NOT IN":
-		left, err := Eval(e.Left, row, colMap)
+		left, err := evalCached(e.Left, row, colMap, cache)
 		if err != nil {
 			return "", err
 		}
+
+		// Handle subquery IN (SELECT ...)
+		if sub, ok := e.Right.(*SubqueryExpr); ok {
+			found := false
+			if cache != nil {
+				if valSet, ok := cache[sub]; ok {
+					_, found = valSet[string(left)]
+				}
+			}
+			if e.Op == "NOT IN" {
+				return Value(boolVal(!found)), nil
+			}
+			return Value(boolVal(found)), nil
+		}
+
 		// Right side is an OR chain of values
-		right, err := Eval(e.Right, row, colMap)
+		right, err := evalCached(e.Right, row, colMap, cache)
 		if err != nil {
 			return "", err
 		}
-		// The right value is the literal value from the OR chain
-		// For IN, we compare left against each element
-		// But since the right is already flattened to OR, we do string comparison
 		found := false
 		if be, ok := e.Right.(*BinaryExpr); ok && be.Op == "OR" {
-			// Walk the OR chain
-			found = walkOrChain(left, be, row, colMap)
+			found = walkOrChainCached(left, be, row, colMap, cache)
 		} else {
-			// Single element
 			rv := string(right)
 			found = string(left) == rv
 		}
@@ -282,11 +311,11 @@ func evalBinary(e *BinaryExpr, row Row, colMap ColMap) (Value, error) {
 
 	default:
 		// Comparison or arithmetic operators
-		left, err := Eval(e.Left, row, colMap)
+		left, err := evalCached(e.Left, row, colMap, cache)
 		if err != nil {
 			return "", err
 		}
-		right, err := Eval(e.Right, row, colMap)
+		right, err := evalCached(e.Right, row, colMap, cache)
 		if err != nil {
 			return "", err
 		}
@@ -295,11 +324,12 @@ func evalBinary(e *BinaryExpr, row Row, colMap ColMap) (Value, error) {
 	}
 }
 
-// walkOrChain walks an OR chain to find if left matches any element.
-func walkOrChain(left Value, expr *BinaryExpr, row Row, colMap ColMap) bool {
+
+// walkOrChainCached walks an OR chain to find if left matches any element.
+func walkOrChainCached(left Value, expr *BinaryExpr, row Row, colMap ColMap, cache SubqueryCache) bool {
 	if expr.Op != "OR" {
 		// Leaf: evaluate and compare
-		right, err := Eval(expr, row, colMap)
+		right, err := evalCached(expr, row, colMap, cache)
 		if err != nil {
 			return false
 		}
@@ -308,11 +338,11 @@ func walkOrChain(left Value, expr *BinaryExpr, row Row, colMap ColMap) bool {
 
 	// Check left side
 	if leftBe, ok := expr.Left.(*BinaryExpr); ok && leftBe.Op == "OR" {
-		if walkOrChain(left, leftBe, row, colMap) {
+		if walkOrChainCached(left, leftBe, row, colMap, cache) {
 			return true
 		}
 	} else {
-		v, err := Eval(expr.Left, row, colMap)
+		v, err := evalCached(expr.Left, row, colMap, cache)
 		if err == nil && string(left) == string(v) {
 			return true
 		}
@@ -320,9 +350,9 @@ func walkOrChain(left Value, expr *BinaryExpr, row Row, colMap ColMap) bool {
 
 	// Check right side
 	if rightBe, ok := expr.Right.(*BinaryExpr); ok && rightBe.Op == "OR" {
-		return walkOrChain(left, rightBe, row, colMap)
+		return walkOrChainCached(left, rightBe, row, colMap, cache)
 	}
-	v, err := Eval(expr.Right, row, colMap)
+	v, err := evalCached(expr.Right, row, colMap, cache)
 	if err == nil && string(left) == string(v) {
 		return true
 	}
@@ -465,7 +495,7 @@ func evalFuncCall(fn *FuncCall, row Row, colMap ColMap) (Value, error) {
 		// These are handled by the aggregate engine, not the row evaluator.
 		// But for non-aggregate queries, evaluate the argument.
 		if len(fn.Args) == 1 {
-			return Eval(fn.Args[0], row, colMap)
+			return Eval(fn.Args[0], row, colMap) // uses Eval (no cache needed for scalar)
 		}
 		return Value(""), nil
 

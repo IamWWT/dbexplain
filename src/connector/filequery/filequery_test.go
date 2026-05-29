@@ -56,13 +56,24 @@ func tokenTypes(tokens []Token) []TokenType {
 	return types
 }
 
-// --- Parser tests ---
-
-func TestParseSelectStar(t *testing.T) {
-	stmt, err := Parse("SELECT * FROM test_table")
+// parseTestStmt is a helper that parses SQL and asserts it returns a *SelectStmt.
+func parseTestStmt(t *testing.T, sql string) *SelectStmt {
+	t.Helper()
+	parsed, err := Parse(sql)
 	if err != nil {
 		t.Fatalf("Parse error: %v", err)
 	}
+	stmt, ok := parsed.(*SelectStmt)
+	if !ok {
+		t.Fatalf("expected *SelectStmt, got %T", parsed)
+	}
+	return stmt
+}
+
+// --- Parser tests ---
+
+func TestParseSelectStar(t *testing.T) {
+	stmt := parseTestStmt(t,"SELECT * FROM test_table")
 	if len(stmt.Columns) != 1 {
 		t.Fatalf("expected 1 column, got %d", len(stmt.Columns))
 	}
@@ -76,10 +87,7 @@ func TestParseSelectStar(t *testing.T) {
 }
 
 func TestParseSelectColumns(t *testing.T) {
-	stmt, err := Parse("SELECT col1, col2 FROM my_table")
-	if err != nil {
-		t.Fatalf("Parse error: %v", err)
-	}
+	stmt := parseTestStmt(t,"SELECT col1, col2 FROM my_table")
 	if len(stmt.Columns) != 2 {
 		t.Fatalf("expected 2 columns, got %d", len(stmt.Columns))
 	}
@@ -89,20 +97,14 @@ func TestParseSelectColumns(t *testing.T) {
 }
 
 func TestParseSelectWithAlias(t *testing.T) {
-	stmt, err := Parse("SELECT col1 AS c1, col2 c2 FROM t")
-	if err != nil {
-		t.Fatalf("Parse error: %v", err)
-	}
+	stmt := parseTestStmt(t,"SELECT col1 AS c1, col2 c2 FROM t")
 	if stmt.Columns[0].Alias != "c1" {
 		t.Fatalf("expected alias c1, got %q", stmt.Columns[0].Alias)
 	}
 }
 
 func TestParseWhere(t *testing.T) {
-	stmt, err := Parse("SELECT * FROM t WHERE col1 > 100")
-	if err != nil {
-		t.Fatalf("Parse error: %v", err)
-	}
+	stmt := parseTestStmt(t,"SELECT * FROM t WHERE col1 > 100")
 	if stmt.Where == nil {
 		t.Fatal("expected WHERE clause")
 	}
@@ -116,10 +118,7 @@ func TestParseWhere(t *testing.T) {
 }
 
 func TestParseWhereAndOr(t *testing.T) {
-	stmt, err := Parse("SELECT * FROM t WHERE a > 1 AND b < 10 OR c = 5")
-	if err != nil {
-		t.Fatalf("Parse error: %v", err)
-	}
+	stmt := parseTestStmt(t,"SELECT * FROM t WHERE a > 1 AND b < 10 OR c = 5")
 	if stmt.Where == nil {
 		t.Fatal("expected WHERE clause")
 	}
@@ -131,10 +130,7 @@ func TestParseWhereAndOr(t *testing.T) {
 }
 
 func TestParseGroupBy(t *testing.T) {
-	stmt, err := Parse("SELECT col1, COUNT(*) FROM t GROUP BY col1")
-	if err != nil {
-		t.Fatalf("Parse error: %v", err)
-	}
+	stmt := parseTestStmt(t,"SELECT col1, COUNT(*) FROM t GROUP BY col1")
 	if len(stmt.GroupBy) != 1 {
 		t.Fatalf("expected 1 GROUP BY column, got %d", len(stmt.GroupBy))
 	}
@@ -144,10 +140,7 @@ func TestParseGroupBy(t *testing.T) {
 }
 
 func TestParseOrderBy(t *testing.T) {
-	stmt, err := Parse("SELECT * FROM t ORDER BY col1 DESC, col2 ASC")
-	if err != nil {
-		t.Fatalf("Parse error: %v", err)
-	}
+	stmt := parseTestStmt(t,"SELECT * FROM t ORDER BY col1 DESC, col2 ASC")
 	if len(stmt.OrderBy) != 2 {
 		t.Fatalf("expected 2 ORDER BY columns, got %d", len(stmt.OrderBy))
 	}
@@ -157,10 +150,7 @@ func TestParseOrderBy(t *testing.T) {
 }
 
 func TestParseLimitOffset(t *testing.T) {
-	stmt, err := Parse("SELECT * FROM t LIMIT 10 OFFSET 5")
-	if err != nil {
-		t.Fatalf("Parse error: %v", err)
-	}
+	stmt := parseTestStmt(t,"SELECT * FROM t LIMIT 10 OFFSET 5")
 	if stmt.Limit != 10 {
 		t.Fatalf("expected LIMIT 10, got %d", stmt.Limit)
 	}
@@ -170,10 +160,7 @@ func TestParseLimitOffset(t *testing.T) {
 }
 
 func TestParseJoin(t *testing.T) {
-	stmt, err := Parse("SELECT t.col1, o.col2 FROM t1 t JOIN t2 o ON t.key = o.key")
-	if err != nil {
-		t.Fatalf("Parse error: %v", err)
-	}
+	stmt := parseTestStmt(t,"SELECT t.col1, o.col2 FROM t1 t JOIN t2 o ON t.key = o.key")
 	if len(stmt.Joins) != 1 {
 		t.Fatalf("expected 1 JOIN, got %d", len(stmt.Joins))
 	}
@@ -190,10 +177,7 @@ func TestParseJoin(t *testing.T) {
 }
 
 func TestParseQualifiedColumns(t *testing.T) {
-	stmt, err := Parse("SELECT t.reach_rate, o.org_name FROM t1 t JOIN t2 o ON t.id = o.id")
-	if err != nil {
-		t.Fatalf("Parse error: %v", err)
-	}
+	stmt := parseTestStmt(t,"SELECT t.reach_rate, o.org_name FROM t1 t JOIN t2 o ON t.id = o.id")
 	cr, ok := stmt.Columns[0].Expr.(*ColumnRef)
 	if !ok {
 		t.Fatalf("expected ColumnRef, got %T", stmt.Columns[0].Expr)
@@ -204,10 +188,7 @@ func TestParseQualifiedColumns(t *testing.T) {
 }
 
 func TestParseAggregateFunc(t *testing.T) {
-	stmt, err := Parse("SELECT AVG(reach_rate) AS avg_rate FROM t")
-	if err != nil {
-		t.Fatalf("Parse error: %v", err)
-	}
+	stmt := parseTestStmt(t,"SELECT AVG(reach_rate) AS avg_rate FROM t")
 	fc, ok := stmt.Columns[0].Expr.(*FuncCall)
 	if !ok {
 		t.Fatalf("expected FuncCall, got %T", stmt.Columns[0].Expr)
@@ -218,10 +199,7 @@ func TestParseAggregateFunc(t *testing.T) {
 }
 
 func TestParseCast(t *testing.T) {
-	stmt, err := Parse("SELECT CAST(col1 AS FLOAT) FROM t")
-	if err != nil {
-		t.Fatalf("Parse error: %v", err)
-	}
+	stmt := parseTestStmt(t,"SELECT CAST(col1 AS FLOAT) FROM t")
 	fc, ok := stmt.Columns[0].Expr.(*FuncCall)
 	if !ok || fc.Name != "CAST" {
 		t.Fatalf("expected CAST, got %T", stmt.Columns[0].Expr)
@@ -232,10 +210,7 @@ func TestParseCast(t *testing.T) {
 }
 
 func TestParseArithmetic(t *testing.T) {
-	stmt, err := Parse("SELECT (a + b) * c FROM t")
-	if err != nil {
-		t.Fatalf("Parse error: %v", err)
-	}
+	stmt := parseTestStmt(t,"SELECT (a + b) * c FROM t")
 	if len(stmt.Columns) != 1 {
 		t.Fatalf("expected 1 column, got %d", len(stmt.Columns))
 	}
@@ -249,10 +224,7 @@ GROUP BY pnbrn_org_name
 ORDER BY avg_reach_rate DESC
 LIMIT 10`
 
-	stmt, err := Parse(sql)
-	if err != nil {
-		t.Fatalf("Parse error: %v", err)
-	}
+	stmt := parseTestStmt(t,sql)
 	if len(stmt.Columns) != 2 {
 		t.Fatalf("expected 2 columns, got %d", len(stmt.Columns))
 	}
@@ -832,6 +804,272 @@ func TestExecuteRealWorld(t *testing.T) {
 	// First should be 广东 (highest avg: 85)
 	if *result.Rows[0][0] != "广东分行" {
 		t.Fatalf("expected first 广东分行, got %q", *result.Rows[0][0])
+	}
+}
+
+// --- NULLS FIRST / LAST ---
+
+func TestLexerNullsFirstLast(t *testing.T) {
+	sql := "SELECT * FROM t ORDER BY col DESC NULLS LAST"
+	tokens, err := Tokenize(sql)
+	if err != nil {
+		t.Fatalf("Tokenize error: %v", err)
+	}
+	// Find NULLS and LAST tokens
+	hasNulls, hasLast := false, false
+	for _, tok := range tokens {
+		if tok.Type == TOKEN_NULLS {
+			hasNulls = true
+		}
+		if tok.Type == TOKEN_LAST {
+			hasLast = true
+		}
+	}
+	if !hasNulls {
+		t.Fatal("expected NULLS token")
+	}
+	if !hasLast {
+		t.Fatal("expected LAST token")
+	}
+}
+
+func TestParseNullsFirstLast(t *testing.T) {
+	stmt := parseTestStmt(t, "SELECT * FROM t ORDER BY col DESC NULLS LAST")
+
+	if len(stmt.OrderBy) != 1 {
+		t.Fatalf("expected 1 ORDER BY, got %d", len(stmt.OrderBy))
+	}
+	if stmt.OrderBy[0].Dir != "DESC" {
+		t.Fatalf("expected DESC, got %q", stmt.OrderBy[0].Dir)
+	}
+	if stmt.OrderBy[0].NullsDir != "LAST" {
+		t.Fatalf("expected NULLS LAST, got %q", stmt.OrderBy[0].NullsDir)
+	}
+}
+
+func TestParseNullsFirstDefault(t *testing.T) {
+	stmt := parseTestStmt(t, "SELECT * FROM t ORDER BY col ASC NULLS FIRST")
+	if stmt.OrderBy[0].NullsDir != "FIRST" {
+		t.Fatalf("expected NULLS FIRST, got %q", stmt.OrderBy[0].NullsDir)
+	}
+}
+
+func TestExecuteOrderByNullsLast(t *testing.T) {
+	header := []string{"val"}
+	rows := [][]string{{"30"}, {""}, {"10"}, {""}, {"20"}}
+
+	// ORDER BY val DESC NULLS LAST: non-null desc first, then nulls
+	result, err := Execute("SELECT * FROM t ORDER BY val DESC NULLS LAST", header, rows, nil, 100)
+	if err != nil {
+		t.Fatalf("Execute error: %v", err)
+	}
+	if result.RowCount != 5 {
+		t.Fatalf("expected 5 rows, got %d", result.RowCount)
+	}
+	// First row should be "30" (highest non-null)
+	if *result.Rows[0][0] != "30" {
+		t.Fatalf("expected first row '30', got %q", *result.Rows[0][0])
+	}
+	// Last rows should be empty (NULLS LAST)
+	if *result.Rows[3][0] != "" {
+		t.Fatalf("expected row 4 empty, got %q", *result.Rows[3][0])
+	}
+}
+
+func TestExecuteOrderByNullsFirst(t *testing.T) {
+	header := []string{"val"}
+	rows := [][]string{{"30"}, {""}, {"10"}, {""}, {"20"}}
+
+	// ORDER BY val ASC NULLS FIRST: nulls first, then ascending
+	result, err := Execute("SELECT * FROM t ORDER BY val ASC NULLS FIRST", header, rows, nil, 100)
+	if err != nil {
+		t.Fatalf("Execute error: %v", err)
+	}
+	if result.RowCount != 5 {
+		t.Fatalf("expected 5 rows, got %d", result.RowCount)
+	}
+	// First rows should be empty (NULLS FIRST)
+	if *result.Rows[0][0] != "" {
+		t.Fatalf("expected first row empty, got %q", *result.Rows[0][0])
+	}
+	// Last row should be "30" (highest)
+	if *result.Rows[4][0] != "30" {
+		t.Fatalf("expected last row '30', got %q", *result.Rows[4][0])
+	}
+}
+
+// --- UNION ALL ---
+
+func TestParseUnionAll(t *testing.T) {
+	stmt, err := Parse("SELECT a FROM t1 UNION ALL SELECT b FROM t2")
+	if err != nil {
+		t.Fatalf("Parse error: %v", err)
+	}
+	u, ok := stmt.(*UnionStmt)
+	if !ok {
+		t.Fatalf("expected *UnionStmt, got %T", stmt)
+	}
+	if !u.All {
+		t.Fatal("expected UNION ALL")
+	}
+	if u.Left == nil || u.Right == nil {
+		t.Fatal("expected left and right SELECTs")
+	}
+}
+
+func TestExecuteUnionAll(t *testing.T) {
+	header := []string{"name"}
+	rows := [][]string{{"a"}, {"b"}}
+
+	// The same data appears for both left and right
+	result, err := Execute("SELECT name FROM t UNION ALL SELECT name FROM t", header, rows, nil, 100)
+	if err != nil {
+		t.Fatalf("Execute error: %v", err)
+	}
+	// Should be 4 rows (2 from left + 2 from right)
+	if result.RowCount != 4 {
+		t.Fatalf("expected 4 rows, got %d", result.RowCount)
+	}
+}
+
+func TestExecuteUnionAllDifferentData(t *testing.T) {
+	// UNION ALL with different WHERE filters effectively gives different subsets
+	header := []string{"name", "val"}
+	rows := [][]string{{"a", "1"}, {"b", "2"}, {"c", "3"}}
+
+	result, err := Execute("SELECT name FROM t WHERE val >= '2' UNION ALL SELECT name FROM t WHERE val < '2'", header, rows, nil, 100)
+	if err != nil {
+		t.Fatalf("Execute error: %v", err)
+	}
+	// 2 rows from first SELECT + 1 row from second SELECT = 3
+	if result.RowCount != 3 {
+		t.Fatalf("expected 3 rows, got %d", result.RowCount)
+	}
+}
+
+// --- UNION (distinct) ---
+
+func TestExecuteUnionDistinct(t *testing.T) {
+	header := []string{"name"}
+	rows := [][]string{{"a"}, {"b"}, {"a"}}
+
+	result, err := Execute("SELECT name FROM t UNION SELECT name FROM t", header, rows, nil, 100)
+	if err != nil {
+		t.Fatalf("Execute error: %v", err)
+	}
+	// Only 2 distinct values: a, b (but rows run twice so more input)
+	// UNION dedup across left + right results
+	if result.RowCount != 2 {
+		t.Fatalf("expected 2 distinct rows, got %d", result.RowCount)
+	}
+}
+
+func TestExecuteUnionNoDuplicates(t *testing.T) {
+	header := []string{"val"}
+	rows := [][]string{{"x"}, {"y"}}
+
+	// UNION of identical queries should still dedup but data is already distinct
+	result, err := Execute("SELECT val FROM t WHERE val = 'x' UNION SELECT val FROM t WHERE val = 'y'", header, rows, nil, 100)
+	if err != nil {
+		t.Fatalf("Execute error: %v", err)
+	}
+	if result.RowCount != 2 {
+		t.Fatalf("expected 2 rows, got %d", result.RowCount)
+	}
+}
+
+// --- DISTINCT ON ---
+
+func TestParseDistinctOn(t *testing.T) {
+	stmt := parseTestStmt(t, "SELECT DISTINCT ON (dept) dept, name FROM t ORDER BY dept, name DESC")
+	if len(stmt.DistinctOn) != 1 {
+		t.Fatalf("expected 1 DISTINCT ON column, got %d", len(stmt.DistinctOn))
+	}
+	if stmt.DistinctOn[0].Col != "dept" {
+		t.Fatalf("expected DISTINCT ON dept, got %q", stmt.DistinctOn[0].Col)
+	}
+}
+
+func TestParseDistinctOnMultiple(t *testing.T) {
+	stmt := parseTestStmt(t, "SELECT DISTINCT ON (a, b) a, b, c FROM t ORDER BY a, b")
+	if len(stmt.DistinctOn) != 2 {
+		t.Fatalf("expected 2 DISTINCT ON columns, got %d", len(stmt.DistinctOn))
+	}
+}
+
+func TestExecuteDistinctOn(t *testing.T) {
+	header := []string{"dept", "name", "score"}
+	rows := [][]string{
+		{"eng", "alice", "90"},
+		{"eng", "bob", "85"},
+		{"sales", "carol", "95"},
+		{"sales", "dave", "80"},
+	}
+
+	// For each dept, keep the first row (highest score due to ORDER BY)
+	result, err := Execute("SELECT DISTINCT ON (dept) dept, name, score FROM t ORDER BY dept, score DESC", header, rows, nil, 100)
+	if err != nil {
+		t.Fatalf("Execute error: %v", err)
+	}
+	if result.RowCount != 2 {
+		t.Fatalf("expected 2 rows (1 per dept), got %d", result.RowCount)
+	}
+	// First row should be eng with highest score
+}
+
+// --- Subquery IN (SELECT ...) ---
+
+func TestParseSubqueryIn(t *testing.T) {
+	stmt := parseTestStmt(t, "SELECT * FROM t WHERE col IN (SELECT col2 FROM t WHERE col2 > 10)")
+	if stmt.Where == nil {
+		t.Fatal("expected WHERE clause")
+	}
+	be, ok := stmt.Where.(*BinaryExpr)
+	if !ok {
+		t.Fatalf("expected BinaryExpr, got %T", stmt.Where)
+	}
+	if be.Op != "IN" {
+		t.Fatalf("expected IN, got %q", be.Op)
+	}
+	if _, ok := be.Right.(*SubqueryExpr); !ok {
+		t.Fatalf("expected SubqueryExpr on right side, got %T", be.Right)
+	}
+}
+
+func TestExecuteSubqueryIn(t *testing.T) {
+	header := []string{"id", "name"}
+	rows := [][]string{
+		{"1", "alice"},
+		{"2", "bob"},
+		{"3", "carol"},
+		{"4", "dave"},
+	}
+
+	result, err := Execute("SELECT * FROM t WHERE id IN (SELECT id FROM t WHERE name >= 'c')", header, rows, nil, 100)
+	if err != nil {
+		t.Fatalf("Execute error: %v", err)
+	}
+	// Subquery returns carol(3) and dave(4) → main query should return those 2
+	if result.RowCount != 2 {
+		t.Fatalf("expected 2 rows, got %d", result.RowCount)
+	}
+}
+
+func TestExecuteSubqueryNotIn(t *testing.T) {
+	header := []string{"id", "name"}
+	rows := [][]string{
+		{"1", "alice"},
+		{"2", "bob"},
+		{"3", "carol"},
+	}
+
+	result, err := Execute("SELECT name FROM t WHERE name NOT IN (SELECT name FROM t WHERE id = '2')", header, rows, nil, 100)
+	if err != nil {
+		t.Fatalf("Execute error: %v", err)
+	}
+	// Subquery returns 'bob', main should return 'alice' and 'carol'
+	if result.RowCount != 2 {
+		t.Fatalf("expected 2 rows, got %d", result.RowCount)
 	}
 }
 

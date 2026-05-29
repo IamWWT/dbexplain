@@ -708,5 +708,14 @@
       "file": "src/policy/policy.go, src/execute.go, src/main.go",
       "created": "2026-05-29"
     }
+    {
+      "id": "ISSUE-065",
+      "title": "[待评估] 文件查询引擎支持窗口函数 (ROW_NUMBER, RANK, LAG/LEAD)",
+      "status": "open",
+      "priority": "low",
+      "category": "feature",
+      "description": "窗口函数需要排序后的分区计算，当前聚合引擎只支持 GROUP BY 语义。需要：OVER 子句解析、PARTITION BY 支持、窗口排序、完整 WINDOW 函数注册表。比较 ROW_NUMBER / RANK / DENSE_RANK / NTILE 用于排名场景，LAG / LEAD 用于前后行引用。复杂度高，列入 v0.2.x 评估。",
+      "created": "2026-05-29"
+    }
   ]
 }

@@ -17,18 +17,47 @@ func NewParser(tokens []Token) *Parser {
 	return &Parser{tokens: tokens, pos: 0}
 }
 
-// Parse parses a full SQL statement and returns a SelectStmt.
-func Parse(sql string) (*SelectStmt, error) {
+// Parse parses a full SQL statement and returns a Stmt.
+// The returned statement can be *SelectStmt or *UnionStmt.
+func Parse(sql string) (Stmt, error) {
 	tokens, err := Tokenize(sql)
 	if err != nil {
 		return nil, err
 	}
 	p := NewParser(tokens)
-	stmt, err := p.parseSelect()
+	stmt, err := p.parseStatement()
 	if err != nil {
 		return nil, err
 	}
 	return stmt, nil
+}
+
+// parseStatement parses a SELECT statement, optionally followed by UNION [ALL] SELECT.
+func (p *Parser) parseStatement() (Stmt, error) {
+	left, err := p.parseSingleSelect()
+	if err != nil {
+		return nil, err
+	}
+
+	p.skipSemicolons()
+
+	// UNION [ALL] SELECT ...
+	if p.peek().Type == TOKEN_UNION {
+		p.next()
+		all := false
+		if p.peek().Type == TOKEN_ALL {
+			p.next()
+			all = true
+		}
+		right, err := p.parseSingleSelect()
+		if err != nil {
+			return nil, err
+		}
+		p.skipSemicolons()
+		return &UnionStmt{Left: left, Right: right, All: all}, nil
+	}
+
+	return left, nil
 }
 
 // peek returns the current token without consuming it.
@@ -62,13 +91,55 @@ func (p *Parser) skipSemicolons() {
 	}
 }
 
-// parseSelect parses: SELECT select_list [FROM table_ref] [WHERE expr] [GROUP BY col,...] [ORDER BY col,...] [LIMIT N] [OFFSET M]
+// parseSelect parses: SELECT select_list ... and verifies nothing follows.
 func (p *Parser) parseSelect() (*SelectStmt, error) {
+	stmt, err := p.parseSingleSelect()
+	if err != nil {
+		return nil, err
+	}
+	p.skipSemicolons()
+	if p.peek().Type != TOKEN_EOF {
+		return nil, fmt.Errorf("unexpected token %s after complete statement", p.peek())
+	}
+	return stmt, nil
+}
+
+// parseSingleSelect parses one SELECT statement without checking for EOF.
+// Used internally by parseStatement() and subquery IN handler.
+func (p *Parser) parseSingleSelect() (*SelectStmt, error) {
 	stmt := &SelectStmt{Limit: 0, Offset: 0}
 
 	// SELECT
 	if _, err := p.expect(TOKEN_SELECT); err != nil {
 		return nil, err
+	}
+
+	// DISTINCT [ON (col1, col2, ...)]
+	if p.peek().Type == TOKEN_DISTINCT {
+		p.next()
+		if p.peek().Type == TOKEN_ON {
+			p.next() // consume ON
+			if _, err := p.expect(TOKEN_LPAREN); err != nil {
+				return nil, err
+			}
+			var distinctOn []ColumnRef
+			for {
+				col, err := p.parseColumnRef()
+				if err != nil {
+					return nil, err
+				}
+				distinctOn = append(distinctOn, col)
+				if p.peek().Type == TOKEN_COMMA {
+					p.next()
+				} else {
+					break
+				}
+			}
+			if _, err := p.expect(TOKEN_RPAREN); err != nil {
+				return nil, err
+			}
+			stmt.DistinctOn = distinctOn
+		}
 	}
 
 	// select_list
@@ -77,11 +148,6 @@ func (p *Parser) parseSelect() (*SelectStmt, error) {
 		return nil, err
 	}
 	stmt.Columns = columns
-
-	// Optional DISTINCT (parse but we don't enforce it in-memory)
-	if p.peek().Type == TOKEN_DISTINCT {
-		p.next()
-	}
 
 	p.skipSemicolons()
 
@@ -165,7 +231,19 @@ func (p *Parser) parseSelect() (*SelectStmt, error) {
 				p.next()
 				dir = "DESC"
 			}
-			stmt.OrderBy = append(stmt.OrderBy, OrderExpr{Expr: col, Dir: dir})
+			// NULLS FIRST / NULLS LAST
+			nullsDir := ""
+			if p.peek().Type == TOKEN_NULLS {
+				p.next()
+				if p.peek().Type == TOKEN_FIRST {
+					p.next()
+					nullsDir = "FIRST"
+				} else if p.peek().Type == TOKEN_LAST {
+					p.next()
+					nullsDir = "LAST"
+				}
+			}
+			stmt.OrderBy = append(stmt.OrderBy, OrderExpr{Expr: col, Dir: dir, NullsDir: nullsDir})
 			if p.peek().Type == TOKEN_COMMA {
 				p.next()
 			} else {
@@ -200,12 +278,6 @@ func (p *Parser) parseSelect() (*SelectStmt, error) {
 			return nil, fmt.Errorf("invalid OFFSET value %q: %w", tok.Value, err)
 		}
 		stmt.Offset = n
-	}
-
-	p.skipSemicolons()
-
-	if p.peek().Type != TOKEN_EOF {
-		return nil, fmt.Errorf("unexpected token %s after complete statement", p.peek())
 	}
 
 	return stmt, nil
@@ -377,6 +449,12 @@ func (p *Parser) parseComparison() (Expr, error) {
 		return nil, err
 	}
 
+	// Handle postfix NOT: name NOT IN (...), name NOT LIKE '...', name NOT BETWEEN ... AND ...
+	if p.peek().Type == TOKEN_NOT {
+		p.next()
+		negate = true
+	}
+
 	switch p.peek().Type {
 	case TOKEN_EQ:
 		p.next()
@@ -432,27 +510,45 @@ func (p *Parser) parseComparison() (Expr, error) {
 		if _, err := p.expect(TOKEN_LPAREN); err != nil {
 			return nil, err
 		}
-		var list []Expr
-		for {
-			elem, err := p.parseAddSub()
+
+		// Check for subquery: IN (SELECT ...)
+		if p.peek().Type == TOKEN_SELECT {
+			subquery, err := p.parseSingleSelect()
 			if err != nil {
 				return nil, err
 			}
-			list = append(list, elem)
-			if p.peek().Type == TOKEN_COMMA {
-				p.next()
-			} else {
-				break
+			if _, err := p.expect(TOKEN_RPAREN); err != nil {
+				return nil, err
 			}
+			op := "IN"
+			if negate {
+				op = "NOT IN"
+			}
+			left = &BinaryExpr{Left: left, Op: op, Right: &SubqueryExpr{Stmt: subquery}}
+		} else {
+			// Value list: IN (val1, val2, ...)
+			var list []Expr
+			for {
+				elem, err := p.parseAddSub()
+				if err != nil {
+					return nil, err
+				}
+				list = append(list, elem)
+				if p.peek().Type == TOKEN_COMMA {
+					p.next()
+				} else {
+					break
+				}
+			}
+			if _, err := p.expect(TOKEN_RPAREN); err != nil {
+				return nil, err
+			}
+			op := "IN"
+			if negate {
+				op = "NOT IN"
+			}
+			left = &BinaryExpr{Left: left, Op: op, Right: p.listToExpr(list)}
 		}
-		if _, err := p.expect(TOKEN_RPAREN); err != nil {
-			return nil, err
-		}
-		op := "IN"
-		if negate {
-			op = "NOT IN"
-		}
-		left = &BinaryExpr{Left: left, Op: op, Right: p.listToExpr(list)}
 	case TOKEN_BETWEEN:
 		p.next()
 		low, err := p.parseAddSub()

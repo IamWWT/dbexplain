@@ -97,6 +97,11 @@ func (b *BetweenExpr) String() string { return fmt.Sprintf("%s BETWEEN %s AND %s
 
 // --- Statement types ---
 
+// Stmt is the interface implemented by all statement types.
+type Stmt interface {
+	stmtNode()
+}
+
 // SelectExpr is a single expression in the SELECT list, optionally aliased.
 type SelectExpr struct {
 	Expr  Expr
@@ -105,16 +110,28 @@ type SelectExpr struct {
 
 // SelectStmt is the parsed representation of a SELECT query.
 type SelectStmt struct {
-	Columns   []SelectExpr // SELECT list
-	From      string       // primary table name
-	FromAlias string       // primary table alias (empty if none)
-	Joins     []JoinClause // JOIN clauses
-	Where     Expr         // WHERE expression (nil if none)
-	GroupBy   []ColumnRef  // GROUP BY columns
-	OrderBy   []OrderExpr  // ORDER BY clauses
-	Limit     int          // LIMIT (0 = no limit)
-	Offset    int          // OFFSET (0 = no offset)
+	Columns    []SelectExpr // SELECT list
+	From       string       // primary table name
+	FromAlias  string       // primary table alias (empty if none)
+	Joins      []JoinClause // JOIN clauses
+	Where      Expr         // WHERE expression (nil if none)
+	GroupBy    []ColumnRef  // GROUP BY columns
+	OrderBy    []OrderExpr  // ORDER BY clauses
+	Limit      int          // LIMIT (0 = no limit)
+	Offset     int          // OFFSET (0 = no offset)
+	DistinctOn []ColumnRef  // DISTINCT ON columns (nil if none)
 }
+
+func (s *SelectStmt) stmtNode() {}
+
+// UnionStmt represents a UNION [ALL] of two SELECT statements.
+type UnionStmt struct {
+	Left  *SelectStmt
+	Right *SelectStmt
+	All   bool // true = UNION ALL, false = UNION (distinct)
+}
+
+func (u *UnionStmt) stmtNode() {}
 
 // JoinClause represents a single JOIN clause.
 type JoinClause struct {
@@ -125,8 +142,9 @@ type JoinClause struct {
 
 // OrderExpr represents a single ORDER BY entry.
 type OrderExpr struct {
-	Expr ColumnRef // the column to order by
-	Dir  string    // "ASC" or "DESC"
+	Expr     ColumnRef // the column to order by
+	Dir      string    // "ASC" or "DESC"
+	NullsDir string    // "FIRST", "LAST", or "" (default)
 }
 
 // AggInfo holds aggregation information for a column.
@@ -135,6 +153,14 @@ type AggInfo struct {
 	Col  string // column name (may include table qualifier)
 	Distinct bool
 }
+
+// SubqueryExpr represents a scalar subquery: (SELECT ...)
+type SubqueryExpr struct {
+	Stmt *SelectStmt // the inner SELECT statement
+}
+
+func (s *SubqueryExpr) exprNode()       {}
+func (s *SubqueryExpr) String() string { return "(SELECT ...)" }
 
 // --- NamedData holds a named dataset for JOIN resolution ---
 type NamedData struct {

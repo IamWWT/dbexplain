@@ -27,6 +27,22 @@ func Execute(sql string, header []string, rows [][]string, extras []NamedData, m
 		return nil, fmt.Errorf("parse error: %w", err)
 	}
 
+	switch s := stmt.(type) {
+	case *SelectStmt:
+		result, err := executeSelect(s, header, rows, extras, maxRows)
+		if result != nil {
+			result.ExecutionTime = time.Since(start).String()
+		}
+		return result, err
+	case *UnionStmt:
+		return executeUnion(s, header, rows, extras, maxRows, start)
+	default:
+		return nil, fmt.Errorf("unsupported statement type %T", stmt)
+	}
+}
+
+// executeSelect runs a single SELECT query against in-memory data.
+func executeSelect(stmt *SelectStmt, header []string, rows [][]string, extras []NamedData, maxRows int) (*query.QueryResult, error) {
 	// Convert data to Row slice
 	data := make([]Row, len(rows))
 	for i, row := range rows {
@@ -94,7 +110,6 @@ func Execute(sql string, header []string, rows [][]string, extras []NamedData, m
 			currentData = joinData
 			primaryHeader = joinHeader
 		}
-		// Rebuild colmap after JOIN
 	}
 
 	// Build column map
@@ -108,13 +123,32 @@ func Execute(sql string, header []string, rows [][]string, extras []NamedData, m
 		}
 	}
 
-	// Apply WHERE filter
+	// Pre-evaluate subqueries in WHERE clause
+	var subqueryCache map[*SubqueryExpr]map[string]bool
+	if stmt.Where != nil {
+		subqueryCache = make(map[*SubqueryExpr]map[string]bool)
+		collectSubqueries(stmt.Where, subqueryCache)
+		// Execute each subquery and build result sets
+		for subExpr := range subqueryCache {
+			valSet := make(map[string]bool)
+			subResult, err := executeSelect(subExpr.Stmt, header, rows, extras, maxRows)
+			if err == nil && subResult != nil {
+				for _, row := range subResult.Rows {
+					if len(row) > 0 && row[0] != nil {
+						valSet[*row[0]] = true
+					}
+			}
+			subqueryCache[subExpr] = valSet
+		}
+	}
+}
+
+// Apply WHERE filter
 	if stmt.Where != nil {
 		var filtered []Row
 		for _, row := range currentData {
-			result, err := Eval(stmt.Where, row, colMap)
+			result, err := EvalWithSubqueries(stmt.Where, row, colMap, subqueryCache)
 			if err != nil {
-				// If evaluation fails, skip the row (lenient)
 				continue
 			}
 			if result.Bool() {
@@ -134,17 +168,15 @@ func Execute(sql string, header []string, rows [][]string, extras []NamedData, m
 		if len(stmt.OrderBy) > 0 {
 			sortAggResults(result, stmt.OrderBy)
 		}
-		result.ExecutionTime = time.Since(start).String()
 		return result, nil
 	}
 
-	// Handle ORDER BY
+	// Handle ORDER BY (with NULLS FIRST/LAST support)
 	if len(stmt.OrderBy) > 0 {
 		sort.SliceStable(currentData, func(i, j int) bool {
 			for _, ob := range stmt.OrderBy {
 				idx, ok := colMap[ob.Expr.Col]
 				if !ok {
-					// Try with table prefix
 					idx, ok = colMap[stmt.FromAlias+"."+ob.Expr.Col]
 					if !ok {
 						continue
@@ -155,6 +187,19 @@ func Execute(sql string, header []string, rows [][]string, extras []NamedData, m
 				}
 				vi := string(currentData[i][idx])
 				vj := string(currentData[j][idx])
+
+				// NULLS FIRST/LAST handling
+				viIsNull := vi == ""
+				vjIsNull := vj == ""
+				if viIsNull && vjIsNull {
+					continue
+				}
+				if viIsNull {
+					return ob.NullsDir == "FIRST" || (ob.NullsDir == "" && ob.Dir == "DESC")
+				}
+				if vjIsNull {
+					return ob.NullsDir == "LAST" || (ob.NullsDir == "" && ob.Dir == "ASC")
+				}
 
 				// Try numeric comparison
 				fi, errI := strconv.ParseFloat(vi, 64)
@@ -181,6 +226,11 @@ func Execute(sql string, header []string, rows [][]string, extras []NamedData, m
 		})
 	}
 
+	// Apply DISTINCT ON (after ORDER BY, keeps first row per group)
+	if len(stmt.DistinctOn) > 0 {
+		currentData = dedupDistinctOn(currentData, colMap, stmt.FromAlias, stmt.DistinctOn)
+	}
+
 	// Apply LIMIT/OFFSET
 	limit := stmt.Limit
 	if limit <= 0 {
@@ -202,8 +252,119 @@ func Execute(sql string, header []string, rows [][]string, extras []NamedData, m
 		return nil, err
 	}
 
-	result.ExecutionTime = time.Since(start).String()
 	return result, nil
+}
+
+// executeUnion executes a UNION [ALL] of two SELECT statements.
+func executeUnion(stmt *UnionStmt, header []string, rows [][]string, extras []NamedData, maxRows int, start time.Time) (*query.QueryResult, error) {
+	left, err := executeSelect(stmt.Left, header, rows, extras, maxRows)
+	if err != nil {
+		return nil, fmt.Errorf("UNION left: %w", err)
+	}
+
+	right, err := executeSelect(stmt.Right, header, rows, extras, maxRows)
+	if err != nil {
+		return nil, fmt.Errorf("UNION right: %w", err)
+	}
+
+	merged := mergeResults(left, right, stmt.All, maxRows)
+	merged.ExecutionTime = time.Since(start).String()
+	return merged, nil
+}
+
+// mergeResults combines two query results for UNION [ALL].
+// For UNION ALL, rows are concatenated. For UNION, duplicates are removed.
+func mergeResults(left, right *query.QueryResult, all bool, maxRows int) *query.QueryResult {
+	// Use left column names
+	cols := left.Columns
+
+	// Count total rows
+	totalRows := len(left.Rows) + len(right.Rows)
+	merged := make([][]*string, 0, totalRows)
+
+	if all {
+		// UNION ALL: simple concatenation
+		merged = append(merged, left.Rows...)
+		merged = append(merged, right.Rows...)
+	} else {
+		// UNION: concatenate and dedup
+		seen := make(map[string]bool)
+		addUnique := func(rows [][]*string) {
+			for _, row := range rows {
+				key := joinRowValues(row)
+				if !seen[key] {
+					seen[key] = true
+					merged = append(merged, row)
+				}
+			}
+		}
+		addUnique(left.Rows)
+		addUnique(right.Rows)
+	}
+
+	// Apply maxRows
+	if maxRows > 0 && len(merged) > maxRows {
+		merged = merged[:maxRows]
+	}
+
+	return &query.QueryResult{
+		Columns:  cols,
+		Rows:     merged,
+		RowCount: len(merged),
+	}
+}
+
+// joinRowValues creates a string key for a row (for dedup).
+func joinRowValues(row []*string) string {
+	var b strings.Builder
+	for i, v := range row {
+		if i > 0 {
+			b.WriteByte('\x00')
+		}
+		if v != nil {
+			b.WriteString(*v)
+		}
+	}
+	return b.String()
+}
+
+// dedupDistinctOn keeps only the first row for each distinct value of the ON columns.
+// Data must already be sorted by ORDER BY for correct "first row" semantics.
+func dedupDistinctOn(data []Row, colMap ColMap, fromAlias string, distinctOn []ColumnRef) []Row {
+	seen := make(map[string]bool)
+	var result []Row
+	for _, row := range data {
+		var key strings.Builder
+		for i, dcol := range distinctOn {
+			if i > 0 {
+				key.WriteByte('\x00')
+			}
+			idx, ok := colMap[dcol.Col]
+			if !ok && fromAlias != "" {
+				idx, ok = colMap[fromAlias+"."+dcol.Col]
+			}
+			if ok && idx < len(row) {
+				key.WriteString(string(row[idx]))
+			}
+		}
+		k := key.String()
+		if !seen[k] {
+			seen[k] = true
+			result = append(result, row)
+		}
+	}
+	return result
+}
+
+// collectSubqueries traverses an expression tree and collects all SubqueryExpr nodes.
+func collectSubqueries(expr Expr, cache map[*SubqueryExpr]map[string]bool) {
+	switch e := expr.(type) {
+	case *BinaryExpr:
+		collectSubqueries(e.Left, cache)
+		collectSubqueries(e.Right, cache)
+	case *SubqueryExpr:
+		cache[e] = nil
+	}
 }
 
 // executeHashJoin performs a hash join between two datasets.
@@ -581,6 +742,19 @@ func sortAggResults(result *query.QueryResult, orderBy []OrderExpr) {
 			}
 			vi := *result.Rows[i][idx]
 			vj := *result.Rows[j][idx]
+
+			// NULLS FIRST/LAST handling
+			viIsNull := vi == ""
+			vjIsNull := vj == ""
+			if viIsNull && vjIsNull {
+				continue
+			}
+			if viIsNull {
+				return ob.NullsDir == "FIRST" || (ob.NullsDir == "" && ob.Dir == "DESC")
+			}
+			if vjIsNull {
+				return ob.NullsDir == "LAST" || (ob.NullsDir == "" && ob.Dir == "ASC")
+			}
 
 			// Try numeric comparison
 			fi, errI := strconv.ParseFloat(vi, 64)
