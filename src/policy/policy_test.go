@@ -256,6 +256,9 @@ func TestExtractTableNames(t *testing.T) {
 		{"SELECT * FROM user_credentials WHERE id=1", []string{"user_credentials"}},
 		{"SHOW TABLES", nil},
 		{"PRAGMA table_info(users)", nil},
+		// Comment-based bypass: -- comment with newline should still extract table
+		{"SELECT * FROM testdb.-- comment\niplist", []string{"testdb.iplist", "iplist", "testdb"}},
+		{"SELECT * FROM iplist -- comment\nWHERE id=1", []string{"iplist"}},
 	}
 
 	for _, tt := range tests {

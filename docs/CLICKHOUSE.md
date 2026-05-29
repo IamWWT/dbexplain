@@ -117,7 +117,7 @@ if err == nil {
 
 ### 校验机制
 
-- **SQLGuard 动词白名单**：所有查询经过 `sqlguard` 模块校验，仅允许 `SELECT`、`EXPLAIN`、`WITH`、`SHOW`、`DESCRIBE`、`DESC`、`PRAGMA` 七类只读动词通过。任何写操作语句将被拒绝。
+- **SQLGuard 动词白名单**：所有查询经过 `sqlguard` 模块校验，仅允许 `SELECT`、`EXPLAIN`、`WITH`、`SHOW`、`DESCRIBE`、`DESC`、`PRAGMA`、`CHECK` 八类只读动词通过。任何写操作语句将被拒绝。
 - **多语句检测**：禁止分号分隔的多条 SQL 语句，防止注入绕过。
 
 ### 自动 LIMIT 追加
@@ -194,7 +194,7 @@ clickhouse connect: clickhouse HTTP 401: Authentication failed
 
 1. **HTTP 接口友好**：无需原生 TCP 驱动，`curl` 即可测试，集成轻量。  
 2. **权限最小化**：建议创建专用只读用户，授予 `SELECT ON system.*` 和对应业务库的元数据读取权限，避免数据泄露。  
-3. **采样注释功能暂时受限**：因 SQL 语法顺序问题，目前采样几乎总是失败，可暂时接受无自动注释，依赖手工维护的 `COMMENT` 列注释。  
+3. **采样注释**：工具从 ClickHouse 获取列注释时，系统表中预填的 `COMMENT` 注释会优先展示。采样推断作为补充，可为无注释列提供语义提示。
 4. **大库采集策略**：ClickHouse 表数量和列数量可能极大，采集时间与表数成正比。可通过 `-timeout` 调大超时，或分 DSN 指定不同库分批采集。  
 5. **MergeTree 家族展示**：工具将 `partition_key`、`sorting_key` 作为卡片信息输出，是理解 ClickHouse 数据组织的重要参考。  
 6. **日志详尽**：所有查询失败记录在 `logs/<label>.log`，便于快速定位权限或语法问题。  

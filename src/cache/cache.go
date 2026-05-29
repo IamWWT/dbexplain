@@ -172,7 +172,9 @@ func (s *Store) Update(u *schema.Universe) error {
 	return s.Save()
 }
 
-// Save persists the current fingerprint store to disk.
+// Save persists the current fingerprint store to disk atomically.
+// Writes to a temporary file first, then renames to ensure the cache file
+// is never left in a partially-written/corrupted state.
 func (s *Store) Save() error {
 	var fps []Fingerprint
 	for _, fp := range s.entries {
@@ -182,7 +184,12 @@ func (s *Store) Save() error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(s.path, data, 0644)
+	// Atomic write: temp file + rename (atomic on POSIX, same filesystem)
+	tmpPath := s.path + ".tmp"
+	if err := os.WriteFile(tmpPath, data, 0644); err != nil {
+		return err
+	}
+	return os.Rename(tmpPath, s.path)
 }
 
 // ── Delta computation ──

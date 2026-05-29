@@ -51,10 +51,35 @@ LLM 在外部消费 IR 做推理
 
 ## 3. 目标架构
 
-### 目录结构
+### 当前目录结构（v0.1.0，实际代码）
 
 ```
-cmd/
+src/
+  main.go               # CLI 入口 + 配置加载
+  execute.go            # 只读查询执行（sqlguard + policy + AutoLimit）
+  capabilities/         # Capability 枚举（含 CapSQL/CapFile v0.1.0 新增）
+  connector/            # 连接器自注册（11 种数据源）
+  sqlguard/             # SQL 只读校验（P0 安全边界）
+  policy/               # 细粒度访问控制（DENY_TABLES/COLUMNS/STATEMENTS）
+  query/                # Queryable 接口 + 执行控制
+  cache/                # Schema 指纹 + 增量扫描
+  dsn/                  # DSN 解析 + 凭据脱敏
+  schema/               # 通用数据模型（Instance/Table/Column/ForeignKey）
+  ir/                   # IR v1 图原语（Node/Column/Edge）
+  graph/                # 内部图模型
+  core/                 # 公共 API（Collect/CollectToGraph/CollectToJSON）
+  analyze/              # 聚类分析 + 重要性排序
+  diagnostics/          # 统一诊断层
+  context/              # AI Agent 上下文压缩
+  render/               # Markdown/JSON 输出
+  crypto/               # XChaCha20-Poly1305 加密
+```
+
+### 未来目录结构（规划中）
+
+`internal/` 重构推迟到 v1.0 之后。包边界稳定后再做结构迁移：
+
+```
 internal/
   connectors/       # 仅负责：连接数据库
   capabilities/     # 声明数据库能力枚举
@@ -68,7 +93,9 @@ internal/
   diff/             # Schema diff (未来)
 ```
 
-### Capability Architecture（核心架构升级）
+### Capability Architecture（v0.1.0 已落地）
+
+Capability 架构已落地在 `execute.go`（v0.1.0），`isSQLKind()` 硬编码 switch 已被删除。
 
 当前架构（反模式）：
 
@@ -78,7 +105,7 @@ if postgres { ... }
 if redis { ... }
 ```
 
-目标架构（Capability-driven）：
+当前架构（Capability-driven，v0.1.0 已落地）：
 
 ```go
 type Capability string
@@ -91,6 +118,8 @@ const (
     CapVector       Capability = "vector"
     CapRowCount     Capability = "row_count"
     CapIndex        Capability = "index"
+    CapSQL          Capability = "sql"    // v0.1.0 新增
+    CapFile         Capability = "file"   // v0.1.0 新增
 )
 
 // Connector 声明自己支持哪些能力
@@ -99,13 +128,20 @@ type Connector interface {
     Capabilities() []Capability
 }
 
-// Extractor 按能力工作
-if Has(c, CapForeignKey) {
-    run FKExtractor(c)
+// execute.go 使用 CapSQL 路由
+caps := capabilities.FromProvider(c)
+if caps.Has(capabilities.CapSQL) {
+    sqlguard.Validate(sqlArg)       // SQL 校验
+    policies.CheckSQL(sqlArg)        // SQL 策略
+    sql = sqlguard.AutoLimit(sql)    // 自动 LIMIT
+} else {
+    policies.CheckNative(sqlArg)     // 原生校验
 }
 ```
 
-**关键收益**：新增数据库类型不需要修改 pipeline。只需实现 Connector + 声明已有 Capabilities。
+**关键收益**：新增数据库类型不需要修改 pipeline。只需实现 Connector + 声明 CapSQL（若支持 SQL）。
+
+**关键改进（v0.1.0）**：`isSQLKind()` 硬编码 switch 已被 `capabilities.FromProvider().Has(CapSQL)` 替代。宪法第 10 条已落地。
 
 ---
 
@@ -302,7 +338,7 @@ type TableFingerprint struct {
 - 输出：Markdown + Diagnostics + JSON
 - 交互特性：
   - `-h` 7 组分栏帮助（数据源/过滤/输出控制/显示格式/AI 上下文/性能/帮助），中英双语
-  - `--manual` 完整手册约 600 行，`--filter <关键字>` 按行过滤快速查找
+  - `all` / `<dbtype>` 完整手册约 600 行，`--filter <关键字>` 按行过滤快速查找
   - `--human` 上下文标记输出（`[table=]`/`[pattern=]`/`[database=]` 等按数据库类型自适应）
   - `-o` 文件输出自动添加 UTF-8 BOM（Windows 兼容）
   - 终端直接渲染含 ANSI 颜色高亮
@@ -400,6 +436,16 @@ Password Mode:
 3. **AI 关系猜测** — 不做 LLM-based relation inference
 4. **Embedding-first** — 先做 deterministic graph，不做向量化优先级
 
+### 已知限制（v0.1.0）
+
+这些是当前实现层面的已知限制，不改变核心定位：
+
+1. **Streaming 输出** — 全量 Schema 在内存组装后输出，不支持流式。v1.0 前不实现
+2. **Schema Diff** — `diff/` 包尚未实现，`cache.Delta` 提供基础差分能力
+3. **MCP Server / IDE 集成** — 未来考虑独立仓库实现，dbexplain 不内嵌 serve 模式
+4. **CSV/XLSX 定位** — 视为"文件数据源"而非"数据库"，不扩展更多文件格式（Parquet/Avro）
+5. **数据库层只读双保险** — 工具层 sqlguard + policy 为第一道防线，强烈建议配合数据库 GRANT SELECT ONLY 使用
+
 ---
 
 ## 11. 发展路线
@@ -425,11 +471,16 @@ Password Mode:
 - [x] Operational Graph：基于真实查询的关系图
 - [x] 兜底机制：不可用数据源静默跳过，因子权重自动重新归一化
 
-### Phase 4（进行中 — v0.0.4+）
+### v0.1.0 安全加固里程碑（2026-05-29）
 
-- [x] Claude Code Skill 集成 (已有)
-- [ ] MCP Server（战略级）
-- [ ] Cursor / OpenHands / Aider 集成
+- [x] sqlguard P0 绕过修复：WITH CTE 写操作 + SELECT INTO
+- [x] sqlguard P1 加固：ANALYZE/REINDEX 移至黑名单、连接池竞态修复
+- [x] policy 引擎双修复：matchStarSelect 全线检测、配置不再泄漏到 os.Environ
+- [x] postgres 正确性双修复：FK schema JOIN、索引字符串解析
+- [x] cache 原子写入：temp file + os.Rename
+- [x] **Capability 架构落地**：isSQLKind() 删除 → capabilities.FromProvider().Has(CapSQL)
+- [ ] MCP Server（战略级，独立项目）
+- [ ] Cursor / OpenHands / Aider 集成（独立项目）
 - [ ] 企业级 diff / lineage / governance
 - [ ] Cloud scan orchestration
 
@@ -439,6 +490,7 @@ Password Mode:
 
 | 日期 | 版本 | 说明 |
 |------|------|------|
+| 2026-05-29 | v4 | v0.1.0: CapSQL 架构落地、P0/P1 安全加固；新增已知限制章节 |
 | 2026-05-20 | v3 | 新增安全性章节，密码防泄漏为第一要义 |
 | 2026-05-20 | v2 | Phase 1-3 已完成，更新路线图状态 |
 | 2026-05-20 | v1 | 初始架构愿景，基于架构评审建议 |

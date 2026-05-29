@@ -20,6 +20,7 @@
 
 | 需求 | 路径 |
 |------|------|
+| **文档-代码映射（权威）** | **`docs/CODE_MAP.md`** |
 | 入口 | `src/main.go` |
 | DSN 解析 | `src/dsn/dsn.go` |
 | 核心数据模型 | `src/schema/types.go` |
@@ -29,24 +30,20 @@
 | 注册表 | `src/connector/registry.go` |
 | Panic 保护 | `src/connector/runner.go` |
 | 关系分析 + 聚类 + 问题检测 | `src/analyze/analyze.go` |
+| 重要性排序 | `src/analyze/ranking.go` |
 | 终端美化 + JSON 输出 | `src/render/render.go` |
 | 构建脚本 | `src/build.sh` |
-| CLI 安装脚本 (Linux/macOS) | `dbexplain-skill/scripts/install.sh` |
-| CLI 安装脚本 (Windows) | `dbexplain-skill/scripts/install.ps1` |
-| CLI 卸载脚本 (Linux/macOS) | `dbexplain-skill/scripts/uninstall.sh` |
-| CLI 卸载脚本 (Windows) | `dbexplain-skill/scripts/uninstall.ps1` |
-| Skill 安装脚本 | `dbexplain-skill/scripts/install-skill.sh` |
-| Skill 卸载脚本 | `dbexplain-skill/scripts/uninstall-skill.sh` |
+| 安装/卸载脚本 | `dbexplain-skill/scripts/` |
 | CHANGELOG（中文） | `CHANGELOG.md` |
-| 测试文档 | `docs/test/README.md`（11 层分层测试） |
 | CHANGELOG（英文） | `CHANGELOG_EN.md` |
-| README（英文） | `README_EN.md` |
+| 测试文档 | `docs/test/README.md`（13 个文件全覆盖） |
 | 项目宪法 | `CONSTITUTION.md` |
 | 架构愿景 | `docs/ARCHITECTURE.md` |
 | 算法文档 | `docs/ALGORITHMS.md` |
 | 安全检查手册 | `docs/SECURITY_CHECKLIST.md` |
-| 加密/解密核心 (v0.0.6) | `src/crypto/crypto.go` |
-| 机器指纹采集 (v0.0.6) | `src/crypto/fingerprint*.go` |
+| 策略引擎 | `docs/POLICY.md` |
+| 只读查询执行 | `docs/EXECUTE.md` |
+| 加密/解密 | `src/crypto/crypto.go` |
 | Issue 追踪 | `issues.json` |
 
 ## 构建命令
@@ -88,7 +85,7 @@ scheme://[user[:pass]@]host[:port][/dbname][?label=别名&其他参数]
 | `-cache` | string | "" | Schema 指纹缓存文件（增量扫描） |
 | `-timeout` | duration | 20s | 每个 DSN 的采集超时 |
 | `--human` | bool | false | 人类友好输出（含上下文标记） |
-| `--manual` | bool | false | 完整帮助手册 |
+| `--manual` | bool | false | 完整帮助手册（已弃用，建议使用 `dbexplain all`） |
 | `--language` | string | zh | 手册语言（zh/en） |
 | `--filter` | string | "" | 过滤手册输出（忽略大小写，配合 --manual） |
 | `--version` | bool | false | 输出版本号并退出 |
@@ -116,6 +113,8 @@ scheme://[user[:pass]@]host[:port][/dbname][?label=别名&其他参数]
 **v0.0.9 已发布：** CSV/TSV/XLSX 文件处理（10 种数据源全覆盖）、FILE_PROCESSING.md 专项文档、分层测试 docs/test/、15 个 DSN 实机测试。
 
 **v0.0.9 已关闭：** CSV/XLSX 文件处理（路径三态、编码推断、类型推断）、文件只读查询引擎（`SELECT *`）、CLI 子命令（`dbexplain csv`/`xlsx`）、分层测试文档（`docs/test/`）。
+
+**v0.1.0 已发布：** CapSQL 能力架构落地（`isSQLKind()` 删除 → `capabilities.FromProvider().Has(CapSQL)`）、P0 sqlguard 绕过修复（WITH CTE 写操作 + SELECT INTO）、readOps 白名单修复（ANALYZE/REINDEX 移至黑名单）、policy 引擎双修复（matchStarSelect 全线检测 + 配置不再泄漏到 os.Environ）、Postgres 正确性双修复（FK schema JOIN + 索引结构化查询）、SET SESSION 连接池竞态修复、cache 原子写入、文档全面对齐 18 个 .md 文件。
 
 **当前开放（ISSUE-033, ISSUE-035, ISSUE-042, ISSUE-043, ISSUE-053）：** Phase 4 LLM 生态集成、GBase/HBase/OceanBase 评估、Elasticsearch TLS InsecureSkipVerify、ClickHouse 密码 URL 参数明文传输、移除明文 .env 支持评估。
 
@@ -194,6 +193,7 @@ wc -c /tmp/perf-prev-1.json /tmp/perf-curr-1.json
 | 1 | **已完成 (v0.0.4)** | IR v1 + Capability System + Graph Model + 统一诊断层 |
 | 2 | **已完成 (v0.0.4)** | Context Compression + Importance Ranking + Retrieval Chunks + Delta Scan |
 | 3 | **已完成 (v0.0.4)** | Query-Aware Metadata + Operational Graph |
-| 4 | 进行中 | LLM Ecosystem Integration + MCP Server + 企业特性 |
+| 4 | **已完成 (v0.1.0)** | CapSQL 架构落地 + P0/P1 安全加固 + 文档全面对齐 |
+| 5 | 规划中 | LLM Ecosystem Integration + MCP Server + 企业特性 |
 
-当前版本：**v0.0.7** — Go 模块化 + 公共 API + IR Graph 构建器 + FK 补全 + 只读查询执行引擎（sqlguard 沙箱）+ 全链路安全审计。
+当前版本：**v0.1.0** — CapSQL 能力架构落地 + P0/P1 安全加固 + Postgres 正确性修复 + 文档全面对齐。

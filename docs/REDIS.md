@@ -93,7 +93,7 @@ _, err := pipe.Exec(ctx)
 
 ### 校验机制
 
-- **内置只读命令白名单**：工具内部维护了 30+ 个 Redis 只读命令的白名单，包括 `GET`、`HGET`、`HGETALL`、`HMGET`、`HKEYS`、`HVALS`、`HLEN`、`HEXISTS`、`SCAN`、`LRANGE`、`LLEN`、`LINDEX`、`ZRANGE`、`ZRANGEBYSCORE`、`ZCARD`、`ZSCORE`、`ZRANK`、`SMEMBERS`、`SCARD`、`SISMEMBER`、`TTL`、`PTTL`、`TYPE`、`EXISTS`、`STRLEN`、`PING`、`DBSIZE`、`RANDOMKEY` 等。
+- **内置只读命令白名单**：工具内部维护了 30+ 个 Redis 只读命令的白名单，包括 `GET`、`HGET`、`HGETALL`、`HMGET`、`HKEYS`、`HVALS`、`HLEN`、`HEXISTS`、`SCAN`、`LRANGE`、`LLEN`、`LINDEX`、`ZRANGE`、`ZCARD`、`ZSCORE`、`ZRANK`、`SMEMBERS`、`SCARD`、`SISMEMBER`、`TTL`、`PTTL`、`TYPE`、`EXISTS`、`STRLEN`、`PING`、`MGET`、`ZCOUNT`、`ZREVRANGE`、`ZREVRANK`、`SRANDMEMBER`、`XLEN`、`XRANGE`、`XREVRANGE`、`XREAD`、`KEYS` 等。
 - **写命令拒绝**：任何写命令（`SET`、`DEL`、`HSET`、`LPUSH`、`SADD`、`ZADD` 等）将被拒绝，返回 `READ_ONLY_VIOLATION` 错误。
 - **注意**：Redis 校验不经过 `sqlguard` 模块，使用内部独立的白名单校验。
 

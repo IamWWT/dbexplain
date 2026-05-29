@@ -117,11 +117,11 @@ ORDER BY k.CONSTRAINT_NAME, k.ORDINAL_POSITION
 
 ### 查询格式
 
-标准 SQL 语句，支持 `SELECT`、`EXPLAIN`、`WITH`（CTE）、`SHOW`、`DESCRIBE`/`DESC`、`PRAGMA` 等只读操作。
+标准 SQL 语句，支持 `SELECT`、`EXPLAIN`、`WITH`（CTE）、`SHOW`、`DESCRIBE`/`DESC`、`PRAGMA`、`CHECK` 等只读操作。
 
 ### 校验机制
 
-- **SQLGuard 动词白名单**：所有查询在到达数据库之前，先经过 `sqlguard` 模块的语句动词白名单校验，仅允许 `SELECT`、`EXPLAIN`、`WITH`、`SHOW`、`DESCRIBE`、`DESC`、`PRAGMA` 七类只读动词通过。任何包含 `INSERT`、`UPDATE`、`DELETE`、`DROP`、`ALTER` 等写操作的语句将被拒绝。
+- **SQLGuard 动词白名单**：所有查询在到达数据库之前，先经过 `sqlguard` 模块的语句动词白名单校验，仅允许 `SELECT`、`EXPLAIN`、`WITH`、`SHOW`、`DESCRIBE`、`DESC`、`PRAGMA`、`CHECK` 八类只读动词通过。任何包含 `INSERT`、`UPDATE`、`DELETE`、`DROP`、`ALTER` 等写操作的语句将被拒绝。
 - **多语句检测**：禁止分号分隔的多条 SQL 语句，防止通过 `SELECT 1; DROP TABLE ...` 等方式绕过白名单。
 
 ### 自动 LIMIT 追加
@@ -131,7 +131,7 @@ ORDER BY k.CONSTRAINT_NAME, k.ORDINAL_POSITION
 
 ### 超时控制
 
-- **数据库层**：执行前通过 `SET SESSION max_execution_time=N000`（N 为毫秒数）设置 MySQL 会话级最大执行时间，查询超时将由 MySQL Server 主动终止。
+- **数据库层**：执行前通过 `SET SESSION max_execution_time=N`（N = timeout × 1000，即毫秒数）设置 MySQL 会话级最大执行时间，查询超时将由 MySQL Server 主动终止。
 - **应用层**：通过 Go `context.WithTimeout` 设置应用级超时，双重保障避免长时间阻塞。
 
 ### 执行方式
@@ -173,7 +173,7 @@ skip mysql://...: mysql ping: dial tcp 127.0.0.1:3306: connect: connection refus
 ### 2.4 注释推断不理想
 
 - 推断基于首行数据，若首行数据为空或为默认值，生成的注释可能不准确。
-- 建议在数据库中手动添加 `COMMENT ON COLUMN`，工具会优先使用原生注释。
+- 建议在数据库中通过 `ALTER TABLE t MODIFY COLUMN c ... COMMENT 'text'` 手动添加注释，工具会优先使用原生注释。
 - 可修改 `schema.InferComment` 函数适应特定业务术语。
 
 ### 2.5 行数显示不准确

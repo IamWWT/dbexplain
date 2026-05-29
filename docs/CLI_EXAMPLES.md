@@ -1,6 +1,6 @@
 # dbexplain CLI 查询案例库
 
-> 所有查询均已在本环境（v0.0.9, 15 数据源）跑通验证。`--human` 用于可读表格输出，不加则为 JSON（供 AI Agent 消费）。
+> 所有查询均已在本环境（v0.1.0, 15 数据源）跑通验证。`--human` 用于可读表格输出，不加则为 JSON（供 AI Agent 消费）。
 > `--human` 可放在查询语句之前或之后：`dbexplain execute -env --db 1 --human "SELECT 1"` 与 `dbexplain execute -env --db 1 "SELECT 1" --human` 等价。
 
 ---
@@ -220,7 +220,7 @@ dbexplain execute -env --db 6 --timeout 60 --limit 500 --human \
 dbexplain list -env
 ```
 
-### 安全策略控制 (v0.0.9+)
+### 安全策略控制 (v0.1.0+)
 
 可在 `.env` 或 `~/.config/dbexplain/.env.dbexplain` 中添加安全策略，限制查询范围：
 
@@ -290,4 +290,4 @@ dbexplain execute -env --db 1 --human "SELECT id, name FROM users"
 
 ---
 
-*案例库持续更新中。v0.0.9 新增 CSV/TSV/XLSX 文件处理、Qdrant 实际数据验证。全部查询已通过 --human 实测验证。*
+*案例库持续更新中。v0.1.0 新增 CapSQL 架构落地、Postgres schema 多 schema 修复。全部查询已通过 --human 实测验证。*

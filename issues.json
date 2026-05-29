@@ -682,7 +682,7 @@
       "closed": "2026-05-26",
       "priority": "medium",
       "category": "feature",
-      "description": "execute 新增 --human 参数，查询结果以 ASCII 表格渲染（类 mysql/pg CLI 风格），替代默认 JSON。NULL 值标注、自动列宽对齐。9 种数据库通用。formatHuman() 在 execute.go 中实现。注意：--human 必须在 SQL 之前（Go flag 限制）。",
+      "description": "execute 新增 --human 参数，查询结果以 ASCII 表格渲染（类 mysql/pg CLI 风格），替代默认 JSON。NULL 值标注、自动列宽对齐。9 种数据库通用。formatHuman() 在 execute.go 中实现。注意：--human 必须在 SQL 之前（Go flag 限制，v0.0.9 已放宽为任意位置）。\n\n注意：docs/ 下 ISSUE-062.md 为 v0.0.9 策略引擎修复记录（JSON 编号 ISSUE-064），与本 ISSUE-062 编号冲突，内容不同。",
       "file": "src/execute.go",
       "created": "2026-05-26"
     },
@@ -696,6 +696,17 @@
       "description": "文档更新：(1) 新建 docs/CLI_EXAMPLES.md — 7 数据源 13 条实测查询命令，全部经本环境验证通过；(2) 9 份 DB 文档补全 execute 章节（GAUSSDB.md/SQLITE.md/QDRANT.md 新建，6 份已有文档新增 execute 小节）；(3) EXECUTE.md 新增 9-DB 执行行为速览索引表；(4) README.md/README_EN.md 重构——DSN 格式前置、使用方式拆分 Schema采集/只读查询/列出数据库/参考手册四个子节、截图归入 execute 小节；(5) CHANGELOG 中英双语新增 --human + CLI_EXAMPLES 条目；(6) RELEASE_WECHAT_v0.0.7.md 新增 --human 输出示例和 CLI_EXAMPLES 链接。",
       "file": "docs/CLI_EXAMPLES.md, docs/GAUSSDB.md, docs/SQLITE.md, docs/QDRANT.md, docs/EXECUTE.md, docs/MYSQL.md, docs/POSTGRESQL.md, docs/CLICKHOUSE.md, docs/REDIS.md, docs/MONGO.md, docs/ELASTICSEARCH.md, README.md, README_EN.md, CHANGELOG.md, CHANGELOG_EN.md, docs/RELEASE_WECHAT_v0.0.7.md",
       "created": "2026-05-26"
+    },
+    {
+      "id": "ISSUE-064",
+      "title": "[v0.0.9] 策略引擎全字段查询绕过修复（matchStarSelect + CheckNative 列级检查）",
+      "status": "closed",
+      "closed": "2026-05-29",
+      "priority": "critical",
+      "category": "bug",
+      "description": "修复 DENY_TABLES/DENY_COLUMNS 在 SELECT * 和原生全字段查询时的绕过问题：(1) extractTableNames() regex 捕获 schema 前缀，DENY_TABLES=information_schema 生效；(2) matchStarSelect() 新增——SELECT * 时匹配 DENY_COLUMNS 表前缀；(3) CheckNative() 新增 MongoDB/Qdrant 列级检查，支持 projection 排除；(4) --human 后置 flag 支持。对应 docs/ISSUE-062.md（文件名沿用历史编号，JSON 编号为 ISSUE-064）。",
+      "file": "src/policy/policy.go, src/execute.go, src/main.go",
+      "created": "2026-05-29"
     }
   ]
 }

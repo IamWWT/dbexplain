@@ -69,8 +69,8 @@ GaussDB 提供 WDR（Workload Diagnosis Report）作为内置诊断功能：
 
 1. 在有 GaussDB 或 TDSQL 实例的环境中运行：
    ```bash
-   dbexplain -dsn 'gaussdb://user:pass@host:5432/db' -v
-   dbexplain -dsn 'mysql://user:pass@host:3306/db?label=tdsql-test' -v
+   dbexplain -dsn 'gaussdb://user:pass@host:25308/db'
+   dbexplain -dsn 'mysql://user:pass@host:3306/db?label=tdsql-test'
    ```
 2. 观察日志中是否有跳过或警告信息
 3. 对比同环境下原生 PG/MySQL 的输出，验证统计字段是否存在差异

@@ -35,6 +35,16 @@ const (
 
 	// CapIndex — the database supports traditional secondary indexes.
 	CapIndex Capability = "index"
+
+	// CapSQL — the database/connector accepts SQL syntax and should go through
+	// sqlguard validation, AutoLimit, and CheckSQL policy checks in execute.
+	// All SQL-based connectors declare this capability.
+	CapSQL Capability = "sql"
+
+	// CapFile — the connector handles local file data sources (CSV, XLSX).
+	// File sources are inherently read-only and bypass sqlguard,
+	// but still enforce policy engine rules (DENY_TABLES, MASK_COLUMNS).
+	CapFile Capability = "file"
 )
 
 // Provider is something that declares which capabilities it supports.

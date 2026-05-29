@@ -27,6 +27,7 @@ func (postgresConnector) Capabilities() []capabilities.Capability {
 		capabilities.CapSampling,
 		capabilities.CapRowCount,
 		capabilities.CapIndex,
+		capabilities.CapSQL,
 	}
 }
 
@@ -235,12 +236,7 @@ func fillPGTable(ctx context.Context, db *sql.DB, schemaName, baseName string, t
 				continue
 			}
 			idx.Unique = strings.Contains(strings.ToUpper(def), "UNIQUE")
-			if i := strings.Index(def, "("); i >= 0 {
-				inner := def[i+1 : strings.LastIndex(def, ")")]
-				for _, col := range strings.Split(inner, ",") {
-					idx.Columns = append(idx.Columns, strings.TrimSpace(col))
-				}
-			}
+			idx.Columns = extractIndexColumns(def)
 			t.Indexes = append(t.Indexes, idx)
 		}
 	} else {
@@ -253,10 +249,12 @@ func fillPGTable(ctx context.Context, db *sql.DB, schemaName, baseName string, t
 		       c.confupdtype, c.confdeltype
 		FROM pg_constraint c
 		JOIN pg_class c1 ON c1.oid=c.conrelid
+		JOIN pg_namespace n1 ON n1.oid=c1.relnamespace
 		JOIN pg_class c2 ON c2.oid=c.confrelid
+		JOIN pg_namespace n2 ON n2.oid=c2.relnamespace
 		JOIN pg_attribute a ON a.attrelid=c.conrelid AND a.attnum=ANY(c.conkey)
 		JOIN pg_attribute a2 ON a2.attrelid=c.confrelid AND a2.attnum=ANY(c.confkey)
-		WHERE c.contype='f' AND c1.relname=$1`, baseName)
+		WHERE c.contype='f' AND c1.relname=$1 AND n1.nspname=$2`, baseName, schemaName)
 	if err == nil {
 		defer fkRows.Close()
 		fkMap := map[string]*schema.ForeignKey{}
@@ -350,6 +348,9 @@ func (postgresConnector) ExecQuery(ctx context.Context, opts query.ExecuteOpts) 
 	}
 	defer db.Close()
 
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
+
 	// Set statement timeout if specified
 	if opts.Timeout > 0 {
 		db.ExecContext(ctx, fmt.Sprintf("SET statement_timeout = '%ds'", opts.Timeout))
@@ -386,4 +387,60 @@ func pgFKAction(code string) string {
 	default:
 		return code
 	}
+}
+
+// extractIndexColumns extracts column names from a PostgreSQL index definition string.
+// Handles:
+//   - Simple columns:   CREATE INDEX i ON t (col)                    → [col]
+//   - Multi-column:     CREATE INDEX i ON t (a, b)                  → [a, b]
+//   - Function indexes: CREATE INDEX i ON t (lower(name))           → [lower(name)]
+//   - INCLUDE:          CREATE INDEX i ON t (a) INCLUDE (b)         → [a]
+func extractIndexColumns(def string) []string {
+	start := strings.Index(def, "(")
+	if start < 0 {
+		return nil
+	}
+	// Find matching ')' at parenthesis depth 1 (the index column list end)
+	depth := 0
+	end := -1
+	for i := start; i < len(def); i++ {
+		switch def[i] {
+		case '(':
+			depth++
+		case ')':
+			depth--
+			if depth == 0 {
+				end = i
+				goto foundEnd
+			}
+		}
+	}
+foundEnd:
+	if end < 0 {
+		return nil
+	}
+	inner := def[start+1 : end]
+	// Split by comma, respecting parenthesis nesting
+	var cols []string
+	depth = 0
+	curStart := 0
+	for i := 0; i < len(inner); i++ {
+		switch inner[i] {
+		case '(':
+			depth++
+		case ')':
+			if depth > 0 {
+				depth--
+			}
+		case ',':
+			if depth == 0 {
+				cols = append(cols, strings.TrimSpace(inner[curStart:i]))
+				curStart = i + 1
+			}
+		}
+	}
+	if curStart < len(inner) {
+		cols = append(cols, strings.TrimSpace(inner[curStart:]))
+	}
+	return cols
 }

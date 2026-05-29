@@ -22,9 +22,9 @@ func TestValidate_AllowedReadOps(t *testing.T) {
 		{"DESCRIBE users"},
 		{"DESC users"},
 		{"PRAGMA table_info('users')"},
-		{"ANALYZE"},
 		{"CHECK TABLE users"},
-		{"REINDEX"},
+		{"SELECT * FROM t INTO @var"}, // MySQL variable assignment (read-only)
+		{"SELECT id, name INTO @a, @b FROM t"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.sql, func(t *testing.T) {
@@ -58,6 +58,17 @@ func TestValidate_RejectedWriteOps(t *testing.T) {
 		{"LOAD DATA INFILE 'x.csv' INTO TABLE t", "LOAD"},
 		{"IMPORT TABLE t FROM 'x.csv'", "IMPORT"},
 		{"EXPORT TABLE t TO 'x.csv'", "EXPORT"},
+		{"ANALYZE", "ANALYZE"},
+		{"ANALYZE TABLE t", "ANALYZE"},
+		{"REINDEX", "REINDEX"},
+		// CTE with write operations
+		{"WITH del AS (DELETE FROM orders WHERE id=1 RETURNING id) SELECT * FROM del", "WITH CTE"},
+		{"WITH ins AS (INSERT INTO t VALUES(1) RETURNING id) SELECT * FROM ins", "WITH CTE"},
+		{"WITH upd AS (UPDATE users SET status='banned' RETURNING id) SELECT * FROM upd", "WITH CTE"},
+		{"WITH a AS (INSERT INTO t VALUES(1)), b AS (SELECT 1) SELECT * FROM b", "WITH CTE"},
+		// SELECT INTO (PostgreSQL DDL write)
+		{"SELECT * INTO backup_users FROM users", "SELECT INTO"},
+		{"SELECT id, name INTO new_table FROM old_table WHERE created > NOW()-7", "SELECT INTO"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.reason, func(t *testing.T) {

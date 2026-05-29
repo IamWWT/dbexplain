@@ -19,7 +19,7 @@ if err != nil { ... }
 - **客户端选择**：使用官方 `github.com/qdrant/go-client`（go-qdrant），基于 gRPC 协议与 Qdrant 服务端通信。默认端口为 6334（gRPC 端口），HTTP REST API 端口为 6333，工具仅使用 gRPC 协议。
 - **DSN 格式**：`qdrant://:api-key@host:6334?label=xxx`。用户名部分留空（`:` 前为空），API Key 作为密码字段。若使用未开启认证的 Qdrant 实例，则为 `qdrant://@host:6334?label=xxx`。
 - **认证**：API Key 通过 gRPC 元数据（`api-key` header）传递，在每次请求时由 go-qdrant 客户端自动附加，代码无需显式处理 Token 刷新。
-- **TLS 支持**：通过 DSN 查询参数 `tls=true` 启用 TLS。默认不使用 TLS 适用于内网环境。
+- **TLS 支持**：当前版本硬编码 `UseTLS: false`，DSN 查询参数 `tls=true` 暂未生效。TLS 支持已在规划中，当前仅适用于内网环境。
 - **超时控制**：Ping 操作使用独立的 5 秒超时，通过 HealthCheck API 验证服务端可达。
 - **错误包装**：所有 error 均通过 `schema.NewDBError` 返回，记录脱敏 DSN 和操作上下文。
 
@@ -35,19 +35,18 @@ for _, col := range collections {
 ```
 
 - **ListCollections**：获取所有集合的名称列表。此操作对应 gRPC `ListCollections` RPC，仅返回集合名和 ID，不传输数据。
-- **GetCollectionInfo**：对每个集合获取详细元数据，包括：
-  - 向量配置：维度（`size`）、距离算法（`distance`：Cosine/Euclid/Dot/Manhattan）、数据类型
-  - 索引配置：HNSW 参数（`m`、`ef_construct`）、量化设置
-  - 分片信息：分片数、分片分布方式
-- **点数统计**：`GetCollectionInfo` 返回 `points_count` 字段，表示集合中已索引的向量总数。这是精确计数，非估算值。
+- **GetCollectionInfo**：对每个集合获取元数据，当前采集的信息包括：
+  - `points_count`：集合中已索引的向量总数。这是精确计数，非估算值。
+  - 集合名映射为"表名"，附加一个固定列 `vector`（类型 `float[]`）作为向量占位。
+- **暂未采集的信息**（规划中）：向量维度（`size`）、距离算法（`distance`）、HNSW 参数、分片信息等高级元数据当前版本未采集。
 - **无传统"表"概念**：Qdrant 的数据模型是 Collection（集合）而非 Table（表）。每个 Collection 包含向量数据（vectors）和可选的 payload（结构化元数据）。工具将每个 Collection 映射为一个逻辑"表"，其向量维度、距离算法等信息作为特殊字段输出。
 
-### 1.3 向量配置信息采集
+### 1.3 当前采集的数据
 
-- **向量维度**：从 `GetCollectionInfo` 的 `VectorParams.Size` 获取，表示向量维度（如 768、1536）。
-- **距离算法**：从 `VectorParams.Distance` 获取，可能值：`Cosine`、`Euclid`、`Dot`、`Manhattan`。
-- **多向量支持**：Qdrant 支持命名向量（named vectors），即一个 Collection 可有多个向量字段。工具将每个命名向量的配置作为独立属性输出。
-- **量化配置**：若启用了标量量化（Scalar Quantization）或乘积量化（Product Quantization），工具记录量化类型和参数。
+- **集合列表**：通过 `ListCollections` 获取所有集合名称。
+- **点数统计**：通过 `GetCollectionInfo` 获取每个集合的 `points_count`。
+- **列映射**：每个集合映射为一张"表"，含一个固定虚拟列 `vector float[]`。
+- **注意**：当前版本不采集向量维度、距离算法、HNSW 参数等详细配置。这些信息将在后续版本中补充。
 
 ### 1.4 安全设计：严格只读
 
@@ -73,10 +72,7 @@ client.GetCollectionInfo(ctx, n)  // 获取集合元数据
 |------------|------------|------|
 | Collection | Table | 集合名映射为表名 |
 | Points Count | Table.RowCount | 精确的点数，非估算 |
-| Vector Dimension | Column（特殊） | 作为虚拟列输出，类型为 `VECTOR(dim)` |
-| Distance Metric | Table 属性 | Cosine/Euclid/Dot 等信息 |
-| Shards Count | Table 属性 | 分片配置信息 |
-| Index Config | Table 属性 | HNSW 参数信息 |
+| Vector | Column | 固定虚拟列 `vector float[]` |
 
 ### 1.6 错误处理与进度日志
 
@@ -100,7 +96,7 @@ skip qdrant://...: qdrant ping: rpc error: code = Unavailable desc = connection 
 - **端口混淆**：确认使用 gRPC 端口（默认 6334）而非 HTTP REST 端口（默认 6333）。这两个端口是独立的，工具仅通过 gRPC 连接。
 - **服务未运行**：确认 Qdrant 服务已启动：`docker ps | grep qdrant` 或 `systemctl status qdrant`。
 - **API Key 错误**：确认 DSN 中的 API Key 正确。格式为 `qdrant://:api-key@host:6334?label=xxx`（密码字段为 API Key）。
-- **TLS 不匹配**：如果服务端启用了 TLS 但 DSN 中未指定 `tls=true`，gRPC 客户端会使用明文连接并失败。反之，如果服务端未启用 TLS 但客户端指定了 TLS，同样会失败。
+- **TLS 不匹配**：当前版本硬编码 `UseTLS: false`，DSN 的 `tls=true` 参数暂未生效。若 Qdrant 服务端强制要求 TLS，连接会失败（已知限制，将在后续版本修复）。
 
 ### 2.2 集合列表为空
 
@@ -134,10 +130,7 @@ skip qdrant://...: qdrant ping: rpc error: code = Unavailable desc = connection 
 |------|----------|
 | 测试连接（健康检查） | `curl -H "api-key: YOUR_API_KEY" http://host:6333/healthz` |
 | 列出所有集合 | `curl -H "api-key: YOUR_API_KEY" http://host:6333/collections` |
-| 获取集合详情 | `curl -H "api-key: YOUR_API_KEY" http://host:6333/collections/collection_name` |
-| 查看集合点数 | `curl -H "api-key: YOUR_API_KEY" http://host:6333/collections/collection_name \| jq '.result.points_count'` |
-| 查看向量配置 | `curl -H "api-key: YOUR_API_KEY" http://host:6333/collections/collection_name \| jq '.result.config.params.vectors'` |
-| 查看索引配置 | `curl -H "api-key: YOUR_API_KEY" http://host:6333/collections/collection_name \| jq '.result.config.hnsw_config'` |
+| 获取集合详情（点数、向量配置等） | `curl -H "api-key: YOUR_API_KEY" http://host:6333/collections/collection_name` |
 
 ---
 
@@ -149,29 +142,25 @@ skip qdrant://...: qdrant ping: rpc error: code = Unavailable desc = connection 
 
 - **格式**：JSON（非 SQL）。Qdrant 不使用 SQL 语法，查询以 JSON 对象形式传入。
 - **只读操作白名单**：
-  - `{"scroll": "collection_name"}` — 滚动获取集合中的点（支持可选参数 `limit`、`offset`、`filter`）
-  - `{"count": "collection_name"}` — 获取集合的点数（精确计数）
+  - `{"scroll": "collection_name", "limit": N}` — 获取集合的点数。实际实现为 `ListCollections` + `GetCollectionInfo`，返回集合名和 `points_count`
+  - `{"count": "collection_name"}` — 获取集合的点数。实际通过 `GetCollectionInfo` 返回精确计数
 
 **示例**：
 ```bash
 # 获取集合的点数
 dbexplain execute -env --label qdrant-test '{"count":"documents"}'
 
-# 滚动获取集合中的前 20 个点
+# 获取指定集合的点数（通过 GetCollectionInfo）
 dbexplain execute -env --label qdrant-test '{"scroll":"documents","limit":20}'
-
-# 带过滤条件的滚动
-dbexplain execute -env --label qdrant-test \
-  '{"scroll":"documents","limit":50,"filter":{"must":[{"key":"category","match":{"value":"news"}}]}}'
 ```
 
 ### execute 安全机制
 
 - **内部白名单校验**：仅允许 `scroll` 和 `count` 操作，拒绝所有其他操作（如 `upsert`、`delete`、`create`、`update` 等）。
-- **不走 SQL 校验器**：Qdrant 的 JSON 格式不经过 `sqlguard.Validate()`，而是由 `isSQLKind()` 路由判断为非 SQL 数据库，通过连接器内部的只读白名单进行验证。
-- **数据泄露防护**：`scroll` 返回的数据仅包含 vector ID 和 payload（用户定义的结构化元数据），不返回原始向量值（除非显式配置）。若需返回向量数据，Qdrant 服务端需设置 `with_vector=true`，但工具默认不启用。
-- **无 AutoLimit 保护**：由于不是 SQL，不会执行自动 LIMIT 注入。`scroll` 操作的 `limit` 参数由用户显式指定，无默认上限。
-- **超时保护**：应用层通过 `context.WithTimeout` 控制整体查询超时。Qdrant 没有数据库端超时设置（因为 Qdrant 没有类似 `statement_timeout` 的机制）。
+- **不走 SQL 校验器**：Qdrant 的 JSON 格式不经过 `sqlguard.Validate()`，而是由 `capabilities.FromProvider().Has(CapSQL)` 判断为不具备 SQL 能力，通过连接器内部的只读白名单进行验证。
+- **数据泄露防护**：`scroll` 操作仅返回集合名和 `points_count`，不返回向量数据或 payload 内容。
+- **无 AutoLimit 保护**：由于不是 SQL，不会执行自动 LIMIT 注入。`scroll` 操作的 `limit` 参数用于控制返回的集合数，但所有集合均需逐个调用 `GetCollectionInfo`，集合过多时建议加 `limit`。
+- **超时保护**：应用层通过 `context.WithTimeout` 控制整体查询超时。每个 `GetCollectionInfo` 调用使用独立 3-5 秒超时。
 - **并发控制**：通过 `query.QueryLock` 的 `TryLock` 机制确保同一 label 的 Qdrant 实例同时只有一个查询在执行。
 
 ---
@@ -184,7 +173,7 @@ dbexplain execute -env --label qdrant-test \
 4. **精确的点数**：与其他数据库（如 MySQL InnoDB 的 `TABLE_ROWS` 估算）不同，Qdrant 提供的 `points_count` 是精确值，AI Agent 可完全信赖此数字进行容量规划。
 5. **无列级注释推断**：Qdrant 没有列概念，因此无列注释推断。向量维度、距离算法等信息直接来源于系统元数据，无需推断。
 6. **gRPC 协议注意事项**：gRPC 使用 HTTP/2，若企业环境中存在 HTTP/2 不兼容的代理或负载均衡器，可能导致连接失败。此时需确保代理支持 HTTP/2 透传，或使用直连方式（跳过代理）。
-7. **execute 的 scroll 限制**：`scroll` 操作不保证结果顺序，Qdrant 使用随机访问模式。若需要有序结果，应在应用层对返回数据进行排序。
+7. **execute 的 scroll 限制**：当前 `scroll` 操作的实现为 `ListCollections` + `GetCollectionInfo`，并非真正的 Scroll API。返回数据仅限于集合名和 `points_count`，不含向量值和 payload。
 8. **版本兼容**：测试于 Qdrant v1.3+ 版本，`ListCollections` 和 `GetCollectionInfo` API 在 1.x 系列中保持稳定。go-qdrant 客户端版本需与服务端版本匹配（建议使用最新版本）。
 
 通过以上机制和指南，即可安全、高效地使用 `dbexplain` 对 Qdrant 向量数据库实例进行结构探查与数据查询。

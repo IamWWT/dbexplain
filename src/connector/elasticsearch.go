@@ -25,7 +25,7 @@ func init() {
 type esConnector struct{}
 
 func (esConnector) Capabilities() []capabilities.Capability {
-	return nil
+	return []capabilities.Capability{capabilities.CapSQL}
 }
 
 func (esConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instance, error) {

@@ -91,6 +91,24 @@
 - Extractor 按 Capability 工作，不按数据库类型分支
 - 新增数据库类型**不需要修改 pipeline**——只需实现 Connector + 声明已有 Capabilities
 - 禁止出现 `if mysql { ... } else if postgres { ... }` 的 pipeline 分支
+- **v0.1.0 已落地**：`execute.go` 中 `isSQLKind()` 已被 `capabilities.FromProvider().Has(CapSQL)` 替代
+
+---
+
+## 项目边界 (v0.1.0)
+
+### 数据源范围
+- **核心**: MySQL, PostgreSQL, GaussDB, ClickHouse, SQLite, Redis, Elasticsearch, MongoDB, Qdrant
+- **文件数据源**（非"数据库"）: CSV, TSV, XLSX — 可做 Schema 采集和只读查询，但不扩展更多文件格式
+- **不支持的**: Parquet, Avro, Google Sheets — 超出"数据库上下文编译器"定位
+
+### 集成策略
+- MCP Server, Cursor, OpenHands, Aider 集成 → **独立项目/仓库**，dbexplain 不内嵌 serve 模式
+- dbexplain 是 CLI 工具，消费方通过 stdout/文件/JSON 获取数据
+
+### 安全边界
+- **sqlguard + policy 是第一道防线**，建议配合数据库层 GRANT SELECT ONLY 作为第二道防线
+- 容器/VM 环境：机器指纹加密可能失效（无 `/etc/machine-id`），推荐使用密码模式或 `--machine-id-override`
 
 ---
 
@@ -107,5 +125,6 @@
 
 | 日期 | 版本 | 说明 |
 |------|------|------|
+| 2026-05-29 | v3 | 第 10 条确认落地；新增"项目边界"章节，定义数据源范围和集成策略 |
 | 2026-05-19 | v1 | 初始宪法，基于 v0.0.2 代码库提取 |
 | 2026-05-20 | v2 | 项目重新定义为 Database Context Compiler；新增第 8-10 条：Deterministic Only、Graph First、Capability Architecture |

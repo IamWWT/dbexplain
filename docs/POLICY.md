@@ -1,7 +1,7 @@
 # dbexplain 安全策略引擎 (Policy)
 
 > 细粒度访问控制系统，为 `dbexplain execute` 提供表级、列级、语句级拒绝策略。
-> 支持全部 9 种数据库，通过 `.env` 文件统一配置。
+> 支持全部 12 种数据源（9 种数据库 + CSV/TSV/XLSX 文件），通过 `.env` 文件统一配置。
 
 ---
 
@@ -181,7 +181,7 @@ dbexplain execute -env --label es-test "SELECT * FROM runbooks"
 |------|------|---------|
 | 语句 | `DENY_STATEMENTS=DROP,SHUTDOWN` | 原始 JSON 子串匹配 |
 | 集合 | `DENY_TABLES=system.users,system.profile` | 从 JSON `"find"`/`"aggregate"` 字段解析 |
-| 列 | **不支持** | MongoDB JSON 无结构化列引用 |
+| 列 | **支持 (v0.1.0+)** | MongoDB 原生 JSON 查询：`DENY_COLUMNS=collection.field` 匹配，除非查询通过投影显式排除该字段 |
 
 ```bash
 # 拦截（集合级别）
@@ -205,7 +205,7 @@ dbexplain execute -env --label mongo-test '{"find":"user","filter":{},"limit":5}
 |------|------|---------|
 | 语句 | `DENY_STATEMENTS=drop_collection` | 原始 JSON 子串匹配 |
 | 集合 | `DENY_TABLES=internal_docs` | 从 JSON `"scroll"`/`"count"` 字段解析 |
-| 列 | **不支持** | Qdrant 向量数据库无列概念 |
+| 列 | **支持 (v0.1.0+)** | Qdrant JSON query：`DENY_COLUMNS=collection.field` 匹配，除非查询通过投影显式排除该字段 |
 
 ```bash
 # 拦截（集合级别）
@@ -224,7 +224,7 @@ dbexplain execute -env --label qdrant-test '{"count":"public_collection"}'
 | 维度 | 配置 | 提取方式 |
 |------|------|---------|
 | 语句 | `DENY_STATEMENTS=FLUSHALL,CONFIG,SHUTDOWN` | 原始命令子串匹配 |
-| Key | `DENY_TABLES=CONVERSATION:*,secret_key` | 提取命令的第一个参数作为 key，支持 `filepath.Match` 通配符 |
+| Key | `DENY_TABLES=CONVERSATION:*,secret_key` | 提取命令的第一个参数作为 key，支持 `globMatch()` 自定义通配符（与 `filepath.Match` 兼容，但避免将 `/` 视为路径分隔符） |
 | 列 | **不支持** | Redis 无列概念 |
 
 **Key 提取规则：** 30+ 只读命令中，有 key 参数的命令提取 `parts[1]` 作为 key 名；无 key 参数的命令（SCAN, PING, ECHO 等）跳过 key 检查。
@@ -305,8 +305,8 @@ MASK_COLUMNS=ssn=*** dbexplain execute -env --label mongo \
 | SQLite | ✅ | ✅ 表 | ✅ | ✅ | SQL 语法提取 |
 | ClickHouse | ✅ | ✅ 表 | ✅ | ✅ | SQL 语法提取 |
 | Elasticsearch | ✅ | ✅ 表 | ✅ | ✅ | SQL 语法提取（`_sql` 端点） |
-| MongoDB | ✅ | ✅ 集合 | — | ✅ | JSON `find`/`aggregate` 字段 |
-| Qdrant | ✅ | ✅ 集合 | — | ✅ | JSON `scroll`/`count` 字段 |
+| MongoDB | ✅ | ✅ 集合 | ✅ (v0.1.0+) | ✅ | JSON `find`/`aggregate` 字段 |
+| Qdrant | ✅ | ✅ 集合 | ✅ (v0.1.0+) | ✅ | JSON `scroll`/`count` 字段 |
 | Redis | ✅ | ✅ Key | — | ✅ | 命令第一个参数 + 通配符匹配 |
 
 ---
@@ -383,7 +383,7 @@ MASK_COLUMNS=password_hash=***,card_number=****-****-****-****,email=REDACTED
 | 定位 | 通用只读校验 | 细粒度访问控制 |
 | 作用范围 | SQL 语句动词 | 表/列/语句模式 |
 | 配置方式 | 硬编码白名单 | .env 文件自定义 |
-| 数据库类型 | SQL 类 | 全部 9 种 |
+| 数据库类型 | 仅 SQL 类 | SQL 类 + 原生类共 12 种数据源 |
 | 触发时机 | 校验链第一层 | 校验链第二层 |
 
 两者协同工作：sqlguard 阻止写操作，policy 阻止敏感数据访问。
@@ -395,8 +395,19 @@ MASK_COLUMNS=password_hash=***,card_number=****-****-****-****,email=REDACTED
 | 文件 | 职责 |
 |------|------|
 | `src/policy/policy.go` | Config 加载、SQL/原生查询校验、表名列名提取、列值屏蔽 |
-| `src/policy/policy_test.go` | 54+ 个测试用例：三层策略 + 列屏蔽 + 9 种数据库覆盖 |
+| `src/policy/policy_test.go` | 60+ 个测试用例：三层策略 + 列屏蔽 + 12 种数据源覆盖 |
 | `src/execute.go` | 集成点：`sqlguard.Validate()` → `policy.CheckSQL/CheckNative()` → `policy.ApplyMask()` |
+
+### 排障参考
+
+| 现象 | 可能原因 | 排查方向 |
+|------|---------|----------|
+| `DENY_TABLES=information_schema` 不生效 | `extractTableNames()` regex 未捕获 schema 前缀 | v0.0.9+ 已修复；检查二进制版本 |
+| `SELECT *` 绕过 `DENY_COLUMNS` | 无显式列引用，`matchStarSelect` 未触发 | v0.0.9+ 已修复；检查是否使用 `SELECT` + 列名 |
+| MongoDB/Qdrant `{"find":"col"}` 绕过列级策略 | `CheckNative()` 未检查列级 | v0.0.9+ 已修复；可加 projection 显示排除 |
+| `execute "query" --human` 不生效 | Go flag 遇第一个非 flag 参数停止解析 | v0.0.9+ 已修复；支持 flag 前后任意位置 |
+
+> 完整修复记录见 [`issues.json`](../issues.json#ISSUE-064)（v0.0.9 策略引擎绕过修复）。
 
 ---
 
@@ -404,6 +415,7 @@ MASK_COLUMNS=password_hash=***,card_number=****-****-****-****,email=REDACTED
 
 | 版本 | 变更 |
 |------|------|
-| v0.0.9 | CSV/XLSX 文件数据源：绕过 sqlguard/策略引擎的只读查询，类型推断 |
-| v0.0.8 | 初始实现：三层策略 + 9 种数据库全覆盖 + Redis 通配符 key 匹配 + MASK_COLUMNS 列值屏蔽 |
+| v0.1.0 | MongoDB/Qdrant 列级检测支持（`CheckNative` + `DENY_COLUMNS=collection.field`）；`matchStarSelect()` 全线检测（`\A` → `\b` 防 CTE 绕过）；`extractTableNames()` schema 前缀捕获修复；配置不再泄漏到 `os.Environ`（`LoadFromMap`）；文档对齐 12 种数据源 |
+| v0.0.9 | CSV/XLSX 文件数据源：受策略引擎约束（DENY_TABLES + MASK_COLUMNS），绕过 sqlguard |
+| v0.0.8 | 初始实现：三层策略 + 9 种数据源全覆盖 + Redis 通配符 key 匹配 + MASK_COLUMNS 列值屏蔽 |
 | v0.0.8 (审计) | 安全增强：`normalizeIdentifiers()` 防引用标识符绕过、`normalizeWhitespace()` 防空白字符绕过、`globMatch()` 替代 `filepath.Match` 防路径分隔符截断、`log.Printf` 警告 malformed glob 模式 |

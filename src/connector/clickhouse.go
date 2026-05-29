@@ -26,6 +26,7 @@ func (clickhouseConnector) Capabilities() []capabilities.Capability {
 		capabilities.CapSampling,
 		capabilities.CapRowCount,
 		capabilities.CapPartition,
+		capabilities.CapSQL,
 	}
 }
 

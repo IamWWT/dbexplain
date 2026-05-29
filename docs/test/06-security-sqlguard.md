@@ -1,168 +1,89 @@
-# L6: SQLGuard 沙箱测试
+# L5: SQL 只读沙箱验证
 
-> 验证 sqlguard 只读校验机制对所有 SQL 数据库的正确性。
+> 验证 sqlguard 三层校验：动词白名单 + 多语句检测 + 自动 LIMIT。
 
-## 6.1 允许的语句 (ALLOW)
+---
 
-### SELECT
-
-```bash
-# MySQL
-dbexplain execute -env --db 1 --human "SELECT 1" 
-# 实际: +----------+
-#       | SELECT 1 |
-#       +----------+
-#       |        1 |
-#       +----------+
-#       (1 row)
-
-# PostgreSQL
-dbexplain execute -env --db 6 --human "SELECT 1"
-# 预期: 返回结果
-
-# ClickHouse
-dbexplain execute -env --db 2  --human "SELECT 1" 
-# 预期: 返回结果
-
-# SQLite
-dbexplain execute -env --db 3 --human "SELECT 1" 
-# 预期: 返回结果
-```
-
-### SHOW
+## 前置条件
 
 ```bash
-dbexplain execute -env --db 1 --human "SHOW DATABASES"  2>&1 | head -5
-# 预期: 显示数据库列表
+cd src
+BIN="../release/dbexplain-linux-amd64"
 ```
 
-### DESCRIBE
+> **配置优先级**：运行 `-env` 前确保 CWD 中有 `.env.dbexplain` 或设置 `DBPROBE_ENV_FILE=.env`。
+> 详见 [README.md](README.md#配置优先级说明) 和 [docs/CONFIG_SEARCH.md](../docs/CONFIG_SEARCH.md)。
+
+## 6.1 读操作允许
 
 ```bash
-dbexplain execute -env --db 1 --human "DESCRIBE information_schema.TABLES"  2>&1 | head -5
-# 预期: 显示表结构
+# SELECT
+$BIN execute -env --db 1 "SELECT 1" 2>&1 | jq .
+# EXPLAIN
+$BIN execute -env --db 1 "EXPLAIN SELECT 1" 2>&1 | jq .
+# WITH (CTE)
+$BIN execute -env --db 1 "WITH t AS (SELECT 1) SELECT * FROM t" 2>&1 | jq .
+# SHOW
+$BIN execute -env --db 1 "SHOW DATABASES" 2>&1 | jq .
+# DESCRIBE
+$BIN execute -env --db 1 "DESCRIBE testdb.iplist" 2>&1 | jq .
 ```
 
-### EXPLAIN
+## 6.2 写操作拒绝
 
 ```bash
-dbexplain execute -env --db 1 --explain "SELECT 1"
-# 预期: 返回执行计划
+for cmd in INSERT UPDATE DELETE DROP ALTER CREATE TRUNCATE RENAME REPLACE GRANT REVOKE; do
+  echo "=== $cmd ==="
+  $BIN execute -env --db 1 "$CMD test" 2>&1 | head -1
+done
+# 预期: 全部返回 READ_ONLY_VIOLATION
 ```
 
-## 6.2 拒绝的语句 (DENY)
-
-### DDL
+## 6.3 多语句检测
 
 ```bash
-# CREATE
-dbexplain execute -env --db 1 "CREATE TABLE test (id INT)" 2>&1
-# 实际: {"error":"READ_ONLY_VIOLATION: statement not allowed: CREATE"}
+# 多 SELECT (保守拒绝)
+$BIN execute -env --db 1 "SELECT 1; SELECT 2"
+# 预期: READ_ONLY_VIOLATION: multiple statements detected (2)
 
-# DROP
-dbexplain execute -env --db 1 "DROP TABLE users" 2>&1
-# 实际: {"error":"READ_ONLY_VIOLATION: statement not allowed: DROP"}
-
-# ALTER
-dbexplain execute -env --db 1 "ALTER TABLE users ADD COLUMN x INT" 2>&1
-# 实际: {"error":"READ_ONLY_VIOLATION: statement not allowed: ALTER"}
-
-# TRUNCATE
-dbexplain execute -env --db 1 "TRUNCATE TABLE users" 2>&1
-# 预期: READ_ONLY_VIOLATION
+# 写注入绕过
+$BIN execute -env --db 1 "SELECT 1; DROP TABLE users"
+# 预期: READ_ONLY_VIOLATION: multiple statements detected (2)
 ```
 
-### DML
+## 6.4 自动 LIMIT 注入
 
 ```bash
-# INSERT
-dbexplain execute -env --db 1 "INSERT INTO users VALUES (1)" 2>&1
-# 实际: {"error":"READ_ONLY_VIOLATION: statement not allowed: INSERT"}
+# 无 LIMIT 自动追加
+$BIN execute -env --db 1 "SELECT * FROM testdb.iplist" 2>/dev/null | python3 -c "
+import json,sys; d=json.load(sys.stdin)
+print(f'rows={d[\"row_count\"]}, truncated={d[\"truncated\"]}')
+# 预期: rows <= 1000 or truncated=true
+"
 
-# UPDATE
-dbexplain execute -env --db 1 "UPDATE users SET name='x'" 2>&1
-# 实际: {"error":"READ_ONLY_VIOLATION: statement not allowed: UPDATE"}
-
-# DELETE
-dbexplain execute -env --db 1 "DELETE FROM users" 2>&1
-# 实际: {"error":"READ_ONLY_VIOLATION: statement not allowed: DELETE"}
+# 已有 LIMIT 不追加
+$BIN execute -env --db 1 "SELECT * FROM testdb.iplist LIMIT 5" 2>/dev/null | python3 -c "
+import json,sys; d=json.load(sys.stdin)
+print(f'rows={d[\"row_count\"]}')  # 预期 rows=5
+"
 ```
 
-![dbddldml-sqlguard](../assets/dbddldml-sqlguard.png)
-
-### MySQL 专用
+## 6.5 EXPLAIN 不走自动 LIMIT
 
 ```bash
-dbexplain execute -env --db 1 "REPLACE INTO users VALUES (1)" 2>&1
-# 预期: READ_ONLY_VIOLATION
-
-dbexplain execute -env --db 1 "LOAD DATA INFILE 'file' INTO TABLE users" 2>&1
-# 预期: READ_ONLY_VIOLATION
+$BIN execute -env --db 1 --explain "SELECT * FROM testdb.iplist WHERE device_type = 'PHY'" 2>/dev/null | python3 -c "
+import json,sys; d=json.load(sys.stdin)
+print(f'columns={[c[\"name\"] for c in d[\"columns\"]]}')
+# 预期: EXPLAIN 返回计划列（如 id/select_type/table 等）
+"
 ```
 
-### Redis 写入
+## 6.6 空查询拒绝
 
 ```bash
-dbexplain execute -env --db 7 "SET key value" 2>&1
-# 实际: {"error":"READ_ONLY_VIOLATION: statement not allowed: SET"}
+$BIN execute -env --db 1 ""
+# 预期: READ_ONLY_VIOLATION: empty query
 
-dbexplain execute -env --db 7 "DEL key" 2>&1
-# 预期: READ_ONLY_VIOLATION
+$BIN execute -env --db 1 "   "
+# 预期: READ_ONLY_VIOLATION: empty query
 ```
-
-### MongoDB 写入
-
-```bash
-dbexplain execute -env --db 9 '{"insert":"test","documents":[{"x":1}]}' 2>&1
-# 实际: {"error":"READ_ONLY_VIOLATION: statement not allowed: insert"}
-```
-
-### Qdrant 写入
-
-```bash
-dbexplain execute -env --db 4 '{"upsert":"mcp_tools","points":[{"id":1,"vector":[0.1,0.2]}]}' 2>&1
-# 预期: READ_ONLY_VIOLATION
-```
-
-## 6.3 Autolimit 功能
-
-```bash
-# --limit 参数控制最大行数
-dbexplain execute -env --db 1 --human --limit 3 "SELECT * FROM information_schema.TABLES" 
-# 预期: 仅返回 3 行
-```
-
-```bash
-# 默认 limit 1000
-dbexplain execute -env --db 1 "SELECT * FROM information_schema.TABLES" | python3 -c "import json,sys; d=json.load(sys.stdin); print(f'rows: {d[\"row_count\"]}')"
-# 预期: row_count ≤ 1000
-```
-
-## 6.4 大小写不敏感
-
-```bash
-dbexplain execute -env --db 1  --human "select 1"
-# 预期: 允许（小写 select 被识别）
-```
-
-## 6.5 错误处理
-
-```bash
-# 语法错误
-dbexplain execute -env --db 1 "SELECT invalid syntax" 2>&1
-# 预期: QUERY_ERROR
-
-# 不存在的表
-dbexplain execute -env --db 1 "SELECT * FROM non_existent_table" 2>&1
-# 预期: QUERY_ERROR
-
-# 空查询
-dbexplain execute -env --db 1 "" 2>&1
-# 实际: {"error":"READ_ONLY_VIOLATION: empty query"}
-
-# 多语句检测
-dbexplain execute -env --db 1 "SELECT 1; DROP TABLE users" 2>&1
-# 实际: {"error":"READ_ONLY_VIOLATION: multi-statement not allowed"}
-```
-
-![db-errorhandle](../assets/db-errorhandle.png)

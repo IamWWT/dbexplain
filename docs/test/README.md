@@ -1,107 +1,139 @@
-# dbexplain v0.0.9 测试文档
+# dbexplain 测试框架
 
-## 测试总览
+> 分层测试方法论，覆盖全部 12 种数据源 + 安全引擎 + 性能基准。
 
-本目录包含 dbexplain v0.0.9 的全量分层测试文档，覆盖全部 10 种数据源类型和所有历史版本功能。
+---
 
-## 测试层级
+## 测试分层
 
-| 层级 | 文件 | 覆盖范围 |
-|------|------|---------|
-| L1 环境验证 | `01-environment.md` | Go 编译、vet、单元测试、交叉编译 |
-| L2 Schema 采集 | `02-schema-collection.md` | 全部 10 种数据源的 Schema 采集 |
-| L3 SQL 执行 | `03-execute-sql.md` | MySQL/PostgreSQL/ClickHouse/SQLite/Elasticsearch |
-| L4 NoSQL 执行 | `04-execute-nosql.md` | Redis/MongoDB/Qdrant |
-| L5 文件处理 | `05-file-processing.md` | CSV/TSV/XLSX |
-| L6 安全沙箱 | `06-security-sqlguard.md` | sqlguard 只读校验 |
-| L7 策略引擎 | `07-policy-engine.md` | DENY_TABLES/COLUMNS/STATEMENTS/MASK |
-| L8 并发限制 | `08-concurrent-limit.md` | --conn 并发控制 |
-| L9 CLI 帮助 | `09-cli-help.md` | 所有子命令、手册、--version |
-| L10 回归测试 | `10-regression.md` | 历史版本功能回归 |
-| L11 全量集成 | `11-end-to-end.md` | 一次运行所有数据源 |
+| 层级 | 名称 | 覆盖范围 | 文档 |
+|------|------|---------|------|
+| L0 | 版本升级 | 跨版本构建对比、回归基线 | [10-regression.md](10-regression.md) |
+| L1 | 静态分析 | go build/vet/test、交叉编译、安全审计、Shell 语法 | [01-environment.md](01-environment.md) |
+| L2 | 单元测试 | 各包测试用例详细清单 | [01-environment.md](01-environment.md) §1.3 |
+| L3 | 功能集成 | CLI 帮助、子命令、手册、别名解析 | [09-cli-help.md](09-cli-help.md) |
+| L4 | 端到端回归 | 全部 DSN Schema 采集 | [10-regression.md](10-regression.md) |
+| L5 | 安全专项 | sqlguard + policy 全链路 | [06-security-sqlguard.md](06-security-sqlguard.md)、[07-policy-engine.md](07-policy-engine.md) |
+| L6 | 查询执行 | SQL + NoSQL + 文件 execute | [03-execute-sql.md](03-execute-sql.md)、[04-execute-nosql.md](04-execute-nosql.md)、[05-file-processing.md](05-file-processing.md) |
+| L7 | 文档验证 | 版本一致性、文档引用正确性 | [10-regression.md](10-regression.md) |
+| L8 | 能力架构 | CapSQL 路由、PostgreSQL 多 Schema、策略引擎增强、JSON 包装格式 | [12-capability-routing.md](12-capability-routing.md) |
 
-## 前置条件
+## 测试概览
 
-1. Go 1.26+
-2. 配置 `.env` 文件（`src/.env`，包含 15 个 DSN 条目）
-3. 所有数据库服务正常运行
-4. 测试 CSV 文件准备（`/tmp/dbexplain-test/` 目录）
+| 维度 | 数据 |
+|------|------|
+| 数据源 | 15 (mysql/clickhouse/sqlite/qdrant/es/postgres/redis×2/mongo/sqlite/xlsx×2/csv/tsv/csv) |
+| 二进制架构 | 单二进制，含全部数据库类型 + xlsx 支持 |
+| Go 版本 | 1.26 |
+| 测试环境 | Linux x86-64 (amd64) |
 
-### 准备 CSV/TSV 测试数据
+## 配置优先级说明
 
-```bash
-mkdir -p /tmp/dbexplain-test
-echo 'name,age,city' > /tmp/dbexplain-test/users.csv
-echo 'Alice,30,Beijing' >> /tmp/dbexplain-test/users.csv
-echo 'Bob,25,Shanghai' >> /tmp/dbexplain-test/users.csv
-echo 'Charlie,35,Guangzhou' >> /tmp/dbexplain-test/users.csv
-echo 'id,product,price' > /tmp/dbexplain-test/products.csv
-echo '1,Widget A,9.99' >> /tmp/dbexplain-test/products.csv
-echo '2,Widget B,19.99' >> /tmp/dbexplain-test/products.csv
-printf 'name\tage\tcity\nAlice\t30\tBeijing\nBob\t25\tShanghai\n' > /tmp/dbexplain-test/data.tsv
-echo 'int_col,float_col,date_col,text_col' > /tmp/dbexplain-test/types.csv
-echo '1,3.14,2024-01-01,hello' >> /tmp/dbexplain-test/types.csv
-echo '2,2.718,2024-02-15,world' >> /tmp/dbexplain-test/types.csv
+> 详细搜索机制见 [docs/CONFIG_SEARCH.md](../docs/CONFIG_SEARCH.md)。
+
+`-env` 模式按以下顺序查找配置文件（命中即停）：
+
+```
+优先级 1: $DBPROBE_ENV_FILE 环境变量
+优先级 2: CWD/.env.dbexplain
+优先级 3: CWD/.env.dbexplain.enc
+优先级 4: ~/.config/dbexplain/.env.dbexplain
+优先级 5: ~/.config/dbexplain/.env.dbexplain.enc
+优先级 6: CWD/.env
 ```
 
-### 测试二进制
+### 常见场景与应对
+
+**场景一：全局有加密配置，本地测试用明文 `.env`**
+
+本机 `~/.config/dbexplain/.env.dbexplain.enc` 优先级（5）高于 `CWD/.env`（6），
+导致从 `src/` 运行 `-env` 时全局配置抢先匹配，本地 `.env` 不被读取。
+
+**解决方案（三选一）：**
+
+| 方法 | 命令 | 优先级 | 适用场景 |
+|------|------|--------|---------|
+| 创建 `.env.dbexplain` | `cp .env .env.dbexplain` | 2（最高） | 开发测试，一劳永逸 |
+| 环境变量覆盖 | `DBPROBE_ENV_FILE=.env dbexplain -env` | 1（最高） | 临时切换，无需改文件 |
+| 重命名全局配置 | `mv ~/.config/dbexplain/.env.dbexplain.enc ~/.config/dbexplain/.env.dbexplain.enc.bak` | — | 彻底禁用全局，影响所有项目 |
+
+**推荐开发测试方式：**
 
 ```bash
 cd src
 
-# 一键构建（所有数据库类型 + xlsx 支持）
-bash build.sh
+# 方案 A：创建 .env.dbexplain（优先级 2，击败全局加密配置）
+cp .env .env.dbexplain
+dbexplain -env                    # 命中 .env.dbexplain ✓
+dbexplain execute -env --db 1 "SELECT 1"  # 同上 ✓
 
-# 测试用二进制路径
-BIN="../release/dbexplain-linux-amd64"
-# 或使用 go run
-BIN="go run ."
+# 方案 B：环境变量覆盖（不产生新文件）
+DBPROBE_ENV_FILE=.env dbexplain -env                    # 显式指定 ✓
+DBPROBE_ENV_FILE=.env dbexplain execute -env --db 1 "SELECT 1"  # ✓
 ```
 
-## 配置文件 (.env)
+**场景二：多项目切换，每个项目有独立配置**
 
-文件位置: `src/.env`
-
-```
-DB1=mysql://root:root@123456@localhost:9433/testdb?label=aiops-mysql
-DB2=clickhouse://default:ClickHouse@2026!@localhost:9421?label=aiops-clickhouse
-DB3=sqlite:///home/wwt/Downloads/aigc/proj/agents/aiops/intent-apparatus/data/rules.db?label=intentapparatus-sqlite
-DB4=qdrant://:Qdrant@2026!@localhost:9426?label=aiops-qdrant
-DB5=elasticsearch://elastic:Es@Pass2026!@localhost:9422?label=aiops-es
-DB6=postgres://videomon_user:VideoMon@2026!Secure@localhost:5432/videomon?label=video-pg
-DB7=redis://default:Pwd1Open2%23IMD@localhost:6389/0?label=openim-redis
-DB8=redis://:Redis@2026!Secure@localhost:6379/0?label=video-redis
-DB9=mongodb://openIM:Pwd1Open2%23IMD@192.168.0.127:27017/openim_v3?authSource=openim_v3&directConnection=true&label=openim-mongo
-DB10=sqlite:///home/wwt/Downloads/aigc/proj/agents/aiops/veinmap/data/veinmap.db/?label=veinmap-sqlite
-DB11=xlsx:///home/wwt/Documents/aigc/nmpaas/TSF/TSF模块进程管理&日志信息.xlsx?label=tsf-xlsx
-DB12=xlsx:///home/wwt/Documents/aigc/nmpaas/TDMQ/消息队列 TDMQ V1.5 日常巡检说明 01 .xlsx?label=tdmq-xlsx
-DB13=csv:///tmp/dbexplain-test/users.csv?label=csv-users
-DB14=csv:///tmp/dbexplain-test/?label=csv-test-data
-DB15=tsv:///tmp/dbexplain-test/data.tsv?label=tsv-test-data
+```bash
+# 每个项目目录下放 .env.dbexplain，自动命中（优先级 2）
+cd ~/project-a && dbexplain -env   # 用 project-a 的配置
+cd ~/project-b && dbexplain -env   # 用 project-b 的配置
+# 互不干扰，无需环境变量
 ```
 
-## DSN 速查表
+**场景三：专门测试某个 DSN**
 
-| 编号 | 标签 | 类型 | 说明 | 采集结果 |
-|------|------|------|------|---------|
-| DB1 | aiops-mysql | MySQL | testdb | 2 tables (iplist 12 rows, port 30 rows) |
-| DB2 | aiops-clickhouse | ClickHouse | default | 2 databases |
-| DB3 | intentapparatus-sqlite | SQLite | rules.db | 5+ tables |
-| DB4 | aiops-qdrant | Qdrant | 向量集合 | 2 collections (mcp_tools, runbooks 480 pts) |
-| DB5 | aiops-es | Elasticsearch | 索引映射 | 17 索引/视图 |
-| DB6 | video-pg | PostgreSQL | videomon | 5+ tables |
-| DB7 | openim-redis | Redis | openim | key 模式推断 |
-| DB8 | video-redis | Redis | video/cache | 1 table (_server_info) |
-| DB9 | openim-mongo | MongoDB | openim_v3 | 5+ collections |
-| DB10 | veinmap-sqlite | SQLite | veinmap.db | 4 tables |
-| DB11 | tsf-xlsx | XLSX | TSF 巡检 | 3 sheets (45+14+6 rows) |
-| DB12 | tdmq-xlsx | XLSX | TDMQ 巡检 | 1 sheet |
-| DB13 | csv-users | CSV | users.csv | 1 table (3 rows) |
-| DB14 | csv-test-data | CSV | 目录扫描 | 3 tables |
-| DB15 | tsv-test-data | TSV | data.tsv | 1 table (2 rows) |
+```bash
+# 直接 -dsn 绕过文件搜索，完全不依赖 -env
+dbexplain -dsn 'csv:///tmp/test.csv?label=test'
+dbexplain execute -dsn 'csv:///tmp/test.csv?label=test' "SELECT *"
+```
 
-## 注意事项
+## 最新测试结果
 
-- GaussDB 不在 .env 中，但代码完全支持；如需测试请单独通过 `-dsn` 传入
-- 代理环境: 所有 `go mod tidy` 命令需加 `HTTPS_PROXY=http://127.0.0.1:7897/`
-- 所有测试命令在 `src/` 目录下执行（`cd src`）
+完整测试结果报告见 [RESULTS.md](RESULTS.md)。v0.1.0 测试结果: **81/81 项通过 (100%)**，含 P0 安全修复验证。
+
+## 快速导航
+
+```bash
+# 推荐执行顺序
+01-environment.md    # 构建验证 + 单元测试
+02-schema-collection.md  # Schema 采集
+03-execute-sql.md    # SQL 查询执行
+04-execute-nosql.md  # NoSQL 查询执行
+05-file-processing.md    # 文件处理
+06-security-sqlguard.md  # SQL 沙箱
+07-policy-engine.md  # 安全策略
+08-concurrent-limit.md   # 并发限制
+09-cli-help.md       # CLI 帮助
+10-regression.md     # 回归测试
+11-end-to-end.md     # 全量集成
+12-capability-routing.md  # 能力架构
+```
+
+## 测试充分性评估
+
+| 模块 | 充分性 | 置信度 | 依据 |
+|------|--------|--------|------|
+| DSN 解析 | 高 | 95% | 35+ 用例 |
+| 字段推断 | 高 | 95% | 44 用例 |
+| 安全策略引擎 | 高 | 99% | 41 用例覆盖全部三层 + 12-DB 类型 + 防绕过 |
+| SQL 只读校验 | 高 | 100% | 28 用例 + 实机 8 动词验证 |
+| 查询引擎 | 高 | 100% | 15 DSN 实机执行 (SQL/NoSQL/文件) |
+| 交叉编译 | 高 | 100% | 5/5 平台成功 |
+| 文档同步 | 高 | 100% | 全部文件版本 v0.1.0 一致 |
+| 文件处理 (CSV/TSV/XLSX) | 中 | 90% | 基本功能覆盖，边界场景需补充 |
+| 能力架构 (CapSQL) | 高 | 100% | 全 15 连接器路由验证 |
+
+### 测试边界与薄弱点
+
+| 薄弱点 | 风险 | 说明 | 缓解措施 |
+|--------|------|------|---------|
+| analyze/connector/diagnostics 无单元测试 | 高 | 核心分析管线无 `*_test.go` | L1+L3+L4 全量覆盖 |
+| policy 正则提取假阳性 | 低 | 可能误匹配注释中的 FROM | 安全设计：false positive 偏向拒绝 |
+| Windows 实机未验证 | 中 | install.ps1 仅语法审查 | PowerShell 语法检查通过 |
+| 大文件 CSV/XLSX 性能 | 中 | 全量读入内存 | 文档标注限制 |
+| 超大结果集 human 输出 | 低 | maxColWidth=256 截断 | 防御性设计 |
+| TSV kind 报告为 csv | 低 | csv.go 硬编码 Kind 为 csv | 仅标签问题，功能和查询正常 |
+| Redis _server_info 无 columns | 低 | 元数据格式无列信息 | schema 采集正确，仅无列信息 |
+| QueryLock CLI 跨进程 | 低 | 每次 execute 为独立进程 | 库模式正常，单元测试验证 |

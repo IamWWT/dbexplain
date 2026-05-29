@@ -26,6 +26,7 @@ func (mysqlConnector) Capabilities() []capabilities.Capability {
 		capabilities.CapSampling,
 		capabilities.CapRowCount,
 		capabilities.CapIndex,
+		capabilities.CapSQL,
 	}
 }
 
@@ -335,6 +336,9 @@ func (mysqlConnector) ExecQuery(ctx context.Context, opts query.ExecuteOpts) (*q
 		return nil, fmt.Errorf("mysql open: %w", err)
 	}
 	defer db.Close()
+
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
 
 	// Set max execution time if timeout specified
 	if opts.Timeout > 0 {

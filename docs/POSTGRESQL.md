@@ -41,17 +41,17 @@ if d.DBName != "" {
 ### 1.3 表信息采集
 
 ```
-rows, err := db.QueryContext(ctx, `
-    SELECT tablename,
-           pg_size_pretty(pg_total_relation_size(quote_ident(tablename))),
-           COALESCE(obj_description(quote_ident(tablename)::regclass,'pg_class'),'')
-    FROM pg_tables WHERE schemaname='public' ORDER BY tablename`)
+// 实际代码先列出所有非系统 schema，再遍历每个 schema 查询表
+// Schema 发现：SELECT nspname FROM pg_namespace WHERE nspname NOT LIKE 'pg_%' AND nspname != 'information_schema' ORDER BY nspname
+// 遍历查询：SELECT t.tablename, COALESCE(s.n_live_tup,0), ... FROM pg_tables t
+//           LEFT JOIN pg_stat_user_tables s ON s.schemaname=t.schemaname AND s.relname=t.tablename
+//           WHERE t.schemaname=$1 ORDER BY t.tablename
 ```
 
-- **仅公共模式**：默认只采集 `public` schema 下的表。若需采集其他 schema，需修改代码或添加 `search_path` 参数。  
-- **表大小**：通过 `pg_total_relation_size` 获取表+索引总大小，并使用 `pg_size_pretty` 格式化为易读字符串（如 `120 kB`）。  
-- **表注释**：通过 `obj_description` 获取表级别注释，若为 NULL 则填充空字符串。  
-- **行数估算**：当前代码未单独获取行数（仅取表大小），可通过 `pg_stat_user_tables.n_live_tup` 扩展，但当前版本未实现。
+- **多 Schema 采集**：默认采集所有非系统 schema（`pg_%` 和 `information_schema` 除外）。先通过 `pg_namespace` 发现所有非系统 schema，再逐个遍历。若无自定义 schema，fallback 为 `public`。
+- **表大小**：通过 `pg_total_relation_size` 获取表+索引总大小。使用 `COALESCE` 处理统计信息不可用时返回 0。
+- **表注释**：通过 `obj_description` 获取表级别注释，若为 NULL 则填充空字符串。
+- **行数估算**：通过 `LEFT JOIN pg_stat_user_tables s ON s.schemaname=t.schemaname AND s.relname=t.tablename` 获取 `n_live_tup` 近似实时行数。
 
 ### 1.4 列信息采集与语义推断
 
@@ -68,7 +68,7 @@ colRows, err := db.QueryContext(ctx, `
     FROM pg_attribute a
     LEFT JOIN pg_attrdef d ON d.adrelid=a.attrelid AND d.adnum=a.attnum
     WHERE a.attrelid=$1::regclass AND a.attnum>0 AND NOT a.attisdropped
-    ORDER BY a.attnum`, "public."+t.Name)
+    ORDER BY a.attnum`, schemaName+"."+baseName)
 ```
 
 - **系统表查询**：使用 `pg_attribute`、`pg_attrdef`、`pg_constraint` 获取列名、类型、是否可空、默认值、注释、主键/唯一约束信息。  
@@ -83,7 +83,7 @@ colRows, err := db.QueryContext(ctx, `
 ```
 idxRows, err := db.QueryContext(ctx, `
     SELECT indexname, indexdef FROM pg_indexes
-    WHERE schemaname='public' AND tablename=$1`, t.Name)
+    WHERE schemaname=$2 AND tablename=$1`, baseName, schemaName)
 ```
 - 从 `pg_indexes` 视图读取索引定义，解析出唯一性和列名列表。  
 - 不对索引进行分类，仅输出名称和列（如 `UNI(rtsp_url)`）。
@@ -91,13 +91,16 @@ idxRows, err := db.QueryContext(ctx, `
 **外键**：
 ```
 fkRows, err := db.QueryContext(ctx, `
-    SELECT c.conname, a.attname, c2.relname, a2.attname
+    SELECT c.conname, a.attname, c2.relname, a2.attname,
+           c.confupdtype, c.confdeltype
     FROM pg_constraint c
     JOIN pg_class c1 ON c1.oid=c.conrelid
+    JOIN pg_namespace n1 ON n1.oid=c1.relnamespace
     JOIN pg_class c2 ON c2.oid=c.confrelid
+    JOIN pg_namespace n2 ON n2.oid=c2.relnamespace
     JOIN pg_attribute a ON a.attrelid=c.conrelid AND a.attnum=ANY(c.conkey)
     JOIN pg_attribute a2 ON a2.attrelid=c.confrelid AND a2.attnum=ANY(c.confkey)
-    WHERE c.contype='f' AND c1.relname=$1`, t.Name)
+    WHERE c.contype='f' AND c1.relname=$1 AND n1.nspname=$2`, baseName, schemaName)
 ```
 - 仅查询外键约束（`contype='f'`），通过连接 `pg_attribute` 获取本表列和引用表列。  
 - 外键的 `RefInstance` 默认为空，表示同一实例内引用，若跨库/跨实例引用需通过命名推断补充（由分析模块完成）。
@@ -120,7 +123,7 @@ fkRows, err := db.QueryContext(ctx, `
 
 ### 校验机制
 
-- **SQLGuard 动词白名单**：所有查询经过 `sqlguard` 模块校验，仅允许 `SELECT`、`EXPLAIN`、`WITH`、`SHOW`、`DESCRIBE`、`DESC`、`PRAGMA` 七类只读动词通过。任何写操作语句将被拒绝。
+- **SQLGuard 动词白名单**：所有查询经过 `sqlguard` 模块校验，仅允许 `SELECT`、`EXPLAIN`、`WITH`、`SHOW`、`DESCRIBE`、`DESC`、`PRAGMA`、`CHECK` 八类只读动词通过。任何写操作语句将被拒绝。
 - **多语句检测**：禁止分号分隔的多条 SQL 语句，防止注入绕过。
 
 ### 自动 LIMIT 追加
@@ -158,7 +161,7 @@ skip postgres://...: postgres ping: dial tcp x.x.x.x:5432: connect: connection r
 
 ### 2.2 采集不到任何表或数据库
 
-- 检查 `search_path` 设置：工具只采集 `public` schema。若表在其他 schema（如 `custom_schema`），需临时将表移动到 public 或修改代码增加 schema 参数。  
+- 若表在其他 schema（如 `custom_schema`），工具会自动发现并采集所有非系统 schema。确保用户具有该 schema 的 `USAGE` 和 `SELECT` 权限。
 - 数据库权限不足：用户需具有 `CONNECT` 和 `SELECT` 系统表权限（通常对 `pg_catalog` 有默认只读权限）。  
 - 数据库为空或无业务表：报表会显示 `(no columns)` 或表数为 0，属正常。
 
@@ -199,8 +202,8 @@ skip postgres://...: postgres ping: dial tcp x.x.x.x:5432: connect: connection r
 
 1. **权限最小化**：工具仅需 `CONNECT` 和 `pg_catalog` 的 `SELECT` 权限，无需对业务表拥有任何权限（因 `pg_class` 等是共享系统表），但仍建议创建专用只读角色。  
 2. **SSL 处理**：生产环境若必须 SSL，应在连接字符串中添加 `sslmode=require` 并修改代码支持，或通过 SSL 隧道（如 stunnel）转换为非 SSL 连接。  
-3. **Schema 范围**：当前限定 public 是常见默认行为，但多 schema 场景（如 `auth`、`logs`）可能遗漏数据，需根据需求扩展代码或使用 `search_path` 参数。  
-4. **行数获取**：`pg_stat_user_tables.n_live_tup` 提供近似行数，但当前版本未使用，若要展示行数可扩展 `fillPGTable` 函数。  
+3. **Schema 范围**：工具自动采集所有非系统 schema（`pg_%` 和 `information_schema` 除外）。多 schema 场景（如 `auth`、`logs`）天然支持，无需额外配置。
+4. **行数获取**：通过 `LEFT JOIN pg_stat_user_tables` 获取 `n_live_tup` 近似行数，直接展示在报告中。
 5. **采样安全性**：`LIMIT 1` 查询是安全的，但在超大表中若存在长时间运行的事务可能会等待，一般不超过几毫秒。  
 6. **日志记录**：所有查询错误会被记录到 `logs/<label>.log`，方便排查权限或网络问题。  
 7. **版本兼容**：测试于 PostgreSQL 12~16 均正常，较低版本（如 9.x）部分系统视图差异可能影响结果，但大多数查询兼容。

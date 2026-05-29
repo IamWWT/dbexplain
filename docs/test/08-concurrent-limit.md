@@ -1,51 +1,40 @@
-# L8: 并发限制测试
+# L5: 并发控制验证
 
-> 验证 `--conn` 参数的并发控制功能。
+> 验证同一 label 的并发查询互斥机制。
 
-## 8.1 串行采集
+---
 
-```bash
-cd src
-dbexplain -env -timeout 60s --conn 1 --json
-# 预期: 所有数据源依次采集，无死锁，全部成功（15 个 DSN 逐一完成）
-```
-
-## 8.2 默认并发
-
-```bash
-dbexplain -env -timeout 30s --json 2>&1 | head -5
-# 预期: 默认并发 10，多个数据源并行采集
-```
-
-## 8.3 高并发
-
-```bash
-dbexplain -env -timeout 30s --conn 20 --json 2>&1 | head -5
-# 预期: 更高并发（20），无资源竞争
-```
-
-## 8.4 Execute 并发锁
+## 前置条件
 
 ```bash
 cd src
-# 同时发起两个查询到同一 DSN
-dbexplain execute -env --db 1 "SELECT SLEEP(5)" &
-PID1=$!
+BIN="../release/dbexplain-linux-amd64"
+```
+
+> **配置优先级**：运行 `-env` 前确保 CWD 中有 `.env.dbexplain` 或设置 `DBPROBE_ENV_FILE=.env`。
+> 详见 [README.md](README.md#配置优先级说明) 和 [docs/CONFIG_SEARCH.md](../docs/CONFIG_SEARCH.md)。
+
+## 8.1 并发互斥
+
+```bash
+# 在后台启动慢查询
+$BIN execute -env --db 6 --timeout 60 "SELECT pg_sleep(10)" &
 sleep 1
-dbexplain execute -env --db 1 "SELECT 1" &
-PID2=$!
-wait $PID1 $PID2 2>/dev/null
-# 第二个查询应提示 CONCURRENT_LIMIT 或等第一个完成后执行
+
+# 同时发起第二个查询
+$BIN execute -env --db 6 "SELECT 1"
+# 预期: CONCURRENT_LIMIT: a query is already running for label "video-pg"
+
+# 等待后台完成
+wait
 ```
 
-## 8.5 跨标签并发
+## 8.2 不同 label 可并发
 
 ```bash
-# 不同 DSN 可同时查询
-dbexplain execute -env --db 1 "SELECT SLEEP(3)" &
-PID1=$!
-dbexplain execute -env --db 2 "SELECT 1" --human &
-PID2=$!
-wait $PID1 $PID2 2>/dev/null
-# 两个查询应同时完成，ClickHouse 查询不等 MySQL
+# 同时查询不同数据库
+$BIN execute -env --db 1 --timeout 60 "SELECT 1" &
+$BIN execute -env --db 6 --timeout 60 "SELECT 1" &
+# 两者都应成功（不同 label 不互斥）
+wait
 ```

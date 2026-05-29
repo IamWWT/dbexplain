@@ -34,14 +34,15 @@ rows, err := db.QueryContext(ctx,
 
 - **系统表过滤**：通过 `name NOT LIKE 'sqlite_%'` 排除 SQLite 内部系统表（如 `sqlite_sequence`、`sqlite_stat1` 等）。`sqlite_master` 本身不会出现在结果中（其 type 不是 `table`）。
 - **仅采集基表**：`type='table'` 排除了视图（`type='view'`）和触发器（`type='trigger'`）。
-- **无行数估算**：SQLite 不维护任何近似行数统计信息。要获取精确行数必须执行 `SELECT COUNT(*)`（触发全表扫描），工具不执行此操作以避免性能问题。报告中行数显示为 `-` 或 0。
+- **行数获取**：SQLite 不维护近似行数统计信息。工具执行 `SELECT COUNT(*) FROM "tablename"` 获取精确行数（触发全表扫描）。由于 SQLite 文件操作极快，即使大表 COUNT 也通常在毫秒级完成，行数直接展示在报告中。
 - **无表大小信息**：SQLite 不对外暴露单表大小，报告中跳过大小字段。
 
 ### 1.3 列信息采集与语义推断
 
 ```
+// 表名通过 strings.ReplaceAll(t.Name, "'", "''") 转义防止 SQL 注入
 colRows, err := db.QueryContext(ctx,
-    fmt.Sprintf("PRAGMA table_info('%s')", tableName))
+    fmt.Sprintf("PRAGMA table_info('%s')", strings.ReplaceAll(t.Name, "'", "''")))
 ```
 
 - **PRAGMA table_info** 返回每列的：`cid`（序号）、`name`（列名）、`type`（类型声明）、`notnull`（是否 NOT NULL，1/0）、`dflt_value`（默认值）、`pk`（是否主键，1/0）。

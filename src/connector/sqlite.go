@@ -26,6 +26,7 @@ func (sqliteConnector) Capabilities() []capabilities.Capability {
 		capabilities.CapSampling,
 		capabilities.CapRowCount,
 		capabilities.CapIndex,
+		capabilities.CapSQL,
 	}
 }
 

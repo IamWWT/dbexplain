@@ -26,11 +26,15 @@
 
 **第一层：操作动词白名单**
 ```
-允许: SELECT, EXPLAIN, WITH, SHOW, DESCRIBE, DESC, PRAGMA
+允许: SELECT, EXPLAIN, WITH, SHOW, DESCRIBE, DESC, PRAGMA, CHECK
 拒绝: INSERT, UPDATE, DELETE, DROP, ALTER, CREATE, TRUNCATE,
-       RENAME, REPLACE, GRANT, REVOKE, MERGE, LOAD, IMPORT
+       RENAME, REPLACE, GRANT, REVOKE, MERGE, LOAD, IMPORT,
+       ANALYZE, REINDEX
 ```
 取 SQL 的第一个 token 与白名单/黑名单比对，不区分大小写。
+
+> `ANALYZE` 和 `REINDEX` 曾被错误列入允许列表，v0.1.0 已修正：`ANALYZE` 写入统计表，`REINDEX` 锁表重建索引，均为写操作。
+> `CHECK TABLE` 为只读诊断操作，保留在白名单中。
 
 **第二层：多语句检测**
 ```
@@ -91,7 +95,7 @@ if !ok {
 | Redis | 原生命令（空格分隔，只读白名单） | `GET mykey` / `HGETALL myhash` / `SCAN 0` |
 | Qdrant | JSON（scroll/count） | `{"scroll":"collection_name"}` / `{"count":"collection_name"}` |
 
-**查询路由机制**：`isSQLKind()` 根据 DSN 类型决定执行路径——SQL 类走 `sqlguard.Validate()` 校验，非 SQL 类跳过 SQL 校验、由各连接器内部进行只读白名单验证。
+**查询路由机制**：`capabilities.FromProvider().Has(CapSQL)` 根据连接器声明的能力决定执行路径——SQL 类走 `sqlguard.Validate()` 校验，非 SQL 类跳过 SQL 校验、由各连接器内部进行只读白名单验证。
 
 ### 5. DSN 凭据保护
 
@@ -100,7 +104,7 @@ if !ok {
 - DSN 密码在错误消息中自动脱敏（`Redacted()`）
 - 查询结果 JSON **不包含**任何连接信息或凭据
 
-### 6. 细粒度访问控制 (`policy` 包，v0.0.9+)
+### 6. 细粒度访问控制 (`policy` 包，v0.1.0+)
 
 在 sqlguard 动词白名单校验之后，增加第二层访问控制——表级/列级/语句级拒绝策略。适用于**所有数据库类型**（SQL + 非SQL），通过 `.env` 文件配置。
 
@@ -283,7 +287,7 @@ else:
 | 并发互斥 | TryLock per-label | 防止并发压力 |
 | 凭据保护 | Redacted() + sanitizeErr() + 查询结果不含 DSN | 防止密码泄露 |
 | OS 环境隔离 | loadEnvFile() 直接返回 entries，不经过 os.Setenv | 防止 DSN 密码残留进程环境变量 |
-| 查询路由 | isSQLKind() 按数据库类型分流校验 | 防止 SQL 校验器误判原生命令 |
+| 查询路由 | capabilities.FromProvider().Has(CapSQL) 按能力分流校验 | 防止 SQL 校验器误判原生命令 |
 | 沙箱隔离 | 每次新建连接 + 独立 context | 连接故障不影响其他操作 |
 | 终端注入防御 | sanitizeCell() 剥离 ANSI 转义和控制字符 (仅 `--human`，全 9 种数据库) | 防止恶意数据注入终端命令 |
 | 列宽防护 | maxColWidth=256 截断超长 cell (仅 `--human`，全 9 种数据库) | 防止巨量 cell 撑爆终端/内存 |
@@ -306,7 +310,7 @@ else:
 | CSV/TSV | ❌ | 无（文件只读） | — | [FILE_PROCESSING.md](FILE_PROCESSING.md) |
 | XLSX | ❌ | 无（文件只读） | — | [FILE_PROCESSING.md](FILE_PROCESSING.md) |
 
-> **SQL 数据库**（上表前 6 种）通过 `isSQLKind()` 路由到 `sqlguard.Validate()` 进行动词白名单校验，并自动注入 `LIMIT 1000`。
+> **SQL 数据库**（上表前 6 种）通过 `capabilities.FromProvider().Has(CapSQL)` 路由到 `sqlguard.Validate()` 进行动词白名单校验，并自动注入 `LIMIT 1000`。
 > **非 SQL 数据库**（上表后 3 种）跳过 sqlguard，由各连接器内部实现只读白名单。
 > **文件数据源**（CSV/TSV/XLSX）绕过 sqlguard——文件本身只读，仅支持 `SELECT * [LIMIT N [OFFSET M]]`，但仍受策略引擎约束（`DENY_TABLES`、`MASK_COLUMNS`）。
 

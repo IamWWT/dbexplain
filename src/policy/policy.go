@@ -311,6 +311,7 @@ func (c *Config) ApplyMask(result *query.QueryResult) {
 // by normalizing the SQL before extraction.
 func extractTableNames(sql string) []string {
 	sql = stripSQLComments(sql)
+	sql = normalizeWhitespace(sql)
 	sql = normalizeIdentifiers(sql)
 	// Capture optional schema prefix + table name as a single group
 	re := regexp.MustCompile(`(?i)\b(?:FROM|JOIN|UPDATE|INTO|TABLE)\s+(\w+(?:\.\w+)?)`)
@@ -347,6 +348,7 @@ func extractTableNames(sql string) []string {
 // Handles quoted identifiers and SQL comments by normalizing the SQL first.
 func extractColumnRefs(sql string) []string {
 	sql = stripSQLComments(sql)
+	sql = normalizeWhitespace(sql)
 	sql = normalizeIdentifiers(sql)
 	// Match any contiguous word-dot-word sequence (any depth)
 	re := regexp.MustCompile(`\w+(?:\.\w+)+`)
@@ -514,6 +516,13 @@ func stripSQLComments(sql string) string {
 			for j < len(sql) && sql[j] != '\n' {
 				j++
 			}
+			// Skip past the newline so text on the next line directly follows
+			// the previous content. Prevents bypass where "FROM testdb.--
+			// comment\niplist" leaves a newline that breaks regex-based
+			// table/column extraction (\w doesn't match \n).
+			if j < len(sql) {
+				j++ // skip \n
+			}
 			i = j
 			continue
 		}
@@ -600,7 +609,7 @@ func normalizeIdentifiers(sql string) string {
 // matchStarSelect checks if a normalized SQL query uses SELECT * (no explicit column list).
 // This is used to detect queries that may select denied columns without naming them.
 func matchStarSelect(normalizedSQL string) bool {
-	re := regexp.MustCompile(`(?i)\ASELECT\s+\*\s+FROM\b`)
+	re := regexp.MustCompile(`(?i)\bSELECT\s+\*\s+FROM\b`)
 	return re.MatchString(normalizedSQL)
 }
 
@@ -622,3 +631,4 @@ func isSQLKeyword(s string) bool {
 	}
 	return false
 }
+
