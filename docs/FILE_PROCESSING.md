@@ -104,33 +104,88 @@ INTEGER → FLOAT → DATE → TEXT
 
 ## 7. 查询执行
 
-### 支持的语法
+文件查询引擎提供纯 Go 内存 SQL 查询能力，CSV 和 XLSX 数据源支持完全相同的 SQL 语法。
 
+### 支持的 SQL 语法
+
+```sql
+SELECT [DISTINCT [ON (col1, col2, ...)]] col1, col2, ...
+FROM table_name [alias]
+[JOIN / LEFT JOIN / RIGHT JOIN other_table [alias] ON condition]
+[WHERE condition]
+[GROUP BY col1, col2, ...]
+[HAVING condition]
+[ORDER BY col1 [ASC|DESC] [NULLS FIRST|LAST], ...]
+[LIMIT n] [OFFSET m]
+[UNION [ALL] SELECT ...]
 ```
-SELECT *                    — 返回全部行（受 MaxRows 限制）
-SELECT * LIMIT N            — 返回前 N 行
-SELECT * LIMIT N OFFSET M   — 分页，跳过 M 行后返回 N 行
-```
 
-### 限制
+### 功能明细
 
-- **不支持**: 列选择、WHERE 条件、JOIN、ORDER BY、GROUP BY、子查询
-- **不经过 sqlguard**: 文件查询绕过 SQL 沙箱校验（文件本身只读）
-- **Policy 引擎**: 文件查询受 `DENY_TABLES`（文件名/目录名匹配）和 `MASK_COLUMNS`（列值屏蔽）约束
-- **XLSX 默认查询第一个 Sheet**: 不支持按 Sheet 名选择
+| 功能 | 说明 | 示例 |
+|------|------|------|
+| **列投影** | 指定列、`*`、别名、去重 | `SELECT col1, col2 AS alias` |
+| **WHERE 过滤** | 比较/逻辑运算符、LIKE/IN/BETWEEN/IS NULL | `WHERE col = '值' AND col LIKE '%x%'` |
+| **GROUP BY + 聚合** | SUM/AVG/COUNT/MAX/MIN + COUNT(DISTINCT) | `GROUP BY col HAVING AVG(col) > 80` |
+| **ORDER BY** | ASC/DESC + NULLS FIRST/LAST | `ORDER BY col DESC NULLS LAST` |
+| **JOIN** | INNER/LEFT/RIGHT JOIN，跨文件/跨格式 | `FROM t1 JOIN t2 ON t1.k = t2.k` |
+| **UNION / UNION ALL** | 合并结果集 | `SELECT ... UNION ALL SELECT ...` |
+| **子查询** | WHERE IN / NOT IN (SELECT ...) | `WHERE col IN (SELECT ...)` |
+| **表达式** | 算术运算、括号分组 | `col1 / col2 * 100` |
+| **CAST / ABS / ROUND** | 类型转换与数学函数 | `CAST(col AS FLOAT)`, `ROUND(col, 2)` |
+
+### FROM 表名规则
+
+- **CSV/TSV**: 表名 = 文件名（不含扩展名），非 DSN label
+- **XLSX**: 表名 = Sheet 名，每 Sheet 为独立 SQL 表；单 Sheet 时文件名也可用
+- **表别名**: `FROM table_name alias` 支持
+
+### 跨文件与跨格式 JOIN
+
+文件查询引擎支持以下 JOIN 场景：
+
+| JOIN 场景 | 配置要求 | 示例 |
+|-----------|---------|------|
+| 同 DSN 内 JOIN | 无需额外配置（目录/Glob 多文件） | `FROM file1 JOIN file2 ON ...` |
+| 跨 DSN JOIN | 需两个 DSN 条目 | `DB1=csv:///a.csv DB2=csv:///b.csv` |
+| XLSX 跨 Sheet JOIN | 无需额外配置（自动加载所有 Sheet） | `FROM Sheet1 JOIN Sheet2 ON ...` |
+| CSV ↔ XLSX 跨格式 JOIN | 需两个 DSN 分别指向两个文件 | `DB1=csv:///a.csv DB2=xlsx:///b.xlsx` |
 
 ### 执行示例
 
 ```bash
-# CSV 查询
+# CSV 全表扫描
 dbexplain execute -dsn 'csv:///tmp/data.csv?label=test' 'SELECT * LIMIT 5'
 
-# TSV 查询
-dbexplain execute -dsn 'tsv:///tmp/data.tsv?label=test&delimiter=%09' 'SELECT *'
+# WHERE 条件过滤
+dbexplain execute -dsn 'csv:///tmp/data.csv?label=test' "SELECT * FROM data WHERE col = '江苏分行'" --human
 
-# XLSX 查询
-dbexplain execute -dsn 'xlsx:///tmp/report.xlsx?label=report' 'SELECT * LIMIT 10'
+# GROUP BY + 聚合 + HAVING
+dbexplain execute -dsn 'csv:///tmp/data.csv?label=test' \
+  'SELECT col, AVG(rate) AS avg_rate FROM data GROUP BY col HAVING avg_rate > 80' --human
+
+# ORDER BY + 表达式
+dbexplain execute -dsn 'csv:///tmp/data.csv?label=test' \
+  'SELECT col, interact_cnt / tol_cnt * 100 AS weighted FROM data ORDER BY weighted DESC' --human
+
+# XLSX 多 Sheet 查询
+dbexplain execute -dsn 'xlsx:///tmp/report.xlsx?label=report' 'SELECT * FROM Sheet1 LIMIT 10'
+dbexplain execute -dsn 'xlsx:///tmp/report.xlsx?label=report' 'SELECT * FROM Sheet2 LIMIT 10'
+
+# XLSX 跨 Sheet JOIN
+dbexplain execute -dsn 'xlsx:///tmp/report.xlsx?label=report' \
+  'SELECT s1.*, s2.name FROM Sheet1 s1 JOIN Sheet2 s2 ON s1.id = s2.id' --human
+
+# 跨文件 LEFT JOIN（两个 DSN）
+dbexplain execute -env --label touch_data \
+  'SELECT t.*, o.name FROM data t LEFT JOIN org o ON t.org_id = o.id' --human
 ```
+
+### 安全约束
+
+- **不经过 sqlguard**: 文件查询绕过 SQL 沙箱校验（文件本身只读）
+- **Policy 引擎**: 文件查询受 `DENY_TABLES`（文件名/目录名/Sheet 名匹配）和 `MASK_COLUMNS`（列值屏蔽）约束
+- **LIMIT 上限**: 默认最大返回 1000 行，可通过 `--limit N` 调整
 
 ---
 

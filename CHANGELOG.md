@@ -18,6 +18,10 @@
 - **PostgreSQL 索引解析**: `strings.LastIndex(def, ")")` 对函数索引 (`lower(email)`) 和 INCLUDE 列解析错误。新增 `extractIndexColumns()` 带括号深度追踪
 - **cache 原子写入**: `os.WriteFile` 非原子写入、进程崩溃导致 cache 损坏。改为 temp file + `os.Rename()` 原子操作
 
+### ORDER BY 计算列别名排序修复
+- **问题**: `SELECT ..., CAST(total AS FLOAT) / cnt \* 100 AS ir ORDER BY ir DESC` — `ir` 是计算列别名（非原始 CSV 列），`colMap` 查找不到导致排序失效，结果实际未排序
+- **修复**: `executor.go` 中 ORDER BY 比较函数增加别名回退路径：`colMap` 查找失败时遍历 SELECT 列搜索匹配别名，用 `Eval()` 计算表达式值后再比较
+
 ### PostgreSQL 多 Schema 支持
 - **Schema 发现**: `collectPGDB()` 改为查询 `pg_namespace` 获取所有非系统 schema，不再硬编码 `public`
 - **行数获取**: 新增 `pg_class.reltuples` → `n_live_tup` 采集，提供每表行数估计
@@ -62,6 +66,18 @@
 - **子查询 IN / NOT IN**: `SubqueryExpr` AST 节点 + `subqueryCache` 预计算缓存；`parseComparison()` 同时支持前缀 NOT (`NOT col IN (...)`) 和后缀 NOT (`col NOT IN (...)`)，以及 NOT LIKE / NOT BETWEEN
 - **66 个单元测试**（原 44 + 新增 22）：NULLS 词法/解析/执行、UNION ALL 解析/执行、UNION 去重、DISTINCT ON 解析/执行、子查询 IN/NOT IN 全链路
 
+### 文件查询引擎增强 v2 — SQL 兼容性扩展
+- **双引号字符串字面量**: 新增 `readDoubleQuotedString()`，`"value"` 和 `'value'` 均支持，双引号 SQL 不再报错。与 MySQL 兼容
+- **IS NULL / IS NOT NULL**: 新增 `IS` 关键字解析，空值判断（CSV 空字符串视为 NULL）。兼容 MySQL/PostgreSQL
+- **HAVING 子句**: GROUP BY 后支持 HAVING 过滤，引用 SELECT 列别名做聚合后条件筛选。兼容 MySQL/PostgreSQL
+- **LEFT JOIN / RIGHT JOIN**: `JoinClause` 新增 `JoinType` 字段，哈希 JOIN 引擎扩展为支持左连接/右连接语义。兼容 MySQL/PostgreSQL
+- **XLSX 多 Sheet 支持**: `ExecQuery` 按 SQL FROM 表名匹配 Sheet；`resolveJoinSources` 加载全部 Sheet 为独立 NamedData。每 Sheet 可单独作为 SQL 表查询
+- **ROUND 单参数**: `ROUND(col)` 默认小数位为 0，无需显式传 `n`
+- **多 DSN 错误优化**: 匹配到多个 DSN 时列出所有可用 label 和文件路径，方便 agent 选择正确的 `--label`
+- **文件不存在提示**: CSV/XLSX 文件 `os.Open` 失败时明确提示 `file not found: <path> (use absolute path)`
+- **`references/sql-syntax.md`**: 完整 SQL 语法参考独立文件，SKILL.md 精简语法表并引用之
+- **SKILL.md 语气优化**: "不在列表内的**不支持**" 改为 "完整语法参考和示例见 sql-syntax.md"，agent 提示更友好
+
 ### QA 场景扩展 (Q09-Q15)
 - **7 个新业务分析场景**: 覆盖 GROUP BY + AVG、ORDER BY + LIMIT、CAST + 列间算术、GROUP BY date、AND 多条件、跨文件 JOIN、嵌套算术 + ABS
 - **`testdata/qa/questions/Q09-Q15.md`**: 新建问题文件，每个含业务背景 + 验证 SQL + 预期输出
@@ -75,11 +91,28 @@
 - **错误信息可见性修复**: csv.go 改为透传底层解析错误，不再用 ErrNotSupported 掩盖
 - **`resolveDSNEntries()` 删除**: 被内联加载 + `filterEntries()` 替代
 
+### 文件查询引擎正确性修复
+- **CAST 转换失败返回 "0" 修复**: `CAST(x AS INTEGER/FLOAT)` 转换失败时返回 `Value("0")` 而非原始值，改为返回 `val`
+- **SUM 全非数值组返回 "0" 修复**: 分组内所有值均非数值时 SUM 返回 `"0"`，改为返回 `""`（SQL NULL 语义，与 MAX/MIN 一致）
+- **AVG count==0 返回 "0" 修复**: 分组内无非数值可转换时 AVG 返回 `"0"`，改为返回 `""`
+- **Eval 错误静默吞没修复**: `buildResult()` 列投影和 `executeAggregation()` 表达式求值中 Eval 错误曾静默返回 `""`，改为传播错误
+- **JOIN 后列映射越界修复**: 哈希 JOIN 后 `colMap` 重建仅使用主表别名，JOIN 表限定名列索引偏移为 `len(primaryHeader)` 导致越界。改为按主表+JOIN 表逐源构建正确偏移
+
 ### 第三方分发包定型
 - **`testdata/account-manager-skill/`**: 独立于主项目的第三方分发包，QwenPaw agent 直接读取目录 SKILL.md 识别技能
 - **目录结构**: `SKILL.md` + `assets/`(5 平台预编译二进制) + `scripts/`(install/uninstall) + `references/`(表字段定义) + `.env.example`
 - **离线安装**: `bash scripts/install.sh --offline ./assets/dbexplain-linux-amd64`，不指定路径时自动检测 assets/
 - **SQL 能力透明化**: SKILL.md 从"不支持清单"改为"支持语法完整列表"，AI agent 无需猜测
+
+### macOS Gatekeeper 兼容
+- **install.sh macOS quarantine 自动移除**: 2 个 `install.sh`（dbexplain-skill + account-manager-skill）新增 `remove_quarantine()` 函数，安装二进制后自动执行 `xattr -d com.apple.quarantine`，用户无需手动操作
+- **SETUP.md**: 增加 macOS Gatekeeper 说明和手动解决方法
+
+### dbexplain-skill 最佳实践泛化
+- **SKILL_ZH.md / SKILL_EN.md**: 新增"可追溯分析"（严禁编造数据、逐条标注来源SQL）、"文件查询最佳实践"（数据预览→澄清需求→业务分析）、"错误处理（9+3 分类）"章节
+- **`references/sql-syntax.md`**: 新建，从 account-manager-skill 泛化，中性列名（`sales_data`/`department`/`employee_id`），明确仅覆盖文件数据源
+- **`references/troubleshooting.md`**: 新建，从 account-manager-skill 泛化并扩展数据库连接排障（DNS/认证/超时/SSL 等），按 9+3 分类组织
+- **install-skill.sh**: 安装/更新时自动部署 `references/` 目录，`--verify` 验证其完整性
 
 ### 版本跟踪
 - 版本号: v0.1.0

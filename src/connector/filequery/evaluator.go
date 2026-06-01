@@ -272,6 +272,17 @@ func evalBinaryCached(e *BinaryExpr, row Row, colMap ColMap, cache SubqueryCache
 		}
 		return Value(boolVal(match)), nil
 
+	case "IS NULL", "IS NOT NULL":
+		left, err := evalCached(e.Left, row, colMap, cache)
+		if err != nil {
+			return "", err
+		}
+		isNull := string(left) == ""
+		if e.Op == "IS NOT NULL" {
+			return Value(boolVal(!isNull)), nil
+		}
+		return Value(boolVal(isNull)), nil
+
 	case "IN", "NOT IN":
 		left, err := evalCached(e.Left, row, colMap, cache)
 		if err != nil {
@@ -454,13 +465,15 @@ func evalFuncCall(fn *FuncCall, row Row, colMap ColMap) (Value, error) {
 		case "FLOAT", "DOUBLE", "REAL", "DECIMAL":
 			f, ok := val.Float()
 			if !ok {
-				return Value("0"), nil
+				// Conversion failed — return original value
+				return val, nil
 			}
 			return Value(fmt.Sprintf("%v", f)), nil
 		case "INT", "INTEGER", "BIGINT", "SMALLINT":
 			n, ok := val.Int()
 			if !ok {
-				return Value("0"), nil
+				// Conversion failed — return original value
+				return val, nil
 			}
 			return Value(fmt.Sprintf("%d", n)), nil
 		default:

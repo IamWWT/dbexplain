@@ -128,23 +128,61 @@ dbexplain execute -env --label redis 'HGETALL session:abc'
 ```
 
 **CSV/XLSX 文件（v0.1.0+ 文件查询引擎）：**
-文件数据源支持完整 SELECT 子集，无需外部工具即可进行业务分析：
+文件数据源支持完整 SELECT 子集，无需外部工具即可进行业务分析。完整语法参考见 [`references/sql-syntax.md`](references/sql-syntax.md)。
+
+| 语法 | 说明 |
+|------|------|
+| `SELECT ... FROM table` | 列投影，支持 `SELECT *`、别名、`DISTINCT ON` |
+| `WHERE ... AND/OR/NOT` | 过滤，支持 `=`/`!=`/`<`/`>`/`LIKE`/`IN`/`BETWEEN`/`IS NULL` |
+| `GROUP BY ... HAVING` | 分组聚合 + 分组后过滤 |
+| `SUM/AVG/COUNT/MAX/MIN` | 聚合函数，支持 `COUNT(DISTINCT col)` |
+| `ORDER BY ... NULLS FIRST/LAST` | 排序 |
+| `JOIN / LEFT JOIN / RIGHT JOIN` | 跨文件哈希连接 |
+| `UNION / UNION ALL` | 合并结果 |
+| `CAST / ABS / ROUND` | 类型转换和数学函数 |
+| `col IN (SELECT ...)` | 子查询 |
+
 ```bash
 # WHERE 过滤 + 列投影
-dbexplain execute -env --label touch-ops 'SELECT csmgr_refno, reach_rate FROM data WHERE reach_rate < 60' --human
+dbexplain execute -env --label my_data 'SELECT employee_id, completion_rate FROM sales_data WHERE completion_rate < 60' --human
 
 # GROUP BY + 聚合
-dbexplain execute -env --label touch-ops 'SELECT dept, AVG(rate) AS avg_rate FROM data GROUP BY dept ORDER BY avg_rate DESC' --human
+dbexplain execute -env --label my_data 'SELECT department, AVG(rate) AS avg_rate FROM data GROUP BY department ORDER BY avg_rate DESC' --human
 
 # 跨文件 JOIN
-dbexplain execute -env --label touch-ops \
-  'SELECT o.org_name, AVG(t.reach_rate) FROM data t JOIN org o ON t.org_id = o.id GROUP BY o.org_name' --human
+dbexplain execute -env --label my_data \
+  'SELECT o.branch_name, AVG(t.completion_rate) FROM sales_data t JOIN org_info o ON t.dept_id = o.dept_id GROUP BY o.branch_name' --human
 
 # 列间算术 + 类型转换
-dbexplain execute -env --label touch-ops \
-  'SELECT rm, CAST(channel_cnt AS FLOAT) / total_cnt * 100 AS pct FROM data WHERE total_cnt > 0' --human
+dbexplain execute -env --label my_data \
+  'SELECT employee_id, CAST(channel_cnt AS FLOAT) / total_cnt * 100 AS pct FROM data WHERE total_cnt > 0' --human
 ```
 文件数据源只读（仅 SELECT），遇到 DROP/INSERT 会返回 parse error。
+
+### 2.7 文件查询最佳实践
+
+#### 数据预览
+
+先用 `SELECT * --limit 5` 查看数据样例，再用聚合查询检查维度列的基数：
+
+```bash
+dbexplain execute -env --label my_data 'SELECT *' --limit 5 --human                # 看数据样例
+dbexplain execute -env --label my_data 'SELECT DISTINCT department FROM data' --human  # 部门有几个
+```
+
+> **`SELECT *` 只用于预览数据结构，不得作为分析结论的数据来源。** 任何统计值（均值、极值、占比等）必须通过聚合查询计算。
+
+#### 澄清需求
+
+**用户问题模糊时，必须先澄清再分析。** 不要替用户假设分析维度。一次问 2-3 个关键问题：
+
+- 需要看汇总统计（均值/总数）还是明细数据？
+- 是否需要分组对比或排名？
+- 关注哪个具体指标？是否需要时间趋势？
+
+#### 业务分析
+
+根据用户问题确定分析范围，**每次聚合查询显式用 WHERE 限定范围**，不依赖对话上下文隐式过滤。需要全部数据时不要加 LIMIT（默认上限 1000 行足够）。
 
 **输出：** 默认 JSON（Agent 继续分析），加 `--human` 给用户看终端表格。
 
@@ -167,7 +205,71 @@ MASK_COLUMNS=email=REDACTED,card_no=****       # 不阻断，替换列值输出
 | `CONCURRENT_LIMIT` | 并发冲突 | 稍后重试 |
 | `QUERY_ERROR: ...` | 连接或 SQL 错 | 修 DSN 或 SQL |
 
-## 4. 常用参数
+## 4. 可追溯分析
+
+每条量化结论必须标注来源 SQL，确保用户能验证数据的真实性。
+
+### 严禁编造数据
+
+**分析输出中的每一个数字必须来自实际的 SQL 查询输出。** 禁止以下行为：
+
+- **编造统计值**：平均完成率、最大值、范围等必须通过 `AVG/MAX/MIN/COUNT` 等聚合查询精确计算，不许从 `SELECT *` 的结果中目测估计
+- **编造不存在的功能**：文件查询引擎支持的功能见[语法速览](#26-执行只读查询先采集后查询)表格。**引擎不支持的功能（如窗口函数、STDDEV、中位数等）不得编造计算结果。** 如果引擎报错，如实报告
+- **编造示例表格**：不要用中文翻译列名重新画一个假表。如果引用查询结果，直接贴原始输出的列名和数值
+- **排序错误**：排名表必须按指标值严格排序
+- **隐瞒输出**：查询结果必须原文引用到分析中。`--human` 输出的表格可以截取关键行，但不能自行概括为不同的数值
+
+> **执行原则**：需要什么数字，就写什么 SQL 去查。`SELECT *` 只用于数据预览，不应作为分析结论的数据来源。
+
+### 引用规范
+
+- **排名、占比、均值等量化结论**：末尾标注来源 SQL 和执行行数
+- **逐条标注，禁止笼统归因**：每条结论标注各自来源 SQL。**禁止在结尾统一写"所有数据来自 XXX 查询"**
+- **定性判断**：需有具体数据对比支撑（如分组对比、时间序列）
+
+### 好的例子
+
+> 部门 A 平均完成率最高，为 95.2%；部门 B 最低，为 82.1%。
+> 来源：`SELECT department, AVG(completion_rate) AS avg_rate FROM sales_data GROUP BY department ORDER BY avg_rate DESC`（6 行）
+
+### 不好的例子
+
+> 部门 A 表现最好。← ✗ 无来源、无具体数值
+> 大多数部门完成率集中在 85-90% 之间。← ✗ 模糊表述替代具体数字
+> 自定义表格：部门 | 完成率 | 说明 ← ✗ 数据可能是编造的
+> 所有数据均来自 SELECT * 查询。← ✗ 笼统归因
+
+### SQL 报错时
+
+如实报告错误信息，不假装查询成功，不编造替代结果。
+
+## 5. 错误处理
+
+区分两类排障场景，完整排障指南见 [`references/troubleshooting.md`](references/troubleshooting.md)。
+
+### 数据库连接问题（9 种数据库类型适用）
+
+| 现象 | 常见原因 | 处理 |
+|------|---------|------|
+| `connection refused` | 服务未启动/端口错误/防火墙拦截 | 检查服务状态和端口号 |
+| `i/o timeout` | 网络延迟/防火墙丢包 | 检查网络连通性或增大 `--timeout` |
+| `access denied` | 用户名/密码错误 | 让用户检查 `.env` 中的凭据 |
+| `no such host` | DNS 无法解析主机名 | 确认主机名拼写或用 IP 替代 |
+| `unsupported protocol` | DSN scheme 缺失或拼错 | 确认 scheme 前缀正确 |
+| `no scanners configured` | 连接器未编译 | 确认 `dbexplain` 版本包含所需连接器 |
+
+### 文件查询问题（CSV/TSV/XLSX 适用）
+
+| 现象 | 常见原因 | 处理 |
+|------|---------|------|
+| `parse error` | SQL 语法不支持；引号用反 | 检查语法和引号用法 |
+| `table "xxx" not found` | FROM 表名用了 label | 用文件名（不含扩展名） |
+| `multiple DSNs matched` | 多数据源时缺 `--label` | 加 `--label` 参数 |
+| `file not found` / `Instances (0)` | DSN 文件路径非绝对路径 | 使用绝对路径 |
+
+---
+
+## 6. 常用参数
 
 | 参数 | 作用域 | 说明 |
 |------|--------|------|
@@ -180,7 +282,7 @@ MASK_COLUMNS=email=REDACTED,card_no=****       # 不阻断，替换列值输出
 | `-include/-exclude` | 采集 | 按 DB 类型过滤采集 |
 | `-json/-o file` | 采集 | JSON 输出/写入文件 |
 
-## 5. 注意事项
+## 7. 注意事项
 
 - **密码含特殊字符**：命令行用**单引号**包裹整个 DSN；`.env` 文件里无需转义
 - **MongoDB**：DSN 必须含 `authSource`（如 `?authSource=admin`），且需指定数据库名

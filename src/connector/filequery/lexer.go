@@ -46,6 +46,13 @@ const (
 	TOKEN_FIRST
 	TOKEN_LAST
 
+	// Phase II — new keywords
+	TOKEN_IS
+	TOKEN_HAVING
+	TOKEN_LEFT
+	TOKEN_RIGHT
+	TOKEN_OUTER
+
 	// Identifiers & literals
 	TOKEN_IDENT    // column/table name
 	TOKEN_NUMBER   // integer or float
@@ -147,6 +154,16 @@ func tokenName(tt TokenType) string {
 		return "FIRST"
 	case TOKEN_LAST:
 		return "LAST"
+	case TOKEN_IS:
+		return "IS"
+	case TOKEN_HAVING:
+		return "HAVING"
+	case TOKEN_LEFT:
+		return "LEFT"
+	case TOKEN_RIGHT:
+		return "RIGHT"
+	case TOKEN_OUTER:
+		return "OUTER"
 	case TOKEN_IDENT:
 		return "IDENT"
 	case TOKEN_NUMBER:
@@ -218,6 +235,11 @@ var keywords = map[string]TokenType{
 	"NULLS":    TOKEN_NULLS,
 	"FIRST":    TOKEN_FIRST,
 	"LAST":     TOKEN_LAST,
+	"IS":       TOKEN_IS,
+	"HAVING":   TOKEN_HAVING,
+	"LEFT":     TOKEN_LEFT,
+	"RIGHT":    TOKEN_RIGHT,
+	"OUTER":    TOKEN_OUTER,
 }
 
 // Lexer tokenizes SQL input.
@@ -299,6 +321,8 @@ func (l *Lexer) Next() Token {
 		return Token{Type: TOKEN_SEMICOLON, Value: ";", Pos: pos}
 	case '\'':
 		return l.readString()
+	case '"':
+		return l.readDoubleQuotedString()
 	}
 
 	// Number
@@ -312,6 +336,10 @@ func (l *Lexer) Next() Token {
 	}
 
 	l.pos++
+	// Specific hint for double quotes (legacy or old-version fallback)
+	if ch == '"' {
+		return Token{Type: TOKEN_ERROR, Value: "use single quotes (') for string literals", Pos: pos}
+	}
 	return Token{Type: TOKEN_ERROR, Value: fmt.Sprintf("unexpected character %q", ch), Pos: pos}
 }
 
@@ -397,6 +425,29 @@ func (l *Lexer) readString() Token {
 			// Check for escaped quote ''
 			if l.peek() == '\'' {
 				buf.WriteByte('\'')
+				l.pos += 2
+				continue
+			}
+			l.pos++ // skip closing quote
+			return Token{Type: TOKEN_STRING, Value: buf.String(), Pos: pos}
+		}
+		buf.WriteRune(ch)
+		l.pos++
+	}
+	return Token{Type: TOKEN_ERROR, Value: "unterminated string", Pos: pos}
+}
+
+// readDoubleQuotedString reads a double-quoted string literal.
+func (l *Lexer) readDoubleQuotedString() Token {
+	pos := l.pos
+	l.pos++ // skip opening quote
+	var buf strings.Builder
+	for l.pos < len(l.input) {
+		ch := l.input[l.pos]
+		if ch == '"' {
+			// Check for escaped double quote ""
+			if l.peek() == '"' {
+				buf.WriteByte('"')
 				l.pos += 2
 				continue
 			}

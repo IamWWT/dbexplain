@@ -78,7 +78,14 @@ func handleExecute(args []string) {
 		os.Exit(1)
 	}
 	if len(entries) > 1 {
-		fmt.Fprintln(os.Stderr, "ERROR: multiple DSNs matched — use --label or --db to select one")
+		msg := fmt.Sprintf("ERROR: %d DSNs matched — use --label to select one:\n", len(entries))
+		for _, e := range entries {
+			d, err := dsn.ParseDSN(e.raw)
+			if err == nil {
+				msg += fmt.Sprintf("  --label %s (%s)\n", d.Label, d.FilePath())
+			}
+		}
+		fmt.Fprint(os.Stderr, msg)
 		os.Exit(1)
 	}
 
@@ -490,15 +497,18 @@ func resolveJoinSources(sql string, entries []dsnEntry) ([]query.ExtraTable, err
 					matched = true
 
 				case "xlsx":
-					header, rows, err := connector.ReadXLSXFile(d.FilePath())
+					// Load all sheets — each sheet is available as a table
+					sheets, err := connector.ReadXLSXSheets(d.FilePath())
 					if err != nil {
 						continue
 					}
-					extras = append(extras, query.ExtraTable{
-						Alias:  tableName,
-						Header: header,
-						Rows:   rows,
-					})
+					for _, s := range sheets {
+						extras = append(extras, query.ExtraTable{
+							Alias:  s.Alias,
+							Header: s.Header,
+							Rows:   s.Rows,
+						})
+					}
 					matched = true
 				}
 			}

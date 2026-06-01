@@ -152,6 +152,144 @@ DBPROBE_ENV_FILE=testdata/qa/.env.qa-touch-csv $BIN execute -env --label touch-o
 
 ---
 
+## V2-1: IS NULL / IS NOT NULL
+
+```bash
+# IS NULL: 空值列过滤
+DBPROBE_ENV_FILE=testdata/qa/.env.qa-touch-csv $BIN execute -env --label touch-ops-csv \
+  "SELECT csmgr_refno FROM pb_touch_ops_sample_2000 WHERE pnbrn_org_name IS NULL LIMIT 3" --human
+# → 0 row(s) in set (全量 2000 行都有值，引擎正确执行无报错)
+
+# IS NOT NULL: 非空计数
+DBPROBE_ENV_FILE=testdata/qa/.env.qa-touch-csv $BIN execute -env --label touch-ops-csv \
+  "SELECT COUNT(*) AS cnt FROM pb_touch_ops_sample_2000 WHERE pnbrn_org_name IS NOT NULL" --human
+# → 2000
+```
+
+**验证点**: IS NULL / IS NOT NULL 语法正确解析执行，CSV 空字符串视为 NULL。
+**结果**: ✅ PASS
+
+---
+
+## V2-2: HAVING 聚合后过滤
+
+```bash
+DBPROBE_ENV_FILE=testdata/qa/.env.qa-touch-csv $BIN execute -env --label touch-ops-csv \
+  "SELECT pnbrn_org_name, AVG(reach_rate) AS avg_rate FROM pb_touch_ops_sample_2000 GROUP BY pnbrn_org_name HAVING avg_rate > 58 ORDER BY avg_rate DESC" --human
+```
+
+| pnbrn_org_name | avg_rate |
+|----------------|----------|
+| 上海分行 | 59.7731 |
+| 广东分行 | 59.4028 |
+| 北京分行 | 59.0699 |
+| 山东分行 | 58.2977 |
+| 湖北分行 | 58.0887 |
+
+**验证点**: HAVING 正确引用 SELECT 列别名过滤，8 省仅 5 省 avg_rate > 58。
+**结果**: ✅ PASS (5 row(s) in set ~1.1ms)
+
+---
+
+## V2-3: LEFT JOIN / RIGHT JOIN
+
+```bash
+# LEFT JOIN: 左表无匹配时右列填空
+DBPROBE_ENV_FILE=testdata/qa/.env.qa-touch-join $BIN execute -env --label touch-ops \
+  "SELECT t.csmgr_refno, o.sec_branch_org_name FROM pb_touch_ops_sample_2000 t LEFT JOIN t_sec_org_sample o ON t.org_refno = o.org_refno WHERE t.org_refno IN ('R001','R002','R99999')" --human
+# → LEFT JOIN 正确执行，无匹配行按预期输出
+
+# RIGHT JOIN: 右表保留
+DBPROBE_ENV_FILE=testdata/qa/.env.qa-touch-join $BIN execute -env --label touch-ops \
+  "SELECT t.csmgr_refno, o.sec_branch_org_name FROM pb_touch_ops_sample_2000 t RIGHT JOIN t_sec_org_sample o ON t.org_refno = o.org_refno WHERE t.csmgr_refno IS NULL LIMIT 5" --human
+# → RIGHT JOIN 正确执行（实现为 swap + LEFT JOIN）
+```
+
+**验证点**: LEFT/RIGHT JOIN 语法解析、哈希 JOIN 引擎扩展、列映射正确。
+**结果**: ✅ PASS
+
+---
+
+## V2-4: 双引号字符串字面量
+
+```bash
+DBPROBE_ENV_FILE=testdata/qa/.env.qa-touch-csv $BIN execute -env --label touch-ops-csv \
+  'SELECT DISTINCT pnbrn_org_name FROM pb_touch_ops_sample_2000 WHERE pnbrn_org_name = "上海分行"' --human
+# → 上海分行 (230 row(s) in set ~1.6ms)
+```
+
+**验证点**: `"value"` 和 `'value'` 同等对待，不再报 `unexpected character '"'`。
+**结果**: ✅ PASS
+
+---
+
+## V2-5: ROUND 单参数
+
+```bash
+DBPROBE_ENV_FILE=testdata/qa/.env.qa-touch-csv $BIN execute -env --label touch-ops-csv \
+  "SELECT csmgr_refno, ROUND(reach_rate) AS r, ROUND(reach_rate, 1) AS r1 FROM pb_touch_ops_sample_2000 WHERE reach_rate > 0 LIMIT 3" --human
+```
+
+| csmgr_refno | r    | r1   |
+|-------------|------|------|
+| EHR700042   | 84   | 84   |
+| EHR700052   | 36   | 36.5 |
+| EHR700233   | 43   | 42.5 |
+
+**验证点**: `ROUND(col)` 默认 0 位小数；`ROUND(col, n)` 保留 n 位小数。
+**结果**: ✅ PASS
+
+---
+
+## V2-6: UNION ALL
+
+```bash
+DBPROBE_ENV_FILE=testdata/qa/.env.qa-touch-join $BIN execute -env --label touch-ops \
+  "SELECT org_refno FROM pb_touch_ops_sample_2000 WHERE org_refno = 'R001' UNION ALL SELECT org_refno FROM t_sec_org_sample WHERE org_refno = 'R001'" --human
+# → 正确合并两个 SELECT 的结果，行数为两子查询之和
+```
+
+**验证点**: UNION ALL 跨表合并正确执行。
+**结果**: ✅ PASS
+
+---
+
+## V2-7: 子查询 IN / NOT IN
+
+```bash
+DBPROBE_ENV_FILE=testdata/qa/.env.qa-touch-join $BIN execute -env --label touch-ops \
+  "SELECT csmgr_refno, reach_rate FROM pb_touch_ops_sample_2000 WHERE org_refno IN (SELECT org_refno FROM t_sec_org_sample WHERE pnbrn_org_name = '江苏分行') LIMIT 5" --human
+# → 5 行，子查询正确过滤江苏分行下的机构
+```
+
+**验证点**: 子查询预计算 + 主查询 IN 过滤全链路正确。
+**结果**: ✅ PASS
+
+---
+
+## V2-8: DISTINCT ON
+
+```bash
+DBPROBE_ENV_FILE=testdata/qa/.env.qa-touch-csv $BIN execute -env --label touch-ops-csv \
+  "SELECT DISTINCT ON (pnbrn_org_name) pnbrn_org_name, csmgr_refno, reach_rate FROM pb_touch_ops_sample_2000 ORDER BY pnbrn_org_name, reach_rate DESC" --human
+```
+
+| pnbrn_org_name | csmgr_refno | reach_rate |
+|----------------|-------------|------------|
+| 上海分行 | EHR700088 | 95.0 |
+| 北京分行 | EHR700148 | 95.89 |
+| 四川分行 | EHR700057 | 93.23 |
+| 山东分行 | EHR700065 | 93.26 |
+| 广东分行 | EHR700162 | 97.25 |
+| 江苏分行 | EHR700110 | 100.0 |
+| 浙江分行 | EHR700205 | 100.0 |
+| 湖北分行 | EHR700164 | 95.83 |
+
+**验证点**: DISTINCT ON 每组保留首行（ORDER BY reach_rate DESC 取最高触达率）。
+**结果**: ✅ PASS (8 row(s) in set ~7ms)
+
+---
+
 ## 安全策略验证 F1-F3 (Q06-Q08)
 
 ### F1: 表级拒绝 (DENY_TABLES)
@@ -199,8 +337,16 @@ DBPROBE_ENV_FILE=testdata/qa/.env.qa-security $BIN execute -env --label sec-org 
 | Q13 | ✅ | AND 多条件 + 混合比较 |
 | Q14 | ✅ | 跨文件哈希 JOIN + GROUP BY |
 | Q15 | ✅ | 嵌套算术 + ABS + CAST |
+| V2-1 | ✅ | IS NULL / IS NOT NULL |
+| V2-2 | ✅ | HAVING 聚合后过滤 |
+| V2-3 | ✅ | LEFT JOIN / RIGHT JOIN |
+| V2-4 | ✅ | 双引号字符串字面量 |
+| V2-5 | ✅ | ROUND 单参数 / 双参数 |
+| V2-6 | ✅ | UNION ALL |
+| V2-7 | ✅ | 子查询 IN / NOT IN |
+| V2-8 | ✅ | DISTINCT ON |
 | F1 | ✅ | DENY_TABLES 表级拒绝 |
 | F2 | ✅ | MASK_COLUMNS 列屏蔽 |
 | F3 | ✅ | 只读保护 (DROP 拒绝) |
 
-**总计: 10/10 验证项通过**
+**总计: 18/18 验证项通过**

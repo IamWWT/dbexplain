@@ -125,23 +125,61 @@ dbexplain execute -env --label redis 'HGETALL session:abc'
 ```
 
 **CSV/XLSX files (v0.1.0+ file query engine):**
-File datasources support the full SELECT subset for business analysis without external tools:
+File datasources support the full SELECT subset for business analysis without external tools. See full syntax reference at [`references/sql-syntax.md`](references/sql-syntax.md).
+
+| Syntax | Description |
+|--------|-------------|
+| `SELECT ... FROM table` | Column projection, supports `SELECT *`, aliases, `DISTINCT ON` |
+| `WHERE ... AND/OR/NOT` | Filtering with `=`/`!=`/`<`/`>`/`LIKE`/`IN`/`BETWEEN`/`IS NULL` |
+| `GROUP BY ... HAVING` | Group aggregation + post-group filter |
+| `SUM/AVG/COUNT/MAX/MIN` | Aggregate functions, supports `COUNT(DISTINCT col)` |
+| `ORDER BY ... NULLS FIRST/LAST` | Sorting |
+| `JOIN / LEFT JOIN / RIGHT JOIN` | Cross-file hash join |
+| `UNION / UNION ALL` | Combine results |
+| `CAST / ABS / ROUND` | Type conversion and math functions |
+| `col IN (SELECT ...)` | Subqueries |
+
 ```bash
 # WHERE filter + column projection
-dbexplain execute -env --label touch-ops 'SELECT csmgr_refno, reach_rate FROM data WHERE reach_rate < 60' --human
+dbexplain execute -env --label my_data 'SELECT employee_id, completion_rate FROM sales_data WHERE completion_rate < 60' --human
 
 # GROUP BY + aggregation
-dbexplain execute -env --label touch-ops 'SELECT dept, AVG(rate) AS avg_rate FROM data GROUP BY dept ORDER BY avg_rate DESC' --human
+dbexplain execute -env --label my_data 'SELECT department, AVG(rate) AS avg_rate FROM data GROUP BY department ORDER BY avg_rate DESC' --human
 
 # Cross-file JOIN
-dbexplain execute -env --label touch-ops \
-  'SELECT o.org_name, AVG(t.reach_rate) FROM data t JOIN org o ON t.org_id = o.id GROUP BY o.org_name' --human
+dbexplain execute -env --label my_data \
+  'SELECT o.branch_name, AVG(t.completion_rate) FROM sales_data t JOIN org_info o ON t.dept_id = o.dept_id GROUP BY o.branch_name' --human
 
 # Column arithmetic + type cast
-dbexplain execute -env --label touch-ops \
-  'SELECT rm, CAST(channel_cnt AS FLOAT) / total_cnt * 100 AS pct FROM data WHERE total_cnt > 0' --human
+dbexplain execute -env --label my_data \
+  'SELECT employee_id, CAST(channel_cnt AS FLOAT) / total_cnt * 100 AS pct FROM data WHERE total_cnt > 0' --human
 ```
 File datasources are read-only (SELECT only); DROP/INSERT returns parse error.
+
+### 2.7 File Query Best Practices
+
+#### Data Preview
+
+Always preview data with `SELECT * --limit 5` first, then check dimension column cardinality:
+
+```bash
+dbexplain execute -env --label my_data 'SELECT *' --limit 5 --human                 # view sample data
+dbexplain execute -env --label my_data 'SELECT DISTINCT department FROM data' --human  # how many departments
+```
+
+> **`SELECT *` is for data preview only — never use it as the source for analytical conclusions.** All statistics (averages, extremes, ratios) must be computed via aggregate queries.
+
+#### Clarify Requirements
+
+**When user requests are vague, always clarify before analyzing.** Ask 2-3 key questions:
+
+- Do you need summary statistics (averages/totals) or detailed data?
+- Do you need comparisons or rankings across groups?
+- Which specific metric matters? Is a time trend needed?
+
+#### Business Analysis
+
+Scope your analysis based on the user's question. **Always use explicit WHERE clauses to bound each aggregate query** — never rely on implicit context from the conversation. Do not add LIMIT when full data is needed (default 1000-row limit is sufficient).
 
 **Output:** Default JSON (for Agent analysis), add `--human` for terminal tables.
 
@@ -164,7 +202,71 @@ MASK_COLUMNS=email=REDACTED,card_no=****       # non-blocking, replace column va
 | `CONCURRENT_LIMIT` | Concurrency conflict | Retry later |
 | `QUERY_ERROR: ...` | Connection or SQL error | Fix DSN or SQL |
 
-## 4. Common Parameters
+## 4. Traceable Analysis
+
+Every quantitative conclusion must cite its source SQL, allowing users to verify data authenticity.
+
+### Never Fabricate Data
+
+**Every number in your analysis output must come from an actual SQL query result.** The following are prohibited:
+
+- **Fabricated statistics**: Averages, extremes, ranges must be computed via `AVG/MAX/MIN/COUNT` aggregate queries — never estimated from `SELECT *` results
+- **Fabricated features**: Do not claim results for unsupported functions (window functions, STDDEV, median, etc.). The file query engine's supported syntax is listed in the [syntax table](#26-execute-read-only-query-collect-first-then-query). If the engine returns an error, report it honestly
+- **Fabricated tables**: Do not create fake tables with translated column names. If citing query results, use original column names and values exactly as output
+- **Sorting errors**: Ranking tables must be strictly ordered by the metric value
+- **Omitted output**: Query results must be cited verbatim. `--human` output tables may be truncated to key rows, but values must not be paraphrased
+
+> **Golden rule**: Whatever number you need, write the SQL to compute it. `SELECT *` is for data preview only — never use it as the source for analytical conclusions.
+
+### Citation Rules
+
+- **Quantitative conclusions** (rankings, ratios, averages): append the source SQL and row count at the end
+- **Cite per conclusion**: Each conclusion must cite its own source SQL. **Do not write "all data comes from query XXX" at the end**
+- **Qualitative judgments**: Must be supported by concrete data comparisons (e.g., group comparisons, time series)
+
+### Good Example
+
+> Department A has the highest average completion rate at 95.2%; Department B has the lowest at 82.1%.
+> Source: `SELECT department, AVG(completion_rate) AS avg_rate FROM sales_data GROUP BY department ORDER BY avg_rate DESC` (6 rows)
+
+### Bad Examples
+
+> Department A performs best. ← ✗ No source, no numbers
+> Most departments cluster around 85-90%. ← ✗ Vague estimation instead of precise numbers
+> Custom table: Dept | Rate | Notes ← ✗ Data may be fabricated
+> All data from SELECT * query. ← ✗ Vague attribution
+
+### On SQL Errors
+
+Report error messages honestly. Never pretend a query succeeded or fabricate alternative results.
+
+## 5. Error Handling
+
+Two categories of troubleshooting scenarios. Full guide at [`references/troubleshooting.md`](references/troubleshooting.md).
+
+### Database Connection Issues (9 database types)
+
+| Error | Common Cause | Action |
+|-------|-------------|--------|
+| `connection refused` | Service not running / wrong port / firewall | Check service status and port number |
+| `i/o timeout` | Network latency / firewall dropping packets | Check connectivity or increase `--timeout` |
+| `access denied` | Wrong username/password | Ask user to check credentials in `.env` |
+| `no such host` | DNS resolution failure | Verify hostname spelling or use IP |
+| `unsupported protocol` | Missing or wrong DSN scheme prefix | Verify scheme prefix is correct |
+| `no scanners configured` | Connector not compiled | Verify `dbexplain` version includes needed connector |
+
+### File Query Issues (CSV/TSV/XLSX)
+
+| Error | Common Cause | Action |
+|-------|-------------|--------|
+| `parse error` | SQL syntax not supported; wrong quote usage | Check syntax and quote usage |
+| `table "xxx" not found` | FROM clause uses label instead of filename | Use filename (without extension) |
+| `multiple DSNs matched` | Missing `--label` with multiple datasources | Add `--label` parameter |
+| `file not found` / `Instances (0)` | Relative path in DSN | Use absolute path |
+
+---
+
+## 6. Common Parameters
 
 | Parameter | Scope | Description |
 |-----------|-------|-------------|
@@ -177,7 +279,7 @@ MASK_COLUMNS=email=REDACTED,card_no=****       # non-blocking, replace column va
 | `-include/-exclude` | collect | Filter by DB type |
 | `-json/-o file` | collect | JSON output / write to file |
 
-## 5. Notes
+## 7. Notes
 
 - **DSN with special chars**: wrap the entire DSN in **single quotes** on CLI; no escaping needed in `.env`
 - **MongoDB**: DSN must include `authSource` (e.g. `?authSource=admin`) and specify database name

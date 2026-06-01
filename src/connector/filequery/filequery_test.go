@@ -1097,3 +1097,288 @@ func TestExecuteNoMatchWhere(t *testing.T) {
 		t.Fatalf("expected 0 rows, got %d", result.RowCount)
 	}
 }
+
+// --- Double-quoted strings (v2) ---
+
+func TestLexerDoubleQuotedString(t *testing.T) {
+	tokens, err := Tokenize(`"hello world"`)
+	if err != nil {
+		t.Fatalf("Tokenize double-quoted error: %v", err)
+	}
+	found := false
+	for _, tok := range tokens {
+		if tok.Type == TOKEN_STRING && tok.Value == "hello world" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatal("expected TOKEN_STRING for double-quoted literal")
+	}
+}
+
+func TestExecuteDoubleQuotedString(t *testing.T) {
+	header := []string{"name", "city"}
+	rows := [][]string{
+		{"alice", "上海"},
+		{"bob", "北京"},
+		{"carol", "上海"},
+	}
+
+	result, err := Execute(`SELECT name FROM t WHERE city = "上海"`, header, rows, nil, 100)
+	if err != nil {
+		t.Fatalf("Execute double-quote error: %v", err)
+	}
+	if result.RowCount != 2 {
+		t.Fatalf("expected 2 rows (city=上海), got %d", result.RowCount)
+	}
+}
+
+// --- IS NULL / IS NOT NULL (v2) ---
+
+func TestParseIsNull(t *testing.T) {
+	stmt := parseTestStmt(t, "SELECT * FROM t WHERE col IS NULL")
+	be, ok := stmt.Where.(*BinaryExpr)
+	if !ok {
+		t.Fatalf("expected BinaryExpr, got %T", stmt.Where)
+	}
+	if be.Op != "IS NULL" {
+		t.Fatalf("expected IS NULL, got %q", be.Op)
+	}
+}
+
+func TestParseIsNotNull(t *testing.T) {
+	stmt := parseTestStmt(t, "SELECT * FROM t WHERE col IS NOT NULL")
+	be, ok := stmt.Where.(*BinaryExpr)
+	if !ok {
+		t.Fatalf("expected BinaryExpr, got %T", stmt.Where)
+	}
+	if be.Op != "IS NOT NULL" {
+		t.Fatalf("expected IS NOT NULL, got %q", be.Op)
+	}
+}
+
+func TestExecuteIsNull(t *testing.T) {
+	header := []string{"name", "remark"}
+	rows := [][]string{
+		{"a", "ok"},
+		{"b", ""},
+		{"c", "done"},
+		{"d", ""},
+	}
+
+	result, err := Execute("SELECT * FROM t WHERE remark IS NULL", header, rows, nil, 100)
+	if err != nil {
+		t.Fatalf("Execute IS NULL error: %v", err)
+	}
+	if result.RowCount != 2 {
+		t.Fatalf("expected 2 rows (remark IS NULL), got %d", result.RowCount)
+	}
+}
+
+func TestExecuteIsNotNull(t *testing.T) {
+	header := []string{"name", "remark"}
+	rows := [][]string{
+		{"a", "ok"},
+		{"b", ""},
+		{"c", "done"},
+		{"d", ""},
+	}
+
+	result, err := Execute("SELECT * FROM t WHERE remark IS NOT NULL", header, rows, nil, 100)
+	if err != nil {
+		t.Fatalf("Execute IS NOT NULL error: %v", err)
+	}
+	if result.RowCount != 2 {
+		t.Fatalf("expected 2 rows (remark IS NOT NULL), got %d", result.RowCount)
+	}
+}
+
+// --- HAVING (v2) ---
+
+func TestParseHaving(t *testing.T) {
+	stmt := parseTestStmt(t, "SELECT dept, AVG(score) AS avg_score FROM t GROUP BY dept HAVING avg_score > 50")
+	if stmt.Having == nil {
+		t.Fatal("expected HAVING clause")
+	}
+	be, ok := stmt.Having.(*BinaryExpr)
+	if !ok {
+		t.Fatalf("expected BinaryExpr for HAVING, got %T", stmt.Having)
+	}
+	if be.Op != ">" {
+		t.Fatalf("expected > in HAVING, got %q", be.Op)
+	}
+}
+
+func TestExecuteHaving(t *testing.T) {
+	header := []string{"dept", "score"}
+	rows := [][]string{
+		{"eng", "90"},
+		{"eng", "70"},
+		{"sales", "40"},
+		{"sales", "60"},
+		{"hr", "50"},
+	}
+
+	result, err := Execute("SELECT dept, AVG(score) AS avg_score FROM t GROUP BY dept HAVING avg_score > 50", header, rows, nil, 100)
+	if err != nil {
+		t.Fatalf("Execute HAVING error: %v", err)
+	}
+	// eng avg=80, sales avg=50, hr avg=50 — only eng > 50
+	if result.RowCount != 1 {
+		t.Fatalf("expected 1 group (HAVING avg > 50), got %d", result.RowCount)
+	}
+	if *result.Rows[0][0] != "eng" {
+		t.Fatalf("expected 'eng' as surviving group, got %q", *result.Rows[0][0])
+	}
+}
+
+// --- LEFT JOIN (v2) ---
+
+func TestParseLeftJoin(t *testing.T) {
+	stmt := parseTestStmt(t, "SELECT t.*, o.name FROM t1 t LEFT JOIN t2 o ON t.id = o.id")
+	if len(stmt.Joins) != 1 {
+		t.Fatalf("expected 1 JOIN, got %d", len(stmt.Joins))
+	}
+	if stmt.Joins[0].JoinType != "LEFT" {
+		t.Fatalf("expected LEFT JOIN, got %q", stmt.Joins[0].JoinType)
+	}
+}
+
+func TestParseRightJoin(t *testing.T) {
+	stmt := parseTestStmt(t, "SELECT * FROM t1 RIGHT JOIN t2 ON t1.id = t2.id")
+	if stmt.Joins[0].JoinType != "RIGHT" {
+		t.Fatalf("expected RIGHT JOIN, got %q", stmt.Joins[0].JoinType)
+	}
+}
+
+func TestExecuteLeftJoinMatchAll(t *testing.T) {
+	header1 := []string{"id", "name"}
+	rows1 := [][]string{
+		{"1", "Alice"},
+		{"2", "Bob"},
+		{"3", "Charlie"},
+	}
+
+	header2 := []string{"id", "dept"}
+	rows2 := [][]string{
+		{"1", "eng"},
+		{"2", "sales"},
+	}
+
+	extras := []NamedData{{Alias: "o", Header: header2, Rows: rows2}}
+
+	result, err := Execute("SELECT t.name, o.dept FROM t1 t LEFT JOIN t2 o ON t.id = o.id", header1, rows1, extras, 100)
+	if err != nil {
+		t.Fatalf("Execute LEFT JOIN error: %v", err)
+	}
+	// Charlie has no match but should still appear (3 rows)
+	if result.RowCount != 3 {
+		t.Fatalf("expected 3 rows (LEFT JOIN includes Charlie), got %d", result.RowCount)
+	}
+	// Last row (Charlie) should have empty dept
+	if *result.Rows[2][1] != "" {
+		t.Fatalf("expected Charlie's dept to be empty, got %q", *result.Rows[2][1])
+	}
+}
+
+func TestExecuteLeftJoinNoMatch(t *testing.T) {
+	header1 := []string{"id", "name"}
+	rows1 := [][]string{
+		{"1", "Alice"},
+		{"2", "Bob"},
+	}
+
+	header2 := []string{"id", "dept"}
+	rows2 := [][]string{
+		{"3", "hr"},
+		{"4", "finance"},
+	}
+
+	extras := []NamedData{{Alias: "o", Header: header2, Rows: rows2}}
+
+	result, err := Execute("SELECT t.name, o.dept FROM t1 t LEFT JOIN t2 o ON t.id = o.id", header1, rows1, extras, 100)
+	if err != nil {
+		t.Fatalf("Execute LEFT JOIN no-match error: %v", err)
+	}
+	if result.RowCount != 2 {
+		t.Fatalf("expected 2 rows (all left rows retained), got %d", result.RowCount)
+	}
+	// Both should have empty dept
+	for i, row := range result.Rows {
+		if *row[1] != "" {
+			t.Fatalf("expected row %d dept empty, got %q", i, *row[1])
+		}
+	}
+}
+
+// --- ROUND single-arg (v2) ---
+
+func TestExecuteRoundSingleArg(t *testing.T) {
+	header := []string{"val"}
+	rows := [][]string{{"42.7"}, {"3.14"}, {"99.9"}}
+
+	result, err := Execute("SELECT ROUND(val) AS r FROM t", header, rows, nil, 100)
+	if err != nil {
+		t.Fatalf("Execute ROUND single-arg error: %v", err)
+	}
+	if result.RowCount != 3 {
+		t.Fatalf("expected 3 rows, got %d", result.RowCount)
+	}
+	if *result.Rows[0][0] != "43" {
+		t.Fatalf("expected ROUND(42.7)=43, got %q", *result.Rows[0][0])
+	}
+	if *result.Rows[1][0] != "3" {
+		t.Fatalf("expected ROUND(3.14)=3, got %q", *result.Rows[1][0])
+	}
+}
+
+func TestExecuteRoundTwoArg(t *testing.T) {
+	header := []string{"val"}
+	rows := [][]string{{"42.777"}, {"3.14159"}}
+
+	result, err := Execute("SELECT ROUND(val, 2) AS r FROM t", header, rows, nil, 100)
+	if err != nil {
+		t.Fatalf("Execute ROUND two-arg error: %v", err)
+	}
+	if *result.Rows[0][0] != "42.78" {
+		t.Fatalf("expected ROUND(42.777, 2)=42.78, got %q", *result.Rows[0][0])
+	}
+}
+
+func TestExecuteOrderByAlias(t *testing.T) {
+	header := []string{"name", "total", "cnt"}
+	rows := [][]string{
+		{"a", "100", "10"},
+		{"b", "200", "5"},
+		{"c", "50", "10"},
+		{"d", "300", "5"},
+	}
+	// ORDER BY computed expression alias DESC: ratio = total/cnt
+	// Expected: d=60, b=40, a=10, c=5
+	result, err := Execute("SELECT name, CAST(total AS FLOAT) / cnt * 100 AS ratio FROM t ORDER BY ratio DESC", header, rows, nil, 100)
+	if err != nil {
+		t.Fatalf("Execute error: %v", err)
+	}
+	if result.RowCount != 4 {
+		t.Fatalf("expected 4 rows, got %d", result.RowCount)
+	}
+	// Verify DESC order by ratio
+	expected := []string{"d", "b", "a", "c"}
+	for i, exp := range expected {
+		if *result.Rows[i][0] != exp {
+			t.Fatalf("position %d: expected name=%q, got %q", i, exp, *result.Rows[i][0])
+		}
+	}
+	// Also test ASC
+	result, err = Execute("SELECT name, CAST(total AS FLOAT) / cnt * 100 AS ratio FROM t ORDER BY ratio ASC", header, rows, nil, 100)
+	if err != nil {
+		t.Fatalf("Execute error: %v", err)
+	}
+	expectedAsc := []string{"c", "a", "b", "d"}
+	for i, exp := range expectedAsc {
+		if *result.Rows[i][0] != exp {
+			t.Fatalf("ASC position %d: expected name=%q, got %q", i, exp, *result.Rows[i][0])
+		}
+	}
+}

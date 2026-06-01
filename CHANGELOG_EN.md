@@ -18,6 +18,10 @@
 - **PostgreSQL index parsing**: `strings.LastIndex(def, ")")` broke on function indexes (`lower(email)`) and INCLUDE columns. Added `extractIndexColumns()` with bracket depth tracking
 - **Cache atomic write**: `os.WriteFile` is non-atomic; process crash corrupts cache. Switched to temp file + `os.Rename()` atomic operation
 
+### ORDER BY Computed Alias Sorting Fix
+- **Problem**: `SELECT ..., CAST(total AS FLOAT) / cnt * 100 AS ir ORDER BY ir DESC` — `ir` is a computed column alias (not a raw CSV column), `colMap` lookup fails causing no sorting to be applied
+- **Fix**: `executor.go` ORDER BY comparator added alias fallback: when `colMap` lookup fails, search SELECT columns for matching alias and evaluate via `Eval()` before comparing
+
 ### PostgreSQL Multi-Schema Support
 - **Schema discovery**: `collectPGDB()` now queries `pg_namespace` for all non-system schemas, no longer hardcoded to `public` only
 - **Row count from pg_class**: Added `n_live_tup` collection via `pg_class.reltuples` for per-table row estimates
@@ -62,11 +66,17 @@
 - **Subquery IN / NOT IN**: `SubqueryExpr` AST node + `subqueryCache` pre-computation cache; `parseComparison()` handles both prefix NOT (`NOT col IN (...)`) and postfix NOT (`col NOT IN (...)`), also NOT LIKE / NOT BETWEEN
 - **66 unit tests** (44 original + 22 new): NULLS lex/parse/exec, UNION ALL parse/exec, UNION dedup, DISTINCT ON parse/exec, subquery IN/NOT IN full pipeline
 
-### Third-Party Distribution Package
-- **`testdata/account-manager-skill/`**: Self-contained package for third-party customization; QwenPaw agent reads `SKILL.md` directly from directory
-- **Layout**: `SKILL.md` + `assets/`(5 pre-compiled platform binaries) + `scripts/`(install/uninstall) + `references/`(table specs) + `.env.example`
-- **Offline install**: `bash scripts/install.sh --offline ./assets/dbexplain-linux-amd64`; auto-detects in assets/ when no path specified
-- **SQL transparency**: SKILL.md switched from "unsupported list" to "complete supported syntax table" — AI agent never guesses
+### File Query Engine Enhancements v2 — SQL Compatibility Extension
+- **Double-quoted string literals**: New `readDoubleQuotedString()` function, both `"value"` and `'value'` are accepted. MySQL-compatible, no longer throws parse error on double-quoted SQL
+- **IS NULL / IS NOT NULL**: New `IS` keyword, null-value predicate (CSV empty strings treated as NULL). MySQL/PostgreSQL compatible
+- **HAVING clause**: Post-GROUP BY filter supporting SELECT column aliases in aggregate conditions. MySQL/PostgreSQL compatible
+- **LEFT JOIN / RIGHT JOIN**: `JoinClause` now has `JoinType` field; hash JOIN engine extended for left/right outer join semantics. MySQL/PostgreSQL compatible
+- **XLSX multi-sheet support**: `ExecQuery` matches sheet by SQL FROM table name; `resolveJoinSources` loads all sheets as independent NamedData. Each sheet queryable as a separate SQL table
+- **ROUND single-argument form**: `ROUND(col)` defaults to 0 decimal places, no longer requires explicit `n`
+- **Multi-DSN error improvement**: When multiple DSNs match, all available labels and file paths are listed, helping agents select the correct `--label`
+- **File-not-found hint**: CSV/XLSX `os.Open` failure now gives explicit `file not found: <path> (use absolute path)`
+- **`references/sql-syntax.md`**: Standalone SQL syntax reference file; SKILL.md simplified and references it
+- **SKILL.md tone improvement**: Changed from "not supported" to "full SQL reference at sql-syntax.md", more agent-friendly
 
 ### QA Scenario Expansion (Q09-Q15)
 - **7 new business analysis scenarios**: GROUP BY + AVG, ORDER BY + LIMIT, CAST + column arithmetic, GROUP BY date, AND multi-condition, cross-file JOIN, nested arithmetic + ABS
@@ -80,6 +90,33 @@
 - **JOIN alias overwrite fix**: `executor.go` added existence check on sources map, preventing nil overwrite when alias is missing
 - **Error visibility fix**: csv.go now passes through underlying parse errors instead of masking with ErrNotSupported
 - **`resolveDSNEntries()` removed**: Replaced by inline loading + `filterEntries()`
+
+### File Query Engine Correctness Fixes
+- **CAST conversion returning "0" fix**: `CAST(x AS INTEGER/FLOAT)` on failure returned `Value("0")` instead of the original value; changed to return `val`
+- **SUM returning "0" for all-non-numeric groups fix**: When all values in a group were non-numeric, SUM returned `"0"`; changed to return `""` (SQL NULL semantics, consistent with MAX/MIN)
+- **AVG count==0 returning "0" fix**: When all group values were non-numeric, AVG returned `"0"`; changed to return `""`
+- **Eval error silent swallow fix**: `buildResult()` column projection and `executeAggregation()` expression evaluation silently returned `""` on Eval errors; changed to propagate errors
+- **JOIN column map out-of-range fix**: After hash JOIN, `colMap` rebuild only used primary table alias; JOIN table qualified column indices used `len(primaryHeader)` offset causing out-of-range access. Changed to build colMap per-source with correct offsets
+
+### Third-Party Distribution Package
+- **`testdata/account-manager-skill/`**: Self-contained package for third-party customization; QwenPaw agent reads `SKILL.md` directly from directory
+- **Layout**: `SKILL.md` + `assets/`(5 pre-compiled platform binaries) + `scripts/`(install/uninstall) + `references/`(table specs) + `.env.example`
+- **Offline install**: `bash scripts/install.sh --offline ./assets/dbexplain-linux-amd64`; auto-detects in assets/ when no path specified
+- **SQL transparency**: SKILL.md switched from "unsupported list" to "complete supported syntax table" — AI agent never guesses
+
+### macOS Gatekeeper Compatibility
+- **Quarantine auto-removal in installers**: Both `install.sh` scripts (dbexplain-skill + account-manager-skill) added `remove_quarantine()` — automatically runs `xattr -d com.apple.quarantine` after binary install on macOS
+- **SETUP.md**: Added macOS Gatekeeper notes and manual workaround instructions
+
+### dbexplain-skill Best Practice Generalization
+- **SKILL_ZH.md / SKILL_EN.md**: New sections — "Traceable Analysis" (no fabricated data, per-conclusion SQL citations), "File Query Best Practices" (preview → clarify → analyze), "Error Handling (9+3 classification)"
+- **`references/sql-syntax.md`**: New, generalized from account-manager-skill with neutral column names (`sales_data`/`department`/`employee_id`), scoped to file datasources
+- **`references/troubleshooting.md`**: New, generalized from account-manager-skill and expanded with DB connection troubleshooting (DNS/auth/timeout/SSL), organized in 9+3 categories
+- **install-skill.sh**: Now deploys `references/` directory on install/update; `--verify` checks its integrity
+
+### Version Tracking
+- Version: v0.1.0
+- All 38 doc-code discrepancies resolved
 
 ## v0.0.9 (2026-05-28)
 

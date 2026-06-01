@@ -21,6 +21,7 @@ TOOLS_DIR="${SKILL_DIR}/tools"
 SKILL_MD_ZH="${SKILL_DIR}/SKILL_ZH.md"
 SKILL_MD_EN="${SKILL_DIR}/SKILL_EN.md"
 ENV_EXAMPLE="${SKILL_DIR}/.env.dbexplain.example"
+REF_DIR="${SKILL_DIR}/references"
 SKILL_NAME="dbexplain-skill"
 VERSION="v0.1.0"
 LANG="zh"        # default: Chinese
@@ -183,6 +184,13 @@ install_to() {
   if [ -f "$ENV_EXAMPLE" ]; then
     cp "$ENV_EXAMPLE" "${target_dir}/${SKILL_NAME}/.env.dbexplain.example"
     _step ".env.dbexplain.example → ${target_dir}/${SKILL_NAME}/.env.dbexplain.example"
+  fi
+
+  # Copy references/ directory (sql-syntax.md, troubleshooting.md, etc.)
+  if [ -d "$REF_DIR" ]; then
+    mkdir -p "${target_dir}/${SKILL_NAME}/references"
+    cp -r "$REF_DIR"/* "${target_dir}/${SKILL_NAME}/references/"
+    _step "references/ → ${target_dir}/${SKILL_NAME}/references/"
   fi
 
   # Install binary (as "dbexplain" — platform-agnostic name)
@@ -363,7 +371,20 @@ verify_installation() {
       ((errors++))
     fi
 
-    # 2. Check tools directory and binary (look for "dbexplain" first, then legacy platform names)
+    # 2. Check references/ directory
+    if [ -d "${real_dir}/references" ]; then
+      local ref_count
+      ref_count="$(ls "${real_dir}/references"/*.md 2>/dev/null | wc -l)"
+      if [ "$ref_count" -gt 0 ]; then
+        echo -e "  ${GREEN}✓${NC} references/ present (${ref_count} file(s))"
+      else
+        echo -e "  ${YELLOW}⚠${NC} references/ directory is empty"
+      fi
+    else
+      echo -e "  ${YELLOW}⚠${NC} references/ directory missing (optional)"
+    fi
+
+    # 3. Check tools directory and binary (look for "dbexplain" first, then legacy platform names)
     local bin_path="${real_dir}/tools/dbexplain"
     if [ -f "$bin_path" ]; then
       if [ -x "$bin_path" ]; then
@@ -460,6 +481,13 @@ update_single_dir() {
   if [ -f "$ENV_EXAMPLE" ]; then
     cp "$ENV_EXAMPLE" "${real_dir}/.env.dbexplain.example"
     echo -e "      ${GREEN}✓${NC} .env.dbexplain.example"
+  fi
+
+  # Update references/ directory
+  if [ -d "$REF_DIR" ]; then
+    rm -rf "${real_dir}/references" 2>/dev/null
+    cp -r "$REF_DIR" "${real_dir}/references"
+    echo -e "      ${GREEN}✓${NC} references/"
   fi
 
   if [ -f "${real_dir}/.env.dbexplain" ]; then

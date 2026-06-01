@@ -240,6 +240,13 @@ install_offline() {
     exit 1
 }
 
+# ── macOS Gatekeeper: remove quarantine attribute ──
+remove_quarantine() {
+    if [ "$OS" = "darwin" ]; then
+        xattr -d com.apple.quarantine "$DEST_BIN" 2>/dev/null || true
+    fi
+}
+
 # ── Copy binary to install dir (offline: preserve user's original file) ──
 copy_binary() {
     local src="$1"
@@ -252,6 +259,7 @@ copy_binary() {
         cp "$src" "$DEST_BIN"
         chmod +x "$DEST_BIN"
     fi
+    remove_quarantine
     info "Binary copied to ${DEST_BIN}"
     info "Original file preserved at ${src}"
 }
@@ -268,6 +276,7 @@ move_binary() {
         mv "$src" "$DEST_BIN"
         chmod +x "$DEST_BIN"
     fi
+    remove_quarantine
     info "Binary installed to ${DEST_BIN}"
 }
 

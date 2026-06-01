@@ -102,13 +102,18 @@ func (a *Aggregator) computeAgg(indices []int, ac AggCol) string {
 		return fmt.Sprintf("%d", len(indices))
 	case "SUM":
 		var sum float64
+		hasVal := false
 		for _, idx := range indices {
 			if ac.Index >= 0 && ac.Index < len(a.rows[idx]) {
 				f, ok := a.rows[idx][ac.Index].Float()
 				if ok {
 					sum += f
+					hasVal = true
 				}
 			}
+		}
+		if !hasVal {
+			return ""
 		}
 		return formatFloat(sum)
 	case "AVG":
@@ -124,7 +129,7 @@ func (a *Aggregator) computeAgg(indices []int, ac AggCol) string {
 			}
 		}
 		if count == 0 {
-			return "0"
+			return ""
 		}
 		return formatFloat(sum / float64(count))
 	case "MAX":

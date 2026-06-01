@@ -119,6 +119,7 @@ type SelectStmt struct {
 	OrderBy    []OrderExpr  // ORDER BY clauses
 	Limit      int          // LIMIT (0 = no limit)
 	Offset     int          // OFFSET (0 = no offset)
+	Having     Expr         // HAVING expression (nil if none)
 	DistinctOn []ColumnRef  // DISTINCT ON columns (nil if none)
 }
 
@@ -135,9 +136,10 @@ func (u *UnionStmt) stmtNode() {}
 
 // JoinClause represents a single JOIN clause.
 type JoinClause struct {
-	Table string // table name
-	Alias string // table alias (empty if none)
-	On    Expr   // ON condition
+	Table    string // table name
+	Alias    string // table alias (empty if none)
+	On       Expr   // ON condition
+	JoinType string // "INNER" or "LEFT" (default "INNER")
 }
 
 // OrderExpr represents a single ORDER BY entry.

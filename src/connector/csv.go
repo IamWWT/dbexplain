@@ -342,6 +342,9 @@ func readCSVFile(path string, delimiter rune, encoding string) (*schema.Table, e
 func readCSVData(path string, delimiter rune, encoding string) ([][]string, []string, error) {
 	f, err := os.Open(path)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil, fmt.Errorf("file not found: %s (use absolute path)", path)
+		}
 		return nil, nil, err
 	}
 	defer f.Close()

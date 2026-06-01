@@ -99,13 +99,25 @@ func executeSelect(stmt *SelectStmt, header []string, rows [][]string, extras []
 					joinSrc = aliasSrc
 				}
 			}
-			joinData, joinHeader, err := executeHashJoin(
-				currentData, primaryHeader, stmt.FromAlias,
-				joinSrc.rows, joinSrc.header, join.Alias,
-				join.On,
-			)
-			if err != nil {
-				return nil, fmt.Errorf("JOIN error: %w", err)
+		var joinData []Row
+		var joinHeader []string
+		var joinErr error
+		if join.JoinType == "RIGHT" {
+				// RIGHT JOIN: swap left and right, then do LEFT JOIN
+				joinData, joinHeader, joinErr = executeHashJoin(
+					joinSrc.rows, joinSrc.header, join.Alias,
+					currentData, primaryHeader, stmt.FromAlias,
+					join.On, "LEFT",
+				)
+			} else {
+				joinData, joinHeader, joinErr = executeHashJoin(
+					currentData, primaryHeader, stmt.FromAlias,
+					joinSrc.rows, joinSrc.header, join.Alias,
+					join.On, join.JoinType,
+				)
+			}
+			if joinErr != nil {
+				return nil, fmt.Errorf("JOIN error: %w", joinErr)
 			}
 			currentData = joinData
 			primaryHeader = joinHeader
@@ -113,12 +125,46 @@ func executeSelect(stmt *SelectStmt, header []string, rows [][]string, extras []
 	}
 
 	// Build column map
-	colMap := BuildColMap(primaryHeader, stmt.FromAlias)
-	for _, extra := range extras {
-		extraColMap := BuildColMap(extra.Header, extra.Alias)
-		for k, v := range extraColMap {
-			if _, exists := colMap[k]; !exists {
-				colMap[k] = v + len(primaryHeader)
+	var colMap ColMap
+	if len(stmt.Joins) > 0 {
+		// After JOIN, primaryHeader is the concatenation of primary + each JOIN's right table columns.
+		// Build colMap with both aliases at the correct offsets.
+		colMap = make(ColMap)
+		// Primary table columns at offset 0..len(header)-1
+		for i, col := range header {
+			if stmt.FromAlias != "" {
+				colMap[stmt.FromAlias+"."+col] = i
+			}
+			colMap[col] = i
+		}
+		// Each JOIN's right table columns at subsequent offsets
+		offset := len(header)
+		for _, join := range stmt.Joins {
+			src, ok := sources[join.Table]
+			if !ok && join.Alias != "" {
+				src, ok = sources[join.Alias]
+			}
+			if ok {
+				for i, col := range src.header {
+					idx := offset + i
+					if join.Alias != "" {
+						colMap[join.Alias+"."+col] = idx
+					}
+					if _, exists := colMap[col]; !exists {
+						colMap[col] = idx
+					}
+				}
+				offset += len(src.header)
+			}
+		}
+	} else {
+		colMap = BuildColMap(primaryHeader, stmt.FromAlias)
+		for _, extra := range extras {
+			extraColMap := BuildColMap(extra.Header, extra.Alias)
+			for k, v := range extraColMap {
+				if _, exists := colMap[k]; !exists {
+					colMap[k] = v + len(primaryHeader)
+				}
 			}
 		}
 	}
@@ -164,8 +210,15 @@ func executeSelect(stmt *SelectStmt, header []string, rows [][]string, extras []
 		if err != nil {
 			return nil, err
 		}
+		// Apply HAVING filter to aggregation results
+		if stmt.Having != nil {
+			result, err = applyHaving(result, stmt.Having)
+			if err != nil {
+				return nil, fmt.Errorf("HAVING: %w", err)
+			}
+		}
 		// Apply ORDER BY to aggregation results
-		if len(stmt.OrderBy) > 0 {
+		if len(stmt.OrderBy) > 0 && result != nil {
 			sortAggResults(result, stmt.OrderBy)
 		}
 		return result, nil
@@ -175,18 +228,36 @@ func executeSelect(stmt *SelectStmt, header []string, rows [][]string, extras []
 	if len(stmt.OrderBy) > 0 {
 		sort.SliceStable(currentData, func(i, j int) bool {
 			for _, ob := range stmt.OrderBy {
+				var vi, vj string
 				idx, ok := colMap[ob.Expr.Col]
 				if !ok {
 					idx, ok = colMap[stmt.FromAlias+"."+ob.Expr.Col]
-					if !ok {
+				}
+				if ok {
+					if idx >= len(currentData[i]) || idx >= len(currentData[j]) {
+						continue
+					}
+					vi = string(currentData[i][idx])
+					vj = string(currentData[j][idx])
+				} else {
+					// Resolve as SELECT alias (computed expression)
+					var found bool
+					for _, sel := range stmt.Columns {
+						if sel.Alias != "" && sel.Alias == ob.Expr.Col {
+							vv1, err1 := Eval(sel.Expr, Row(currentData[i]), colMap)
+							vv2, err2 := Eval(sel.Expr, Row(currentData[j]), colMap)
+							if err1 == nil && err2 == nil {
+								vi = string(vv1)
+								vj = string(vv2)
+								found = true
+							}
+							break
+						}
+					}
+					if !found {
 						continue
 					}
 				}
-				if idx >= len(currentData[i]) || idx >= len(currentData[j]) {
-					continue
-				}
-				vi := string(currentData[i][idx])
-				vj := string(currentData[j][idx])
 
 				// NULLS FIRST/LAST handling
 				viIsNull := vi == ""
@@ -368,10 +439,11 @@ func collectSubqueries(expr Expr, cache map[*SubqueryExpr]map[string]bool) {
 }
 
 // executeHashJoin performs a hash join between two datasets.
+// joinType: "INNER" (default) or "LEFT".
 func executeHashJoin(
 	leftData []Row, leftHeader []string, leftAlias string,
 	rightData []Row, rightHeader []string, rightAlias string,
-	onExpr Expr,
+	onExpr Expr, joinType string,
 ) ([]Row, []string, error) {
 	// Build combined column map
 	colMap, combinedHeader := JoinColMaps(leftHeader, leftAlias, rightHeader, rightAlias)
@@ -439,6 +511,15 @@ func executeHashJoin(
 					}
 					result = append(result, combined)
 				}
+			} else if joinType == "LEFT" {
+				// LEFT JOIN: keep unmatched left rows, right columns empty
+				combined := make(Row, len(combinedHeader))
+				for j := range leftHeader {
+					if j < len(lrow) {
+						combined[j] = lrow[j]
+					}
+				}
+				result = append(result, combined)
 			}
 		}
 		return result, combinedHeader, nil
@@ -447,6 +528,7 @@ func executeHashJoin(
 	// Fallback: nested loop join for complex ON conditions
 	var result []Row
 	for _, lrow := range leftData {
+		matched := false
 		for _, rrow := range rightData {
 			// Build combined row for ON evaluation
 			combined := make(Row, len(combinedHeader))
@@ -463,7 +545,18 @@ func executeHashJoin(
 			val, err := Eval(onExpr, combined, colMap)
 			if err == nil && val.Bool() {
 				result = append(result, combined)
+				matched = true
 			}
+		}
+		if !matched && joinType == "LEFT" {
+			// LEFT JOIN: keep unmatched left rows, right columns empty
+			combined := make(Row, len(combinedHeader))
+			for j := range leftHeader {
+				if j < len(lrow) {
+					combined[j] = lrow[j]
+				}
+			}
+			result = append(result, combined)
 		}
 	}
 	return result, combinedHeader, nil
@@ -627,8 +720,7 @@ func executeAggregation(stmt *SelectStmt, data []Row, header []string, colMap Co
 					// Try evaluating against first group row
 					val, err := Eval(sel.Expr, ar.GroupRow, colMap)
 					if err != nil {
-						v := ""
-						row = append(row, &v)
+						return nil, fmt.Errorf("evaluate expression: %w", err)
 					} else {
 						v := string(val)
 						row = append(row, &v)
@@ -702,8 +794,7 @@ func buildResult(stmt *SelectStmt, data []Row, header []string, colMap ColMap) (
 		for j, ce := range colExprs {
 			val, err := Eval(ce.expr, row, colMap)
 			if err != nil {
-				v := ""
-				out[j] = &v
+				return nil, fmt.Errorf("evaluate column %q: %w", ce.alias, err)
 			} else {
 				v := string(val)
 				out[j] = &v
@@ -801,6 +892,46 @@ func exprName(e Expr) string {
 	default:
 		return "expr"
 	}
+}
+
+// applyHaving filters aggregation result rows by a HAVING expression.
+// Rows that don't satisfy the HAVING condition are removed.
+// Rows where HAVING evaluation errors out are also removed (defensive).
+func applyHaving(result *query.QueryResult, having Expr) (*query.QueryResult, error) {
+	if result == nil || len(result.Rows) == 0 {
+		return result, nil
+	}
+
+	// Build column index map from result column names
+	colMap := make(ColMap)
+	for i, col := range result.Columns {
+		colMap[col.Name] = i
+	}
+
+	// Filter rows
+	var filtered [][]*string
+	for _, row := range result.Rows {
+		// Convert []*string to Row ([]Value) for the evaluator
+		rowVals := make(Row, len(row))
+		for j, cell := range row {
+			if cell != nil {
+				rowVals[j] = Value(*cell)
+			}
+		}
+
+		val, err := Eval(having, rowVals, colMap)
+		if err != nil {
+			// Skip rows where HAVING evaluation fails (defensive)
+			continue
+		}
+		if val.Bool() {
+			filtered = append(filtered, row)
+		}
+	}
+
+	result.Rows = filtered
+	result.RowCount = len(filtered)
+	return result, nil
 }
 
 // EnsureRows converts a 2D string slice to a Row slice.

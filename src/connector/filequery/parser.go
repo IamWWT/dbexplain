@@ -162,9 +162,28 @@ func (p *Parser) parseSingleSelect() (*SelectStmt, error) {
 		stmt.FromAlias = fromAlias
 	}
 
-	// JOIN clauses
-	for p.peek().Type == TOKEN_JOIN {
-		p.next()
+	// JOIN clauses (supports JOIN, LEFT [OUTER] JOIN, RIGHT [OUTER] JOIN)
+	for {
+		joinType := "INNER"
+		if p.peek().Type == TOKEN_LEFT {
+			p.next()
+			joinType = "LEFT"
+			// Optional OUTER keyword
+			if p.peek().Type == TOKEN_OUTER {
+				p.next()
+			}
+		} else if p.peek().Type == TOKEN_RIGHT {
+			p.next()
+			joinType = "RIGHT"
+			if p.peek().Type == TOKEN_OUTER {
+				p.next()
+			}
+		} else if p.peek().Type != TOKEN_JOIN {
+			break
+		}
+		if _, err := p.expect(TOKEN_JOIN); err != nil {
+			return nil, err
+		}
 		joinTable, joinAlias, err := p.parseTableRef()
 		if err != nil {
 			return nil, err
@@ -177,9 +196,10 @@ func (p *Parser) parseSingleSelect() (*SelectStmt, error) {
 			return nil, err
 		}
 		stmt.Joins = append(stmt.Joins, JoinClause{
-			Table: joinTable,
-			Alias: joinAlias,
-			On:    onExpr,
+			Table:    joinTable,
+			Alias:    joinAlias,
+			On:       onExpr,
+			JoinType: joinType,
 		})
 	}
 
@@ -211,6 +231,16 @@ func (p *Parser) parseSingleSelect() (*SelectStmt, error) {
 				break
 			}
 		}
+	}
+
+	// HAVING
+	if p.peek().Type == TOKEN_HAVING {
+		p.next()
+		having, err := p.parseExpr()
+		if err != nil {
+			return nil, err
+		}
+		stmt.Having = having
 	}
 
 	// ORDER BY
@@ -573,7 +603,23 @@ func (p *Parser) parseComparison() (Expr, error) {
 			left = &BetweenExpr{Expr: left, Low: low, High: high}
 		}
 	default:
-		if negate {
+		// Check for IS NULL / IS NOT NULL
+		if p.peek().Type == TOKEN_IS {
+			p.next() // consume IS
+			nullNegate := false
+			if p.peek().Type == TOKEN_NOT {
+				p.next()
+				nullNegate = true
+			}
+			if _, err := p.expect(TOKEN_NULL); err != nil {
+				return nil, err
+			}
+			op := "IS NULL"
+			if nullNegate {
+				op = "IS NOT NULL"
+			}
+			left = &BinaryExpr{Left: left, Op: op, Right: &StringLit{Value: ""}}
+		} else if negate {
 			// NOT followed by something else — likely NOT (expr) or NOT expr
 			left = &UnaryExpr{Op: "NOT", Right: left}
 		}
