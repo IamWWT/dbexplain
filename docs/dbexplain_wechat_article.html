@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>dbexplain v0.0.6 发布推文</title>
+<title>dbexplain v0.0.9 + v0.1.0 合并发布</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700;900&family=JetBrains+Mono:wght@400;600&display=swap');
 
@@ -252,22 +252,23 @@
   .step-content { font-size: 14px; line-height: 1.7; }
   .step-content strong { color: var(--rust); }
 
-  /* ── 加密安全展示 ── */
-  .security-block {
+  /* ── 查询结果模拟 ── */
+  .query-result {
     background: #0d1117;
     color: #c9d1d9;
-    padding: 20px;
-    margin: 20px 0;
+    padding: 12px 16px;
+    margin: 0 0 16px;
     font-family: 'JetBrains Mono', monospace;
-    font-size: 12px;
+    font-size: 11px;
     line-height: 1.8;
     border-left: 3px solid var(--green);
+    overflow-x: auto;
   }
-  .security-block .label { color: #8b949e; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 10px; }
-  .security-block .key { color: #79c0ff; }
-  .security-block .val { color: #a5d6ff; }
-  .security-block .ok { color: var(--green); }
-  .security-block .warn { color: #f0c040; }
+  .query-result .header { color: #58a6ff; }
+  .query-result .row-even { color: #c9d1d9; }
+  .query-result .row-odd { color: #8b949e; }
+  .query-result .num { color: #f0c040; }
+  .query-result .sep { color: #30363d; }
 
   /* ── 分隔线 ── */
   .divider {
@@ -286,6 +287,28 @@
     flex: 1;
     height: 1px;
     background: var(--border);
+  }
+
+  /* ── 引用注意框 ── */
+  .callout {
+    background: #fffbf0;
+    border: 1px solid var(--gold);
+    border-left: 4px solid var(--gold);
+    padding: 14px 18px;
+    font-size: 13px;
+    color: #5a4a00;
+    margin: 16px 0;
+    line-height: 1.7;
+  }
+  .callout-info {
+    background: #f0f7ff;
+    border: 1px solid var(--blue);
+    border-left: 4px solid var(--blue);
+    padding: 14px 18px;
+    font-size: 13px;
+    color: #004085;
+    margin: 16px 0;
+    line-height: 1.7;
   }
 
   /* ── 尾部 ── */
@@ -318,19 +341,6 @@
     letter-spacing: 0.08em;
   }
 
-  /* ── 引用注意框 ── */
-  .callout {
-    background: #fffbf0;
-    border: 1px solid var(--gold);
-    border-left: 4px solid var(--gold);
-    padding: 14px 18px;
-    font-size: 13px;
-    color: #5a4a00;
-    margin: 16px 0;
-    line-height: 1.7;
-  }
-  .callout::before { content: '⚠ '; font-weight: 700; }
-
   /* ── 支持矩阵 ── */
   .db-grid {
     display: grid;
@@ -353,6 +363,7 @@
     font-size: 13px;
   }
   .db-item .db-note { color: var(--muted); font-size: 11px; }
+  .db-item .new { color: var(--rust); font-weight: 700; font-size: 10px; letter-spacing: 0.05em; }
 
   @media (max-width: 500px) {
     .feature-grid { grid-template-columns: 1fr; }
@@ -376,37 +387,37 @@
 <div class="tags">
   <span class="tag">开源工具</span>
   <span class="tag">AI Agent</span>
-  <span class="tag">数据库安全</span>
+  <span class="tag">CSV/SQL 查询引擎</span>
   <span class="tag">Go</span>
-  <span class="tag">v0.0.5 + v0.0.6</span>
+  <span class="tag">v0.0.9 + v0.1.0</span>
 </div>
 
-<h1 class="headline">AI 时代，你的数据库密码<br>还在裸奔吗？<em>dbexplain</em> 来了</h1>
+<h1 class="headline">那个给 AI 用的数据库工具，<br>现在能<em>直接分析 Excel</em> 了</h1>
 
 <div class="subtitle">
-  dbexplain v0.0.5 + v0.0.6 合并发布 · 2026年5月 · Apache License
+  dbexplain v0.0.9 + v0.1.0 合并发布 · 2026年6月 · Apache 2.0
 </div>
 
 <div class="lede">
-  当大家把 MySQL、Redis、Elasticsearch 的连接串直接扔进 <code>.env</code> 文件，再交给 AI Agent 去消费时，有没有想过：那个明文密码，一旦服务器被入侵，就是一览无余的？
+  11 种数据源 + 纯 Go 内存 SQL 引擎 + 安全策略引擎。不需要数据库就能跑 SQL 查询，AI Agent 直接分析 CSV/Excel —— 一个二进制，零依赖。
 </div>
 
-<p>过去几个月，<strong>AI Agent 与数据库的协作</strong>已经从"未来趋势"变成了"当下日常"。Claude Code、Cursor、DeepSeek 这些工具都在通过 Skill / Tool 机制直接调用数据库分析工具。但随之而来的安全隐患，大多数开发者选择了视而不见。</p>
+<p>如果你还没听说过 <strong>dbexplain</strong>：它是一个专为 AI Agent 设计的数据库 Schema 上下文生成工具。但这次 v0.0.9 + v0.1.0 合并发布之后，它的能力已经远远超出了"Schema 采集"的范畴。</p>
 
-<p><strong>dbexplain</strong> 是一个专为 AI Agent 设计的数据库 Schema 上下文生成工具——零依赖、支持 9 种数据库、只读安全。这次 v0.0.5 + v0.0.6 合并发布，带来了三件大事。</p>
+<p>最核心的变化是：<strong>现在它能直接对 CSV 和 Excel 文件执行 SQL 查询了</strong>。不是调用外部引擎，而是内置了一个纯 Go 实现的内存 SQL 引擎。</p>
 
 <div class="stats-row">
   <div class="stat">
-    <span class="number">9</span>
-    <span class="label">支持数据库类型</span>
+    <span class="number">11</span>
+    <span class="label">支持数据源类型</span>
   </div>
   <div class="stat">
-    <span class="number">133+</span>
-    <span class="label">测试用例全通过</span>
+    <span class="number">66+</span>
+    <span class="label">查询引擎单元测试</span>
   </div>
   <div class="stat">
-    <span class="number">13</span>
-    <span class="label">Bug 修复</span>
+    <span class="number">15</span>
+    <span class="label">业务分析 QA 场景</span>
   </div>
   <div class="stat">
     <span class="number">0</span>
@@ -414,141 +425,83 @@
   </div>
 </div>
 
-<div class="divider">重磅一</div>
+<div class="divider">核心亮点</div>
 
-<h2 class="section"><span class="num">01</span>配置文件硬件绑定加密</h2>
+<h2 class="section"><span class="num">01</span>内置 SQL 引擎：从此 CSV 不再是二等公民</h2>
 
-<p>这是本次发布最核心的安全特性。<code>v0.0.6</code> 新增 <code>encrypt</code> 子命令，将数据库密码与<strong>机器硬件指纹绑定加密</strong>。加密后的 <code>.enc</code> 文件，离开了这台机器就无法解密——即使攻击者拿到文件也没用。</p>
+<p>这是本次发布最重磅的能力。v0.1.0 新增了 <strong>纯 Go 实现的内存 SQL 查询引擎</strong>，支持对 CSV/TSV/XLSX 文件执行完整的 SELECT 查询：</p>
 
-<div class="security-block">
-  <div class="label">加密技术栈</div>
-  <span class="key">算法</span>   &nbsp;<span class="val">XChaCha20-Poly1305 (AEAD)  </span><span class="ok">← 认证加密，防篡改</span><br>
-  <span class="key">密钥派生</span>&nbsp;<span class="val">SHA-256（机器指纹哈希）</span><br>
-  <span class="key">迭代次数</span>&nbsp;<span class="val">PBKDF2-HMAC-SHA256 × 100,000</span><span class="warn"> ← 密码增强模式</span><br>
-  <span class="key">文件权限</span>&nbsp;<span class="val">0600</span><br>
-  <span class="key">CGO</span>    &nbsp;&nbsp;<span class="val">CGO_ENABLED=0  </span><span class="ok">← 全平台纯 Go 编译</span>
-</div>
+<pre><span class="comment">-- WHERE 过滤 + 列投影</span>
+<span class="cmd">dbexplain</span> execute -env --label my_data \
+  <span class="str">'SELECT employee_id, completion_rate FROM sales_data WHERE completion_rate < 60'</span> --human
 
-<h3 class="subsection">使用极其简单，三步完成</h3>
+<span class="comment">-- GROUP BY + 聚合</span>
+<span class="cmd">dbexplain</span> execute -env --label my_data \
+  <span class="str">'SELECT department, AVG(rate) AS avg_rate FROM data GROUP BY department ORDER BY avg_rate DESC'</span> --human
 
-<div class="steps">
-  <div class="step">
-    <div class="step-num">1</div>
-    <div class="step-content"><strong>加密明文配置</strong>：<code>dbexplain encrypt ~/.config/dbexplain/.env.dbexplain</code></div>
-  </div>
-  <div class="step">
-    <div class="step-num">2</div>
-    <div class="step-content"><strong>删除明文文件</strong>：<code>rm ~/.config/dbexplain/.env.dbexplain</code>（这步不能省！）</div>
-  </div>
-  <div class="step">
-    <div class="step-num">3</div>
-    <div class="step-content"><strong>正常使用</strong>：<code>dbexplain -env</code>，工具自动发现 <code>.enc</code> 文件并解密，对用户完全透明</div>
-  </div>
-</div>
+<span class="comment">-- 跨文件 JOIN（CSV ↔ XLSX）</span>
+<span class="cmd">dbexplain</span> execute -env --label my_data \
+  <span class="str">'SELECT o.branch_name, AVG(t.completion_rate) FROM sales_data t JOIN org_info o ON t.dept_id = o.dept_id GROUP BY o.branch_name'</span> --human
 
-<div class="callout">
-  加密后务必删除明文 <code>.env.dbexplain</code> 文件，否则工具会优先匹配明文文件，加密形同虚设。
-</div>
+<span class="comment">-- 列间算术 + CAST 类型转换</span>
+<span class="cmd">dbexplain</span> execute -env --label my_data \
+  <span class="str">'SELECT employee_id, CAST(channel_cnt AS FLOAT) / total_cnt * 100 AS pct FROM data WHERE total_cnt > 0'</span> --human</pre>
 
-<p>机器指纹跨平台采集：Linux 读 <code>/etc/machine-id</code>，macOS 读 <code>sysctl hw.uuid</code>，Windows 读注册表 MachineGuid。各数据源独立采集，多重兜底。</p>
-
-<p>还支持<strong>密码增强模式</strong>——密码 + 机器指纹双重保护。密码写入 <code>.encryption_key</code> 文件（权限 600），运行时自动读取，同样无需人工干预。</p>
-
-<h3 class="subsection">为什么这件事很重要？</h3>
+<p>支持的语法完整到让人意外：</p>
 
 <div class="feature-grid">
   <div class="feature-card">
-    <div class="icon">🛡️</div>
-    <div class="title">纵深防御</div>
-    <div class="desc">即使服务器被入侵，攻击者拿到 .enc 文件也无法在其他机器解密使用</div>
+    <div class="icon">🔍</div>
+    <div class="title">WHERE + 运算符</div>
+    <div class="desc">= != &lt; &gt; LIKE IN BETWEEN IS NULL AND/OR/NOT，完整覆盖</div>
   </div>
   <div class="feature-card">
-    <div class="icon">✅</div>
-    <div class="title">合规友好</div>
-    <div class="desc">满足等保、GDPR 对"敏感凭证静态加密"的要求，无需额外方案</div>
+    <div class="icon">📊</div>
+    <div class="title">GROUP BY + 聚合</div>
+    <div class="desc">SUM/AVG/COUNT/MAX/MIN + HAVING 过滤 + COUNT(DISTINCT col)</div>
   </div>
   <div class="feature-card">
-    <div class="icon">🤖</div>
-    <div class="title">AI Agent 安全</div>
-    <div class="desc">Agent 只调用工具，绝不接触明文密码；加密文件由用户自行管理</div>
+    <div class="icon">🔗</div>
+    <div class="title">跨文件 JOIN</div>
+    <div class="desc">CSV↔CSV、XLSX↔XLSX、CSV↔XLSX，LEFT/RIGHT JOIN 全部支持</div>
+  </div>
+  <div class="feature-card">
+    <div class="icon">🧮</div>
+    <div class="title">表达式 + 函数</div>
+    <div class="desc">列间算术、CAST、ABS、ROUND、子查询 IN/NOT IN</div>
+  </div>
+  <div class="feature-card">
+    <div class="icon">📐</div>
+    <div class="title">UNION + DISTINCT ON</div>
+    <div class="desc">跨表合并结果，每组保留首行</div>
   </div>
   <div class="feature-card">
     <div class="icon">⚡</div>
-    <div class="title">零运维负担</div>
-    <div class="desc">加密一次，之后每次 dbexplain -env 自动解密，完全透明</div>
+    <div class="title">NULLS FIRST/LAST</div>
+    <div class="desc">空值排序位置精确控制</div>
   </div>
 </div>
 
-<div class="divider">重磅二</div>
+<div class="callout-info">
+  <strong>为什么这很重要？</strong> 业务数据大量以 CSV/Excel 形式存在，但传统 CLI 工具（grep/awk）面对结构化查询力不从心。现在 AI Agent 可以用标准 SQL 直接分析这些文件，不需要导入数据库、不需要写 Python 脚本。
+</div>
 
-<h2 class="section"><span class="num">02</span>CLI 子命令层级重构</h2>
+<p>引擎底层是递归下降解析器 + 哈希 JOIN 引擎 + 哈希聚合器，全部用 Go 手写，零外部依赖。66 个单元测试覆盖所有语法路径和边界条件。</p>
 
-<p>原来的命令行是扁平的参数堆，用过的人都懂那种感受——<code>-h</code> 出来密密麻麻一页，完全不知道从哪下手。这次彻底重构为清晰的子命令结构：</p>
+<div class="divider">重磅更新</div>
 
-<pre><span class="comment"># 新命令结构</span>
-<span class="cmd">dbexplain</span> <span class="flag">[flags]</span>           <span class="comment"># 采集和分析数据库 Schema</span>
-<span class="cmd">dbexplain</span> encrypt &lt;file&gt;    <span class="comment"># 加密 .env 配置</span>
-<span class="cmd">dbexplain</span> &lt;dbtype&gt;          <span class="comment"># 数据库专用参考手册</span>
-<span class="cmd">dbexplain</span> all               <span class="comment"># 完整参考手册（替代 --manual）</span>
-<span class="cmd">dbexplain</span> all <span class="flag">--filter</span> redis <span class="comment"># 关键词过滤</span></pre>
+<h2 class="section"><span class="num">02</span>数据源矩阵：从 9 到 11</h2>
 
-<p>每种数据库现在有独立子命令，输出该数据库专属的参考手册（DSN 格式、采集机制、安全策略、完整示例）：</p>
-
-<pre><span class="cmd">dbexplain</span> mysql       <span class="comment"># MySQL 专属手册</span>
-<span class="cmd">dbexplain</span> redis       <span class="comment"># Redis 专属手册</span>
-<span class="cmd">dbexplain</span> es          <span class="comment"># Elasticsearch（别名 es）</span>
-<span class="cmd">dbexplain</span> pg          <span class="comment"># PostgreSQL（别名 pg）</span></pre>
-
-<div class="divider">重磅三</div>
-
-<h2 class="section"><span class="num">03</span>一键安装，开箱即用</h2>
-
-<p>过去需要把二进制和配置文件放在同一目录，在 CI/CD 或多环境下非常麻烦。现在一条命令搞定全局安装 + AI Skill 部署：</p>
-
-<pre><span class="comment"># 克隆并安装（Linux/macOS）</span>
-<span class="cmd">git clone</span> <span class="str">https://github.com/IamWWT/dbexplain.git</span>
-<span class="cmd">cd</span> dbexplain
-<span class="cmd">bash</span> dbexplain-skill/scripts/install.sh
-
-<span class="comment"># 安装英文 Skill 版本</span>
-<span class="cmd">bash</span> dbexplain-skill/scripts/install.sh <span class="flag">--lang en</span>
-
-<span class="comment"># Windows PowerShell</span>
-<span class="cmd">.\dbexplain-skill\scripts\install.ps1</span></pre>
-
-<p>安装后 <code>dbexplain</code> 直接进系统 PATH，配置文件按 XDG 规范存放在 <code>~/.config/dbexplain/</code>。安装脚本完成后自动引导用户执行加密三步曲。</p>
-
-<p>Skill 同时拆分为 <strong>SKILL_ZH.md</strong>（中文）和 <strong>SKILL_EN.md</strong>（英文），适配 Claude Code、DeepSeek、AixCoding 等平台。</p>
-
-<div class="divider">工具定位</div>
-
-<h2 class="section"><span class="num">04</span>它到底解决什么问题？</h2>
-
-<p>一句话：<strong>让 AI Agent 读懂你的数据库，同时不暴露任何秘密</strong>。</p>
-
-<p>当你问 Claude Code "帮我优化这条 SQL" 或者 "分析用户表和订单表的关系"，AI 需要先理解数据库结构。传统做法是把 Schema DDL 手动粘贴给 AI——繁琐、容易遗漏、还可能带上密码。</p>
-
-<p>dbexplain 的工作流是：只读扫描 → 生成结构上下文（JSON 或文本） → 喂给 AI Agent。全程不需要 AI 接触任何连接凭证。</p>
-
-<pre><span class="comment"># 扫描所有数据源，输出 AI 友好的 JSON 上下文</span>
-<span class="cmd">dbexplain</span> <span class="flag">-env -json</span>
-
-<span class="comment"># 生成压缩的 AI 上下文文件</span>
-<span class="cmd">dbexplain</span> <span class="flag">-env --context</span> <span class="str">./ai-context/</span>
-
-<span class="comment"># 增量检测 Schema 变更</span>
-<span class="cmd">dbexplain</span> <span class="flag">-env --cache</span> schema_cache.json</pre>
-
-<h3 class="subsection">支持 9 种数据库</h3>
+<p>v0.0.9 新增了 CSV/TSV 和 XLSX 两类文件数据源，使总数据源数达到 11 种：</p>
 
 <div class="db-grid">
   <div class="db-item">
     <span class="db-name">MySQL</span>
-    <span class="db-note">InnoDB/MyISAM，外键推断</span>
+    <span class="db-note">外键、索引、字段注释推断</span>
   </div>
   <div class="db-item">
     <span class="db-name">PostgreSQL</span>
-    <span class="db-note">多 Schema，pgvector</span>
+    <span class="db-note">多 Schema、行数统计</span>
   </div>
   <div class="db-item">
     <span class="db-name">GaussDB</span>
@@ -568,7 +521,7 @@
   </div>
   <div class="db-item">
     <span class="db-name">MongoDB</span>
-    <span class="db-note">近似文档数，零风险</span>
+    <span class="db-note">近似文档数</span>
   </div>
   <div class="db-item">
     <span class="db-name">Elasticsearch</span>
@@ -578,80 +531,239 @@
     <span class="db-name">Qdrant</span>
     <span class="db-note">向量集合元数据</span>
   </div>
+  <div class="db-item">
+    <span class="db-name" style="color:#c0392b">CSV/TSV <span class="new">NEW</span></span>
+    <span class="db-note">文件查询引擎: SQL 完整子集</span>
+  </div>
+  <div class="db-item">
+    <span class="db-name" style="color:#c0392b">XLSX Excel <span class="new">NEW</span></span>
+    <span class="db-note">多 Sheet JOIN，跨格式 JOIN</span>
+  </div>
 </div>
 
-<div class="divider">本次修复</div>
+<div class="divider">只读查询</div>
 
-<h2 class="section"><span class="num">05</span>13 项 Bug 修复（值得认真看）</h2>
+<h2 class="section"><span class="num">03</span> execute 子命令：沙箱保护下的只读查询</h2>
 
-<p>两个版本累计修复了 13 个问题（ISSUE-040～052），其中有两个安全级别较高：</p>
+<p>v0.0.7 引入的 <code>execute</code> 子命令，经过两个版本的打磨已臻成熟。它提供了一个<strong>三层安全防护</strong>的只读查询环境：</p>
+
+<div class="steps">
+  <div class="step">
+    <div class="step-num">1</div>
+    <div class="step-content"><strong>sqlguard 只读校验</strong>：动词白名单（SELECT/EXPLAIN/SHOW/DESC/PRAGMA），多语句检测，自动 LIMIT 1000 注入</div>
+  </div>
+  <div class="step">
+    <div class="step-num">2</div>
+    <div class="step-content"><strong>策略引擎细粒度访问控制</strong>：表级拒绝（DENY_TABLES）、列级屏蔽（MASK_COLUMNS）、语句级黑名单</div>
+  </div>
+  <div class="step">
+    <div class="step-num">3</div>
+    <div class="step-content"><strong>双超时保护</strong>：应用层 context 超时 + 数据库层语句超时（MySQL/PG/CH）</div>
+  </div>
+</div>
+
+<p>非 SQL 数据库各有专属查询方式：</p>
+
+<pre><span class="comment"># MongoDB：JSON 格式查询</span>
+<span class="cmd">dbexplain</span> execute -env --label mongo <span class="str">'{"find":"users","filter":{"age":{"$gt":18}}}'</span>
+
+<span class="comment"># Redis：原生命令（30+ 只读命令白名单）</span>
+<span class="cmd">dbexplain</span> execute -env --label redis <span class="str">'GET user:1001'</span>
+
+<span class="comment"># ES：通过 _sql 端点执行标准 SQL</span>
+<span class="cmd">dbexplain</span> execute -env --label es <span class="str">'SELECT * FROM my_index LIMIT 5'</span></pre>
+
+<div class="divider">安全升级</div>
+
+<h2 class="section"><span class="num">04</span>策略引擎：不再裸奔的数据库凭证</h2>
+
+<p>v0.0.8 引入的细粒度安全策略引擎，在这次发布中得到了充分验证和完善：</p>
 
 <table>
   <thead>
-    <tr><th>级别</th><th>Issue</th><th>问题描述</th></tr>
+    <tr><th>策略</th><th>作用</th><th>示例</th></tr>
   </thead>
   <tbody>
     <tr>
-      <td><strong style="color:#c0392b">CRITICAL</strong></td>
-      <td>040</td>
-      <td>.env 真实凭证已从 Git 历史中移除，.gitignore 规则到位</td>
+      <td><strong>DENY_TABLES</strong></td>
+      <td>表级禁止访问</td>
+      <td><code>DENY_TABLES=sensitive,audit_log</code></td>
     </tr>
     <tr>
-      <td><strong style="color:#e67e22">HIGH</strong></td>
-      <td>052</td>
-      <td>Windows 记事本保存的 .env 含 UTF-8 BOM 导致解析失败，godotenv 错误消息泄露密码——均已修复</td>
+      <td><strong>DENY_COLUMNS</strong></td>
+      <td>列级禁止访问</td>
+      <td><code>DENY_COLUMNS=users.password_hash</code></td>
     </tr>
     <tr>
-      <td><strong style="color:#e67e22">HIGH</strong></td>
-      <td>051</td>
-      <td>-json -o 输出的 JSON 含 UTF-8 BOM，导致 jq/python 解析失败</td>
+      <td><strong>MASK_COLUMNS</strong></td>
+      <td>列值替换不阻断</td>
+      <td><code>MASK_COLUMNS=email=REDACTED,card_no=****</code></td>
     </tr>
     <tr>
-      <td><strong style="color:#3498db">MEDIUM</strong></td>
-      <td>047</td>
-      <td>GaussDB 实例被错误报告为 "postgres"，现已正确识别</td>
-    </tr>
-    <tr>
-      <td><strong style="color:#3498db">MEDIUM</strong></td>
-      <td>048</td>
-      <td>JSON 输出缺少 seq_scan、idx_scan 等操作统计字段</td>
-    </tr>
-    <tr>
-      <td><strong style="color:#27ae60">LOW</strong></td>
-      <td>049</td>
-      <td>MySQL 两次 SHOW INDEX 合并为一次，减少网络往返</td>
+      <td><strong>DENY_STATEMENTS</strong></td>
+      <td>语句级黑名单</td>
+      <td><code>DENY_STATEMENTS=DROP TABLE,FLUSHALL</code></td>
     </tr>
   </tbody>
 </table>
 
-<p>特别值得一提的是 ISSUE-052：密码被 godotenv 库的错误消息暴露，这种"无意识的信息泄露"在很多项目里都存在却鲜被关注。</p>
+<p>而且这些策略对<strong>所有 11 种数据源</strong>一致生效。SQL 数据库支持完整三层策略，MongoDB/Qdrant 支持语句+集合级，Redis 支持语句+Key 级（含通配符）。</p>
+
+<p>配合 v0.0.6 引入的<strong>硬件绑定加密</strong>，现在整个链路从<strong>凭证存储 → 传输 → 使用</strong>都有了保障。</p>
+
+<div class="divider">分发包</div>
+
+<h2 class="section"><span class="num">05</span>第三方分发包：AI Agent 开箱即用</h2>
+
+<p>这次发布首次提供了<strong>完整的第三方分发包</strong>（<code>testdata/account-manager-skill/</code>），包含：</p>
+
+<div class="steps">
+  <div class="step">
+    <div class="step-num">1</div>
+    <div class="step-content"><strong>5 平台预编译二进制</strong>：Linux amd64/arm64、macOS Intel/Silicon、Windows</div>
+  </div>
+  <div class="step">
+    <div class="step-num">2</div>
+    <div class="step-content"><strong>完整的 AI Agent Skill</strong>：SKILL.md 包含语法速览、业务知识、排障指南、可追溯分析规范</div>
+  </div>
+  <div class="step">
+    <div class="step-num">3</div>
+    <div class="step-content"><strong>一键离线安装</strong>：<code>bash scripts/install.sh --offline ./assets/dbexplain-linux-amd64</code></div>
+  </div>
+</div>
+
+<div class="callout-info">
+  <strong>macOS 用户注意</strong>：安装脚本已自动处理 Gatekeeper 拦截问题（<code>xattr -d com.apple.quarantine</code>），无需手动操作。
+</div>
+
+<div class="divider">实战案例</div>
+
+<h2 class="section"><span class="num">06</span>一个真实场景：客户经理触达分析</h2>
+
+<p>想象一下：市场部发来一个 CSV 文件 —— 「客户经理触达运营数据」，40 列、2000 行。你的 AI Agent 需要分析哪个省份触达率最高、哪个渠道最有效。</p>
+
+<p>以前你需要：写 Python 脚本 → pandas 处理 → 调格式 → 出报告。现在：</p>
+
+<pre><span class="comment"># 配置数据源</span>
+<span class="cmd">echo</span> <span class="str">'DB1=csv:///path/to/touch_data.csv?label=touch-ops'</span> &gt; .env.dbexplain
+
+<span class="comment"># 跨省排行</span>
+<span class="cmd">dbexplain</span> execute -env --label touch-ops \
+  <span class="str">'SELECT province, AVG(reach_rate) AS avg_rate FROM data GROUP BY province ORDER BY avg_rate DESC'</span> --human
+
+<span class="comment"># 渠道效能（企微占比排名）</span>
+<span class="cmd">dbexplain</span> execute -env --label touch-ops \
+  <span class="str">'SELECT employee_id, CAST(wecom_cnt AS FLOAT) / total_cnt * 100 AS wecom_pct FROM data WHERE total_cnt > 0 ORDER BY wecom_pct DESC LIMIT 5'</span> --human
+
+<span class="comment"># 跨文件 JOIN：关联组织架构做二级行排名</span>
+<span class="cmd">dbexplain</span> execute -env --label touch-ops \
+  <span class="str">'SELECT o.branch_name, AVG(t.reach_rate) FROM data t JOIN org o ON t.dept_id = o.dept_id GROUP BY o.branch_name ORDER BY avg_rate DESC'</span> --human</pre>
+
+<p><strong>全部在命令行完成，零脚本，零依赖。</strong></p>
+
+<div class="divider">架构演进</div>
+
+<h2 class="section"><span class="num">07</span>CapSQL 架构：新增数据库不再改 execute.go</h2>
+
+<p>v0.1.0 完成了一项重要的架构改进：<strong>CapSQL 能力声明</strong>。每个 Connector 现在声明自己的<strong>能力标签</strong>（CapSQL / CapFile），execute 子命令根据能力标签自动路由，不再需要硬编码的类型分支：</p>
+
+<pre><span class="comment">// 之前：新增数据库要改 execute.go 的 switch</span>
+<span class="comment">// 现在：Connector 声明 CapSQL → execute 自动识别</span>
+
+<span class="cmd">func</span> (c *MySQLConnector) Capabilities() capabilities.Set {
+    <span class="cmd">return</span> capabilities.NewSet(capabilities.CapSQL)
+}</pre>
+
+<p>这意味着<strong>新增数据库连接器不再需要修改 execute.go</strong>，实现了宪法要求的类型分支消除。架构更加清晰、可扩展。</p>
+
+<div class="divider">版本追踪</div>
+
+<h2 class="section"><span class="num">08</span>v0.0.9 → v0.1.0 完整变更</h2>
+
+<table>
+  <thead>
+    <tr><th>版本</th><th>类别</th><th>内容</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>v0.0.9</td>
+      <td>数据源</td>
+      <td>CSV/TSV/XLSX 文件 Schema 采集</td>
+    </tr>
+    <tr>
+      <td>v0.0.9</td>
+      <td>编码</td>
+      <td>GBK/GB2312 编码支持，自定义分隔符</td>
+    </tr>
+    <tr>
+      <td>v0.0.9</td>
+      <td>日志</td>
+      <td>采集进度日志解耦，stderr 不再被污染</td>
+    </tr>
+    <tr>
+      <td>v0.0.9</td>
+      <td>CLI</td>
+      <td>--human 放查询语句后也生效</td>
+    </tr>
+    <tr>
+      <td>v0.1.0</td>
+      <td>安全</td>
+      <td>CTE/SELECT INTO 绕过修复、SET SESSION 竞态修复、策略泄漏修复</td>
+    </tr>
+    <tr>
+      <td>v0.1.0</td>
+      <td>正确性</td>
+      <td>PG FK Schema JOIN、索引解析、cache 原子写入、ORDER BY 别名排序</td>
+    </tr>
+    <tr>
+      <td>v0.1.0</td>
+      <td>引擎</td>
+      <td>纯 Go SQL 引擎 + GROUP BY/JOIN/聚合/表达式/UNION/子查询</td>
+    </tr>
+    <tr>
+      <td>v0.1.0</td>
+      <td>架构</td>
+      <td>CapSQL 能力声明，新增数据库不再改 execute.go</td>
+    </tr>
+    <tr>
+      <td>v0.1.0</td>
+      <td>JSON</td>
+      <td>instances 包装格式、groups/issues/refs 顶级键</td>
+    </tr>
+    <tr>
+      <td>v0.1.0</td>
+      <td>分发包</td>
+      <td>account-manager-skill 第三方分发包定型</td>
+    </tr>
+  </tbody>
+</table>
 
 <div class="divider">写在最后</div>
 
-<p>在 Agentic AI 快速落地的当下，安全往往是最后被考虑的环节。dbexplain 的这次更新，实际上是在回答一个更大的问题：</p>
+<p>从 v0.0.4 到 v0.1.0，dbexplain 在三个月内完成了从"Schema 采集工具"到"数据库上下文编译器 + 文件查询引擎"的蜕变。</p>
 
-<p><strong>当 AI Agent 需要与生产数据库交互时，凭证管理的最佳实践是什么？</strong></p>
+<p>这个项目的核心理念一直没变：<strong>Make Databases AI-Readable</strong>。但 v0.1.0 迈出了关键的一步——不再只是把数据库结构喂给 AI，而是让 AI 能<strong>直接对文件数据和数据库执行只读查询</strong>，获取真实的业务洞察。</p>
 
-<p>硬件绑定加密给出了一个务实的答案：不依赖复杂的密钥管理基础设施，不增加运维负担，让密码天然绑定在它该存在的机器上。</p>
+<p>接下来的路线：MCP Server 协议支持、企业级 SSO 集成、更多 SQL 方言兼容。</p>
 
-<p>项目处于早期阶段，欢迎试用、反馈、提 Issue。</p>
+<p>欢迎试用、Star、提 Issue。</p>
 
 <div class="footer">
   <div class="links">
     <a href="https://github.com/IamWWT/dbexplain">
       ⬡ github.com/IamWWT/dbexplain
     </a>
-    <a href="https://github.com/IamWWT/dbexplain/blob/main/docs/TEST_v0.0.6.md">
-      ⬡ 完整测试报告 TEST_v0.0.6.md
-    </a>
     <a href="https://github.com/IamWWT/dbexplain/blob/main/CHANGELOG.md">
-      ⬡ CHANGELOG.md
+      ⬡ 完整 CHANGELOG
+    </a>
+    <a href="https://github.com/IamWWT/dbexplain/blob/main/docs/test/13-file-query-engine.md">
+      ⬡ 文件查询引擎 QA 测试报告
     </a>
   </div>
   <div class="brand">
     dbexplain<br>
     Make Databases AI-Readable<br>
-    Apache © 2026 WWT
+    Apache 2.0 © 2026 WWT
   </div>
 </div>
 
