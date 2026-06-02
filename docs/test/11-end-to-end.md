@@ -118,7 +118,7 @@ print('Execute JSON structure OK ✓')
 ## 11.5 汇总报告
 
 ```bash
-echo "=== dbexplain v0.1.0 集成测试报告 ==="
+echo "=== dbexplain v0.1.2 集成测试报告 ==="
 echo "日期: $(date '+%Y-%m-%d %H:%M')"
 echo "Go 版本: $(go version)"
 echo ""
@@ -143,4 +143,14 @@ else:
 echo ""
 echo "--- 版本 ---"
 $BIN --version
+echo ""
+echo "--- v0.1.2 新增功能验证 ---"
+echo "--- collect 子命令 ---"
+$BIN collect -env --human 2>&1 | head -5
+echo ""
+echo "--- REPL 模式 ---"
+echo "SELECT 1;" | $BIN repl --dsn "sqlite:////tmp/test.db?label=test" 2>&1 | head -5
+echo ""
+echo "--- --explain 格式化 ---"
+$BIN execute -env --db 1 --explain "SELECT 1" --human 2>&1 | head -3
 ```

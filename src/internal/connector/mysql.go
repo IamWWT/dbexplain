@@ -342,7 +342,9 @@ func (mysqlConnector) ExecQuery(ctx context.Context, opts query.ExecuteOpts) (*q
 
 	// Set max execution time if timeout specified
 	if opts.Timeout > 0 {
-		db.ExecContext(ctx, fmt.Sprintf("SET SESSION max_execution_time=%d", opts.Timeout*1000))
+		if _, err := db.ExecContext(ctx, fmt.Sprintf("SET SESSION max_execution_time=%d", opts.Timeout*1000)); err != nil {
+			logf(ctx, "[mysql] set max_execution_time failed: %v (query will still run without timeout guard)", err)
+		}
 	}
 
 	runCtx := ctx

@@ -159,6 +159,11 @@ func TestRedacted(t *testing.T) {
 		{raw: "redis://default:Pwd1Open2%23IMD@host:6389/0", want: "redis://{dbuser}:{dbpassword}@host:6389/0"},
 		{raw: "mongodb://user:p%40ss@host:27017/db", want: "mongodb://{dbuser}:{dbpassword}@host:27017/db"},
 		{raw: "clickhouse://host/db", want: "clickhouse://host/db"},
+		// @ in password
+		{raw: "mysql://user:p@ss@host/db", want: "mysql://{dbuser}:{dbpassword}@host/db"},
+		{raw: "postgres://user:passw@rd@host:5432/db", want: "postgres://{dbuser}:{dbpassword}@host:5432/db"},
+		{raw: "redis://:p@ssw@rd@host:6379/0", want: "redis://{dbpassword}@host:6379/0"},
+		{raw: "mysql://user:p%40ss@host/db", want: "mysql://{dbuser}:{dbpassword}@host/db"}, // URL-encoded @
 	}
 
 	for _, tt := range tests {

@@ -353,7 +353,9 @@ func (postgresConnector) ExecQuery(ctx context.Context, opts query.ExecuteOpts) 
 
 	// Set statement timeout if specified
 	if opts.Timeout > 0 {
-		db.ExecContext(ctx, fmt.Sprintf("SET statement_timeout = '%ds'", opts.Timeout))
+		if _, err := db.ExecContext(ctx, fmt.Sprintf("SET statement_timeout = '%ds'", opts.Timeout)); err != nil {
+			logf(ctx, "[postgres] set statement_timeout failed: %v (query will still run without timeout guard)", err)
+		}
 	}
 
 	runCtx := ctx

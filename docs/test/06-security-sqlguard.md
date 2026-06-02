@@ -32,9 +32,9 @@ $BIN execute -env --db 1 "DESCRIBE testdb.iplist" 2>&1 | jq .
 ## 6.2 写操作拒绝
 
 ```bash
-for cmd in INSERT UPDATE DELETE DROP ALTER CREATE TRUNCATE RENAME REPLACE GRANT REVOKE; do
+for cmd in INSERT UPDATE DELETE DROP ALTER CREATE TRUNCATE RENAME REPLACE GRANT REVOKE KILL SHUTDOWN FLUSH SET RESET CALL PURGE; do
   echo "=== $cmd ==="
-  $BIN execute -env --db 1 "$CMD test" 2>&1 | head -1
+  $BIN execute -env --db 1 "$cmd test" 2>&1 | head -1
 done
 # 预期: 全部返回 READ_ONLY_VIOLATION
 ```
@@ -66,6 +66,12 @@ $BIN execute -env --db 1 "SELECT * FROM testdb.iplist LIMIT 5" 2>/dev/null | pyt
 import json,sys; d=json.load(sys.stdin)
 print(f'rows={d[\"row_count\"]}')  # 预期 rows=5
 "
+
+# LIMIT( 紧凑语法（v0.1.2+ 支持）
+$BIN execute -env --db 1 "SELECT * FROM testdb.iplist LIMIT(3)" 2>/dev/null | python3 -c "
+import json,sys; d=json.load(sys.stdin)
+print(f'rows={d[\"row_count\"]}')  # 预期 rows=3（不重复追加 LIMIT）
+"
 ```
 
 ## 6.5 EXPLAIN 不走自动 LIMIT
@@ -78,7 +84,23 @@ print(f'columns={[c[\"name\"] for c in d[\"columns\"]]}')
 "
 ```
 
-## 6.6 空查询拒绝
+## 6.6 EXPLAIN 分数据库类型格式化 (v0.1.2+)
+
+```bash
+# MySQL — FORMAT=JSON（human 输出用 render.FormatExplainJSON）
+$BIN execute -env --db 1 --explain "SELECT * FROM testdb.iplist WHERE device_type = 'PHY'" --human 2>/dev/null | head -5
+# 预期: MySQL JSON explain plan 可读渲染（含 select_type/table/access_type）
+
+# SQLite — EXPLAIN QUERY PLAN
+$BIN execute -env --db 3 --explain "SELECT * FROM rules WHERE rule_id = 1" --human 2>/dev/null | head -5
+# 预期: 含 SCAN TABLE / SEARCH TABLE 等查询计划信息
+
+# PostgreSQL — EXPLAIN (ANALYZE, BUFFERS)
+$BIN execute -env --db 6 --explain "SELECT 1" --human 2>/dev/null | head -5
+# 预期: 含 Seq Scan / Result 等执行计划
+```
+
+## 6.7 空查询拒绝
 
 ```bash
 $BIN execute -env --db 1 ""

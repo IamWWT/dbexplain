@@ -111,34 +111,26 @@ func (d *DSN) Redacted() string {
 		return d.Raw
 	}
 
-	// Find the password in the raw DSN by locating the ":password@" pattern.
-	// We search for both the decoded and raw forms to handle URL-encoded
-	// characters (e.g. %23 vs #).
-	//
-	// Strategy: find the last '@' that separates userinfo from host,
-	// then work backwards to find the ':' before the password.
+	// Reconstruct DSN with redacted credentials by finding the scheme prefix
+	// and replacing the userinfo portion between "://" and the last "@".
+	// Uses LastIndex to avoid false matches when the password contains '@'.
 	schemeEnd := strings.Index(d.Raw, "://")
 	if schemeEnd < 0 {
 		return d.Raw
 	}
 	afterScheme := d.Raw[schemeEnd+3:]
 
-	// Find the last '@' (host separator)
+	// Find the last '@' which separates userinfo from host
 	lastAt := strings.LastIndex(afterScheme, "@")
 	if lastAt < 0 {
 		return d.Raw
 	}
-	userinfo := afterScheme[:lastAt]
 
-	// Find the last ':' in userinfo (password separator)
-	colonPos := strings.LastIndex(userinfo, ":")
-	if colonPos < 0 {
-		return d.Raw // no password
-	}
-
-	// Redact credentials with descriptive placeholders
-	redactedUserinfo := "{dbpassword}" // no username
-	if colonPos > 0 {
+	// Rebuild: "scheme://{dbuser}:{dbpassword}@host:port/db..."
+	// Use parsed User/Password fields instead of raw string parsing to handle
+	// special characters (e.g. @ in password).
+	redactedUserinfo := "{dbpassword}"
+	if d.User != "" {
 		redactedUserinfo = "{dbuser}:{dbpassword}"
 	}
 

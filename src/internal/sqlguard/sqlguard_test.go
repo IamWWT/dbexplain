@@ -53,6 +53,15 @@ func TestValidate_RejectedWriteOps(t *testing.T) {
 		{"REPLACE INTO t VALUES(1)", "REPLACE"},
 		{"GRANT SELECT ON t TO user", "GRANT"},
 		{"REVOKE SELECT ON t FROM user", "REVOKE"},
+		{"KILL QUERY 123", "KILL"},
+		{"SHUTDOWN", "SHUTDOWN"},
+		{"FLUSH TABLES", "FLUSH"},
+		{"SET GLOBAL var=1", "SET"},
+		{"RESET QUERY CACHE", "RESET"},
+		{"INSTALL PLUGSON", "INSTALL"},
+		{"UNINSTALL PLUGSON", "UNINSTALL"},
+		{"CALL procedure()", "CALL"},
+		{"PURGE BINARY LOGS TO 'x'", "PURGE"},
 		{"MERGE INTO t USING s ON t.id=s.id WHEN MATCHED THEN UPDATE SET x=1", "MERGE"},
 		{"UPSERT INTO t VALUES(1)", "UPSERT"},
 		{"LOAD DATA INFILE 'x.csv' INTO TABLE t", "LOAD"},
@@ -190,6 +199,8 @@ func TestAutoLimit_ExistingLimit(t *testing.T) {
 		"SELECT * FROM t LIMIT\t10",
 		"SELECT * FROM t\nLIMIT 10",
 		"SELECT * FROM t WHERE x=1 ORDER BY y LIMIT 50",
+		"SELECT * FROM t LIMIT(3)",
+		"SELECT * FROM t LIMIT(  10  )",
 	}
 	for _, sql := range tests {
 		t.Run(sql, func(t *testing.T) {

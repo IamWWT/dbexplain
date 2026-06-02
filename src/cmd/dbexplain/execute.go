@@ -184,7 +184,7 @@ func handleDSLExecute(dslQuery *dsl.DSLQuery, allEntries []config.DSNEntry, huma
 
 	switch kinds[0] {
 	case dsl.SourceSQL:
-		dslExecSQL(dslQuery, bound, human, limit, explain, timeoutSec)
+		dslExecSQL(dslQuery, bound, human, limit, explain, timeoutSec, allEntries)
 	case dsl.SourceFile:
 		dslExecFile(dslQuery, bound, human, limit, allEntries)
 	default:
@@ -207,7 +207,7 @@ func kindName(k dsl.SourceKind) string {
 }
 
 // dslExecSQL compiles and executes a DSL query against an SQL database.
-func dslExecSQL(dslQuery *dsl.DSLQuery, bound *dsl.BoundQuery, human bool, limit int, explain bool, timeoutSec int) {
+func dslExecSQL(dslQuery *dsl.DSLQuery, bound *dsl.BoundQuery, human bool, limit int, explain bool, timeoutSec int, allEntries []config.DSNEntry) {
 	compiledSQL, err := dsl.CompileToSQL(dslQuery, bound)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -227,7 +227,7 @@ func dslExecSQL(dslQuery *dsl.DSLQuery, bound *dsl.BoundQuery, human bool, limit
 		os.Exit(1)
 	}
 
-	policies := policy.Load("")
+	policies := policy.Load(envKeyForLabel(primary.DSN.Label, allEntries))
 
 	result, execErr := executor.ExecQuery(&executor.ExecOptions{
 		Conn:       c,
@@ -270,7 +270,7 @@ func dslExecFile(dslQuery *dsl.DSLQuery, bound *dsl.BoundQuery, human bool, limi
 	}
 	parsed := primary.DSN
 
-	policies := policy.Load("")
+	policies := policy.Load(envKeyForLabel(parsed.Label, allEntries))
 	queryutil.HandleFileExecute(parsed, dslQuery.SQL, human, limit, policies, allEntries)
 }
 
@@ -286,7 +286,7 @@ func dslExecFederated(dslQuery *dsl.DSLQuery, bound *dsl.BoundQuery, allEntries 
 	}
 	var allData []materialized
 
-	for placeholder, bs := range bound.Sources {
+	for _, bs := range bound.Sources {
 		switch bs.Kind {
 		case dsl.SourceSQL:
 			// Execute SELECT * from the table against the SQL DB
@@ -296,7 +296,7 @@ func dslExecFederated(dslQuery *dsl.DSLQuery, bound *dsl.BoundQuery, allEntries 
 				fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
 				os.Exit(1)
 			}
-			policies := policy.Load("")
+			policies := policy.Load(envKeyForLabel(bs.DSN.Label, allEntries))
 			result, execErr := executor.ExecQuery(&executor.ExecOptions{
 				Conn:       c,
 				Parsed:     bs.DSN,
@@ -305,7 +305,7 @@ func dslExecFederated(dslQuery *dsl.DSLQuery, bound *dsl.BoundQuery, allEntries 
 				Explain:    false,
 				TimeoutSec: timeoutSec,
 				Policies:   policies,
-				Lock:       query.NewQueryLock(),
+				Lock:       queryLock,
 				IsSQL:      true,
 			})
 			if execErr != nil {
@@ -332,8 +332,6 @@ func dslExecFederated(dslQuery *dsl.DSLQuery, bound *dsl.BoundQuery, allEntries 
 				header: header,
 				rows:   rows,
 			})
-			_ = placeholder // used for iteration
-
 		case dsl.SourceFile:
 			// Load file data via connector
 			c, err := connector.GetConnector(bs.DSN.Kind)
@@ -424,4 +422,15 @@ func dslExecFederated(dslQuery *dsl.DSLQuery, bound *dsl.BoundQuery, allEntries 
 			os.Exit(1)
 		}
 	}
+}
+
+// envKeyForLabel maps a DSN label back to its EnvKey (e.g. "DB1") from allEntries.
+// Returns "" if not found (only global policies apply).
+func envKeyForLabel(label string, allEntries []config.DSNEntry) string {
+	for _, e := range allEntries {
+		if parsed, err := dsn.ParseDSN(e.Raw); err == nil && parsed.Label == label {
+			return e.EnvKey
+		}
+	}
+	return ""
 }

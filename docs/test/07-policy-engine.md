@@ -109,3 +109,19 @@ DENY_TABLES=iplist $BIN execute -env --db 1 'SELECT * FROM testdb.-- comment\nip
 DENY_STATEMENTS="DROP TABLE" $BIN execute -env --db 1 'DROP  TABLE  users'
 # → ACCESS_DENIED（空白归一化后匹配）
 ```
+
+## 7.11 DSL 模式 per-DSN 策略 (v0.1.2+)
+
+```bash
+# DSL 模式应加载数据源级 DENY_TABLES
+DB1_DENY_TABLES=iplist $BIN execute -env --dsl "SELECT * FROM @aiops-mysql.testdb.iplist LIMIT 1"
+# → ACCESS_DENIED: table "iplist" is not allowed for query
+```
+
+## 7.12 MongoDB 聚合管道写阶段策略 (v0.1.2+)
+
+```bash
+# $out 在聚合管道中被拒绝
+$BIN execute -env --db 9 '{"aggregate":"user","pipeline":[{"$out":"malicious"}]}'
+# → READ_ONLY_VIOLATION: write stage "$out" is not allowed in aggregation pipeline
+```

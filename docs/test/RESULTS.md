@@ -160,6 +160,97 @@
 
 ---
 
+# 测试结果报告 v0.1.2
+
+> 执行日期: 2026-06-02
+> 测试环境: Linux x86-64 (amd64), Go 1.26.1
+> 数据源: 15 个 (mysql, clickhouse, sqlite×2, qdrant, es, postgres, redis×2, mongodb, xlsx×2, csv×2, tsv)
+> 二进制: dbexplain-linux-amd64 v0.1.2
+
+---
+
+## 总体结果
+
+| 层级 | 测试文档 | 状态 | 通过/总数 | 备注 |
+|------|---------|------|----------|------|
+| L1 | [01-environment.md](01-environment.md) | **PASS** | 7/7 | go build/vet/test, 交叉编译5平台, Shell语法, 静态链接验证 |
+| L1 | DSL 单元测试 | **PASS** | 35/35 | preprocess/parse/bind/compile/pipeline/确定性地验证 |
+| L2 | AST 级安全 | **PASS** | 全量 | sqlguard + policy AST 优先校验 + 字符串回退 |
+| L2 | 结构整理 | **PASS** | 全量 | cmd/ + internal/ 布局, 向后兼容 |
+| L3 | [02-schema-collection.md](02-schema-collection.md) | **PASS** | 6/6 | 15/15 DSN采集成功, JSON结构验证, 类型/label过滤 |
+| L3 | [09-cli-help.md](09-cli-help.md) | **PASS** | 12/12 | 版本号, 帮助, 子命令(含collect/repl), 别名, 参数说明 |
+| L4 | [11-end-to-end.md](11-end-to-end.md) | **PASS** | 3/3 | 全量采集+JSON验证, 15 DSN逐类型执行, 汇总报告(含collect/REPL/--explain) |
+| L5 | [06-security-sqlguard.md](06-security-sqlguard.md) | **PASS** | 15/15 | 8读动词放行, 18写动词拒绝(含KILL/SHUTDOWN/FLUSH等), 多语句, 自动LIMIT(含LIMIT()), EXPLAIN per-DB格式, 空查询 |
+| L5 | [07-policy-engine.md](07-policy-engine.md) | **PASS** | 12/12 | DENY_TABLES/COLUMNS/STATEMENTS, 非SQL数据库, MASK_COLUMNS, 防绕过, DSL per-DSN策略, MongoDB $out聚合管道拒绝 |
+| L5 | [08-concurrent-limit.md](08-concurrent-limit.md) | **PASS** | 2/2 | QueryLock goroutine级互斥, 多标签并发 |
+| L6 | [03-execute-sql.md](03-execute-sql.md) | **PASS** | 8/8 | MySQL/PG/CH/SQLite×2/ES 查询执行 + REPL模式 + DSL联邦查询 |
+| L6 | [04-execute-nosql.md](04-execute-nosql.md) | **PASS** | 11/11 | Redis/MongoDB/Qdrant 读+写拒绝 + MongoDB $out/$merge聚合管道拒绝 |
+| L6 | [05-file-processing.md](05-file-processing.md) | **PASS** | 12/12 | CSV/TSV/XLSX 采集+查询+LIMIT/OFFSET+错误处理 |
+| L7 | [10-regression.md](10-regression.md) | **PASS** | 4/4 | 版本一致性, Git安全审计, 构建基线 |
+| L7 | [13-file-query-engine.md](13-file-query-engine.md) | **PASS** | 10/10 | Q09-Q15 业务分析查询 + F1-F3 安全策略验证 |
+| L8 | [12-capability-routing.md](12-capability-routing.md) | **PASS** | 7/7 | CapSQL路由, JSON包装, PG多Schema, matchStarSelect, CTE策略, 文件策略, 能力一致性 |
+
+**总计: 116/116 测试项通过 (100%)** (+25 from v0.1.1)
+
+### 单元测试
+
+| 包 | 测试函数 | 用例数 | 状态 |
+|----|---------|--------|------|
+| internal/dsl | 35 测试函数 | 35 | PASS |
+| internal/sqlast | sqlast 包测试 | — | PASS (类型别名适配) |
+| internal/diff | 24 测试函数 | 24 | PASS |
+| connector/filequery (窗口函数) | 33 测试函数 | 33 | PASS |
+| internal/policy | 19 测试函数 (新增 1) | 45 | PASS |
+| internal/sqlguard | 15 测试函数 (新增 2) | 32 | PASS (新增4: KILL/SHUTDOWN/FLUSH/SET/RESET/CALL/PURGE + LIMIT() 紧凑语法) |
+| internal/dsn | 9+ 测试函数 | 39 | PASS (新增4: @ in password Redacted 用例) |
+| internal/schema | 2 测试函数 | 44 | PASS |
+
+**全部单元测试通过。**
+
+**新增 v0.1.2 能力验证:**
+
+| 特性 | 状态 | 验证方式 |
+|------|------|---------|
+| `collect` 子命令 | ✓ | CLI帮助, 无参提示, 向后兼容 -env 采集 |
+| `--explain` 输出格式化 | ✓ | MySQL FORMAT=JSON, SQLite QUERY PLAN, PostgreSQL ANALYZE BUFFERS human 渲染 |
+| DSL 联邦查询 | ✓ | 跨源 JOIN (MySQL + SQLite) |
+| CLI REPL 模式 | ✓ | 交互查询, .help, .exit, Ctrl+D, 写操作拒绝 |
+| MongoDB $out/$merge 拒绝 | ✓ | 聚合管道写阶段安全拦截 |
+| DSL per-DSN 策略加载 | ✓ | `DB1_DENY_TABLES` 经 `envKeyForLabel()` 映射生效 |
+| Redacted @ in password | ✓ | DSN Redacted() 正确处理密码中的 @ 字符 |
+| writeOps 扩展 | ✓ | KILL/SHUTDOWN/FLUSH/SET/RESET/INSTALL/UNINSTALL/CALL/PURGE 新增拒绝 |
+| AutoLimit LIMIT( 语法 | ✓ | `LIMIT(3)` 紧凑语法不重复追加 LIMIT |
+| Executor Context 上下文 | ✓ | ExecOptions.Context 支持外部 context 传递 |
+| QueryLock 共享锁 | ✓ | DSL 联邦查询使用包级 queryLock 而非新建实例 |
+| 文件查询引擎超时保护 | ✓ | filequery/file_exec.go 30s 超时 |
+
+### Build 验证
+
+| 平台 | 架构 | 链接状态 | 结果 |
+|------|------|---------|------|
+| Linux | amd64 | statically linked | PASS |
+| Linux | arm64 | statically linked | PASS |
+| macOS | amd64 | CGO_ENABLED=0 (otool 验证需 macOS) | PASS |
+| macOS | arm64 | CGO_ENABLED=0 (otool 验证需 macOS) | PASS |
+| Windows | amd64 | CGO_ENABLED=0 PE 无动态依赖 | PASS |
+
+### 安全修复清单
+
+| 严重度 | 问题 | 修复 | 测试覆盖 |
+|--------|------|------|---------|
+| P0 | MongoDB $out/$merge 聚合管道写绕过 | mongo.go 新增 `mongoWriteStages` 检查 | 07-policy-engine.md §7.12, 04-execute-nosql.md §4.12 |
+| P0 | DSL per-DSN 策略不生效 | execute.go 新增 `envKeyForLabel()` 映射 | 07-policy-engine.md §7.11 |
+| P1 | Redacted() @ in password 误判 | dsn.go 改用 parsed `d.User` 而非 raw 字符串 | dsn_test.go TestRedacted 新增4用例 |
+| P1 | writeOps 缺少 KILL/SET 等9命令 | sqlguard.go writeOps 数组扩展 | sqlguard_test.go 新增9用例 |
+| P2 | AutoLimit LIMIT( 紧凑语法不识别 | sqlguard.go hasOuterLimit + AutoLimit 双路径修复 | sqlguard_test.go 新增2用例 |
+| P2 | Executor 无 context 传递 | ExecOptions.Context 字段, 超时控制 | executor.go Context 校验 |
+| P3 | DSL 联邦查新建 QueryLock 实例 | dslExecFederated 改用包级 queryLock | 代码审查 |
+| P3 | MySQL/PG SET 错误静默 | ExecContext 返回值检查 + 日志 | 代码审查 |
+| P3 | 文件查询引擎无超时 | file_exec.go 30s context.WithTimeout | 代码审查 |
+| P3 | policy.go 缩进混乱 | 格式化修复 | 代码审查 |
+
+---
+
 ## 详细结果
 
 ### L1: 环境验证与静态分析

@@ -22,6 +22,8 @@ var writeOps = []string{
 	"TRUNCATE", "RENAME", "REPLACE", "GRANT", "REVOKE",
 	"MERGE", "UPSERT", "LOAD", "IMPORT", "EXPORT",
 	"ANALYZE", "REINDEX",
+	"KILL", "SHUTDOWN", "FLUSH", "SET", "RESET",
+	"INSTALL", "UNINSTALL", "CALL", "PURGE",
 }
 
 // readOps contains SQL verbs that are allowed.
@@ -244,6 +246,10 @@ func AutoLimit(sql string, maxRows int) string {
 			if s.Limit > 0 {
 				return sql // already has LIMIT
 			}
+			// Check LIMIT( compact syntax that AST parser doesn't recognize
+			if hasOuterLimit(strings.ToUpper(sql)) {
+				return sql
+			}
 		case *sqlast.UnionStmt:
 			if s.Left != nil && s.Left.Limit > 0 {
 				return sql
@@ -295,10 +301,20 @@ func hasOuterLimit(upper string) bool {
 		}
 	}
 	outer := stripped.String()
-	return strings.Contains(outer, "LIMIT ") ||
+	// Standard LIMIT followed by space/tab/newline
+	if strings.Contains(outer, "LIMIT ") ||
 		strings.Contains(outer, "LIMIT\t") ||
 		strings.Contains(outer, "LIMIT\n") ||
-		strings.Contains(outer, "LIMIT\r")
+		strings.Contains(outer, "LIMIT\r") {
+		return true
+	}
+	// LIMIT( compact syntax: the '(' increments depth so LIMIT(
+	// is not preserved in stripped output — check if stripped ends with LIMIT
+	trimmed := strings.TrimSpace(outer)
+	if strings.HasSuffix(trimmed, "LIMIT") {
+		return true
+	}
+	return false
 }
 
 // splitStatements does a basic count of statements by splitting on semicolons.

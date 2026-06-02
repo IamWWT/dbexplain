@@ -15,7 +15,7 @@ BIN="../release/dbexplain"
 
 ```bash
 $BIN --version
-# 预期: dbexplain v0.1.1
+# 预期: dbexplain v0.1.2
 ```
 
 ## 9.2 简短帮助
@@ -50,7 +50,7 @@ $BIN all --filter redis 2>&1 | head -10
 ```bash
 for db in mysql postgres gaussdb clickhouse sqlite redis mongodb elasticsearch qdrant csv tsv xlsx; do
   echo "=== $db ==="
-  $BIN "$db" 2>&1 | grep -m1 "v0.1.1"
+  $BIN "$db" 2>&1 | grep -m1 "v0.1.2"
 done
 # 预期: 12/12 全部包含 v0.1.1
 ```
@@ -81,4 +81,36 @@ $BIN list -h 2>&1 | head -10
 
 ```bash
 $BIN encrypt -h 2>&1 | head -10
+```
+
+## 9.11 collect 子命令
+
+```bash
+# collect -h 帮助
+$BIN collect -h 2>&1 | head -10
+# 预期: 包含 Usage of collect 和 -env / -dsn / -human 等标志
+
+# collect 无参（无 DSN）
+$BIN collect 2>&1 | head -3
+# 预期: 提示无 DSN 的错误消息
+
+# collect 向后兼容
+$BIN -env --human 2>&1 | head -5
+# 预期: 与 collect -env --human 输出一致
+```
+
+## 9.12 repl 子命令
+
+```bash
+# repl -h 帮助
+$BIN repl -h 2>&1 | head -10
+# 预期: 包含 Usage of repl
+
+# repl 无参（无 DSN）
+$BIN repl 2>&1 | head -3
+# 预期: No DSN entries 错误消息
+
+# repl 直连 (Ctrl+D 退出)
+echo "" | $BIN repl --dsn "sqlite:////tmp/test.db?label=test" 2>&1
+# 预期: 显示 dbexplain REPL 提示符并正常退出
 ```

@@ -30,7 +30,7 @@ cd src && go test ./... -v -count=1 2>&1 | tail -20
 | `TestParseDSN_Schemes` | 19 | 全部数据库类型 + alias + TLS + unsupported |
 | `TestParseDSN_QueryParams` | 8 | label/sslmode/cluster/tls/中文 |
 | `TestParseDSN_AutoLabel` | 1 | 无 label 自动生成 |
-| `TestRedacted` | 6 | 密码脱敏（含 @/URL编码/空密码/占位符） |
+| `TestRedacted` | 10 | 密码脱敏（含 @/URL编码/空密码/占位符） |
 | `TestParseDSN_EdgeCases` | 1 | 边界情况 |
 
 ### 字段推断 (schema 包)
@@ -44,13 +44,13 @@ cd src && go test ./... -v -count=1 2>&1 | tail -20
 
 | 测试函数 | 用例数 | 覆盖 |
 |---------|--------|------|
-| 16 测试函数 | 39 | 全局/按DSN/表级/列级/语句级/原生/Mongo/Qdrant/Redis key |
+| 19 测试函数 | 45 | 全局/按DSN/表级/列级/语句级/原生/Mongo/Qdrant/Redis key/DSL per-DSN策略/MongoDB $out拒绝 |
 
 ### SQL 只读校验 (sqlguard 包)
 
 | 测试函数 | 用例数 | 覆盖 |
 |---------|--------|------|
-| 13 测试函数 | 28 | 读动词/写动词/空查询/多语句/自动LIMIT/分号/首词提取 |
+| 15 测试函数 | 32 | 读动词/写动词(含KILL/SET/FLUSH)/空查询/多语句/自动LIMIT(含LIMIT())/分号/首词提取 |
 
 ### 查询并发控制 (query 包)
 
@@ -94,5 +94,5 @@ bash -n dbexplain-skill/scripts/uninstall-skill.sh && echo "uninstall-skill OK"
 
 ```bash
 ./dbexplain --version
-# 预期: dbexplain v0.1.1
+# 预期: dbexplain v0.1.2
 ```

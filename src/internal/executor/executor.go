@@ -26,6 +26,7 @@ type ExecOptions struct {
 	Policies   *policy.Config
 	Lock       *query.QueryLock
 	IsSQL      bool
+	Context    context.Context // optional caller context; derived from Background if nil
 }
 
 // ExecQuery runs the full execution pipeline for SQL and native connectors.
@@ -65,8 +66,12 @@ func ExecQuery(opts *ExecOptions) (*query.QueryResult, error) {
 		return nil, fmt.Errorf("QUERY_NOT_SUPPORTED: %s does not support query execution", opts.Parsed.Kind)
 	}
 
-	// Execute
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(opts.TimeoutSec+5)*time.Second)
+	// Execute — use caller context if provided, fall back to Background
+	baseCtx := context.Background()
+	if opts.Context != nil {
+		baseCtx = opts.Context
+	}
+	ctx, cancel := context.WithTimeout(baseCtx, time.Duration(opts.TimeoutSec+5)*time.Second)
 	defer cancel()
 
 	execOpts := query.ExecuteOpts{

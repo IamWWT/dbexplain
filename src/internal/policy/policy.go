@@ -181,10 +181,10 @@ func (c *Config) CheckNative(query string, kind string) error {
 		for _, k := range keys {
 			for _, denied := range c.DenyTables {
 				matched, gErr := globMatch(denied, k)
-			if gErr != nil {
-				log.Printf("WARN: malformed DENY_TABLES glob pattern %q: %v", denied, gErr)
-			}
-			if matched || strings.EqualFold(k, denied) {
+				if gErr != nil {
+					log.Printf("WARN: malformed DENY_TABLES glob pattern %q: %v", denied, gErr)
+				}
+				if matched || strings.EqualFold(k, denied) {
 					return &ErrDenied{Level: "table", Target: denied, SQL: query}
 				}
 			}

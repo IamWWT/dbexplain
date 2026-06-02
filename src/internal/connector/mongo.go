@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"encoding/json"
+	"strings"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -164,6 +165,17 @@ func (mongoConnector) ExecQuery(ctx context.Context, opts query.ExecuteOpts) (*q
 		pipeline := spec.Pipeline
 		if pipeline == nil {
 			pipeline = []map[string]interface{}{}
+		}
+		// Reject write stages in aggregation pipeline
+		mongoWriteStages := map[string]bool{
+			"$out": true, "$merge": true, "$indexStats": true,
+		}
+		for _, stage := range pipeline {
+			for key := range stage {
+				if mongoWriteStages[strings.ToLower(key)] {
+					return nil, fmt.Errorf("READ_ONLY_VIOLATION: write stage %q is not allowed in aggregation pipeline", key)
+				}
+			}
 		}
 		// Append $limit to pipeline if specified
 		if limit > 0 {

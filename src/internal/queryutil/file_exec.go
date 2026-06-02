@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/IamWWT/dbexplain/internal/connector"
 	"github.com/IamWWT/dbexplain/internal/dsn"
@@ -44,7 +45,8 @@ func HandleFileExecute(parsed *dsn.DSN, sqlArg string, human bool, limit int, po
 		os.Exit(1)
 	}
 
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 	opts := query.ExecuteOpts{
 		DSN:     parsed,
 		SQL:     sqlArg,

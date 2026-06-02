@@ -82,3 +82,19 @@ $BIN execute -env --db 4 '{"scroll":"runbooks","limit":20}' --human
 $BIN execute -env --db 4 '{"upsert":"runbooks","points":[]}'
 # 预期: READ_ONLY_VIOLATION: qdrant query must specify "scroll" or "count"
 ```
+
+## 4.12 MongoDB — 聚合管道写阶段拒绝 (v0.1.2+)
+
+```bash
+# $out 写阶段拒绝
+$BIN execute -env --db 9 '{"aggregate":"user","pipeline":[{"$out":"malicious_output"}]}'
+# 预期: READ_ONLY_VIOLATION: write stage "$out" is not allowed in aggregation pipeline
+
+# $merge 写阶段拒绝
+$BIN execute -env --db 9 '{"aggregate":"user","pipeline":[{"$match":{"status":"active"}},{"$merge":{"into":"backup"}}]}'
+# 预期: READ_ONLY_VIOLATION: write stage "$merge" is not allowed in aggregation pipeline
+
+# 正常聚合管道放行
+$BIN execute -env --db 9 '{"aggregate":"user","pipeline":[{"$match":{"app_manger_level":{"$gte":3}}},{"$limit":2}]}' --human
+# 预期: 正常返回查询结果
+```

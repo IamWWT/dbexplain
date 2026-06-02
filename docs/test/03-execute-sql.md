@@ -122,3 +122,30 @@ assert d['columns'][0]['name'] == 'n'
 print('Execute JSON structure OK ✓')
 "
 ```
+
+## 3.14 REPL 交互模式 (v0.1.2+)
+
+```bash
+# 直连 SQLite 启动 REPL，执行查询后退出
+echo "SELECT 1 AS val;" | $BIN repl --dsn "sqlite:////tmp/test.db?label=test" 2>&1 | grep -E "val|Goodbye"
+# 预期: 显示查询结果 val 列，最后显示 Goodbye.
+
+# REPL .help 命令
+echo ".help" | $BIN repl --dsn "sqlite:////tmp/test.db?label=test" 2>&1 | grep -E "Supported|Commands"
+# 预期: 显示 Supported: All 11 data sources 和 Commands 列表
+
+# REPL 写操作拒绝
+echo "DROP TABLE t;" | $BIN repl --dsn "sqlite:////tmp/test.db?label=test" 2>&1 | grep "READ_ONLY_VIOLATION"
+# 预期: READ_ONLY_VIOLATION
+```
+
+## 3.15 DSL 联邦查询 (v0.1.2+)
+
+```bash
+# 跨源 JOIN（MySQL + SQLite）
+$BIN execute -env --dsl "SELECT i.hostip, i.device_type, r.type AS rule_type
+  FROM @aiops-mysql.testdb.iplist i
+  JOIN @rules-sqlite.rules r ON i.id = r.rule_id
+  LIMIT 5" --human
+# 预期: 返回两条数据源关联结果
+```
