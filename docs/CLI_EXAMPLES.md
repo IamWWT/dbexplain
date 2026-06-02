@@ -1,6 +1,6 @@
 # dbexplain CLI 查询案例库
 
-> 所有查询均已在本环境（v0.1.0, 15 数据源）跑通验证。`--human` 用于可读表格输出，不加则为 JSON（供 AI Agent 消费）。
+> 所有查询均已在本环境（v0.1.1, 15 数据源）跑通验证。`--human` 用于可读表格输出，不加则为 JSON（供 AI Agent 消费）。
 > `--human` 可放在查询语句之前或之后：`dbexplain execute -env --db 1 --human "SELECT 1"` 与 `dbexplain execute -env --db 1 "SELECT 1" --human` 等价。
 
 ---
@@ -175,8 +175,85 @@ dbexplain execute -dsn "csv:///tmp/dbexplain-test/users.csv?label=csv-users" "SE
 dbexplain execute -dsn "csv:///tmp/dbexplain-test/users.csv?label=csv-users" "SELECT * LIMIT 1 OFFSET 1" --human
 ```
 
-> CSV 仅支持 `SELECT * [LIMIT N [OFFSET M]]`，不支持 WHERE/JOIN/ORDER BY/列选择。
-> TSV 和 XLSX 用法与 CSV 相同。
+> CSV/TSV/XLSX 由内置 SQL 引擎驱动，支持 WHERE / GROUP BY / JOIN / 聚合函数 / ORDER BY / 窗口函数等完整语法。详见 [`sql-syntax.md`](../dbexplain-skill/references/sql-syntax.md) 和 [`FILE_PROCESSING.md`](FILE_PROCESSING.md)。
+
+---
+
+## 10. Schema Diff — 字段级变更追踪
+
+Schema Diff 支持多版本基线管理和字段级变更检测。
+
+### 首次采集 + 保存版本
+
+```bash
+# 采集所有数据库并保存为版本基线
+dbexplain -env --cache /tmp/schema.cache --json -o /tmp/v1.json --version-label v1.0
+
+# 列出已保存版本
+dbexplain diff --cache /tmp/schema.cache --list-versions
+# → v1.0
+```
+
+### 基线变更检测
+
+```bash
+# 再次采集（同数据库，数据可能已变化）
+dbexplain -env --cache /tmp/schema.cache --json -o /tmp/v2.json --version-label v2.0
+
+# 跨版本对比（显示新增/删除/变化的表及字段级差异）
+dbexplain diff --cache /tmp/schema.cache --since v1.0 --human
+```
+
+输出示例：
+```
+Schema Diff Report — 2 table(s) changed
+============================================================
+
+[added] test.v2 (test)
+  Columns (4):
+    - id [type] → INTEGER
+    - name [type] → TEXT
+
+[removed] test.v1 (test)
+  Columns (4):
+    - id [type] → INTEGER
+
+[changed] db0.SEND_MSG_FAILED_FLAG:{hex} (openim-redis)
+  Columns (1):
+    - ttl [comment] → 18h17m16s → 18h16m24s
+```
+
+### 双文件对比
+
+```bash
+# 用两个 JSON 导出文件做对比
+dbexplain diff --before /tmp/v1.json --after /tmp/v2.json --human
+```
+
+### JSON 输出（供 AI Agent 消费）
+
+```bash
+# 默认输出为 JSON
+dbexplain diff --cache /tmp/schema.cache --since v1.0
+
+# JSON 包含字段级变更详情
+# {
+#   "tables": [{
+#     "instance": "...",
+#     "table": "...",
+#     "status": "changed",
+#     "columns": [{"name": "ttl", "field": "comment", "old": "...", "new": "..."}]
+#   }]
+# }
+```
+
+### Cache 文件格式
+
+- `fingerprints`: 表级 SHA256 哈希（快速判断是否变化）
+- `snapshots`: 完整表元数据快照（用于字段级 diff）
+- `versions`: 命名版本历史（跨版本对比）
+
+JSON 文件自动写入 `*_delta.json`（表级变更）+ `*_diff.json`（字段级变更）。
 
 ---
 
@@ -290,4 +367,4 @@ dbexplain execute -env --db 1 --human "SELECT id, name FROM users"
 
 ---
 
-*案例库持续更新中。v0.1.0 新增 CapSQL 架构落地、Postgres schema 多 schema 修复。全部查询已通过 --human 实测验证。*
+*案例库持续更新中。v0.1.1 新增 DSL 模式（`--dsl`）、Schema Diff、窗口函数、`internal/` 结构整理。全部查询已通过 --human 实测验证。*

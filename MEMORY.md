@@ -21,29 +21,33 @@
 | 需求 | 路径 |
 |------|------|
 | **文档-代码映射（权威）** | **`docs/CODE_MAP.md`** |
-| 入口 | `src/main.go` |
-| DSN 解析 | `src/dsn/dsn.go` |
-| 核心数据模型 | `src/schema/types.go` |
-| 错误处理 | `src/schema/errors.go` |
-| 字段推断 | `src/schema/infer.go` |
-| Connector 接口 + Collect 调度 | `src/connector/connector.go` |
-| 注册表 | `src/connector/registry.go` |
-| Panic 保护 | `src/connector/runner.go` |
-| 关系分析 + 聚类 + 问题检测 | `src/analyze/analyze.go` |
-| 重要性排序 | `src/analyze/ranking.go` |
-| 终端美化 + JSON 输出 | `src/render/render.go` |
+| 入口 | `src/cmd/dbexplain/main.go` |
+| 查询执行 | `src/cmd/dbexplain/execute.go` |
+| DSN 解析 | `src/internal/dsn/dsn.go` |
+| 共享执行引擎 | `src/internal/executor/executor.go` |
+| 核心数据模型 | `src/internal/schema/types.go` |
+| 错误处理 | `src/internal/schema/errors.go` |
+| 字段推断 | `src/internal/schema/infer.go` |
+| DSL 模式 | `src/internal/dsl/` (ast.go, preprocess.go, parser.go, binder.go, compiler.go) |
+| Schema Diff | `src/internal/diff/diff.go`, `types.go` |
+| Connector 接口 + Collect 调度 | `src/internal/connector/connector.go` |
+| 注册表 | `src/internal/connector/registry.go` |
+| Panic 保护 | `src/internal/connector/runner.go` |
+| 关系分析 + 聚类 + 问题检测 | `src/internal/analyze/analyze.go` |
+| 重要性排序 | `src/internal/analyze/ranking.go` |
+| 终端美化 + JSON 输出 | `src/internal/render/render.go` |
 | 构建脚本 | `src/build.sh` |
 | 安装/卸载脚本 | `dbexplain-skill/scripts/` |
 | CHANGELOG（中文） | `CHANGELOG.md` |
 | CHANGELOG（英文） | `CHANGELOG_EN.md` |
-| 测试文档 | `docs/test/README.md`（13 个文件全覆盖） |
+| 测试文档 | `docs/test/README.md`（15 个文件全覆盖） |
 | 项目宪法 | `CONSTITUTION.md` |
 | 架构愿景 | `docs/ARCHITECTURE.md` |
 | 算法文档 | `docs/ALGORITHMS.md` |
 | 安全检查手册 | `docs/SECURITY_CHECKLIST.md` |
 | 策略引擎 | `docs/POLICY.md` |
 | 只读查询执行 | `docs/EXECUTE.md` |
-| 加密/解密 | `src/crypto/crypto.go` |
+| 加密/解密 | `src/internal/crypto/crypto.go` |
 | Issue 追踪 | `issues.json` |
 
 ## 构建命令
@@ -98,7 +102,7 @@ scheme://[user[:pass]@]host[:port][/dbname][?label=别名&其他参数]
 
 ## 已知限制与待办
 
-所有已知问题跟踪在 `issues.json`（63 条，57 closed，1 wontfix，5 open）。
+所有已知问题跟踪在 `issues.json`（65 条，62 closed，1 wontfix，2 open）。
 
 **v0.0.4 已关闭（ISSUE-022 ~ ISSUE-032）：** IR v1 架构、Capability 重构、统一诊断、Importance Ranking、Context Compression、Delta Scan、Operational Stats、Windows 编码兼容。
 
@@ -108,7 +112,7 @@ scheme://[user[:pass]@]host[:port][/dbname][?label=别名&其他参数]
 
 **v0.0.7 已关闭：** Go 模块化发布（`github.com/IamWWT/dbexplain`）、公共 API（`src/core/` 导出 `Collect()`/`CollectToGraph()`/`CollectToJSON()`）、IR Graph 构建器（`BuildGraph()`）、ForeignKey 补全（OnDelete/OnUpdate，SQLite/MySQL/PostgreSQL 全覆盖）、SQLite INTEGER PRIMARY KEY nullable 修复、日志目录多级回退（`resolveLogDir()`）、全链路密码审计、只读查询执行引擎（`execute` 子命令 + sqlguard 沙箱）、9 数据库查询全覆盖。
 
-**v0.0.8 已关闭：** 细粒度安全策略引擎（`src/policy/` 包 — 表级/列级/语句级访问控制，支持 SQL + 非 SQL 所有数据库类型）、GaussDB/TDSQL 兼容性确认文档。
+**v0.0.8 已关闭：** 细粒度安全策略引擎（`src/internal/policy/` 包 — 表级/列级/语句级访问控制，支持 SQL + 非 SQL 所有数据库类型）、GaussDB/TDSQL 兼容性确认文档。
 
 **v0.0.9 已发布：** CSV/TSV/XLSX 文件处理（10 种数据源全覆盖）、FILE_PROCESSING.md 专项文档、分层测试 docs/test/、15 个 DSN 实机测试。
 
@@ -116,14 +120,18 @@ scheme://[user[:pass]@]host[:port][/dbname][?label=别名&其他参数]
 
 **v0.1.0 已发布：** CapSQL 能力架构落地（`isSQLKind()` 删除 → `capabilities.FromProvider().Has(CapSQL)`）、P0 sqlguard 绕过修复（WITH CTE 写操作 + SELECT INTO）、readOps 白名单修复（ANALYZE/REINDEX 移至黑名单）、policy 引擎双修复（matchStarSelect 全线检测 + 配置不再泄漏到 os.Environ）、Postgres 正确性双修复（FK schema JOIN + 索引结构化查询）、SET SESSION 连接池竞态修复、cache 原子写入、文档全面对齐 18 个 .md 文件。
 
-**当前开放（ISSUE-033, ISSUE-035, ISSUE-042, ISSUE-043, ISSUE-053）：** Phase 4 LLM 生态集成、GBase/HBase/OceanBase 评估、Elasticsearch TLS InsecureSkipVerify、ClickHouse 密码 URL 参数明文传输、移除明文 .env 支持评估。
+**v0.1.1 已发布：** 项目结构整理（`main.go`/`execute.go` 拆分为 `cmd/` + `internal/`）、共享 SQL AST 包（`internal/sqlast/`）、AST 级安全升级（sqlguard/policy AST 优先校验）、统一 DSL 查询入口（`internal/dsl/` + `--dsl` flag）、Schema Diff P1-P4（字段级变更检测 + 快照存储 + CLI 子命令 + 多版本基线）、窗口函数 Phase 1-4（排名/值引用/聚合窗口/框架规格）、文件查询引擎增强（UNION/DISTINCT ON/子查询 IN + 7 QA 场景）、E2E 测试标准化、向后兼容。
+
+**当前开放（ISSUE-033, ISSUE-035）：** Phase 4 LLM 生态集成、GBase/HBase/OceanBase 评估。
+
+**DSL v0.1.1 限制：** 仅支持单数据源查询（不支持跨源 JOIN），不支持原生源（Redis/Mongo/Qdrant/ES）。
 
 ## 新增 Connector 模板
 
-1. 在 `src/connector/` 下创建新文件（如 `oracle.go`）
+1. 在 `src/internal/connector/` 下创建新文件（如 `oracle.go`）
 2. 实现 `Connector` 接口的 `Collect(ctx, *dsn.DSN) (*schema.Instance, error)`
 3. 在 `init()` 中调用 `Register("kind", func() Connector { return ... })`
-4. 在 `src/dsn/dsn.go` 的 `ParseDSN()` 中添加 scheme 映射
+4. 在 `src/internal/dsn/dsn.go` 的 `ParseDSN()` 中添加 scheme 映射
 5. 在 `docs/` 下添加专项文档
 6. 运行 `bash build.sh` 重新编译
 
@@ -210,6 +218,17 @@ wc -c /tmp/perf-prev-1.json /tmp/perf-curr-1.json
 | 2 | **已完成 (v0.0.4)** | Context Compression + Importance Ranking + Retrieval Chunks + Delta Scan |
 | 3 | **已完成 (v0.0.4)** | Query-Aware Metadata + Operational Graph |
 | 4 | **已完成 (v0.1.0)** | CapSQL 架构落地 + P0/P1 安全加固 + 文档全面对齐 |
-| 5 | 规划中 | LLM Ecosystem Integration + MCP Server + 企业特性 |
+| 5 | **已完成 (v0.1.1)** | 结构整理 + 统一 DSL 查询入口 + AST 级安全升级 + Schema Diff + 窗口函数 |
+| 6 | 规划中 | LLM Ecosystem Integration + MCP Server + 企业特性 |
 
-当前版本：**v0.1.0** — CapSQL 能力架构落地 + P0/P1 安全加固 + Postgres 正确性修复 + 文档全面对齐。
+当前版本：**v0.1.1** — 结构整理 + 统一 DSL 查询入口 (`--dsl` flag) + Schema Diff P1-P4 + 窗口函数 Phase 1-4 + 文件查询引擎增强 + 向后兼容。
+
+## 最新测试 (v0.1.1)
+
+- **编译验证**: `go build ./...` + `go vet ./...` + `bash build.sh` 全平台通过
+- **链接验证**: Linux `ldd` 静态链接确认，macOS `otool -L` 无非系统动态依赖
+- **单元测试**: `go test ./... -count=1` 全部通过（filequery 100+ 测试、diff 24 测试、dsl 35 测试）
+- **DSL 确定性审计**: preprocess/parse/bind/compile 全路径确定性验证通过
+- **AST 级安全**: sqlguard + policy 均通过 AST 优先校验 + 字符串回退
+- **Schema Diff P1-P4**: 字段级变更检测、快照存储、CLI 子命令、多版本基线 — 全部通过
+- **窗口函数 Phase 1-4**: 排名/值引用/聚合窗口/框架规格 — 36+ 测试全部通过

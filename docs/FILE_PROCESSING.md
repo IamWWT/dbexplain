@@ -249,8 +249,8 @@ dbexplain xlsx
 
 ## 参考文档
 
-- `src/connector/csv.go` — CSV/TSV 连接器实现
-- `src/connector/xlsx.go` — XLSX 连接器实现（含 excelize 封装）
-- `src/connector/infer.go` — 类型推断共享逻辑
-- `src/execute.go` — `handleFileExecute()` 独立执行路径
+- `src/internal/connector/csv.go` — CSV/TSV 连接器实现
+- `src/internal/connector/xlsx.go` — XLSX 连接器实现（含 excelize 封装）
+- `src/internal/connector/infer.go` — 类型推断共享逻辑
+- `src/cmd/dbexplain/execute.go` — `handleFileExecute()` 独立执行路径
 - `docs/test/05-file-processing.md` — 文件处理测试用例

@@ -2,14 +2,15 @@ name: dbexplain-skill
 description: >
   Database schema explorer supporting MySQL/PG/ClickHouse/SQLite/Redis/MongoDB/ES/Qdrant, CSV/TSV/XLSX files.
   Auto-generates table structures, field comments, cross-DB relationship graphs, health reports.
-  Supports read-only query execution (execute, with CSV/XLSX file query engine: WHERE/GROUP BY/JOIN/aggregates/expressions) and access control (policy).
+  Supports read-only query execution (execute, with CSV/XLSX file query engine: WHERE/GROUP BY/JOIN/aggregates/expressions + DSL mode @label.table) and access control (policy).
 user-invocable: true
 trigger:
   - "explain table structure"
   - "analyze database relationships"
   - "cross-DB dependencies"
   - "generate ER diagram"
-  - "database inspection"
+  - "understand database schema"
+  - "database health check"
   - "execute read-only query"
 ---
 ## Tool Overview
@@ -19,7 +20,7 @@ trigger:
 - **Schema Collection** (`dbexplain -env`): inspects tables/fields/types/comments/cross-DB foreign keys/health score, outputs `instances[]` + `refs[]` (JSON)
 - **Read-Only Query** (`dbexplain execute`): runs SELECT to verify data after collection, outputs `columns[]` + `rows[]` (JSON)
 
-Also supports: help manual (`dbexplain all`), config encryption (`encrypt`), incremental change detection (`--cache`).
+Also supports: help manual (`dbexplain all`), config encryption (`encrypt`), incremental change detection (`--cache`), unified DSL query entry (`--dsl`).
 
 ## 1. Core Principles
 
@@ -156,7 +157,28 @@ dbexplain execute -env --label my_data \
 ```
 File datasources are read-only (SELECT only); DROP/INSERT returns parse error.
 
-### 2.7 File Query Best Practices
+### 2.7 DSL Mode (v0.1.1+)
+
+The `--dsl` flag enables DSL mode, which uses `@label.table` syntax to reference datasources, compiling them into native SQL for execution:
+
+```bash
+# DSL mode: @label.table syntax
+dbexplain execute -env --dsl --label mysql 'SELECT * FROM @mysql.users WHERE status = "active"'
+```
+
+The DSL compilation pipeline (preprocess → AST parse → symbol binding → backend routing) is fully deterministic: same input + same DSN environment → same output.
+
+```bash
+# DSL also works with file datasources
+dbexplain execute -env --dsl --label my_data 'SELECT * FROM @my_data.staff WHERE dept = "sales"'
+```
+
+**v0.1.1 DSL limitations:**
+- Single-datasource queries only (no cross-source JOIN)
+- Native backends not supported (Redis/Mongo/Qdrant/ES) — SQL databases and files only
+- `--dsl` is optional — omitting it uses the native SQL path
+
+### 2.8 File Query Best Practices
 
 #### Data Preview
 
@@ -274,6 +296,7 @@ Two categories of troubleshooting scenarios. Full guide at [`references/troubles
 | `--human` | execute | Table output (default JSON) |
 | `--limit/--timeout` | execute | Row limit(1000)/timeout(30s) |
 | `--explain` | execute | Output query plan |
+| `--dsl` | execute | Enable DSL mode, supports @label.table syntax to reference datasources |
 | `--context dir` | collect | AI context dir (summary/topology/diagnostics/chunks) |
 | `--cache file` | collect | Schema fingerprint cache, incremental change detection |
 | `-include/-exclude` | collect | Filter by DB type |

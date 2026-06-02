@@ -317,7 +317,7 @@ CAST(col AS TEXT)      -- 转文本（默认）
 
 - 不支持 `HAVING` 中引用未在 SELECT 列表中出现的别名
 - 不支持子查询在 WHERE 以外的位置（如 FROM 子查询）
-- 不支持窗口函数（ROW_NUMBER、RANK 等）
+- ~~不支持窗口函数（ROW_NUMBER、RANK 等）~~ ✅ v0.1.1 已支持
 - 不支持 CTE（WITH 语句）
 - 不支持 UPDATE/INSERT/DELETE（只读查询引擎）
 - 不支持函数索引和表达式索引

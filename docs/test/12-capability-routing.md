@@ -9,7 +9,7 @@
 
 ```bash
 cd src
-BIN="../release/dbexplain-linux-amd64"
+BIN="../release/dbexplain"
 ```
 
 ## 12.1 CapSQL 路由验证

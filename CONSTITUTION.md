@@ -93,14 +93,35 @@
 - 禁止出现 `if mysql { ... } else if postgres { ... }` 的 pipeline 分支
 - **v0.1.0 已落地**：`execute.go` 中 `isSQLKind()` 已被 `capabilities.FromProvider().Has(CapSQL)` 替代
 
+### 11. 项目结构（`cmd/` + `internal/` 布局）
+
+- 入口统一在 `src/cmd/dbexplain/`（`main.go` + 子命令 handler）
+- 业务逻辑在 `src/internal/` 下按职责分包，不对外暴露
+- **v0.1.1 已完成全量 internal 迁移**：所有 14 个业务包已移至 `src/internal/`，`src/` 仅保留 `cmd/` + 构建文件
+- **禁止在 `internal/` 外创建业务逻辑**
+
+### 12. DSL 确定性（编译型查询入口）
+
+- DSL 是 `dbexplain execute --dsl` 的可选入口，与原生 SQL 通道共存
+- DSL 解析/编译/规划必须确定：相同的输入 + 相同的 DSN 环境 → 相同输出
+- 虚拟表模型统一所有数据源（SQL 数据库 / 文件 / 原生引擎）
+- DSL 语法错误直接报错，不退回到原生通道（避免用户以为在跑 DSL 实际跑了原生 SQL）
+- DSL 通道安全能力与原生通道一致：sqlguard + policy + AutoLimit + ApplyMask
+
 ---
 
-## 项目边界 (v0.1.0)
+## 项目边界 (v0.1.1)
 
 ### 数据源范围
 - **核心**: MySQL, PostgreSQL, GaussDB, ClickHouse, SQLite, Redis, Elasticsearch, MongoDB, Qdrant
 - **文件数据源**（非"数据库"）: CSV, TSV, XLSX — 可做 Schema 采集和只读查询，但不扩展更多文件格式
 - **不支持的**: Parquet, Avro, Google Sheets — 超出"数据库上下文编译器"定位
+
+### DSL 查询
+- `--dsl` flag 提供统一 DSL 查询入口，支持 `@label.table` 语法引用数据源
+- DSL 编译流程：预处理 → sqlast 解析 → 符号绑定 → 后端路由
+- v0.1.1 限制：单数据源查询（不支持跨源 JOIN），原生源（Redis/Mongo/Qdrant/ES）不支持
+- DSL 是可选入口，原生 SQL/原生命令通道完全保留
 
 ### 集成策略
 - MCP Server, Cursor, OpenHands, Aider 集成 → **独立项目/仓库**，dbexplain 不内嵌 serve 模式
@@ -109,6 +130,7 @@
 ### 安全边界
 - **sqlguard + policy 是第一道防线**，建议配合数据库层 GRANT SELECT ONLY 作为第二道防线
 - 容器/VM 环境：机器指纹加密可能失效（无 `/etc/machine-id`），推荐使用密码模式或 `--machine-id-override`
+- DSL 通道安全能力与原生通道一致：sqlguard AST 级校验 + policy AST 级表/列提取 + AutoLimit + ApplyMask
 
 ---
 
@@ -125,6 +147,7 @@
 
 | 日期 | 版本 | 说明 |
 |------|------|------|
+| 2026-06-02 | v4 | 新增第 11-12 条（项目结构、DSL 确定性）；项目边界更新至 v0.1.1；新增 DSL 通道安全说明 |
 | 2026-05-29 | v3 | 第 10 条确认落地；新增"项目边界"章节，定义数据源范围和集成策略 |
 | 2026-05-19 | v1 | 初始宪法，基于 v0.0.2 代码库提取 |
 | 2026-05-20 | v2 | 项目重新定义为 Database Context Compiler；新增第 8-10 条：Deterministic Only、Graph First、Capability Architecture |

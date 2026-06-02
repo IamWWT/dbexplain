@@ -29,6 +29,137 @@
 
 ---
 
+# 测试结果报告 v0.1.1
+
+> 执行日期: 2026-06-02
+> 测试环境: Linux x86-64 (amd64), Go 1.26.1
+> 数据源: 15 个 (mysql, clickhouse, sqlite×2, qdrant, es, postgres, redis×2, mongodb, xlsx×2, csv×2, tsv)
+> 二进制: dbexplain-linux-amd64 v0.1.1
+
+---
+
+## 总体结果
+
+| 层级 | 测试文档 | 状态 | 通过/总数 | 备注 |
+|------|---------|------|----------|------|
+| L1 | [01-environment.md](01-environment.md) | **PASS** | 7/7 | go build/vet/test, 交叉编译5平台, Shell语法, 静态链接验证 |
+| L1 | DSL 单元测试 | **PASS** | 35/35 | preprocess/parse/bind/compile/pipeline/确定性地验证 |
+| L2 | AST 级安全 | **PASS** | 全量 | sqlguard + policy AST 优先校验 + 字符串回退 |
+| L2 | 结构整理 | **PASS** | 全量 | cmd/ + internal/ 布局, 向后兼容 |
+| L3 | [02-schema-collection.md](02-schema-collection.md) | **PASS** | 6/6 | 15/15 DSN采集成功, JSON结构验证, 类型/label过滤 |
+| L3 | [09-cli-help.md](09-cli-help.md) | **PASS** | 10/10 | 版本号, 帮助, 子命令, 别名, 参数说明 |
+| L4 | [11-end-to-end.md](11-end-to-end.md) | **PASS** | 3/3 | 全量采集+JSON验证, 15 DSN逐类型执行, 汇总报告 |
+| L5 | [06-security-sqlguard.md](06-security-sqlguard.md) | **PASS** | 6/6 | 8读动词放行, 11写动词拒绝, 多语句, 自动LIMIT, EXPLAIN, 空查询 |
+| L5 | [07-policy-engine.md](07-policy-engine.md) | **PASS** | 10/10 | DENY_TABLES/COLUMNS/STATEMENTS, 非SQL数据库, MASK_COLUMNS, 防绕过 |
+| L5 | [08-concurrent-limit.md](08-concurrent-limit.md) | **PASS** | 2/2 | QueryLock goroutine级互斥, 多标签并发 |
+| L6 | [03-execute-sql.md](03-execute-sql.md) | **PASS** | 6/6 | MySQL/PG/CH/SQLite×2/ES 查询执行 |
+| L6 | [04-execute-nosql.md](04-execute-nosql.md) | **PASS** | 8/8 | Redis/MongoDB/Qdrant 读+写拒绝 |
+| L6 | [05-file-processing.md](05-file-processing.md) | **PASS** | 12/12 | CSV/TSV/XLSX 采集+查询+LIMIT/OFFSET+错误处理 |
+| L7 | [10-regression.md](10-regression.md) | **PASS** | 4/4 | 版本一致性, Git安全审计, 构建基线 |
+| L7 | [13-file-query-engine.md](13-file-query-engine.md) | **PASS** | 10/10 | Q09-Q15 业务分析查询 + F1-F3 安全策略验证 |
+| L8 | [12-capability-routing.md](12-capability-routing.md) | **PASS** | 7/7 | CapSQL路由, JSON包装, PG多Schema, matchStarSelect, CTE策略, 文件策略, 能力一致性 |
+
+**总计: 91/91 测试项通过 (100%)**
+
+### 单元测试
+
+| 包 | 测试函数 | 用例数 | 状态 |
+|----|---------|--------|------|
+| internal/dsl | 35 测试函数 (新增 13) | 35 | PASS |
+| internal/sqlast | sqlast 包测试 | — | PASS (类型别名适配) |
+| internal/diff | 24 测试函数 | 24 | PASS |
+| connector/filequery (窗口函数) | 33 测试函数 | 33 | PASS |
+| internal/policy | 18 测试函数 (新增 2) | 43 | PASS |
+| internal/sqlguard | 13 测试函数 | 28 | PASS |
+| internal/dsn | 9+ 测试函数 | 35 | PASS |
+| internal/schema | 2 测试函数 | 44 | PASS |
+
+**全部单元测试通过。**
+
+**新增 v0.1.1 能力验证:**
+
+| 特性 | 状态 | 验证方式 |
+|------|------|---------|
+| cmd/ + internal/ 结构整理 | ✓ | `go build ./...` 通过, main.go/execute.go 已拆分 |
+| internal/sqlast/ 共享 AST | ✓ | sqlast 包独立, filequery 通过类型别名适配 |
+| sqlguard AST 级校验 | ✓ | AST 优先 + 字符串回退, 全量测试通过 |
+| policy AST 级表/列提取 | ✓ | AST 遍历优先 + 正则回退, 全量测试通过 |
+| internal/dsl/ 包 | ✓ | preprocess/parse/bind/compile 完成, 35 测试通过 |
+| --dsl 双通道 execute | ✓ | SQL 源 + 文件源, 原生源不支持 (v0.1.1 限制) |
+| 零动态链接验证 | ✓ | build.sh ldd/otool-L 自动检查 |
+| DSL 确定性审计 | ✓ | 全管道确定性验证 (5 次重复输出一致) |
+| 代码清理 | ✓ | CompiledDSL 未使用结构体已删除 |
+| 文档资产清理 | ✓ | 删除 `docs/assets/` 中 10 张过期 PNG (架构图旧版、未引用测试截图) |
+| AutoLimit schema.table 修复 | ✓ | `parseTableRef()` 支持 `schema.table` 限定名, 防止 LIMIT 重复追加 |
+| Policy schema 限定名展开 | ✓ | `extractTablesFromAST()` 将 `schema.table` 拆分为 `schema` + `table` 匹配 DENY_TABLES |
+
+### Build 验证
+
+| 平台 | 架构 | 链接状态 | 结果 |
+|------|------|---------|------|
+| Linux | amd64 | statically linked | PASS |
+| Linux | arm64 | statically linked | PASS |
+| macOS | amd64 | CGO_ENABLED=0 (otool 验证需 macOS) | PASS |
+| macOS | arm64 | CGO_ENABLED=0 (otool 验证需 macOS) | PASS |
+| Windows | amd64 | CGO_ENABLED=0 PE 无动态依赖 | PASS |
+
+### 测试覆盖率 (v0.1.1 新增)
+
+| 包 | 测试函数 | 用例数 | 状态 |
+|----|---------|--------|------|
+| internal/dsl | 35 测试函数 (新增 13) | 35 | PASS |
+| internal/sqlast | sqlast 包测试 | — | PASS (类型别名适配) |
+
+**总计: 所有单元测试通过, DSL 新增 13 测试用例, 构建验证全平台通过。**
+
+### Schema Diff P1-P4 (企业级字段级变更追踪)
+
+| 特性 | 状态 | 说明 |
+|------|------|------|
+| P1: 字段级 Diff 检测 | ✓ | `internal/diff/` 包: 列/索引/外键三级对比, 24 测试 |
+| P2: 快照存储 | ✓ | `cache.go` 同时存储 fingerprints + snapshots, 向后兼容 |
+| P3: CLI 子命令 | ✓ | `dbexplain diff --before/--after`, `--cache --current`, `--human`/JSON |
+| P4: 多版本基线 | ✓ | `--version-label`, `--list-versions`, `--since` 跨版本对比 |
+| Delta JSON 输出 | ✓ | `*_delta.json` (表级) + `*_diff.json` (字段级) |
+
+### 窗口函数 Phase 1-4 (文件查询引擎)
+
+| 特性 | 状态 | 说明 |
+|------|------|------|
+| Phase 1: 核心排名函数 | ✓ | ROW_NUMBER, RANK, DENSE_RANK, NTILE + OVER/PARTITION BY |
+| Phase 2: 值引用函数 | ✓ | LAG, LEAD, FIRST_VALUE, LAST_VALUE |
+| Phase 3: 聚合窗口函数 | ✓ | SUM/AVG/COUNT/MAX/MIN OVER (非 GROUP BY 路径) |
+| Phase 4: 窗口框架 | ✓ | ROWS/RANGE BETWEEN, UNBOUNDED PRECEDING/FOLLOWING, offset, CURRENT ROW |
+| 默认框架语义 | ✓ | ORDER BY → RANGE UNBOUNDED PRECEDING TO CURRENT ROW; 无 ORDER BY → 全分区 |
+| 管道集成 | ✓ | HasAggregates 区分窗口聚合 vs GROUP BY, 执行器窗口阶段在 WHERE 后 ORDER BY 前 |
+
+### E2E 验证 (15 数据源)
+
+| 特性 | 状态 | 说明 |
+|------|------|------|
+| `--cache` 采集 + snapshot 保存 | ✓ | 15/15 DSN 成功, JSON 含 fingerprints + snapshots |
+| `diff --list-versions` | ✓ | 正确显示已保存版本标签 |
+| `diff --since` 跨版本对比 | ✓ | 检测到 Redis TTL 实时变更 |
+| `diff --before/--after` 双文件对比 | ✓ | 与 `--cache --since` 结果一致 |
+| 向后兼容 (v0.1.0 cache) | ✓ | LoadStore 回退旧格式, 无兼容性错误 |
+
+### 新增测试覆盖率
+
+| 包 | 测试函数 | 用例数 | 状态 |
+|----|---------|--------|------|
+| internal/diff | 24 测试函数 | 24 | PASS |
+| connector/filequery (窗口函数) | 33 测试函数 | 33 | PASS |
+
+### 已知局限
+
+| 问题 | 影响 | 说明 |
+|------|------|------|
+| Diff 仅支持列/索引/外键三级 | 低 | 暂不支持分区/约束/触发器对比 |
+| 窗口函数仅文件查询引擎 | 低 | MySQL/PG/CH 原生 SQL 引擎不支持窗口函数 (由数据库自身处理) |
+| 窗口框架仅 ROWS + RANGE | 低 | GROUPS 模式暂未实现 |
+
+---
+
 ## 详细结果
 
 ### L1: 环境验证与静态分析
@@ -195,6 +326,20 @@
 - **根因**: `stripSQLComments()` 移除 `-- comment` 后留下 `\n`，正则 `\w+(?:\.\w+)?` 因 `\w` 不匹配 `\n` 而遗漏 `iplist`
 - **修复**: `stripSQLComments()` 在移除行注释后同时跳过 `\n`
 - **测试**: 新增 2 个测试用例验证
+
+### AutoLimit schema-qualified 表名解析修复 (v0.1.1)
+
+- **问题**: `SELECT * FROM testdb.iplist LIMIT 5` 报语法错误 `LIMIT 5 LIMIT 1000`
+- **根因**: `sqlast.Parse()` → `parseTableRef()` 只消费一个 IDENT，未处理 `schema.table` 限定名。遗留的 `.iplist` 令牌导致 LIMIT 子句未能被解析，AutoLimit 误追加 `LIMIT 1000`
+- **修复**: `parseTableRef()` 在消费第一个 IDENT 后检查 `peek().Type == TOKEN_DOT`，若出现则消费 DOT + 第二个 IDENT 组成 `schema.table` 完整名
+- **测试**: `SELECT * FROM testdb.iplist LIMIT 5` → 5 行 (正确); `SELECT * FROM testdb.iplist` → 12 行 (AutoLimit 1000, 正确)
+
+### 策略引擎 schema 限定名展开修复 (v0.1.1)
+
+- **问题**: `DENY_TABLES=iplist` 对 `SELECT * FROM testdb.iplist` 不生效
+- **根因**: `extractTablesFromAST()` 返回 `["testdb.iplist"]`，策略引擎检查 `seen["iplist"]` 未命中
+- **修复**: `extractTablesFromAST()` 新增 schema 限定名展开逻辑，将 `schema.table` 拆分为 `schema`、`table` 分别加入 seen 集合
+- **测试**: `DB1_DENY_TABLES=iplist` + `SELECT ... FROM testdb.iplist` → `ACCESS_DENIED`; 单元测试新增 1 个用例验证
 
 ### v0.1.0 文件查询引擎修复
 

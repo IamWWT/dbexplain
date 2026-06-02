@@ -1,5 +1,37 @@
 # Changelog
 
+## v0.1.1 (2026-06-02) — Internal Restructuring + Unified DSL Query Entry
+
+### Project Structure
+- **Go standard layout**: Monolithic files split into `cmd/` + `internal/`: `main.go`(2482→910 lines) extracted config/encrypt/list/manual/output; `execute.go`(585→264 lines) extracted render/queryutil/dsnfilter/executor
+- **Full internal/ migration**: 14 top-level packages moved to `src/internal/` by dependency order, old dirs cleaned; `src/` now only holds `cmd/` + `internal/` + build files
+- **Shared SQL AST**: filequery lexer/parser/AST extracted as `internal/sqlast/`, reused by sqlguard/policy/dsl with Go type aliases, 60+ tests passing
+
+### New Features
+- **DSL query mode** (`--dsl`): Reference data sources via `@label.table` (e.g. `SELECT * FROM @my-mysql.users`). Pipeline: preprocess → sqlast parse → symbol binding → backend routing, full security chain synced
+- **Schema Diff** (`dbexplain diff`): Field-level change detection (column/index/FK), 4 comparison modes (cache-baseline / since / two-file / list-versions), supports `--human` and JSON output, 23 unit tests
+- **Window functions**: ROW_NUMBER / RANK / DENSE_RANK / NTILE / LAG / LEAD / FIRST_VALUE / LAST_VALUE / aggregate OVER + ROWS/RANGE frame specs, 36+ test cases
+
+### Security Enhancements
+- **AST-level validation**: sqlguard/policy prioritize `sqlast.Parse()` AST analysis, fall back to string matching; AutoLimit checks AST Limit field to avoid duplicate injection
+- **AutoLimit duplicate injection fix**: `parseTableRef()` didn't handle `schema.table` qualified names, causing schema-prefixed queries to get double LIMIT. Added `parseQualifiedName()` for multi-part identifiers
+- **Policy DENY_TABLES matching fix**: `extractTablesFromAST()` didn't expand `schema.table` for matching, so `DENY_TABLES=users` had no effect on `SELECT * FROM public.users`. Added table name splitting logic
+
+### Documentation
+- **README bilingual split**: README.md → symlink to README_ZH.md, new `README_EN.md` for independent English maintenance. Added doc navigation table, streamlined content
+- **New `docs/USAGE_GUIDE.md`**: Comprehensive coverage of all 11 data sources from install to query, with Linux/macOS/Windows instructions
+- **Stale content fixes**: CLI_EXAMPLES.md CSV section corrected (file engine supports full SQL); sql-syntax.md/troubleshooting.md window function labels updated to ✅ supported
+- **docs/test/ cleanup**: Removed outdated PNG screenshots
+
+### Testing
+- **Unified standards**: All test docs using `cd src + BIN=../release/dbexplain` portable paths, no absolute path dependencies
+- **New test docs**: 14-schema-diff.md(24 items) + 15-window-functions.md(36 items)
+- **Full E2E verification**: 15 data sources 91/91 passed, covering DSL mode, Schema Diff, window functions
+
+### Build & Release
+- `build.sh` version bumped to v0.1.1
+- `issues.json`: Fixed JSON syntax errors + ~70 stale path updates + 3 new issues, total 68
+
 ## v0.1.0 (2026-05-29) — Deep Security Hardening & Architecture Alignment & File Query Engine
 
 ### Security Fixes (P0)

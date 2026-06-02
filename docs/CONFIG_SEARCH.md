@@ -74,8 +74,8 @@ dbexplain -env              # 读取 /etc/dbexplain/config.env
 
 ## 源码位置
 
-- `findConfigFile()` — `src/main.go`
-- `loadEnvFile()` — `src/main.go`
+- `findConfigFile()` — `src/cmd/dbexplain/main.go`
+- `loadEnvFile()` — `src/cmd/dbexplain/main.go`
 
 ## 常见问题
 

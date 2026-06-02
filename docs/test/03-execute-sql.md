@@ -8,7 +8,7 @@
 
 ```bash
 cd src
-BIN="../release/dbexplain-linux-amd64"
+BIN="../release/dbexplain"
 ```
 
 > **配置优先级**：运行 `-env` 前确保 CWD 中有 `.env.dbexplain` 或设置 `DBPROBE_ENV_FILE=.env`。

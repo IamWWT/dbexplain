@@ -8,7 +8,7 @@
 
 ```bash
 cd src
-BIN="../release/dbexplain-linux-amd64"
+BIN="../release/dbexplain"
 ```
 
 > **配置优先级**：运行 `-env` 前确保 CWD 中有 `.env.dbexplain` 或设置 `DBPROBE_ENV_FILE=.env`。
@@ -25,7 +25,7 @@ cd /tmp/build-prev/src && go build -ldflags="-s -w" -o /tmp/dbexplain-prev .
 cd -
 
 # 构建当前版本
-cd src && go build -ldflags="-s -w -X main.version=v0.1.0" -o /tmp/dbexplain-curr .
+cd src && go build -ldflags="-s -w -X main.version=v0.1.1" -o /tmp/dbexplain-curr .
 
 # 对比
 /tmp/dbexplain-prev -env -timeout 30s --json > /tmp/prev.json 2>/dev/null

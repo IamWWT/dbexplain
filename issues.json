@@ -8,7 +8,7 @@
       "priority": "high",
       "category": "bug",
       "description": "fetchCHSampleRow (line 151) 在查询后追加 ' FORMAT JSONCompact'，queryRows (line 194) 也追加 ' FORMAT JSONCompact'，导致实际 SQL 为 'SELECT ... LIMIT 1 FORMAT JSONCompact FORMAT JSONCompact'，ClickHouse 报 SYNTAX_ERROR。修复：从 fetchCHSampleRow 移除多余的 FORMAT 追加，统一由 queryRows 负责。",
-      "file": "src/connector/clickhouse.go",
+      "file": "src/internal/connector/clickhouse.go",
       "created": "2026-05-19"
     },
     {
@@ -19,7 +19,7 @@
       "priority": "high",
       "category": "feature",
       "description": "添加 Redis Cluster 支持。通过 ?cluster=true DSN 参数启用。使用 NewClusterClient 创建客户端，UniversalClient 接口统一单机/集群操作，ForEachMaster 扫描所有分片，集群模式跳过 SELECT dbIndex（仅 db0），聚合 INFO keyspace 统计数据。",
-      "file": "src/connector/redis.go",
+      "file": "src/internal/connector/redis.go",
       "created": "2026-05-19"
     },
     {
@@ -30,7 +30,7 @@
       "priority": "medium",
       "category": "feature",
       "description": "ES 连接器硬编码 http:// 协议。需支持 elasticsearchs:// scheme 和 ?tls=true 参数启用 HTTPS，配置 InsecureSkipVerify（诊断工具可接受）。",
-      "file": "src/connector/elasticsearch.go",
+      "file": "src/internal/connector/elasticsearch.go",
       "created": "2026-05-19"
     },
     {
@@ -41,7 +41,7 @@
       "priority": "low",
       "category": "debt",
       "description": "analyze.InferComment 与 schema.InferComment 功能重复且全局零调用。更严重的是 analyze/infer.go 中 IP 检测使用 strings.Contains(name, \"ip\") 会误匹配 description/chip 等。已由 ISSUE-044 删除文件替代。",
-      "file": "src/analyze/infer.go",
+      "file": "src/internal/analyze/infer.go",
       "created": "2026-05-19"
     },
     {
@@ -52,7 +52,7 @@
       "priority": "medium",
       "category": "feature",
       "description": "添加 -include 和 -exclude CLI 参数，支持按数据库类型(kind)、标签(label)、实例编号(DB1, DB2)过滤 DSN。逗号分隔多值。include 优先级高于 exclude。解析失败的 DSN 不参与过滤。",
-      "file": "src/main.go",
+      "file": "src/cmd/dbexplain/main.go",
       "created": "2026-05-19"
     },
     {
@@ -63,7 +63,7 @@
       "priority": "low",
       "category": "bug",
       "description": "collectPGDB 未查询表行数。MySQL 使用 information_schema.TABLES.Table_rows，PostgreSQL 需从 pg_stat_user_tables.n_live_tup 或 pg_class.reltuples 获取。目前为已知限制。",
-      "file": "src/connector/postgres.go",
+      "file": "src/internal/connector/postgres.go",
       "created": "2026-05-19"
     },
     {
@@ -74,7 +74,7 @@
       "priority": "medium",
       "category": "bug",
       "description": "buildPGDSN 硬编码 sslmode=disable，无法连接启用 SSL 的 PostgreSQL 实例。应支持 ?sslmode=require 或类似参数。",
-      "file": "src/connector/postgres.go",
+      "file": "src/internal/connector/postgres.go",
       "created": "2026-05-19"
     },
     {
@@ -85,7 +85,7 @@
       "priority": "medium",
       "category": "feature",
       "description": "collectPGDB 查询条件硬编码 schemaname='public'，忽略其他 schema（如 auth、logs 等）。应支持指定 schema 或自动采集所有非系统 schema。",
-      "file": "src/connector/postgres.go",
+      "file": "src/internal/connector/postgres.go",
       "created": "2026-05-19"
     },
     {
@@ -151,7 +151,7 @@
       "priority": "high",
       "category": "bug",
       "description": "PrintJSON 输出的 JSON 仅包含 table_count，缺少 columns(name/type/nullable/default/comment/is_primary/is_unique/is_index)、indexes(name/columns/unique/type)、foreign_keys(name/columns/ref_table/ref_columns)、engine、partition_key、order_by_key、key_pattern、data_type 等完整表结构元数据。AI Agent 消费方无法从 JSON 获取表结构信息。修复：重写 render.go PrintJSON，使用 json.MarshalIndent 序列化完整 schema。",
-      "file": "src/render/render.go",
+      "file": "src/internal/render/render.go",
       "created": "2026-05-19"
     },
     {
@@ -162,7 +162,7 @@
       "priority": "high",
       "category": "bug",
       "description": "两处日志直接输出 rawDSN 导致密码以明文写入日志文件：(1) DSN 解析失败时 log.Printf(\"invalid DSN %s: %v\", rawDSN, err)；(2) 采集失败时 logger.Printf(\"skip %s: %v\", rawDSN, err)。修复：使用 parsed.Redacted() 脱敏，解析失败时只输出错误信息不含 DSN。",
-      "file": "src/main.go",
+      "file": "src/cmd/dbexplain/main.go",
       "created": "2026-05-19"
     },
     {
@@ -173,7 +173,7 @@
       "priority": "medium",
       "category": "bug",
       "description": "三个位置使用 if err == nil { ... } 模式，查询失败时静默丢弃错误，排错困难：(1) postgres.go 索引查询 (line 154)；(2) mysql.go 索引查询 (line 149)；(3) mysql.go 主键查询 (line 177)；(4) mysql.go 外键查询 (line 204)。修复：全部添加 else { logf(ctx, ...) } 分支输出错误信息。",
-      "file": "src/connector/postgres.go, src/connector/mysql.go",
+      "file": "src/internal/connector/postgres.go, src/internal/connector/mysql.go",
       "created": "2026-05-19"
     },
     {
@@ -184,7 +184,7 @@
       "priority": "medium",
       "category": "bug",
       "description": "wg.Wait() 后 instances 为空时无任何提示，用户只能看到空报告。修复：在 wg.Wait() 后添加判断，instances 为空时输出警告提示用户检查日志目录。",
-      "file": "src/main.go",
+      "file": "src/cmd/dbexplain/main.go",
       "created": "2026-05-19"
     },
     {
@@ -195,7 +195,7 @@
       "priority": "low",
       "category": "feature",
       "description": "二进制文件没有 --version 或 -v 参数输出版本号。用户和 AI Agent 无法在运行时确认当前版本。建议从编译时注入的 VERSION 变量或 build.sh 中的 ldflags 获取。",
-      "file": "src/main.go",
+      "file": "src/cmd/dbexplain/main.go",
       "created": "2026-05-19"
     },
     {
@@ -217,7 +217,7 @@
       "priority": "low",
       "category": "bug",
       "description": "schema/infer.go 中使用 strings.Contains(name, \"ip\") 检测 IP 地址列，但 \"description\" 等词包含子串 \"ip\"，导致误判为 IP 地址。修复：使用更精确的边界匹配（HasPrefix ip_、HasSuffix _ip、Contains _ip_、name==ip）。",
-      "file": "src/schema/infer.go",
+      "file": "src/internal/schema/infer.go",
       "created": "2026-05-19"
     },
     {
@@ -228,7 +228,7 @@
       "priority": "medium",
       "category": "bug",
       "description": "MySQL 驱动返回 []byte 类型时，fetchMySQLSampleRow 和 fetchPGSampleRow 使用 fmt.Sprintf(\"%v\", val) 将其格式化为 [97 105 111 112 115 ...] 字节数组而非可读字符串。修复：在值转换时优先判断 []byte 并使用 string(b) 转换。",
-      "file": "src/connector/mysql.go, src/connector/postgres.go",
+      "file": "src/internal/connector/mysql.go, src/internal/connector/postgres.go",
       "created": "2026-05-19"
     },
     {
@@ -239,7 +239,7 @@
       "priority": "low",
       "category": "bug",
       "description": "registry.go GetConnector 函数先在锁内读取 constructor，释放锁后再调用 constructor()。若存在并发 Register（当前不会发生，所有 Register 在 init() 中完成），该窗口可能导致 TOCTOU 问题。修复：将 constructor() 调用也纳入锁保护范围，或将 ok==false 分支提前并保持锁至 constructor() 调用完成。",
-      "file": "src/connector/registry.go",
+      "file": "src/internal/connector/registry.go",
       "created": "2026-05-20"
     },
     {
@@ -250,7 +250,7 @@
       "priority": "low",
       "category": "improvement",
       "description": "工具功能分散在不同模块：字段推断在 schema/、风险诊断内嵌在连接器（如 Redis 大 key 检测在 redis.go）、聚类分析在 analyze/、渲染在 render/。已拆分为具体可执行的 Phase 1/2 任务：ISSUE-028（统一诊断层）覆盖诊断抽离，ISSUE-030（Importance Ranking）覆盖确定性评分系统。详见 docs/ARCHITECTURE.md。",
-      "file": "src/analyze/, src/connector/redis.go",
+      "file": "src/internal/analyze/, src/internal/connector/redis.go",
       "created": "2026-05-20"
     },
     {
@@ -260,7 +260,7 @@
       "priority": "low",
       "category": "improvement",
       "description": "Redacted() 将密码替换为 ***，相同密码的多个实例脱敏后完全一致，用户难以区分。但 label 参数已解决此问题——DSN 中设置 ?label=别名 即可唯一标识实例。建议在文档和 --manual 中强调 label 的使用场景。",
-      "file": "src/dsn/dsn.go",
+      "file": "src/internal/dsn/dsn.go",
       "created": "2026-05-20"
     },
     {
@@ -270,8 +270,8 @@
       "closed": "2026-05-20",
       "priority": "high",
       "category": "feature",
-      "description": "定义通用 IR (Internal Representation) v1，独立于数据库类型。核心原语：Node (id/kind/engine/name/metadata)、Column (id/kind/data_type/nullable/is_primary/...)、Edge (source/target/edge_type/confidence)。IR 是项目最重要的长期兼容资产。已产出 src/ir/types.go：Node/NodeKind、Column、Edge/EdgeType、Graph 类型。",
-      "file": "src/ir/types.go",
+      "description": "定义通用 IR (Internal Representation) v1，独立于数据库类型。核心原语：Node (id/kind/engine/name/metadata)、Column (id/kind/data_type/nullable/is_primary/...)、Edge (source/target/edge_type/confidence)。IR 是项目最重要的长期兼容资产。已产出 src/internal/ir/types.go：Node/NodeKind、Column、Edge/EdgeType、Graph 类型。",
+      "file": "src/internal/ir/types.go",
       "created": "2026-05-20"
     },
     {
@@ -281,8 +281,8 @@
       "closed": "2026-05-20",
       "priority": "high",
       "category": "feature",
-      "description": "在 IR 基础上实现内部统一图模型（src/graph/）。所有数据库对象（表/集合/键模式）内部建模为图节点和边。已产出：Graph builder（AddNode/AddColumn/AddEdge/SetMeta/Build）、Query（Neighbors/Degree/Isolated/Subgraphs/HasEdge）、ID helpers（Join/ColumnID）。",
-      "file": "src/graph/graph.go",
+      "description": "在 IR 基础上实现内部统一图模型（src/internal/graph/）。所有数据库对象（表/集合/键模式）内部建模为图节点和边。已产出：Graph builder（AddNode/AddColumn/AddEdge/SetMeta/Build）、Query（Neighbors/Degree/Isolated/Subgraphs/HasEdge）、ID helpers（Join/ColumnID）。",
+      "file": "src/internal/graph/graph.go",
       "created": "2026-05-20"
     },
     {
@@ -293,7 +293,7 @@
       "priority": "high",
       "category": "feature",
       "description": "定义 Capability 枚举（CapForeignKey/Sampling/TTL/Partition/Vector/RowCount/Index）。Connector 接口新增 Capabilities() 方法。8 个连接器全部实现 Capabilities()。capabilities.Set 提供 Has/HasAny/HasAll 检查。Extractor pipeline 集成留待后续。",
-      "file": "src/capabilities/capabilities.go, src/connector/*.go",
+      "file": "src/internal/capabilities/capabilities.go, src/internal/connector/*.go",
       "created": "2026-05-20"
     },
     {
@@ -304,7 +304,7 @@
       "priority": "medium",
       "category": "feature",
       "description": "创建独立的 diagnostics 包，按 Capability 触发诊断规则。已产出：Severity、Issue 统一类型、Rule 结构体（名称+Requires Capability+Check 函数）、Runner（Run 方法）。标准规则：unindexed_fk（需 CapForeignKey）、wide_table（通用）、missing_pk（需 CapForeignKey）、no_timestamp（跳过 NoSQL + ClickHouse）。analyze.go 和 redis.go 的集成留待后续。",
-      "file": "src/diagnostics/diagnostics.go",
+      "file": "src/internal/diagnostics/diagnostics.go",
       "created": "2026-05-20"
     },
     {
@@ -314,8 +314,8 @@
       "closed": "2026-05-20",
       "priority": "medium",
       "category": "feature",
-      "description": "实现多层上下文输出：summary.json（核心表、最大表、高连接表、热表）、topology.json（子图、孤立表、环路）、diagnostics.json（缺主键、未索引FK、Redis无TTL）、retrieval_chunks/（单表上下文 Markdown 文件，供 Agent retrieval 使用）。详见 docs/ARCHITECTURE.md §5。已产出 src/context/compress.go。",
-      "file": "src/context/compress.go",
+      "description": "实现多层上下文输出：summary.json（核心表、最大表、高连接表、热表）、topology.json（子图、孤立表、环路）、diagnostics.json（缺主键、未索引FK、Redis无TTL）、retrieval_chunks/（单表上下文 Markdown 文件，供 Agent retrieval 使用）。详见 docs/ARCHITECTURE.md §5。已产出 src/internal/context/compress.go。",
+      "file": "src/internal/context/compress.go",
       "created": "2026-05-20"
     },
     {
@@ -325,8 +325,8 @@
       "closed": "2026-05-20",
       "priority": "medium",
       "category": "feature",
-      "description": "实现确定性重要性评分算法，不依赖 AI。维度：图出入度、FK 被引次数、行数、索引密度。输出 importance_score (0-1) 及各因子分解。用于 Agent context window 优先加载。详见 docs/ARCHITECTURE.md §5。已产出 src/analyze/ranking.go。",
-      "file": "src/analyze/ranking.go",
+      "description": "实现确定性重要性评分算法，不依赖 AI。维度：图出入度、FK 被引次数、行数、索引密度。输出 importance_score (0-1) 及各因子分解。用于 Agent context window 优先加载。详见 docs/ARCHITECTURE.md §5。已产出 src/internal/analyze/ranking.go。",
+      "file": "src/internal/analyze/ranking.go",
       "created": "2026-05-20"
     },
     {
@@ -336,8 +336,8 @@
       "closed": "2026-05-20",
       "priority": "medium",
       "category": "feature",
-      "description": "实现增量扫描支持。表指纹（列名+类型 hash、索引定义 hash、FK 定义 hash）、元数据版本、last_scan_at 时间戳。两次扫描相同指纹时跳过。解决企业库全量扫描不可行问题。详见 docs/ARCHITECTURE.md §6。已产出 src/cache/cache.go。",
-      "file": "src/cache/cache.go",
+      "description": "实现增量扫描支持。表指纹（列名+类型 hash、索引定义 hash、FK 定义 hash）、元数据版本、last_scan_at 时间戳。两次扫描相同指纹时跳过。解决企业库全量扫描不可行问题。详见 docs/ARCHITECTURE.md §6。已产出 src/internal/cache/cache.go。",
+      "file": "src/internal/cache/cache.go",
       "created": "2026-05-20"
     },
     {
@@ -348,16 +348,17 @@
       "priority": "low",
       "category": "feature",
       "description": "采集真实查询行为事实（非 AI 推理）。PostgreSQL: pg_stat_user_tables seq_scan/idx_scan/n_tup_*；MySQL: performance_schema.table_io_waits_summary_by_table；ClickHouse: system.query_log ARRAY JOIN tables；Redis: INFO stats keyspace_hits/misses。兜底机制：查询失败时静默跳过并记录日志，不可用因子权重自动归零并重新归一化。ISSUE-034 跟踪 GaussDB/TDSQL 兼容性。",
-      "file": "src/connector/postgres.go, mysql.go, clickhouse.go, redis.go",
+      "file": "src/internal/connector/postgres.go, mysql.go, clickhouse.go, redis.go",
       "created": "2026-05-20"
     },
     {
       "id": "ISSUE-033",
       "title": "[Phase 4] LLM Ecosystem Integration",
-      "status": "open",
+      "status": "closed",
+      "closed": "2026-06-02",
       "priority": "low",
       "category": "feature",
-      "description": "与主流 AI Agent 生态集成：Claude Code Skill（已有）、Cursor 集成、OpenHands 集成、Aider 集成。提供标准化的 Agent Context 输出格式，让各平台 AI Agent 无缝消费 IR。",
+      "description": "丢弃。与主流 AI Agent 生态集成：Claude Code Skill（已有）、OpenHands 集成（规划中）、Aider 集成（规划中）、Cursor 集成（策略保留）。OpenHands/Aider 安装入口在 install-skill.sh 菜单中待添加。已关闭：非核心方向，不做主动集成，保持 Skill 自安装脚本即可。",
       "file": "dbexplain-skill/SKILL.md (扩展)",
       "created": "2026-05-20"
     },
@@ -368,7 +369,7 @@
       "priority": "medium",
       "category": "compat",
       "description": "GaussDB(PG兼容)和TDSQL(MySQL兼容)的操作语义表结构可能与原生PG/MySQL不同。需有实际环境用户确认： GaussDB — pg_stat_user_tables字段名/计数器语义是否一致、pg_stat_statements扩展是否存在、是否有WDR替代方案； TDSQL — performance_schema.table_io_waits_summary_by_table在分布式版本是否反映全局统计、events_statements_summary_by_digest在分片查询下的行为。兜底机制已设计：查询失败时跳过该数据源并记录日志，因子权重自动重新归一化。",
-      "file": "src/connector/postgres.go, src/connector/mysql.go",
+      "file": "src/internal/connector/postgres.go, src/internal/connector/mysql.go",
       "created": "2026-05-20",
       "closed": "2026-05-27"
     },
@@ -390,7 +391,7 @@
       "priority": "high",
       "category": "bug",
       "description": "Windows下 -o 输出UTF-8 BOM文件，CMD `type` 命令按系统代码页(GBK/CP936)解析导致中文乱码，BOM显示为'锘?'。修复：运行时检测ANSI代码页，中文系统(936)转GBK输出，其他locale保持UTF-8 BOM。同时替换schema/infer.go中Unicode省略号(…)为ASCII(...)。引入golang.org/x/sys(Win API)和golang.org/x/text(GBK编码器)，通过build tag分离平台代码(encode_windows.go / encode.go)。",
-      "file": "src/main.go, src/encode.go, src/encode_windows.go, src/schema/infer.go",
+      "file": "src/cmd/dbexplain/main.go, src/cmd/dbexplain/encode.go, src/cmd/dbexplain/encode_windows.go, src/internal/schema/infer.go",
       "created": "2026-05-20"
     },
     {
@@ -401,7 +402,7 @@
       "priority": "medium",
       "category": "feature",
       "description": "当前日志目录固定为工具二进制所在目录下的 logs/，用户无法自定义。需求：增加 CLI 参数（如 --log-dir <path>），允许用户指定日志输出目录。默认行为保持不变（二进制所在目录），但用户可通过参数覆盖。影响范围：filter.log、各 DSN 独立日志（<label>.log）等所有日志输出。",
-      "file": "src/main.go",
+      "file": "src/cmd/dbexplain/main.go",
       "created": "2026-05-20"
     },
     {
@@ -412,7 +413,7 @@
       "priority": "high",
       "category": "feature",
       "description": "当前工具使用方式需要二进制和 .env 文件同在工具目录下，用户体验差。改造目标：(1) 提供 Linux 一键安装脚本（install.sh）和 Windows 一键安装脚本（install.bat/ps1）；(2) 二进制自动移动到 PATH 目录（Linux: /usr/local/bin/，Windows: %USERPROFILE%\\AppData\\Local\\dbexplain\\ 并添加到用户 PATH）；(3) .env 文件默认改名为 .env.dbexplain，存放在 $HOME/.config/dbexplain/（Linux）或 %USERPROFILE%\\.dbexplain\\（Windows），符合 XDG 规范；(4) Linux 安装在 ~/.bashrc 中增加 source 脚本自动加载 .env.dbexplain 中的环境变量（或通过导出 DBPROBE_ENV_FILE 环境变量指向配置文件路径）；(5) 工具启动时优先读取 DBPROBE_ENV_FILE 环境变量指向的配置文件，其次读取当前目录下的 .env.dbexplain，最后回退到 .env；(6) 安装完成后提示用户将 .env.dbexplain 放置在配置目录并填入实际数据库连接串。",
-      "file": "install_skill_for_all_platform.sh, 新增 install.sh / install.ps1, src/main.go (配置文件查找逻辑)",
+      "file": "install_skill_for_all_platform.sh, 新增 install.sh / install.ps1, src/cmd/dbexplain/main.go (配置文件查找逻辑)",
       "created": "2026-05-20"
     },
     {
@@ -456,7 +457,7 @@
       "priority": "medium",
       "category": "security",
       "description": "elasticsearch.go:47 使用 tls.Config{InsecureSkipVerify: true} 禁用 TLS 证书验证，容易遭受中间人攻击。短期内作为诊断工具可接受（已文档化），长期需支持 TLS 证书配置选项（--tls-ca-file 或 ?tls-ca=path）。",
-      "file": "src/connector/elasticsearch.go",
+      "file": "src/internal/connector/elasticsearch.go",
       "created": "2026-05-21"
     },
     {
@@ -467,7 +468,7 @@
       "priority": "medium",
       "category": "security",
       "description": "clickhouse.go:269 将密码作为 URL 查询参数（params.Set(\"password\", c.pass)），可能被 HTTP 代理/负载均衡器日志记录。应改用 HTTP Basic Auth Header 传递认证信息。",
-      "file": "src/connector/clickhouse.go",
+      "file": "src/internal/connector/clickhouse.go",
       "created": "2026-05-21"
     },
     {
@@ -478,7 +479,7 @@
       "priority": "low",
       "category": "bug",
       "description": "analyze/infer.go 与 schema/infer.go 功能重复且全局零调用。更严重的是 analyze/infer.go:27 使用 strings.Contains(name, \"ip\") 检测 IP 地址列，会误匹配 description/chip 等包含 ip 子串的词。schema/infer.go 中已有更精确的边界匹配实现。修复：删除 analyze/infer.go 消除死代码和 bug。替代 ISSUE-004。",
-      "file": "src/analyze/infer.go",
+      "file": "src/internal/analyze/infer.go",
       "created": "2026-05-21"
     },
     {
@@ -489,7 +490,7 @@
       "priority": "medium",
       "category": "bug",
       "description": "postgres.go:207 在无注释列采样时未检查 t.RowCount > 0。MySQL(mysql.go:143) 和 ClickHouse(clickhouse.go:174) 均有此守卫。导致对空表执行无意义的 SELECT * LIMIT 1 查询。修复：添加 && t.RowCount > 0 条件。",
-      "file": "src/connector/postgres.go",
+      "file": "src/internal/connector/postgres.go",
       "created": "2026-05-21"
     },
     {
@@ -500,7 +501,7 @@
       "priority": "low",
       "category": "bug",
       "description": "analyze.go:268-275 中 longestCommonPrefix 函数在公共前缀不含 _ 或 - 分隔符时会剥离所有字符返回空串（如 abc/abd/abe → ab→\"\"）。导致聚类名变为\"N-table cluster\"而非更有意义的名称。修复：无分隔符时保留完整公共前缀。",
-      "file": "src/analyze/analyze.go",
+      "file": "src/internal/analyze/analyze.go",
       "created": "2026-05-21"
     },
     {
@@ -511,7 +512,7 @@
       "priority": "medium",
       "category": "bug",
       "description": "postgres.go:46 硬编码 inst.Kind = \"postgres\"，即使 DSN scheme 为 gaussdb:// 也报告为 postgres。用户无法区分 GaussDB 和 PostgreSQL 实例。修复：读取 d.Kind 赋值给 inst.Kind。",
-      "file": "src/connector/postgres.go",
+      "file": "src/internal/connector/postgres.go",
       "created": "2026-05-21"
     },
     {
@@ -522,7 +523,7 @@
       "priority": "medium",
       "category": "bug",
       "description": "render.go 中 jsonTable 结构体缺少 OpStats 字段。所有连接器（PostgreSQL/MySQL/ClickHouse/Redis）已采集操作统计信息（seq_scan/idx_scan/query_count/keyspace_hits 等），但在 JSON 输出中被丢弃。修复：为 jsonTable 添加 OpStats 字段。",
-      "file": "src/render/render.go",
+      "file": "src/internal/render/render.go",
       "created": "2026-05-21"
     },
     {
@@ -533,7 +534,7 @@
       "priority": "low",
       "category": "perf",
       "description": "mysql.go 中索引查询(line 156)和主键查询(line 187)分别发送 SHOW INDEX FROM 查询，产生 2 倍网络往返。可合并为一次 SHOW INDEX FROM 查询，在代码中分离 PRIMARY 和二级索引。",
-      "file": "src/connector/mysql.go",
+      "file": "src/internal/connector/mysql.go",
       "created": "2026-05-21"
     },
     {
@@ -544,7 +545,7 @@
       "priority": "low",
       "category": "debt",
       "description": "更新 ISSUE-004 状态为 closed(wontfix)，已由 ISSUE-044 删除文件替代。analyze.InferComment 与 schema.InferComment 功能完全重复且含 IP 检测 bug，已决定删除而非保留。",
-      "file": "src/analyze/infer.go",
+      "file": "src/internal/analyze/infer.go",
       "created": "2026-05-21"
     },
     {
@@ -555,7 +556,7 @@
       "priority": "high",
       "category": "bug",
       "description": "-json -o file 组合使用时，encodeOutput() 将 UTF-8 BOM (ef bb bf) 写入 JSON 文件开头，导致大多数 JSON 解析器（Python json.load、jq 等）报错 Unexpected UTF-8 BOM。修复：JSON 输出跳过 encodeOutput，直接写入原始字节。文本输出（-o 不含 -json）保持 BOM 行为不变。",
-      "file": "src/main.go",
+      "file": "src/cmd/dbexplain/main.go",
       "created": "2026-05-21"
     },
     {
@@ -566,20 +567,20 @@
       "priority": "high",
       "category": "bug",
       "description": "Two bugs: (1) Windows Notepad saves .env.dbexplain with UTF-8 BOM, causing godotenv parser to fail silently; (2) godotenv library error messages contain raw config lines including passwords. Fix: strip BOM before parsing; sanitize godotenv error messages to redact credentials.",
-      "file": "src/main.go",
+      "file": "src/cmd/dbexplain/main.go",
       "created": "2026-05-21"
     },
     {
       "id": "ISSUE-053",
       "title": "Consider removing plaintext .env support in future major version",
-      "status": "open",
+      "status": "closed",
+      "closed": "2026-06-02",
       "priority": "medium",
       "category": "security",
-      "description": "Once encrypted config adoption is sufficient, remove plaintext .env loading. Only support .enc encrypted files. Break-glass: --allow-plaintext flag for migration period.",
+      "description": "CLOSED BY DECISION: Permanently keep plaintext .env support. The procedural barrier (encryption workflow) outweighs the security benefit for a CLI diagnostic tool that already redacts passwords from all output paths. Encrypted config remains available as an OPT-IN for users who need it.",
       "labels": [
         "security",
-        "breaking-change",
-        "future"
+        "wontfix"
       ],
       "created": "2026-05-22"
     },
@@ -591,7 +592,7 @@
       "priority": "low",
       "category": "bug",
       "description": "sqlite.go:92 将 c.Nullable = notnull == 0 修正为 c.Nullable = notnull == 0 && pk == 0。SQLite 的 INTEGER PRIMARY KEY 列 PRAGMA table_info 返回 notnull=0 但 pk>0，修正前被误标为 nullable。",
-      "file": "src/connector/sqlite.go",
+      "file": "src/internal/connector/sqlite.go",
       "created": "2026-05-26"
     },
     {
@@ -602,7 +603,7 @@
       "priority": "high",
       "category": "feature",
       "description": "当 /var/log/dbexplain 不可写时（容器/非特权用户），自动回退到 $XDG_STATE_HOME/dbexplain/logs → $HOME/.local/state/dbexplain/logs → os.TempDir()/dbexplain/logs。新增 resolveLogDir() 辅助函数。",
-      "file": "src/main.go",
+      "file": "src/cmd/dbexplain/main.go",
       "created": "2026-05-26"
     },
     {
@@ -613,7 +614,7 @@
       "priority": "high",
       "category": "feature",
       "description": "schema.ForeignKey 新增 OnDelete/OnUpdate 字段。SQLite PRAGMA foreign_key_list 已提供但之前未存储；MySQL 新增 information_schema.REFERENTIAL_CONSTRAINTS 查询；PostgreSQL 追加 pg_constraint.confupdtype/confdeltype。jsonFK 序列化同步新增 on_delete/on_update。",
-      "file": "src/schema/types.go, src/connector/sqlite.go, src/connector/mysql.go, src/connector/postgres.go, src/render/render.go",
+      "file": "src/internal/schema/types.go, src/internal/connector/sqlite.go, src/internal/connector/mysql.go, src/internal/connector/postgres.go, src/internal/render/render.go",
       "created": "2026-05-26"
     },
     {
@@ -624,7 +625,7 @@
       "priority": "high",
       "category": "feature",
       "description": "jsonRef 新增 8 个结构化字段（from_instance/from_db/from_table/from_col/to_instance/to_db/to_table/to_col），便于程序化消费。保留 from/to 字符串字段向后兼容。",
-      "file": "src/render/render.go",
+      "file": "src/internal/render/render.go",
       "created": "2026-05-26"
     },
     {
@@ -635,7 +636,7 @@
       "priority": "critical",
       "category": "security",
       "description": "审查所有 8 个 connector + render.go + main.go 输出路径：JSON 输出（Redacted DSN）、label 字段（无密码）、日志文件（Redacted）、-context 输出（仅表名，无连接信息）。确认全链路无密码泄露。",
-      "file": "src/connector/*.go, src/render/render.go, src/main.go",
+      "file": "src/internal/connector/*.go, src/internal/render/render.go, src/cmd/dbexplain/main.go",
       "created": "2026-05-26"
     },
     {
@@ -645,8 +646,8 @@
       "closed": "2026-05-26",
       "priority": "critical",
       "category": "feature",
-      "description": "模块路径从 dbexplain 改为 github.com/IamWWT/dbexplain，18 文件 44 行 import 全部更新。新建 src/core/ 包导出 Collect/CollectToGraph/CollectToJSON 公共 API，VeinMap 等 Go 项目可直接 import。新增 src/core/graph.go 提供 BuildGraph() 将 schema.Instance 转为 IR Graph。",
-      "file": "src/go.mod, src/core/collector.go, src/core/graph.go, 18 .go files",
+      "description": "模块路径从 dbexplain 改为 github.com/IamWWT/dbexplain，18 文件 44 行 import 全部更新。新建 src/internal/core/ 包导出 Collect/CollectToGraph/CollectToJSON 公共 API，VeinMap 等 Go 项目可直接 import。新增 src/internal/core/graph.go 提供 BuildGraph() 将 schema.Instance 转为 IR Graph。",
+      "file": "src/go.mod, src/internal/core/collector.go, src/internal/core/graph.go, 18 .go files",
       "created": "2026-05-26"
     },
     {
@@ -657,7 +658,7 @@
       "priority": "critical",
       "category": "feature",
       "description": "新增 execute 子命令用于安全执行只读查询。sqlguard 包（SQL 只读校验、多语句检测、自动 LIMIT 注入）、query 包（Queryable 接口 + 查询结果类型 + QueryLock 并发控制）、9 个 connector 全部实现 ExecQuery——SQL 类（MySQL/PG/GaussDB/SQLite/ClickHouse）走 sqlguard + database/sql，ES 走 _sql REST 端点，Redis 30+ 命令白名单，MongoDB find/aggregate JSON，Qdrant scroll/count JSON。详见 docs/EXECUTE.md。后续：--human 表格输出（ISSUE-062）、CLI 案例库（ISSUE-063）。",
-      "file": "src/sqlguard/, src/query/, src/connector/mysql.go, src/connector/postgres.go, src/connector/sqlite.go, src/connector/clickhouse.go, src/connector/query.go, src/execute.go",
+      "file": "src/internal/sqlguard/, src/internal/query/, src/internal/connector/mysql.go, src/internal/connector/postgres.go, src/internal/connector/sqlite.go, src/internal/connector/clickhouse.go, src/internal/connector/query.go, src/cmd/dbexplain/execute.go",
       "created": "2026-05-26"
     },
     {
@@ -667,7 +668,7 @@
       "priority": "high",
       "category": "feature",
       "description": "在 .env 中新增安全相关变量，对 dbexplain execute 实施细粒度访问控制，阻止敏感数据通过查询暴露。三个维度：(1) 表级禁止 — 指定不可查询的表（如 user_credentials, payment_log），sqlguard 解析 SQL 中引用的表名并拒绝命中黑名单的查询；(2) 列级禁止 — 指定表中不可查询的字段（如 users.password_hash, orders.card_number），检测 SELECT 子句中的列引用并拒绝；(3) 语句级禁止 — 指定禁止执行的特定语句模式（精确匹配或正则），完全阻止匹配的查询执行。变量可全局生效或按 label 限定范围。需与现有 sqlguard 动词白名单/多语句检测/LIMIT 注入协同工作，放在 sqlguard Validate 之后、ExecQuery 之前作为第二层过滤。",
-      "file": "src/sqlguard/ (扩展), src/main.go (.env 变量解析)",
+      "file": "src/internal/sqlguard/ (扩展), src/cmd/dbexplain/main.go (.env 变量解析)",
       "labels": [
         "security",
         "v0.0.8"
@@ -683,7 +684,7 @@
       "priority": "medium",
       "category": "feature",
       "description": "execute 新增 --human 参数，查询结果以 ASCII 表格渲染（类 mysql/pg CLI 风格），替代默认 JSON。NULL 值标注、自动列宽对齐。9 种数据库通用。formatHuman() 在 execute.go 中实现。注意：--human 必须在 SQL 之前（Go flag 限制，v0.0.9 已放宽为任意位置）。\n\n注意：docs/ 下 ISSUE-062.md 为 v0.0.9 策略引擎修复记录（JSON 编号 ISSUE-064），与本 ISSUE-062 编号冲突，内容不同。",
-      "file": "src/execute.go",
+      "file": "src/cmd/dbexplain/execute.go",
       "created": "2026-05-26"
     },
     {
@@ -705,17 +706,105 @@
       "priority": "critical",
       "category": "bug",
       "description": "修复 DENY_TABLES/DENY_COLUMNS 在 SELECT * 和原生全字段查询时的绕过问题：(1) extractTableNames() regex 捕获 schema 前缀，DENY_TABLES=information_schema 生效；(2) matchStarSelect() 新增——SELECT * 时匹配 DENY_COLUMNS 表前缀；(3) CheckNative() 新增 MongoDB/Qdrant 列级检查，支持 projection 排除；(4) --human 后置 flag 支持。对应 docs/ISSUE-062.md（文件名沿用历史编号，JSON 编号为 ISSUE-064）。",
-      "file": "src/policy/policy.go, src/execute.go, src/main.go",
+      "file": "src/internal/policy/policy.go, src/cmd/dbexplain/execute.go, src/cmd/dbexplain/main.go",
       "created": "2026-05-29"
-    }
+    },
     {
       "id": "ISSUE-065",
-      "title": "[待评估] 文件查询引擎支持窗口函数 (ROW_NUMBER, RANK, LAG/LEAD)",
-      "status": "open",
-      "priority": "low",
+      "title": "文件查询引擎支持窗口函数 (ROW_NUMBER, RANK, LAG/LEAD, 聚合窗口, 窗口框架)",
+      "status": "closed",
+      "closed": "2026-06-02",
+      "priority": "medium",
       "category": "feature",
-      "description": "窗口函数需要排序后的分区计算，当前聚合引擎只支持 GROUP BY 语义。需要：OVER 子句解析、PARTITION BY 支持、窗口排序、完整 WINDOW 函数注册表。比较 ROW_NUMBER / RANK / DENSE_RANK / NTILE 用于排名场景，LAG / LEAD 用于前后行引用。复杂度高，列入 v0.2.x 评估。",
-      "created": "2026-05-29"
+      "description": "窗口函数完整实现，4 Phase：Phase 1 ROW_NUMBER/RANK/DENSE_RANK/NTILE，Phase 2 LAG/LEAD/FIRST_VALUE/LAST_VALUE，Phase 3 SUM/AVG/COUNT/MAX/MIN OVER 聚合窗口，Phase 4 ROWS/RANGE BETWEEN 窗口框架。涉及文件：sqlast/types.go (WindowDef, WindowFrame), sqlast/lexer.go (OVER/PARTITION/ROWS/RANGE/UNBOUNDED/PRECEDING/FOLLOWING/CURRENT/ROW token), sqlast/parser.go (parseOverClause, parseFrameClause), filequery/executor.go (window evaluation pass, permutation-based ORDER BY), filequery/evaluator.go (computeWindowFunctions, frame-aware aggregate/值引用), filequery/aggregate.go (HasAggregates window func detection). 36+ 测试覆盖所有场景。复杂度高，v0.1.2."
+    },
+    {
+      "id": "ISSUE-066",
+      "title": "AutoLimit schema-qualified 表名导致 LIMIT 重复追加语法错误",
+      "status": "closed",
+      "closed": "2026-06-02",
+      "priority": "high",
+      "category": "bug",
+      "description": "`SELECT * FROM testdb.iplist LIMIT 5` 报语法错误 `LIMIT 5 LIMIT 1000`。根因：`sqlast.Parse()` → `parseTableRef()` 只消费一个 IDENT，未处理 `schema.table` 限定名，遗留的 `.iplist` 令牌导致 LIMIT 子句未被解析，AutoLimit 误追加 `LIMIT 1000`。修复：`parseTableRef()` 在消费第一个 IDENT 后检查 `peek().Type == TOKEN_DOT`，若出现则消费 DOT + 第二个 IDENT 组成 `schema.table` 完整名。",
+      "file": "src/internal/sqlast/parser.go, src/internal/policy/policy.go",
+      "created": "2026-06-02"
+    },
+    {
+      "id": "ISSUE-067",
+      "title": "策略引擎 schema 限定名未展开导致 DENY_TABLES 不匹配",
+      "status": "closed",
+      "closed": "2026-06-02",
+      "priority": "high",
+      "category": "bug",
+      "description": "`DENY_TABLES=iplist` 对 `SELECT * FROM testdb.iplist` 不生效。根因：`extractTablesFromAST()` 返回 `[\"testdb.iplist\"]`，策略引擎检查 `seen[\"iplist\"]` 未命中。修复：新增 schema 限定名展开逻辑，将 `schema.table` 拆分为 `schema` + `table` 分别加入 seen 集合。同步扩张正则回退的 extractTableNames() 逻辑。",
+      "file": "src/internal/policy/policy.go",
+      "created": "2026-06-02"
+    },
+    {
+      "id": "ISSUE-068",
+      "title": "清理 docs/assets/ 过期 PNG 文件",
+      "status": "closed",
+      "closed": "2026-06-02",
+      "priority": "low",
+      "category": "chore",
+      "description": "删除 docs/assets/ 中 10 张过期 PNG：architecture.png、deployment.png、skill-interaction.png（旧版架构图导出），以及 7 张未引用的测试截图（dbddldml-sqlguard.png、db-errorhandle.png、dbpolicy-denymask.png、db-sqlguard.png、mongo-sqlguard.png、qdrant-sqlguard.png、redis-sqlguard.png）。保留 .drawio.png 源文件。",
+      "file": "docs/assets/",
+      "created": "2026-06-02"
+    },
+    {
+      "id": "ISSUE-069",
+      "title": "[v0.1.2] DSL 联邦查询 — 跨源 JOIN/UNION 支持",
+      "status": "open",
+      "priority": "medium",
+      "category": "feature",
+      "description": "当前 DSL 模式每条查询只能引用一个数据源（`handleDSLExecute()` 限制 `len(kinds) > 1` 报错退出），无法实现 `@dsl-mysql.users JOIN @dsl-pg.orders` 这样的跨源查询。\n\n实现路径：利用文件查询引擎作为联邦合并层。文件查询引擎的 `filequery.Execute(sql, header, rows, extras, maxRows)` 已接受任意 `[][]string` 数据作为 `extras`，hash join/union/aggregation/window 全部已实现。\n\n改动范围：\n1. `execute.go` `handleDSLExecute()` — 移除 `len(kinds) > 1` 阻断逻辑\n2. 新增数据物化层 — 对每个 `@label` 源执行数据检索（SQL 源走 SELECT *，文件源直接加载），结果统一转为 `[][]string`\n3. 调用 `filequery.Execute()` 做最终合并 — 主表数据作为 header+rows，其他源作为 extras\n\n已有基础：\n- `dsl/binder.go` — 多源绑定 ✅\n- `filequery/executor.go` — hash join/union/aggregation/window ✅\n- `queryutil.ResolveJoinSources()` — 数据加载 ✅\n\n限制：全内存操作（不适合单表百万行级）、无分布式事务、仅字符串类型。\n详见 docs/RELEASE_WECHAT_v0.1.1.md §一 的限制说明。",
+      "file": "src/cmd/dbexplain/execute.go, src/internal/dsl/",
+      "created": "2026-06-02",
+      "labels": ["v0.1.2", "feature"]
+    },
+    {
+      "id": "ISSUE-070",
+      "title": "[v0.1.2] CLI REPL 模式 — 交互式查询",
+      "status": "open",
+      "priority": "medium",
+      "category": "feature",
+      "description": "新增交互式 REPL 模式，用户进入后持续输入查询，避免重复加载配置和建立连接的开销。\n\n基本功能：\n1. `dbexplain repl` 进入交互模式\n2. 提示符显示当前选中的数据源（如 `my-mysql>`）\n3. 支持 `.conn`/`.dsn` 命令切换数据源\n4. 支持 `.help` 查看内置命令\n5. 支持方向键历史（利用 readline 或类似库）\n6. 每次查询自动计时 + 行数统计\n7. `.exit` 或 Ctrl+D 退出\n\n与现有架构的集成：直接复用 `execute.go` 中的查询管道（sqlguard → policy → AutoLimit → ExecQuery），REPL 只负责配置加载和交互循环。",
+      "file": "src/cmd/dbexplain/repl.go (新增)",
+      "created": "2026-06-02",
+      "labels": ["v0.1.2", "feature"]
+    },
+    {
+      "id": "ISSUE-071",
+      "title": "[v0.1.2] --explain 输出格式化 + 数据库特定语法支持",
+      "status": "open",
+      "priority": "medium",
+      "category": "feature",
+      "description": "当前 `--explain` 实现：`executor.go:46` 简单地在 SQL 前拼 `\"EXPLAIN \"`，所有数据库同一个逻辑，结果原始文本输出，可读性差。\n\n具体交付物：\n\n1. **MySQL**: `EXPLAIN FORMAT=JSON` + `--human` 表格渲染（传统 EXPLAIN 的输出行格式已经是表格，但 FORMAT=JSON 需要 JSON 解析后渲染）\n2. **PostgreSQL**: `EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT)` + `--human` 渲染\n3. **SQLite**: `EXPLAIN QUERY PLAN` 替代普通 `EXPLAIN`（普通 EXPLAIN 输出 VDBE 指令，QPLAN 才 readable）\n4. **ClickHouse**: `EXPLAIN PLAN` 替代普通 `EXPLAIN`\n5. **AutoLimit 豁免**: EXPLAIN 结果不经过 AutoLimit（计划行数不是真实数据）\n\n不做的：不引入 `--explain-format` 参数（各 DB 用合理的默认格式即可）。",
+      "file": "src/cmd/dbexplain/execute.go, src/internal/executor/executor.go",
+      "created": "2026-06-02",
+      "labels": ["v0.1.2", "feature"]
+    },
+    {
+      "id": "ISSUE-072",
+      "title": "[v0.1.2] 新增 collect 子命令，schema 采集从默认行为迁移为显式子命令",
+      "status": "open",
+      "priority": "medium",
+      "category": "feature",
+      "description": "当前 Schema 采集是默认行为（无子命令时 fallthrough 到 handleCollect），与 execute/list/diff/encrypt 等子命令不一致。\n\n目标：\n- `dbexplain collect -env --human` — 新方式，显式子命令\n- `dbexplain -env --human` — 保持向后兼容（保留 fallback）\n\n改动：\n1. `main.go` 新增 `case \"collect\": handleCollect(os.Args[2:])`\n2. `handleCollect()` 改为接收 `[]string` 参数，内部 `flag.Parse()`，返回后 `flag.CommandLine = flag.NewFlagSet(...)` 避免与其他子命令的 flag 冲突\n3. 无参 `dbexplain` 改为显示帮助而非进采集，提升新用户首次体验\n\n注意：`handleCollect()` 非常长（~200行 flag 定义 + ~200行采集逻辑），拆分 flag 定义和采集执行为两个函数会更清晰。",
+      "file": "src/cmd/dbexplain/main.go",
+      "created": "2026-06-02",
+      "labels": ["v0.1.2", "feature"]
+    },
+    {
+      "id": "ISSUE-073",
+      "title": "[v0.1.2] 补充发布前检查标准",
+      "status": "open",
+      "priority": "medium",
+      "category": "debt",
+      "description": "当前 SECURITY_CHECKLIST.md §6 的发布前检查项以安全和构建为主，缺少发布完整性检查。\n\n需补充的标准（更新 SECURITY_CHECKLIST.md §6）：\n1. **版本一致性** — version.go / build.sh ldflags / CHANGELOG 版本号三者一致\n2. **CHANGELOG 完整性** — 确认所有 closed issue 在 CHANGELOG 中有对应条目\n3. **issues.json 有效性** — `python3 -m json.tool` 验证合法\n4. **二进制 smoke test** — `--version` 输出版本正确 + 基本查询可用\n5. **release/ 产物完整性** — 5 平台二进制均存在，`file` 命令校验架构正确\n6. **文档 stale 引用** — grep 检查 docs/ 中无已删除文件的引用链接\n\n不做的：不涉及 CI/CD 自动化，仅完善人工检查标准。",
+      "file": "docs/SECURITY_CHECKLIST.md",
+      "created": "2026-06-02",
+      "labels": ["v0.1.2", "debt"]
     }
   ]
 }

@@ -9,8 +9,8 @@
 ## 前置条件
 
 ```bash
-cd ~/Downloads/aigc/proj/agents/aiops/dbexplain
-BIN="./bin/dbexplain"
+cd src
+BIN="../release/dbexplain"
 ```
 
 ## 测试数据
@@ -25,7 +25,7 @@ BIN="./bin/dbexplain"
 ## Q09: 跨省触达率排行 (GROUP BY + AVG + ORDER BY DESC)
 
 ```bash
-DBPROBE_ENV_FILE=testdata/qa/.env.qa-touch-csv $BIN execute -env --label touch-ops-csv \
+DBPROBE_ENV_FILE=../testdata/qa/.env.qa-touch-csv $BIN execute -env --label touch-ops-csv \
   'SELECT pnbrn_org_name, AVG(reach_rate) AS avg_reach_rate FROM pb_touch_ops_sample_2000 GROUP BY pnbrn_org_name ORDER BY avg_reach_rate DESC' --human
 ```
 
@@ -48,7 +48,7 @@ DBPROBE_ENV_FILE=testdata/qa/.env.qa-touch-csv $BIN execute -env --label touch-o
 ## Q10: 客户经理排名 (ORDER BY ASC + LIMIT)
 
 ```bash
-DBPROBE_ENV_FILE=testdata/qa/.env.qa-touch-csv $BIN execute -env --label touch-ops-csv \
+DBPROBE_ENV_FILE=../testdata/qa/.env.qa-touch-csv $BIN execute -env --label touch-ops-csv \
   'SELECT csmgr_refno, pnbrn_org_name, reach_rate, tol_cnt FROM pb_touch_ops_sample_2000 ORDER BY reach_rate ASC LIMIT 5' --human
 ```
 
@@ -68,7 +68,7 @@ DBPROBE_ENV_FILE=testdata/qa/.env.qa-touch-csv $BIN execute -env --label touch-o
 ## Q11: 企微渠道效能 (CAST + 列间算术 + WHERE)
 
 ```bash
-DBPROBE_ENV_FILE=testdata/qa/.env.qa-touch-csv $BIN execute -env --label touch-ops-csv \
+DBPROBE_ENV_FILE=../testdata/qa/.env.qa-touch-csv $BIN execute -env --label touch-ops-csv \
   'SELECT csmgr_refno, CAST(wecom_interact_cnt AS FLOAT) / total_interact_cnt * 100 AS wecom_pct FROM pb_touch_ops_sample_2000 WHERE total_interact_cnt > 0 ORDER BY wecom_pct DESC LIMIT 5' --human
 ```
 
@@ -88,7 +88,7 @@ DBPROBE_ENV_FILE=testdata/qa/.env.qa-touch-csv $BIN execute -env --label touch-o
 ## Q12: 触达率时间趋势 (GROUP BY date + 时间排序)
 
 ```bash
-DBPROBE_ENV_FILE=testdata/qa/.env.qa-touch-csv $BIN execute -env --label touch-ops-csv \
+DBPROBE_ENV_FILE=../testdata/qa/.env.qa-touch-csv $BIN execute -env --label touch-ops-csv \
   'SELECT data_date, AVG(reach_rate) AS avg_reach_rate FROM pb_touch_ops_sample_2000 GROUP BY data_date ORDER BY data_date ASC' --human
 ```
 
@@ -101,7 +101,7 @@ DBPROBE_ENV_FILE=testdata/qa/.env.qa-touch-csv $BIN execute -env --label touch-o
 ## Q13: 条件过滤 (AND 多条件 + 混合比较)
 
 ```bash
-DBPROBE_ENV_FILE=testdata/qa/.env.qa-touch-csv $BIN execute -env --label touch-ops-csv \
+DBPROBE_ENV_FILE=../testdata/qa/.env.qa-touch-csv $BIN execute -env --label touch-ops-csv \
   'SELECT csmgr_refno, reach_rate, pri_cnt FROM pb_touch_ops_sample_2000 WHERE reach_rate < 60 AND pri_cnt > 5 ORDER BY reach_rate ASC LIMIT 5' --human
 ```
 
@@ -121,7 +121,7 @@ DBPROBE_ENV_FILE=testdata/qa/.env.qa-touch-csv $BIN execute -env --label touch-o
 ## Q14: 跨文件 JOIN (哈希 JOIN + GROUP BY)
 
 ```bash
-DBPROBE_ENV_FILE=testdata/qa/.env.qa-touch-join $BIN execute -env --label touch-ops \
+DBPROBE_ENV_FILE=../testdata/qa/.env.qa-touch-join $BIN execute -env --label touch-ops \
   'SELECT o.sec_branch_org_name, AVG(t.reach_rate) AS avg_reach_rate FROM pb_touch_ops_sample_2000 t JOIN t_sec_org_sample o ON t.org_refno = o.org_refno GROUP BY o.sec_branch_org_name ORDER BY avg_reach_rate DESC' --human
 ```
 
@@ -134,7 +134,7 @@ DBPROBE_ENV_FILE=testdata/qa/.env.qa-touch-join $BIN execute -env --label touch-
 ## Q15: 数据质量验证 (嵌套算术 + ABS + CAST)
 
 ```bash
-DBPROBE_ENV_FILE=testdata/qa/.env.qa-touch-csv $BIN execute -env --label touch-ops-csv \
+DBPROBE_ENV_FILE=../testdata/qa/.env.qa-touch-csv $BIN execute -env --label touch-ops-csv \
   'SELECT csmgr_refno, reach_rate, ABS(reach_rate - (CAST(total_reach_cnt AS FLOAT) / tol_cnt * 100)) AS diff FROM pb_touch_ops_sample_2000 WHERE tol_cnt > 0 ORDER BY diff DESC LIMIT 10' --human
 ```
 
@@ -156,12 +156,12 @@ DBPROBE_ENV_FILE=testdata/qa/.env.qa-touch-csv $BIN execute -env --label touch-o
 
 ```bash
 # IS NULL: 空值列过滤
-DBPROBE_ENV_FILE=testdata/qa/.env.qa-touch-csv $BIN execute -env --label touch-ops-csv \
+DBPROBE_ENV_FILE=../testdata/qa/.env.qa-touch-csv $BIN execute -env --label touch-ops-csv \
   "SELECT csmgr_refno FROM pb_touch_ops_sample_2000 WHERE pnbrn_org_name IS NULL LIMIT 3" --human
 # → 0 row(s) in set (全量 2000 行都有值，引擎正确执行无报错)
 
 # IS NOT NULL: 非空计数
-DBPROBE_ENV_FILE=testdata/qa/.env.qa-touch-csv $BIN execute -env --label touch-ops-csv \
+DBPROBE_ENV_FILE=../testdata/qa/.env.qa-touch-csv $BIN execute -env --label touch-ops-csv \
   "SELECT COUNT(*) AS cnt FROM pb_touch_ops_sample_2000 WHERE pnbrn_org_name IS NOT NULL" --human
 # → 2000
 ```
@@ -174,7 +174,7 @@ DBPROBE_ENV_FILE=testdata/qa/.env.qa-touch-csv $BIN execute -env --label touch-o
 ## V2-2: HAVING 聚合后过滤
 
 ```bash
-DBPROBE_ENV_FILE=testdata/qa/.env.qa-touch-csv $BIN execute -env --label touch-ops-csv \
+DBPROBE_ENV_FILE=../testdata/qa/.env.qa-touch-csv $BIN execute -env --label touch-ops-csv \
   "SELECT pnbrn_org_name, AVG(reach_rate) AS avg_rate FROM pb_touch_ops_sample_2000 GROUP BY pnbrn_org_name HAVING avg_rate > 58 ORDER BY avg_rate DESC" --human
 ```
 
@@ -195,12 +195,12 @@ DBPROBE_ENV_FILE=testdata/qa/.env.qa-touch-csv $BIN execute -env --label touch-o
 
 ```bash
 # LEFT JOIN: 左表无匹配时右列填空
-DBPROBE_ENV_FILE=testdata/qa/.env.qa-touch-join $BIN execute -env --label touch-ops \
+DBPROBE_ENV_FILE=../testdata/qa/.env.qa-touch-join $BIN execute -env --label touch-ops \
   "SELECT t.csmgr_refno, o.sec_branch_org_name FROM pb_touch_ops_sample_2000 t LEFT JOIN t_sec_org_sample o ON t.org_refno = o.org_refno WHERE t.org_refno IN ('R001','R002','R99999')" --human
 # → LEFT JOIN 正确执行，无匹配行按预期输出
 
 # RIGHT JOIN: 右表保留
-DBPROBE_ENV_FILE=testdata/qa/.env.qa-touch-join $BIN execute -env --label touch-ops \
+DBPROBE_ENV_FILE=../testdata/qa/.env.qa-touch-join $BIN execute -env --label touch-ops \
   "SELECT t.csmgr_refno, o.sec_branch_org_name FROM pb_touch_ops_sample_2000 t RIGHT JOIN t_sec_org_sample o ON t.org_refno = o.org_refno WHERE t.csmgr_refno IS NULL LIMIT 5" --human
 # → RIGHT JOIN 正确执行（实现为 swap + LEFT JOIN）
 ```
@@ -213,7 +213,7 @@ DBPROBE_ENV_FILE=testdata/qa/.env.qa-touch-join $BIN execute -env --label touch-
 ## V2-4: 双引号字符串字面量
 
 ```bash
-DBPROBE_ENV_FILE=testdata/qa/.env.qa-touch-csv $BIN execute -env --label touch-ops-csv \
+DBPROBE_ENV_FILE=../testdata/qa/.env.qa-touch-csv $BIN execute -env --label touch-ops-csv \
   'SELECT DISTINCT pnbrn_org_name FROM pb_touch_ops_sample_2000 WHERE pnbrn_org_name = "上海分行"' --human
 # → 上海分行 (230 row(s) in set ~1.6ms)
 ```
@@ -226,7 +226,7 @@ DBPROBE_ENV_FILE=testdata/qa/.env.qa-touch-csv $BIN execute -env --label touch-o
 ## V2-5: ROUND 单参数
 
 ```bash
-DBPROBE_ENV_FILE=testdata/qa/.env.qa-touch-csv $BIN execute -env --label touch-ops-csv \
+DBPROBE_ENV_FILE=../testdata/qa/.env.qa-touch-csv $BIN execute -env --label touch-ops-csv \
   "SELECT csmgr_refno, ROUND(reach_rate) AS r, ROUND(reach_rate, 1) AS r1 FROM pb_touch_ops_sample_2000 WHERE reach_rate > 0 LIMIT 3" --human
 ```
 
@@ -244,7 +244,7 @@ DBPROBE_ENV_FILE=testdata/qa/.env.qa-touch-csv $BIN execute -env --label touch-o
 ## V2-6: UNION ALL
 
 ```bash
-DBPROBE_ENV_FILE=testdata/qa/.env.qa-touch-join $BIN execute -env --label touch-ops \
+DBPROBE_ENV_FILE=../testdata/qa/.env.qa-touch-join $BIN execute -env --label touch-ops \
   "SELECT org_refno FROM pb_touch_ops_sample_2000 WHERE org_refno = 'R001' UNION ALL SELECT org_refno FROM t_sec_org_sample WHERE org_refno = 'R001'" --human
 # → 正确合并两个 SELECT 的结果，行数为两子查询之和
 ```
@@ -257,7 +257,7 @@ DBPROBE_ENV_FILE=testdata/qa/.env.qa-touch-join $BIN execute -env --label touch-
 ## V2-7: 子查询 IN / NOT IN
 
 ```bash
-DBPROBE_ENV_FILE=testdata/qa/.env.qa-touch-join $BIN execute -env --label touch-ops \
+DBPROBE_ENV_FILE=../testdata/qa/.env.qa-touch-join $BIN execute -env --label touch-ops \
   "SELECT csmgr_refno, reach_rate FROM pb_touch_ops_sample_2000 WHERE org_refno IN (SELECT org_refno FROM t_sec_org_sample WHERE pnbrn_org_name = '江苏分行') LIMIT 5" --human
 # → 5 行，子查询正确过滤江苏分行下的机构
 ```
@@ -270,7 +270,7 @@ DBPROBE_ENV_FILE=testdata/qa/.env.qa-touch-join $BIN execute -env --label touch-
 ## V2-8: DISTINCT ON
 
 ```bash
-DBPROBE_ENV_FILE=testdata/qa/.env.qa-touch-csv $BIN execute -env --label touch-ops-csv \
+DBPROBE_ENV_FILE=../testdata/qa/.env.qa-touch-csv $BIN execute -env --label touch-ops-csv \
   "SELECT DISTINCT ON (pnbrn_org_name) pnbrn_org_name, csmgr_refno, reach_rate FROM pb_touch_ops_sample_2000 ORDER BY pnbrn_org_name, reach_rate DESC" --human
 ```
 
@@ -295,7 +295,7 @@ DBPROBE_ENV_FILE=testdata/qa/.env.qa-touch-csv $BIN execute -env --label touch-o
 ### F1: 表级拒绝 (DENY_TABLES)
 
 ```bash
-DBPROBE_ENV_FILE=testdata/qa/.env.qa-security $BIN execute -env --label touch-ops 'SELECT *' --limit 1
+DBPROBE_ENV_FILE=../testdata/qa/.env.qa-security $BIN execute -env --label touch-ops 'SELECT *' --limit 1
 # → ACCESS_DENIED: table "pb_touch_ops_sample_2000" is not allowed for query
 ```
 
@@ -304,7 +304,7 @@ DBPROBE_ENV_FILE=testdata/qa/.env.qa-security $BIN execute -env --label touch-op
 ### F2: 列屏蔽 (MASK_COLUMNS)
 
 ```bash
-DBPROBE_ENV_FILE=testdata/qa/.env.qa-security $BIN execute -env --label sec-org 'SELECT *' --limit 3 --human
+DBPROBE_ENV_FILE=../testdata/qa/.env.qa-security $BIN execute -env --label sec-org 'SELECT *' --limit 3 --human
 # → pnbrn_org_name=****, org_name=REDACTED, 其余列正常
 ```
 
@@ -314,11 +314,11 @@ DBPROBE_ENV_FILE=testdata/qa/.env.qa-security $BIN execute -env --label sec-org 
 
 ```bash
 # 对已禁止表执行 DROP → DENY_TABLES 先拦截
-DBPROBE_ENV_FILE=testdata/qa/.env.qa-security $BIN execute -env --label touch-ops 'DROP TABLE pb_touch_ops_sample_2000'
+DBPROBE_ENV_FILE=../testdata/qa/.env.qa-security $BIN execute -env --label touch-ops 'DROP TABLE pb_touch_ops_sample_2000'
 # → ACCESS_DENIED: table "pb_touch_ops_sample_2000" is not allowed for query
 
 # 对未禁止表执行 DROP → 文件查询引擎拒绝非 SELECT
-DBPROBE_ENV_FILE=testdata/qa/.env.qa-security $BIN execute -env --label sec-org 'DROP TABLE t_sec_org_sample'
+DBPROBE_ENV_FILE=../testdata/qa/.env.qa-security $BIN execute -env --label sec-org 'DROP TABLE t_sec_org_sample'
 # → QUERY_ERROR: csv query error: parse error: expected SELECT, got DROP at position 0
 ```
 

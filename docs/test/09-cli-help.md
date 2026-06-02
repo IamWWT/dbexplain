@@ -8,28 +8,28 @@
 
 ```bash
 cd src
-BIN="../release/dbexplain-linux-amd64"
+BIN="../release/dbexplain"
 ```
 
 ## 9.1 版本号
 
 ```bash
 $BIN --version
-# 预期: dbexplain v0.1.0
+# 预期: dbexplain v0.1.1
 ```
 
 ## 9.2 简短帮助
 
 ```bash
 $BIN -h 2>&1 | head -20
-# 预期: 包含 version v0.1.0、Usage、Database types（含 csv/tsv/xlsx）
+# 预期: 包含 version v0.1.1、Usage、Database types（含 csv/tsv/xlsx）
 ```
 
 ## 9.3 完整手册 (中文)
 
 ```bash
 $BIN all 2>&1 | head -20
-# 预期: 手册版本 v0.1.0
+# 预期: 手册版本 v0.1.1
 ```
 
 ## 9.4 完整手册 (英文)
@@ -50,9 +50,9 @@ $BIN all --filter redis 2>&1 | head -10
 ```bash
 for db in mysql postgres gaussdb clickhouse sqlite redis mongodb elasticsearch qdrant csv tsv xlsx; do
   echo "=== $db ==="
-  $BIN "$db" 2>&1 | grep -m1 "v0.1.0"
+  $BIN "$db" 2>&1 | grep -m1 "v0.1.1"
 done
-# 预期: 12/12 全部包含 v0.1.0
+# 预期: 12/12 全部包含 v0.1.1
 ```
 
 ## 9.7 别名子命令
@@ -60,9 +60,9 @@ done
 ```bash
 for alias in pg postgresql ch sqlite3 es; do
   echo "=== $alias ==="
-  $BIN "$alias" 2>&1 | grep -m1 "v0.1.0"
+  $BIN "$alias" 2>&1 | grep -m1 "v0.1.1"
 done
-# 预期: 5/5 全部包含 v0.1.0
+# 预期: 5/5 全部包含 v0.1.1
 ```
 
 ## 9.8 execute -h

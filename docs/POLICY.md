@@ -7,7 +7,7 @@
 
 ## 概述
 
-安全策略引擎 (`src/policy/`) 在 `sqlguard` 动词白名单校验之后、查询执行之前，提供第二层访问控制。适用于**所有数据库类型**。
+安全策略引擎 (`src/internal/policy/`) 在 `sqlguard` 动词白名单校验之后、查询执行之前，提供第二层访问控制。适用于**所有数据库类型**。
 
 **策略链：**
 ```
@@ -394,9 +394,9 @@ MASK_COLUMNS=password_hash=***,card_number=****-****-****-****,email=REDACTED
 
 | 文件 | 职责 |
 |------|------|
-| `src/policy/policy.go` | Config 加载、SQL/原生查询校验、表名列名提取、列值屏蔽 |
-| `src/policy/policy_test.go` | 60+ 个测试用例：三层策略 + 列屏蔽 + 12 种数据源覆盖 |
-| `src/execute.go` | 集成点：`sqlguard.Validate()` → `policy.CheckSQL/CheckNative()` → `policy.ApplyMask()` |
+| `src/internal/policy/policy.go` | Config 加载、SQL/原生查询校验、表名列名提取、列值屏蔽 |
+| `src/internal/policy/policy_test.go` | 60+ 个测试用例：三层策略 + 列屏蔽 + 12 种数据源覆盖 |
+| `src/cmd/dbexplain/execute.go` | 集成点：`sqlguard.Validate()` → `policy.CheckSQL/CheckNative()` → `policy.ApplyMask()` |
 
 ### 排障参考
 

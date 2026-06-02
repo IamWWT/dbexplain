@@ -1,5 +1,37 @@
 # 变更日志
 
+## v0.1.1 (结构整理 + 统一 DSL 查询入口)
+
+### 项目结构
+- **Go 标准布局**: 单文件拆分为 `cmd/` + `internal/` 结构：`main.go`(2482→910行) 拆出 config/encrypt/list/manual/output；`execute.go`(585→264行) 拆出 render/queryutil/dsnfilter/executor
+- **全量 internal 迁移**: 14 个顶层包按依赖顺序迁入 `src/internal/`，旧目录全部清理，`src/` 仅保留 `cmd/` + `internal/` + 构建文件
+- **共享 SQL AST**: filequery 的词法/语法/AST 类型提取为 `internal/sqlast/`，sqlguard/policy/dsl 统一复用，60+ 测试通过
+
+### 新功能
+- **DSL 查询模式** (`--dsl`): 通过 `@label.table` 统一引用数据源，支持 `SELECT * FROM @my-mysql.users`。预处理 → sqlast 解析 → 符号绑定 → 后端路由，安全管道全同步
+- **Schema Diff** (`dbexplain diff`): 字段级变更检测（列/索引/外键三级），4 种对比模式（cache-baseline / since / two-file / list-versions），支持 `--human` 和 JSON 输出，23 单元测试
+- **窗口函数**: ROW_NUMBER / RANK / DENSE_RANK / NTILE / LAG / LEAD / FIRST_VALUE / LAST_VALUE / 聚合 OVER + ROWS/RANGE 窗口帧，36+ 测试用例
+
+### 安全增强
+- **AST 级校验**: sqlguard/policy 优先使用 `sqlast.Parse()` AST 分析，失败时回退字符串检测；AutoLimit 通过 AST Limit 字段判断避免重复注入
+- **AutoLimit 重复注入修复**: `parseTableRef()` 未处理 `schema.table` 限定名，带 Schema 前缀的查询被追加第二个 LIMIT。新增 `parseQualifiedName()` 处理多节标识符
+- **策略引擎表匹配修复**: `extractTablesFromAST()` 未将 `schema.table` 展开匹配，`DENY_TABLES=users` 对 `SELECT * FROM public.users` 不生效。新增表名拆解逻辑
+
+### 文档
+- **README 中英文分拆**: README.md 改为指向 README_ZH.md 的符号链接，新增 `README_EN.md`，中英文独立维护。新增文档导航表格，精简内容聚焦核心能力
+- **新增 `docs/USAGE_GUIDE.md`**: 全场景傻瓜用法手册，覆盖全部 11 种数据源从安装到查询的完整流程，三平台操作说明
+- **过期内容修正**: CLI_EXAMPLES.md CSV 章节修正（文件引擎已支持完整 SQL）；sql-syntax.md/troubleshooting.md 窗口函数标记更新为 ✅ 已支持
+- **docs/test/ 清理**: 移除过期 PNG 截图文件
+
+### 测试
+- **统一验证标准**: 所有测试文档使用 `cd src + BIN=../release/dbexplain` 可移植路径，移除绝对路径依赖
+- **新增测试文档**: 14-schema-diff.md(24项) + 15-window-functions.md(36项)
+- **全量 E2E 验证**: 15 数据源 91/91 项通过，DSL 模式、Schema Diff、窗口函数全覆盖
+
+### 构建与发布
+- `build.sh` 版本号更新为 v0.1.1
+- `issues.json` 修复 JSON 语法错误 + 约 70 处旧路径更新 + 新增 3 个 issue，总计 68 个
+
 ## v0.1.0 (深度安全加固 & 架构对齐 & 文件查询引擎)
 
 ### 安全修复 (P0)

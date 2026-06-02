@@ -8,7 +8,7 @@
 
 ```bash
 cd src
-BIN="../release/dbexplain-linux-amd64"
+BIN="../release/dbexplain"
 # 或使用 go run: BIN="go run ."
 ```
 

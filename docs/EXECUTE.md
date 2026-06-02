@@ -312,27 +312,28 @@ else:
 
 > **SQL 数据库**（上表前 6 种）通过 `capabilities.FromProvider().Has(CapSQL)` 路由到 `sqlguard.Validate()` 进行动词白名单校验，并自动注入 `LIMIT 1000`。
 > **非 SQL 数据库**（上表后 3 种）跳过 sqlguard，由各连接器内部实现只读白名单。
-> **文件数据源**（CSV/TSV/XLSX）绕过 sqlguard——文件本身只读，仅支持 `SELECT * [LIMIT N [OFFSET M]]`，但仍受策略引擎约束（`DENY_TABLES`、`MASK_COLUMNS`）。
+> **文件数据源**（CSV/TSV/XLSX）绕过 sqlguard——文件本身只读，支持完整 SELECT 子集（WHERE/GROUP BY/JOIN/聚合/窗口函数等），但仍受策略引擎约束（`DENY_TABLES`、`MASK_COLUMNS`）。
 
 ## 架构文件清单
 
 | 文件 | 职责 |
 |------|------|
-| `src/policy/policy.go` | 细粒度访问控制：表级/列级/语句级拒绝策略 |
-| `src/sqlguard/sqlguard.go` | SQL 只读校验、多语句检测、自动 LIMIT |
-| `src/query/types.go` | Queryable 接口、QueryResult 类型、QueryLock 并发控制 |
-| `src/connector/query.go` | executeSQLQuery() 通用 database/sql 查询执行 |
-| `src/connector/mysql.go` | MySQL ExecQuery 实现 |
-| `src/connector/postgres.go` | PostgreSQL/GaussDB ExecQuery 实现 |
-| `src/connector/sqlite.go` | SQLite ExecQuery 实现 |
-| `src/connector/clickhouse.go` | ClickHouse HTTP ExecQuery 实现 |
-| `src/connector/elasticsearch.go` | Elasticsearch _sql REST ExecQuery 实现 |
-| `src/connector/mongo.go` | MongoDB JSON find/aggregate ExecQuery 实现 |
-| `src/connector/redis.go` | Redis 只读命令白名单 ExecQuery 实现 |
-| `src/connector/qdrant.go` | Qdrant scroll/count ExecQuery 实现 |
-| `src/connector/csv.go` | CSV/TSV 文件 schema 采集 + 查询执行（SELECT * only） |
-| `src/connector/xlsx.go` | XLSX 文件 schema 采集 + 查询执行（SELECT * only） |
-| `src/execute.go` | CLI 入口：参数解析、DSN 匹配、查询路由、file 分发、输出控制 |
+| `src/internal/policy/policy.go` | 细粒度访问控制：表级/列级/语句级拒绝策略 |
+| `src/internal/sqlguard/sqlguard.go` | SQL 只读校验、多语句检测、自动 LIMIT |
+| `src/internal/query/types.go` | Queryable 接口、QueryResult 类型、QueryLock 并发控制 |
+| `src/internal/executor/executor.go` | 共享执行引擎（sqlguard → policy → AutoLimit → ExecQuery → ApplyMask） |
+| `src/internal/connector/query.go` | executeSQLQuery() 通用 database/sql 查询执行 |
+| `src/internal/connector/mysql.go` | MySQL ExecQuery 实现 |
+| `src/internal/connector/postgres.go` | PostgreSQL/GaussDB ExecQuery 实现 |
+| `src/internal/connector/sqlite.go` | SQLite ExecQuery 实现 |
+| `src/internal/connector/clickhouse.go` | ClickHouse HTTP ExecQuery 实现 |
+| `src/internal/connector/elasticsearch.go` | Elasticsearch _sql REST ExecQuery 实现 |
+| `src/internal/connector/mongo.go` | MongoDB JSON find/aggregate ExecQuery 实现 |
+| `src/internal/connector/redis.go` | Redis 只读命令白名单 ExecQuery 实现 |
+| `src/internal/connector/qdrant.go` | Qdrant scroll/count ExecQuery 实现 |
+| `src/internal/connector/csv.go` | CSV/TSV 文件 schema 采集 + 文件查询引擎（WHERE/GROUP BY/JOIN/聚合/窗口函数） |
+| `src/internal/connector/xlsx.go` | XLSX 文件 schema 采集 + 文件查询引擎（WHERE/GROUP BY/JOIN/聚合/窗口函数） |
+| `src/cmd/dbexplain/execute.go` | CLI 入口：参数解析、DSN 匹配、查询路由、DSL 模式、file 分发、输出控制 |
 
 ---
 

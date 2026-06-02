@@ -2,7 +2,7 @@ name: dbexplain-skill
 description: >
   数据库结构探查工具，支持 MySQL/PG/ClickHouse/SQLite/Redis/MongoDB/ES/Qdrant、CSV/TSV/XLSX 文件。
   自动生成表结构/字段注释/跨库关系图谱/健康报告。
-  支持只读查询（execute, 含 CSV/XLSX 文件查询引擎 WHERE/GROUP BY/JOIN/聚合/表达式）与访问控制（policy）。
+  支持只读查询（execute, 含 CSV/XLSX 文件查询引擎 WHERE/GROUP BY/JOIN/聚合/表达式 + DSL 模式 @label.table）与访问控制（policy）。
 user-invocable: true
 trigger:
 
@@ -22,7 +22,7 @@ trigger:
 - **Schema 采集**（`dbexplain -env`）：探查表/字段/类型/注释/跨库外键/健康评分，输出 `instances[]` + `refs[]`（JSON）
 - **只读查询**（`dbexplain execute`）：采集后执行 SELECT 验证数据，输出 `columns[]` + `rows[]`（JSON）
 
-此外支持：帮助手册（`dbexplain all`）、配置文件加密（`encrypt`）、增量变更检测（`--cache`）。
+此外支持：帮助手册（`dbexplain all`）、配置文件加密（`encrypt`）、增量变更检测（`--cache`）、统一 DSL 查询入口（`--dsl`）。
 
 ## 1. 核心规则
 
@@ -159,7 +159,28 @@ dbexplain execute -env --label my_data \
 ```
 文件数据源只读（仅 SELECT），遇到 DROP/INSERT 会返回 parse error。
 
-### 2.7 文件查询最佳实践
+### 2.7 DSL 模式（v0.1.1+）
+
+`--dsl` flag 启用 DSL 模式，使用 `@label.table` 语法引用数据源，编译为原生 SQL 后执行：
+
+```bash
+# DSL 模式：@label.table 语法
+dbexplain execute -env --dsl --label mysql 'SELECT * FROM @mysql.users WHERE status = "active"'
+```
+
+DSL 编译流程：预处理 → AST 解析 → 符号绑定 → 后端路由，全程确定性（相同输入 + 相同 DSN 环境 → 相同输出）。
+
+```bash
+# DSL 也支持文件数据源
+dbexplain execute -env --dsl --label my_data 'SELECT * FROM @my_data.staff WHERE dept = "sales"'
+```
+
+**v0.1.1 DSL 限制：**
+- 仅支持单数据源查询（不支持跨源 JOIN）
+- 不支持原生源（Redis/Mongo/Qdrant/ES），仅 SQL 数据库和文件数据源
+- `--dsl` 是可选模式，不加则走原生 SQL 通道
+
+### 2.8 文件查询最佳实践
 
 #### 数据预览
 
@@ -277,6 +298,7 @@ MASK_COLUMNS=email=REDACTED,card_no=****       # 不阻断，替换列值输出
 | `--human` | execute | 表格输出（默认 JSON） |
 | `--limit/--timeout` | execute | 行数(1000)/超时(30s) |
 | `--explain` | execute | 输出查询计划 |
+| `--dsl` | execute | 启用 DSL 模式，支持 @label.table 语法引用数据源 |
 | `--context dir` | 采集 | AI 上下文目录（summary/topology/diagnostics/chunks） |
 | `--cache file` | 采集 | Schema 指纹缓存，增量变更检测 |
 | `-include/-exclude` | 采集 | 按 DB 类型过滤采集 |

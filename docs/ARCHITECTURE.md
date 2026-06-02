@@ -51,38 +51,61 @@ LLM 在外部消费 IR 做推理
 
 ## 3. 目标架构
 
-### 当前目录结构（v0.1.0，实际代码）
+### 当前目录结构（v0.1.1，实际代码）
 
 ```
 src/
-  main.go               # CLI 入口 + 配置加载
-  execute.go            # 只读查询执行（sqlguard + policy + AutoLimit）
-  capabilities/         # Capability 枚举（含 CapSQL/CapFile v0.1.0 新增）
-  connector/            # 连接器自注册（11 种数据源）
-  sqlguard/             # SQL 只读校验（P0 安全边界）
-  policy/               # 细粒度访问控制（DENY_TABLES/COLUMNS/STATEMENTS）
-  query/                # Queryable 接口 + 执行控制
-  cache/                # Schema 指纹 + 增量扫描
-  dsn/                  # DSN 解析 + 凭据脱敏
-  schema/               # 通用数据模型（Instance/Table/Column/ForeignKey）
-  ir/                   # IR v1 图原语（Node/Column/Edge）
-  graph/                # 内部图模型
-  core/                 # 公共 API（Collect/CollectToGraph/CollectToJSON）
-  analyze/              # 聚类分析 + 重要性排序
-  diagnostics/          # 统一诊断层
-  context/              # AI Agent 上下文压缩
-  render/               # Markdown/JSON 输出
-  crypto/               # XChaCha20-Poly1305 加密
+  cmd/dbexplain/        # CLI 入口：main.go + execute.go
+  internal/             # 全部内部包（对外不可见）
+    capabilities/       # Capability 枚举（含 CapSQL/CapFile）
+    connector/          # 连接器自注册（11 种数据源）
+      filequery/        # 文件查询引擎（纯 Go 内存 SQL）
+    sqlguard/           # SQL 只读校验（P0 安全边界）
+    policy/             # 细粒度访问控制（DENY_TABLES/COLUMNS/STATEMENTS）
+    cache/              # Schema 指纹 + 增量扫描 + 快照存储
+    schema/             # 通用数据模型（Instance/Table/Column/ForeignKey）
+    ir/                 # IR v1 图原语（Node/Column/Edge）
+    graph/              # 内部图模型
+    core/               # 公共 API（Collect/CollectToGraph/CollectToJSON）
+    analyze/            # 聚类分析 + 重要性排序
+    diagnostics/        # 统一诊断层
+    context/            # AI Agent 上下文压缩
+    render/             # Markdown/JSON 输出
+    crypto/             # XChaCha20-Poly1305 加密
+    config/             # 配置加载
+    dsn/                # DSN 解析 + 凭据脱敏
+    query/              # Queryable 接口 + 执行控制
+    executor/           # 共享执行引擎（sqlguard → policy → AutoLimit → ExecQuery）
+    dsl/                # DSL @label.table 解析/绑定/编译
+    diff/               # Schema 字段级变更检测
+    sqlast/             # 共享 SQL AST（sqlguard + filequery + DSL）
+    dsnfilter/          # DSN label/kind 过滤
+    queryutil/          # 文件查询执行实用函数
+    list/               # `dbexplain list` 子命令
+    manual/             # `dbexplain all` / `<dbtype>` 手册
+    encrypt/            # 配置加密子命令
+    output/             # 输出编码辅助
+    version/            # 版本信息
 ```
 
-### 未来目录结构（规划中）
+### 内部包重构完成（v0.1.1）
 
-`internal/` 重构推迟到 v1.0 之后。包边界稳定后再做结构迁移：
+v0.1.1 已完成全部 14 个顶层包向 `internal/` 的迁移：
+
+- **Level 0**（叶子包）：`capabilities/`、`crypto/`、`ir/`、`schema/` → `internal/`
+- **Level 1**：`diagnostics/`、`graph/`、`sqlguard/`、`policy/` → `internal/`
+- **Level 2**：`analyze/`、`connector/`(+filequery/)、`core/`、`context/`、`render/` → `internal/`
+- **Level 3**：`cache/` → `internal/`
+
+所有包按依赖顺序逐层迁移，每层迁移后 `go build ./...` 验证通过。全部 14 个旧目录已清理。
+
+此前已完成：`dsn/` → `internal/dsn/`、`query/` → `internal/query/`，并新建 `internal/executor/`、`internal/dsl/`、`internal/diff/` 等包。`internal/plan/` 已废弃（Planner 为 Phase 2+）。
+
+未来可能的进一步重构方向（当前无计划）：
 
 ```
 internal/
   connectors/       # 仅负责：连接数据库
-  capabilities/     # 声明数据库能力枚举
   extractors/       # 按 capability 工作，提取元数据
   analyzers/        # 通用分析（relation inference, clustering）
   diagnostics/      # 统一诊断层（从 connector 中抽离）
@@ -90,12 +113,11 @@ internal/
   ir/               # IR v1 定义和序列化
   renderers/        # Markdown / JSON / HTML 输出
   cache/            # Schema fingerprint + delta scan
-  diff/             # Schema diff (未来)
 ```
 
 ### Capability Architecture（v0.1.0 已落地）
 
-Capability 架构已落地在 `execute.go`（v0.1.0），`isSQLKind()` 硬编码 switch 已被删除。
+Capability 架构已落地在 `cmd/dbexplain/execute.go`（v0.1.0），`isSQLKind()` 硬编码 switch 已被删除。
 
 当前架构（反模式）：
 
@@ -441,7 +463,7 @@ Password Mode:
 这些是当前实现层面的已知限制，不改变核心定位：
 
 1. **Streaming 输出** — 全量 Schema 在内存组装后输出，不支持流式。v1.0 前不实现
-2. **Schema Diff** — `diff/` 包尚未实现，`cache.Delta` 提供基础差分能力
+2. **Schema Diff** — `diff/` 包已实现（字段级变更检测），`cache.Store.DiffDetailed()` 使用快照对比输出 `diff.DiffResult`，`dbexplain diff` CLI 子命令
 3. **MCP Server / IDE 集成** — 未来考虑独立仓库实现，dbexplain 不内嵌 serve 模式
 4. **CSV/XLSX 定位** — 视为"文件数据源"而非"数据库"，不扩展更多文件格式（Parquet/Avro）
 5. **数据库层只读双保险** — 工具层 sqlguard + policy 为第一道防线，强烈建议配合数据库 GRANT SELECT ONLY 使用

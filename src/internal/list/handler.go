@@ -1,0 +1,83 @@
+// Package list handles the "list" subcommand for displaying configured DSNs.
+package list
+
+import (
+	"flag"
+	"fmt"
+	"os"
+	"strings"
+
+	"github.com/IamWWT/dbexplain/internal/dsn"
+	"github.com/IamWWT/dbexplain/internal/config"
+)
+
+// Handle processes the list subcommand.
+func Handle(args []string) {
+	fs := flag.NewFlagSet("list", flag.ExitOnError)
+	envMode := fs.Bool("env", true, "Load from .env config file")
+	dsnFlag := fs.String("dsn", "", "Direct DSN string (repeatable)")
+	configFile := fs.String("config", "", "JSON config file path")
+	fs.Parse(args)
+
+	var entries []config.DSNEntry
+
+	if *configFile != "" {
+		for _, raw := range config.LoadFromConfig(*configFile) {
+			entries = append(entries, config.DSNEntry{Raw: raw})
+		}
+	}
+
+	if *dsnFlag != "" {
+		entries = append(entries, config.DSNEntry{Raw: *dsnFlag})
+	}
+
+	if *envMode && *configFile == "" && *dsnFlag == "" {
+		configPath := config.FindConfigFile()
+		if configPath == "" {
+			fmt.Fprintln(os.Stderr, "  no config file found. Create .env.dbexplain (or .env.dbexplain.enc) in",
+				config.ConfigDirDisplay(), "or current directory.")
+			os.Exit(1)
+		}
+		envEntries, err := config.LoadEnvFile(configPath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "ERROR: load config %s: %v\n", configPath, config.SanitizeErr(err))
+			os.Exit(1)
+		}
+		entries = append(entries, envEntries...)
+	}
+
+	if len(entries) == 0 {
+		fmt.Fprintln(os.Stderr, "  no DSNs found. Use -env, -dsn, or -config.")
+		os.Exit(1)
+	}
+
+	fmt.Println()
+	fmt.Println("  Available databases:")
+	fmt.Println()
+
+	fmt.Printf("  %-6s %-22s %-17s %-24s %s\n", "INDEX", "LABEL", "KIND", "HOST:PORT", "DATABASE")
+	fmt.Println("  " + strings.Repeat("─", 90))
+
+	for i, e := range entries {
+		parsed, err := dsn.ParseDSN(e.Raw)
+		if err != nil {
+			continue
+		}
+		label := parsed.Label
+		if label == "" {
+			label = "(no label)"
+		}
+		hostPort := parsed.Host
+		if parsed.Port != "" {
+			hostPort += ":" + parsed.Port
+		}
+		dbName := parsed.DBName
+		if dbName == "" {
+			dbName = "(n/a)"
+		}
+		fmt.Printf("  %-6d %-22s %-17s %-24s %s\n", i+1, label, parsed.Kind, hostPort, dbName)
+	}
+	fmt.Println()
+	fmt.Println("  Use --db <INDEX> or --label <LABEL> with execute subcommand.")
+	fmt.Println()
+}

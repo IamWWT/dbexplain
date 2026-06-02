@@ -182,7 +182,7 @@ QUERY_ERROR: csv query error: parse error: ...
 
 #### 已知不支持语法
 
-- 窗口函数（ROW_NUMBER、RANK 等）
+- ~~窗口函数（ROW_NUMBER、RANK 等）~~ ✅ v0.1.1 已支持
 - CTE（WITH 语句）
 - UPDATE/INSERT/DELETE（只读引擎）
 - FROM 子查询（如 `SELECT * FROM (SELECT ...) AS t`）

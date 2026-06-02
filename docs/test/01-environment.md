@@ -94,5 +94,5 @@ bash -n dbexplain-skill/scripts/uninstall-skill.sh && echo "uninstall-skill OK"
 
 ```bash
 ./dbexplain --version
-# 预期: dbexplain v0.1.0
+# 预期: dbexplain v0.1.1
 ```

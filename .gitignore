@@ -3,15 +3,13 @@
 src/.env
 
 # 加密配置文件
-.env.enc
-.env.dbexplain.enc
-src/.env.enc
-src/.env.dbexplain.enc
-src/.env.dbexplain
+.env*
 src/.env
-src/.env.bak
+src/.env.*
 *.enc
-testdata
+
+# 测试专用数据
+testdata/
 
 # 日志
 logs/
@@ -38,7 +36,7 @@ dbexplain-skill/.claude
 
 # 内部文件（不对外暴露）
 .github
-release-wechat.md
+docs/test/
 docs/ALGORITHMS.md
 docs/SECURITY_CHECKLIST.md
-docs/RELEASE_WECHAT_v0.0.9.md
+docs/RELEASE_WECHAT_*
