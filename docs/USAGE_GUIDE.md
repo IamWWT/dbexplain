@@ -24,7 +24,7 @@
 ### Linux
 
 ```bash
-wget https://github.com/IamWWT/dbexplain/releases/download/v0.1.1/dbexplain-linux-amd64 -O dbexplain
+wget https://github.com/IamWWT/dbexplain/releases/download/v0.1.2/dbexplain-linux-amd64 -O dbexplain
 chmod +x dbexplain
 ./dbexplain --version
 ```
@@ -33,7 +33,7 @@ chmod +x dbexplain
 
 ```bash
 # Intel 芯片用 darwin-amd64，M1/M2 芯片用 darwin-arm64
-wget https://github.com/IamWWT/dbexplain/releases/download/v0.1.1/dbexplain-darwin-arm64 -O dbexplain
+wget https://github.com/IamWWT/dbexplain/releases/download/v0.1.2/dbexplain-darwin-arm64 -O dbexplain
 chmod +x dbexplain
 ./dbexplain --version
 ```
@@ -44,7 +44,7 @@ chmod +x dbexplain
 
 ```powershell
 # PowerShell
-Invoke-WebRequest https://github.com/IamWWT/dbexplain/releases/download/v0.1.1/dbexplain-windows-amd64.exe -OutFile dbexplain.exe
+Invoke-WebRequest https://github.com/IamWWT/dbexplain/releases/download/v0.1.2/dbexplain-windows-amd64.exe -OutFile dbexplain.exe
 .\dbexplain.exe --version
 ```
 
@@ -92,6 +92,9 @@ dbexplain list -env
 ```bash
 # 采集所有数据库的结构
 dbexplain -env --human
+
+# 或用显式子命令（v0.1.2+）
+dbexplain collect -env --human
 ```
 
 输出示例：
@@ -137,8 +140,22 @@ dbexplain execute -dsn "sqlite:////tmp/test.db" "SELECT * FROM t" --human
 # 看查询计划
 dbexplain execute -env --db 1 --explain "SELECT * FROM users WHERE id = 1" --human
 
+# 交互式 REPL 模式（v0.1.2+，持续查询不退出）
+dbexplain repl --dsn "sqlite:////tmp/test.db"
+
+# 也可以加载配置文件，用 .conn 在多个数据源间切换
+dbexplain repl -env
+dbexplain repl --dsn "mysql://root:pass@127.0.0.1:3306/mydb"
+
 # 自定义超时（默认 30 秒）和行数（默认 1000）
 dbexplain execute -env --db 1 --timeout 60 --limit 500 "SELECT * FROM logs" --human
+```
+
+> **REPL 模式说明：**
+> - 支持所有 11 种数据源：SQL（MySQL/PG/ClickHouse/SQLite 等）、NoSQL（Redis/ES/Mongo/Qdrant）、文件（CSV/Excel）
+> - **不支持 DSL 模式**（`@label.table` 语法）。REPL 每次只能查当前连接的一个数据源
+> - 配合 `-env` 启动后，可用 `.conn <label>` 在已配置的多个数据源之间切换
+> - 跨源 JOIN/UNION（联邦查询）请走命令行的 `--dsl` 模式，REPL 内不支持
 ```
 
 ### 查 Redis
@@ -187,7 +204,7 @@ dbexplain execute -env --dsl "SELECT * FROM @my-mysql.users LIMIT 10" --human
 dbexplain execute -env --dsl "SELECT * FROM @my-pg.orders WHERE status = 'active'" --human
 ```
 
-> v0.1.1 限制：DSL 模式仅支持单数据源，不支持 Redis / Mongo / Qdrant / ES。这些数据库用前面的原生命令方式查。
+> v0.1.2 起 DSL 模式支持跨源 JOIN/UNION（联邦查询），可用 `@label1.t1 JOIN @label2.t2` 关联不同数据库。暂不支持 Redis / Mongo / Qdrant / ES 原生数据源，这些用前面的原生命令方式查。
 
 ---
 

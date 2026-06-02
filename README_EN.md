@@ -73,7 +73,7 @@ dbexplain execute -env --label redis "PING"
 dbexplain execute -env --dsl "SELECT * FROM @my-mysql.users LIMIT 10" --human
 ```
 
-> v0.1.1 limitation: DSL mode supports single-source only, no Redis / Mongo / Qdrant / ES. Use direct execution path as workaround.
+> v0.1.1 limitation: DSL mode was single-source only. v0.1.2 adds cross-source JOIN/UNION (federated query). Redis / Mongo / Qdrant / ES native sources still not supported in DSL mode.
 
 ### File Query Engine
 CSV / TSV / XLSX powered by a **built-in pure-Go SQL engine** — no external database required:
@@ -137,7 +137,9 @@ EOF
 | Scenario | Command |
 |----------|---------|
 | Schema collection | `dbexplain -env / -dsn <url> / -json / -human / -o <file>` |
+| | `dbexplain collect -env --human` (explicit subcommand, v0.1.2+) |
 | Query execution | `dbexplain execute -env --db <N> / --label <name> / --dsl / --human` |
+| Interactive REPL | `dbexplain repl --dsn <url>` or `dbexplain repl -env` (v0.1.2+, all 11 sources, no DSL mode) |
 | File query | `dbexplain execute -dsn "csv://file.csv" "SELECT ..."` |
 | Schema diff | `dbexplain diff --cache <file> --since <ver>` |
 | List DSNs | `dbexplain list -env` |

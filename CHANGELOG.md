@@ -1,5 +1,23 @@
 # 变更日志
 
+## v0.1.2 (2026-06-02) — CLI 交互增强 + DSL 联邦查询
+
+### 新功能
+- **DSL 联邦查询** (ISSUE-069): 跨数据源 JOIN/UNION 支持。移除 `len(kinds)>1` 阻断，数据物化 + filequery 联邦合并层。SQL ↔ 文件 ↔ 混合源 JOIN 全支持
+- **`dbexplain collect` 子命令** (ISSUE-072): Schema 采集从默认行为迁移为显式子命令。`dbexplain collect -env --human` 新方式，向后兼容保留 fallthrough 采集。无参 `dbexplain` 显示帮助
+- **CLI REPL 模式** (ISSUE-070): `dbexplain repl` 交互式查询循环。`.conn` 切换数据源、`.help`/`.exit`/Ctrl+D、自动计时与行数统计
+- **`--explain` 输出格式化** (ISSUE-071): 按数据库类型使用特定 EXPLAIN 语法（MySQL FORMAT=JSON、PostgreSQL ANALYZE BUFFERS、SQLite QUERY PLAN、ClickHouse PLAN）。MySQL FORMAT=JSON --human 可读渲染
+
+### 修复
+- **DSL 文件 JOIN 修复** (ISSUE-069): `dslExecFile()` 传入 `nil allEntries` 导致文件源 DSL 模式下 JOIN 无法解析。改为传入全局 entries
+
+### 文档
+- **发布前检查标准补充** (ISSUE-073): SECURITY_CHECKLIST.md §6 追加版本一致性、CHANGELOG 完整性、issues.json 有效性、二进制冒烟测试、产物完整性、文档陈旧引用检查
+
+### 构建与发布
+- `build.sh` / `version.go` 版本号更新为 v0.1.2
+- 全量 `go build ./...` + `go vet ./...` + `go test ./...` + `bash build.sh` 验证通过
+
 ## v0.1.1 (结构整理 + 统一 DSL 查询入口)
 
 ### 项目结构

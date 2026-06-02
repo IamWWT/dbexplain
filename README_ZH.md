@@ -73,7 +73,7 @@ dbexplain execute -env --label redis "PING"
 dbexplain execute -env --dsl "SELECT * FROM @my-mysql.users LIMIT 10" --human
 ```
 
-> v0.1.1 限制：DSL 模式仅支持单数据源，不支持 Redis / Mongo / Qdrant / ES。可通过直接执行路径绕过。
+> v0.1.1 限制：DSL 模式仅支持单数据源。v0.1.2 已支持跨源 JOIN/UNION（联邦查询），仍不支持 Redis / Mongo / Qdrant / ES 原生数据源。
 
 ### 文件查询引擎
 CSV / TSV / XLSX 由**内置纯 Go SQL 引擎**驱动，无需外部数据库。支持：
@@ -137,7 +137,9 @@ EOF
 | 场景 | 命令 |
 |------|------|
 | Schema 采集 | `dbexplain -env / -dsn <url> / -json / -human / -o <file>` |
+| | `dbexplain collect -env --human`（显式子命令，v0.1.2+） |
 | 查询执行 | `dbexplain execute -env --db <N> / --label <name> / --dsl / --human` |
+| 交互式查询 | `dbexplain repl --dsn <url>` 或 `dbexplain repl -env`（v0.1.2+，支持 11 种数据源，不支持 DSL 模式） |
 | 文件查询 | `dbexplain execute -dsn "csv://file.csv" "SELECT ..."` |
 | Schema 对比 | `dbexplain diff --cache <file> --since <ver>` |
 | 查看 DSN | `dbexplain list -env` |

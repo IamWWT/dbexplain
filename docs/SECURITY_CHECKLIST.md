@@ -112,12 +112,18 @@
 [ ] go build 无错误
 [ ] go vet  无警告
 [ ] go test ./... 全部通过
-[ ] 交叉编译 5 平台全部成功
+[ ] 版本一致性: version.go / build.sh ldflags / CHANGELOG.md 版本号一致
+[ ] CHANGELOG 完整性: 当前版本所有已关闭 Issue 在 CHANGELOG 列出
+[ ] issues.json 有效性: python3 -m json.tool issues.json 无语法错误
+[ ] 交叉编译 5 平台全部成功（bash build.sh）
+[ ] release/ 目录下 5 平台二进制存在，file 命令确认架构正确
+[ ] 二进制冒烟测试: --version 输出正确版本号，基本查询正常
 [ ] .gitignore 包含: src/.env, .env, .env.dbexplain, src/logs/
 [ ] grep -r "e\.raw" src/        # 确认无原始 DSN 输出
 [ ] grep -r "log.*Printf.*%s.*err" src/  # 确认错误消息经过脱敏
 [ ] grep -r "\.env" src/ --include="*.go" | grep -v test | grep -v example  # 检查引用
 [ ] 以 UTF-8 BOM 编码的 .env.dbexplain 测试 -env 正常加载
+[ ] 文档陈旧引用检查: grep 在 docs/ 中查找已删除文件路径的引用
 [ ] 确认 CHANGELOG.md 列出所有安全问题
 [ ] 确认 SECURITY_CHECKLIST.md 追加新发现的问题
 [ ] 加密输出文件权限为 0600

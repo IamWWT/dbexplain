@@ -72,7 +72,19 @@ func main() {
 		case "diff":
 			handleDiff(os.Args[2:])
 			return
+		case "collect":
+			handleCollect(os.Args[2:])
+			return
+		case "repl":
+			handleREPL(os.Args[2:])
+			return
 		}
+	}
+
+	// No subcommand and no flags: show help instead of silently entering collection
+	if len(os.Args) == 1 {
+		manual.PrintHelp()
+		return
 	}
 
 	userLang := preScanLanguage()
@@ -475,6 +487,235 @@ func handleDiff(args []string) {
 		"       dbexplain diff --cache FILE --since VERSION [--human]\n" +
 		"       dbexplain diff --cache FILE --list-versions\n" +
 		"       dbexplain diff --before FILE --after FILE")
+}
+
+// handleCollect implements "dbexplain collect" — explicit schema collection subcommand.
+func handleCollect(args []string) {
+	fs := flag.NewFlagSet("collect", flag.ExitOnError)
+	var dsnFlags []string
+	fs.Func("dsn", "...", func(s string) error { dsnFlags = append(dsnFlags, s); return nil })
+	configFile := fs.String("config", "", "JSON config file with array of DSNs")
+	useEnv := fs.Bool("env", false, "use .env file (prefix DB1=, DB2=...)")
+	includeFilter := fs.String("include", "", "comma-separated kinds/labels/env-keys to include")
+	labelFilter := fs.String("label", "", "filter by label (alias for -include)")
+	excludeFilter := fs.String("exclude", "", "comma-separated kinds/labels/env-keys to exclude")
+	jsonOut := fs.Bool("json", false, "output JSON")
+	humanOut := fs.Bool("human", false, "human-friendly output")
+	contextDir := fs.String("context", "", "write AI context files to directory")
+	cacheFile := fs.String("cache", "", "fingerprint cache file for delta scan (.json)")
+	versionLabel := fs.String("version-label", "", "label for this cache version")
+	outputFile := fs.String("o", "", "write output to file")
+	logDirFlag := fs.String("log-dir", "/var/log/dbexplain", "directory for log files")
+	perDSNTimeout := fs.Duration("timeout", 20*time.Second, "per-DSN collect timeout")
+	maxConcurrent := fs.Int("conn", 10, "max concurrent connections for schema collection")
+	fs.Parse(args)
+
+	// --label is an alias for -include
+	if *labelFilter != "" {
+		if *includeFilter != "" {
+			*includeFilter += "," + *labelFilter
+		} else {
+			*includeFilter = *labelFilter
+		}
+	}
+
+	var entries []config.DSNEntry
+	for _, raw := range dsnFlags {
+		entries = append(entries, config.DSNEntry{Raw: raw})
+	}
+	if *useEnv {
+		configPath := config.FindConfigFile()
+		if configPath == "" {
+			log.Fatal("no config file found. Create .env.dbexplain (or .env.dbexplain.enc) in " + config.ConfigDirDisplay() + " or current directory.")
+		}
+		envEntries, err := config.LoadEnvFile(configPath)
+		if err != nil {
+			log.Printf("warning: load config %s: %v", configPath, config.SanitizeErr(err))
+		} else {
+			entries = append(entries, envEntries...)
+		}
+	}
+	if *configFile != "" {
+		for _, raw := range config.LoadFromConfig(*configFile) {
+			entries = append(entries, config.DSNEntry{Raw: raw})
+		}
+	}
+
+	logDir := config.ResolveLogDir(*logDirFlag)
+
+	logFile, err := os.OpenFile(filepath.Join(logDir, "dbexplain.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err == nil {
+		log.SetOutput(logFile)
+		defer logFile.Close()
+	}
+
+	entries = config.FilterDSNs(entries, *includeFilter, *excludeFilter, logDir)
+	if len(entries) == 0 {
+		log.Fatal("no DSNs provided (or all filtered out). Use -dsn, -env, or -config")
+	}
+
+	if *useEnv && !*jsonOut {
+		config.PrintDSNMapping(entries)
+	}
+
+	var dsns []string
+	for _, e := range entries {
+		dsns = append(dsns, e.Raw)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	var instances []*schema.Instance
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+
+	startAll := time.Now()
+
+	collectLogFile, err := os.OpenFile(filepath.Join(logDir, "collect.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		log.Printf("create collect log: %v", err)
+		collectLogFile = os.Stderr
+	} else {
+		defer collectLogFile.Close()
+	}
+	collectLogger := log.New(collectLogFile, "", log.LstdFlags)
+
+	sem := make(chan struct{}, *maxConcurrent)
+
+	for i, rawDSN := range dsns {
+		i := i
+		rawDSN := rawDSN
+		wg.Add(1)
+		sem <- struct{}{}
+		go func() {
+			defer wg.Done()
+			defer func() { <-sem }()
+			parsed, err := dsn.ParseDSN(rawDSN)
+			if err != nil {
+				log.Printf("invalid DSN: %v", config.SanitizeErr(err))
+				return
+			}
+			label := parsed.Label
+			if label == "" {
+				label = fmt.Sprintf("db_%d", i)
+			}
+			logFileName := filepath.Join(logDir, label+".log")
+			logFile, err := os.OpenFile(logFileName, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+			if err != nil {
+				log.Printf("create log file %s: %v", logFileName, err)
+				logFile = os.Stderr
+			} else {
+				defer logFile.Close()
+			}
+			logger := log.New(logFile, "", log.LstdFlags)
+			collectCtx := connector.WithLogger(ctx, logger)
+			collectCtx, cancel := context.WithTimeout(collectCtx, *perDSNTimeout)
+			defer cancel()
+
+			logger.Printf("[采集中] %s", label)
+			start := time.Now()
+			inst, err := connector.Collect(collectCtx, rawDSN)
+			elapsed := time.Since(start)
+
+			if err != nil {
+				logger.Printf("skip %s: %v", parsed.Redacted(), err)
+				return
+			}
+
+			mu.Lock()
+			instances = append(instances, inst)
+			mu.Unlock()
+
+			nTables := totalTables(inst)
+			logger.Printf("[完成] %s (%d 表) 耗时 %v", label, nTables, elapsed)
+		}()
+	}
+
+	wg.Wait()
+	if len(instances) == 0 {
+		collectLogger.Printf("[!] 所有 DSN 采集均失败，报告为空。请检查日志: %s", logDir)
+	} else {
+		collectLogger.Printf("全部采集完成，总耗时 %v", time.Since(startAll))
+	}
+
+	kindCaps := make(map[string]*capabilities.Set)
+	for _, inst := range instances {
+		if _, ok := kindCaps[inst.Kind]; ok {
+			continue
+		}
+		c, err := connector.GetConnector(inst.Kind)
+		if err != nil {
+			kindCaps[inst.Kind] = capabilities.NewSet()
+		} else {
+			kindCaps[inst.Kind] = capabilities.FromProvider(c)
+		}
+	}
+
+	universe := &schema.Universe{Instances: instances}
+	result := analyze.Analyze(universe, kindCaps)
+
+	if *cacheFile != "" {
+		store, err := cache.LoadStore(*cacheFile)
+		if err != nil {
+			log.Printf("load cache: %v (starting fresh)", err)
+		}
+		delta := store.Diff(universe)
+		if len(delta.Added)+len(delta.Removed)+len(delta.Changed) > 0 {
+			data, _ := json.MarshalIndent(delta, "", "  ")
+			fmt.Fprintf(os.Stderr, "[delta] %d added, %d removed, %d changed\n",
+				len(delta.Added), len(delta.Removed), len(delta.Changed))
+			deltaFile := strings.TrimSuffix(*cacheFile, ".json") + "_delta.json"
+			os.WriteFile(deltaFile, data, 0644)
+
+			detail := store.DiffDetailed(universe)
+			if len(detail.Tables) > 0 {
+				detailData, _ := json.MarshalIndent(detail, "", "  ")
+				diffFile := strings.TrimSuffix(*cacheFile, ".json") + "_diff.json"
+				os.WriteFile(diffFile, detailData, 0644)
+				fmt.Fprintf(os.Stderr, "[diff] %d tables with field-level changes → %s\n",
+					len(detail.Tables), diffFile)
+			}
+		}
+		if err := store.Update(universe); err != nil {
+			log.Printf("save cache: %v", err)
+		}
+		vl := *versionLabel
+		if vl == "" {
+			vl = "v" + time.Now().Format("20060102_150405")
+		}
+		if err := store.SaveVersion(vl); err != nil {
+			log.Printf("save version %s: %v", vl, err)
+		}
+	}
+
+	if *contextDir != "" {
+		output.WriteContext(*contextDir, result)
+	}
+
+	if *outputFile != "" {
+		var out string
+		if *jsonOut {
+			out = output.CaptureJSON(result)
+			if err := os.WriteFile(*outputFile, []byte(out), 0644); err != nil {
+				log.Fatal(err)
+			}
+		} else {
+			out = output.CaptureText(result, *humanOut)
+			data, err := encodeOutput(out)
+			if err != nil {
+				log.Fatalf("encode output: %v", err)
+			}
+			if err := os.WriteFile(*outputFile, data, 0644); err != nil {
+				log.Fatal(err)
+			}
+		}
+		fmt.Fprintln(os.Stderr, "Report written to", *outputFile)
+	} else if *jsonOut {
+		render.PrintJSON(result)
+	} else {
+		render.Print(result, *humanOut)
+	}
 }
 
 // universeFromFile reconstructs a Universe from a JSON file that may be

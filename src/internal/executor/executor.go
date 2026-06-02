@@ -43,7 +43,7 @@ func ExecQuery(opts *ExecOptions) (*query.QueryResult, error) {
 			return nil, err
 		}
 		if opts.Explain {
-			sqlArg = "EXPLAIN " + sqlArg
+			sqlArg = wrapExplain(sqlArg, opts.Parsed.Kind)
 		} else {
 			sqlArg = sqlguard.AutoLimit(sqlArg, opts.Limit)
 		}
@@ -86,4 +86,20 @@ func ExecQuery(opts *ExecOptions) (*query.QueryResult, error) {
 	opts.Policies.ApplyMask(result)
 
 	return result, nil
+}
+
+// wrapExplain wraps SQL with the database-appropriate EXPLAIN prefix.
+func wrapExplain(sql string, kind string) string {
+	switch kind {
+	case "mysql":
+		return "EXPLAIN FORMAT=JSON " + sql
+	case "postgres", "gaussdb":
+		return "EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT) " + sql
+	case "sqlite":
+		return "EXPLAIN QUERY PLAN " + sql
+	case "clickhouse":
+		return "EXPLAIN PLAN " + sql
+	default:
+		return "EXPLAIN " + sql
+	}
 }

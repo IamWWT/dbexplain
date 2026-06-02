@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.1.2 (2026-06-02) — CLI Enhancement + DSL Federated Query
+
+### New Features
+- **DSL Federated Query** (ISSUE-069): Cross-source JOIN/UNION support. Removed `len(kinds)>1` blocker, data materialization + filequery federated merge layer. SQL ↔ file ↔ mixed source JOIN fully supported
+- **`dbexplain collect` subcommand** (ISSUE-072): Schema collection migrated from default behavior to explicit subcommand. `dbexplain collect -env --human` new path, backward-compatible fallback retained. `dbexplain` with no args shows help
+- **CLI REPL mode** (ISSUE-070): `dbexplain repl` interactive query loop. `.conn` switch data source, `.help`/`.exit`/Ctrl+D, automatic timing and row count
+- **`--explain` output formatting** (ISSUE-071): Database-specific EXPLAIN syntax (MySQL FORMAT=JSON, PostgreSQL ANALYZE BUFFERS, SQLite QUERY PLAN, ClickHouse PLAN). MySQL FORMAT=JSON --human readable rendering
+
+### Fixes
+- **DSL file JOIN fix** (ISSUE-069): `dslExecFile()` passed `nil allEntries`, causing file-source DSL JOIN resolution to fail. Changed to pass global entries
+
+### Documentation
+- **Pre-release checklist supplement** (ISSUE-073): SECURITY_CHECKLIST.md §6 added version consistency, CHANGELOG completeness, issues.json validation, binary smoke test, artifact integrity, stale doc reference check
+
+### Build & Release
+- `build.sh` / `version.go` version bumped to v0.1.2
+- Full `go build ./...` + `go vet ./...` + `go test ./...` + `bash build.sh` verification passing
+
 ## v0.1.1 (2026-06-02) — Internal Restructuring + Unified DSL Query Entry
 
 ### Project Structure
