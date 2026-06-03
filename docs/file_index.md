@@ -1,7 +1,7 @@
 # docs/ 文件索引
 
 > 本文档索引 `docs/` 下所有文件，方便快速定位。
-> 更新时间：v0.1.2 (2026-06-03)
+> 更新时间：v0.1.3 (2026-06-03)
 
 ---
 
@@ -19,7 +19,7 @@
 
 | 文件 | 说明 |
 |------|------|
-| [`USAGE_GUIDE.md`](USAGE_GUIDE.md) | 全场景傻瓜用法手册：11 种数据源从安装到查询 |
+| [`USAGE_GUIDE.md`](USAGE_GUIDE.md) | 全场景傻瓜用法手册：12 种数据源从安装到查询 |
 | [`CLI_EXAMPLES.md`](CLI_EXAMPLES.md) | CLI 使用示例集合 |
 | [`EXECUTE.md`](EXECUTE.md) | execute 子命令详解（只读查询） |
 | [`REPL.md`](REPL.md) | REPL 交互模式：启动方式、内命令、自动行为、已知限制（ES 暂不支持等） |
@@ -33,6 +33,7 @@
 | [`MYSQL.md`](MYSQL.md) | MySQL |
 | [`POSTGRESQL.md`](POSTGRESQL.md) | PostgreSQL |
 | [`SQLITE.md`](SQLITE.md) | SQLite |
+| [`DUCKDB.md`](DUCKDB.md) | DuckDB（可选构建，需 `-tags duckdb`） |
 | [`CLICKHOUSE.md`](CLICKHOUSE.md) | ClickHouse |
 | [`MONGO.md`](MONGO.md) | MongoDB |
 | [`REDIS.md`](REDIS.md) | Redis |

@@ -1,5 +1,70 @@
 # 变更日志
 
+## v0.1.3 (2026-06-03) — DuckDB 可选连接器 + 构建系统双版本发布
+
+### ✨ 新功能
+
+- **DuckDB 嵌入式 SQL 引擎**
+  支持内存模式（`duckdb:///:memory:`）与文件数据库模式（`duckdb:///path/to/file.db`）。覆盖完整元数据采集（系统函数 `duckdb_tables/columns/constraints` + 行数统计 + 采样）、`ExecQuery` 查询执行、DSL `@label.duckdb` 绑定及 `EXPLAIN` 格式适配。强制 `access_mode=READ_ONLY` 保障只读安全。
+
+- **DuckDB 文件分析引擎**
+  通过 `read_parquet()`/`read_csv_auto()`/`read_json()` 直接分析 Parquet/CSV/JSON 文件。`allowed_path` 参数控制可读目录，防止路径遍历越界。
+
+- **双版本发布体系**
+  - **标准版（`-std`）**：纯 Go，无 CGO 依赖，跨 5 平台（Linux/Windows/macOS amd64/arm64）
+  - **DuckDB 全量版（`-duckdb`）**：当前平台 + DuckDB 支持，CGO 依赖 gcc/clang
+  发布脚本 `release.sh` 自动完成两阶段构建。
+
+- **CLI 帮助层次化重构**
+  命令按 `Schema` / `Query` / `Utility` / `Help` 分组展示，数据源按 `SQL` / `NoSQL` / `File` 分类。标准版提示 DuckDB 构建方式，DuckDB 版正常显示入口。
+
+### 🐛 修复
+
+- **DuckDB DSN 解析**
+  `duckdb://:memory:` 被 Go 标准库误解析为端口号 → 改为 `duckdb:///:memory:`（三斜杠），连接串构建函数增加专门处理分支。
+
+- **子命令注册遗漏**
+  `main.go` 中 `duckdb` case 缺失导致命令静默退出 → 已补全。
+
+- **Goroutine panic 恢复**
+  三处缺失 `defer/recover()` 的位置（Schema 采集 goroutine 外层、输出捕获 `io.Copy` goroutine）全部补上，避免单点崩溃影响整体进程。
+
+- **路径前缀匹配安全漏洞**
+  `allowed_path` 使用 `strings.HasPrefix` 缺少分隔符守卫（如 `/data` 误匹配 `/data_backup`）→ 添加末尾分隔符检查。
+
+- **错误日志丢失**
+  - XLSX 查询原始错误被 `ErrNotSupported` 吞没 → 增加 `log.Printf` 保留上下文
+  - ClickHouse/ES 的 `io.ReadAll` 错误被 `_` 忽略 → 改为日志记录
+  - Delta/Diff JSON 输出的 `WriteFile`/`MarshalIndent` 错误被 `_` 忽略 → 增加错误日志
+
+- **CJK 字符表格对齐**
+  `fmt.Sprintf("%-30s")` 按字节填充导致图表模式中文错位 → 改用基于视觉宽度的 `pad(Inst.Label, 30)`。
+
+### 🏗️ 构建与发布
+
+- **CGO 引入及宪法例外**
+  项目首次引入 CGO 依赖（DuckDB Go 驱动内嵌 C++ 引擎）。`CONSTITUTION.md` 增加第 4 条例外说明。
+
+- **UPX 极致压缩**
+  - DuckDB 全量版：100 MB → 23 MB（-77%）
+  - 标准版：42 MB → 9.1 MB（-78%）
+  全链路验证：`file`/`ldd`/`nm -D`/`upx -t` 全部通过。
+
+- **构建标签隔离**
+  DuckDB 需要显式 `-tags duckdb` + `CGO_ENABLED=1`，且不在 `full` 标签中。提供 stub 文件给出友好构建提示。
+
+- **全量验证**
+  `go build ./...` / `go vet ./...` / `go test ./...` + `bash build.sh prod/minimal` + `bash release.sh` 全部通过。
+
+### 📚 文档
+
+- **新增** `DUCKDB.md`（使用指南）、`DUCKDB_IMPL.md`（实现边界与安全模型）
+- **README 中英同步**：数据源计数 11 → 12，能力矩阵新增 DuckDB 行，开发指南补充 `release.sh` 与命名规范
+- **测试文档**：新增 `16-duckdb.md`（20 项 E2E），更新 `RESULTS.md`（128/128）、测试总览（16 数据源）
+- **SECURITY_CHECKLIST.md** 增加 DuckDB 文件路径安全检查项
+- **安装脚本**：`install.sh`/`install.ps1` 版本号 v0.1.2 → v0.1.3，下载 URL 使用 `-std` 后缀
+- **CHANGELOG 中英同步**：本版本完整记录双语言版本。
+
 ## v0.1.2 (2026-06-03) — CLI 交互增强 + DSL 联邦查询 + 构建系统优化
 
 ### 新功能

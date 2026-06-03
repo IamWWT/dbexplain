@@ -5,11 +5,15 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"strings"
 
 	"github.com/IamWWT/dbexplain/internal/version"
 )
+
+// duckdbHelp shows duckdb in Database types list, adjusted by build tags.
+var duckdbHelp = "  duckdb\n"
 
 // langText holds bilingual text content.
 type langText struct {
@@ -46,38 +50,48 @@ func PrintHelp() {
 
 	fmt.Fprint(out, p(
 		"\ndbexplain — Database Context Compiler  "+version.Version+"\n\n"+
-			"Usage:\n"+
-			"  dbexplain [flags]              Collect & analyze database schemas\n"+
-			"  dbexplain list                 List all configured databases\n"+
-			"  dbexplain collect [flags]      Explicit schema collection subcommand\n"+
-			"  dbexplain execute <query>      Run read-only query (SQL / JSON / native)\n"+
-			"  dbexplain diff [flags]         Schema diff / delta detection\n"+
-			"  dbexplain repl                 Interactive REPL mode\n"+
-			"  dbexplain encrypt <file>       Encrypt .env config with machine fingerprint\n"+
-			"  dbexplain <dbtype>             Database-specific reference (e.g. mysql, redis)\n"+
-			"  dbexplain all                  Full reference manual\n\n",
+			"Commands:\n"+
+			"  Schema:\n"+
+			"    dbexplain [flags]              Collect & analyze database schemas\n"+
+			"    dbexplain collect [flags]      Explicit schema collection subcommand\n"+
+			"    dbexplain diff [flags]         Schema diff / delta detection\n"+
+			"  Query:\n"+
+			"    dbexplain execute <query>      Run read-only query (SQL / JSON / native)\n"+
+			"    dbexplain repl                 Interactive REPL mode\n"+
+			"  Utility:\n"+
+			"    dbexplain list                 List all configured databases\n"+
+			"    dbexplain encrypt <file>       Encrypt .env config with machine fingerprint\n"+
+			"  Help:\n"+
+			"    dbexplain <dbtype>             Database-specific reference (e.g. mysql, redis)\n"+
+			"    dbexplain all                  Full reference manual\n\n",
 		"\ndbexplain — Database Context Compiler  "+version.Version+"\n\n"+
-			"Usage:\n"+
-			"  dbexplain [flags]              Collect & analyze database schemas\n"+
-			"  dbexplain list                 List all configured databases\n"+
-			"  dbexplain collect [flags]      Explicit schema collection subcommand\n"+
-			"  dbexplain execute <query>      Run read-only query (SQL / JSON / native)\n"+
-			"  dbexplain diff [flags]         Schema diff / delta detection\n"+
-			"  dbexplain repl                 Interactive REPL mode\n"+
-			"  dbexplain encrypt <file>       Encrypt .env config with machine fingerprint\n"+
-			"  dbexplain <dbtype>             Database-specific reference (e.g. mysql, redis)\n"+
-			"  dbexplain all                  Full reference manual\n\n",
+			"Commands:\n"+
+			"  Schema:\n"+
+			"    dbexplain [flags]              Collect & analyze database schemas\n"+
+			"    dbexplain collect [flags]      Explicit schema collection subcommand\n"+
+			"    dbexplain diff [flags]         Schema diff / delta detection\n"+
+			"  Query:\n"+
+			"    dbexplain execute <query>      Run read-only query (SQL / JSON / native)\n"+
+			"    dbexplain repl                 Interactive REPL mode\n"+
+			"  Utility:\n"+
+			"    dbexplain list                 List all configured databases\n"+
+			"    dbexplain encrypt <file>       Encrypt .env config with machine fingerprint\n"+
+			"  Help:\n"+
+			"    dbexplain <dbtype>             Database-specific reference (e.g. mysql, redis)\n"+
+			"    dbexplain all                  Full reference manual\n\n",
 	))
 
 	fmt.Fprint(out, p(
-		"Database types:\n"+
-			"  mysql, postgres/pg, gaussdb, clickhouse/ch, sqlite/sqlite3,\n"+
-			"  redis, mongodb, elasticsearch/es, qdrant,\n"+
-			"  csv, tsv, xlsx\n\n",
-		"Database types:\n"+
-			"  mysql, postgres/pg, gaussdb, clickhouse/ch, sqlite/sqlite3,\n"+
-			"  redis, mongodb, elasticsearch/es, qdrant,\n"+
-			"  csv, tsv, xlsx\n\n",
+		"Supported databases:\n"+
+			"  SQL:   mysql, postgres/pg, gaussdb, clickhouse/ch, sqlite/sqlite3,\n"+
+			"       "+duckdbHelp+
+			"  NoSQL: redis, mongodb, elasticsearch/es, qdrant\n"+
+			"  File:  csv, tsv, xlsx\n\n",
+		"Supported databases:\n"+
+			"  SQL:   mysql, postgres/pg, gaussdb, clickhouse/ch, sqlite/sqlite3,\n"+
+			"       "+duckdbHelp+
+			"  NoSQL: redis, mongodb, elasticsearch/es, qdrant\n"+
+			"  File:  csv, tsv, xlsx\n\n",
 	))
 
 	fmt.Fprint(out, p(
@@ -125,12 +139,16 @@ func PrintHelp() {
 			"  dbexplain list -h       list subcommand help\n"+
 			"  dbexplain execute -h    execute subcommand help\n"+
 			"  dbexplain encrypt -h    encrypt subcommand help\n"+
-			"  dbexplain all -h        full manual help\n",
+			"  dbexplain all -h        full manual help\n"+
+			"  GitHub: https://github.com/IamWWT/dbexplain\n"+
+			"    (build with -tags duckdb for DuckDB support, requires CGO)\n",
 		"See:\n"+
 			"  dbexplain list -h       list subcommand help\n"+
 			"  dbexplain execute -h    execute subcommand help\n"+
 			"  dbexplain encrypt -h    encrypt subcommand help\n"+
-			"  dbexplain all -h        full manual help\n",
+			"  dbexplain all -h        full manual help\n"+
+			"  GitHub: https://github.com/IamWWT/dbexplain\n"+
+			"    (build with -tags duckdb for DuckDB support, requires CGO)\n",
 	))
 }
 
@@ -197,6 +215,11 @@ func captureManualOutput(lang string) string {
 	var buf bytes.Buffer
 	done := make(chan struct{})
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("[PANIC] captureManualOutput: %v", r)
+			}
+		}()
 		io.Copy(&buf, r)
 		close(done)
 	}()
@@ -248,6 +271,7 @@ var DBSubcommands = map[string]func(func(string, string) string){
 	"csv":           printManualFile,
 	"tsv":           printManualFile,
 	"xlsx":          printManualXLSX,
+	"duckdb":        printManualDuckDB,
 }
 
 // PrintDBManual prints the database-specific manual section for the given subcommand.
@@ -448,6 +472,7 @@ DESCRIPTION
     csv              -         文件首行/采样            列名+类型推断
     tsv              -         文件首行/采样            列名+类型推断
     xlsx             -         excelize 库             多Sheet、列名+类型推断
+    duckdb           -         duckdb_* 系统函数        嵌入式引擎，Parquet/JSON/CSV 文件分析
 `,
 		`
 
@@ -467,6 +492,7 @@ DESCRIPTION
     csv              -        File header/sampling    Column names + type inference
     tsv              -        File header/sampling    Column names + type inference
     xlsx             -        excelize library        Multi-sheet, column names + type inference
+    duckdb           -        duckdb_* system funcs   Embedded engine, Parquet/JSON/CSV file analysis
 `))
 
 	// Per-database sections
@@ -479,6 +505,7 @@ DESCRIPTION
 	printManualElasticsearch(p)
 	printManualMongoDB(p)
 	printManualQdrant(p)
+	printManualDuckDB(p)
 
 	fmt.Print(p(`
 

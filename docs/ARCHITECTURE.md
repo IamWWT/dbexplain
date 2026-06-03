@@ -51,14 +51,14 @@ LLM 在外部消费 IR 做推理
 
 ## 3. 目标架构
 
-### 当前目录结构（v0.1.2，实际代码）
+### 当前目录结构（v0.1.3，实际代码）
 
 ```
 src/
   cmd/dbexplain/        # CLI 入口：main.go + execute.go
   internal/             # 全部内部包（对外不可见）
     capabilities/       # Capability 枚举（含 CapSQL/CapFile）
-    connector/          # 连接器自注册（11 种数据源）
+    connector/          # 连接器自注册（12 种数据源，含可选 DuckDB）
       filequery/        # 文件查询引擎（纯 Go 内存 SQL）
     sqlguard/           # SQL 只读校验（P0 安全边界）
     policy/             # 细粒度访问控制（DENY_TABLES/COLUMNS/STATEMENTS）
@@ -87,6 +87,24 @@ src/
     output/             # 输出编码辅助
     version/            # 版本信息
 ```
+
+### 构建架构：双版本策略（v0.1.3）
+
+项目输出两套二进制，满足不同场景：
+
+| 维度 | 标准版（`-std`） | DuckDB 版（`-duckdb`） |
+|------|-----------------|----------------------|
+| CGO | `CGO_ENABLED=0` | `CGO_ENABLED=1` |
+| Build Tags | `full` | `duckdb,mysql,postgres,...`（全驱动） |
+| 交叉编译 | 5 平台 | 仅当前平台 |
+| 典型体积 | ~9 MB (UPX) | ~23 MB (UPX) |
+| DuckDB | 不包含 | 包含 |
+| 运行时依赖 | 零 | libstdc++（系统预装） |
+| 发布方式 | `bash build.sh prod` | `bash build.sh minimal duckdb,...` |
+
+**CGO 例外**：项目宪法第 4 条要求零 CGO，DuckDB 是唯一例外。DuckDB Go 驱动内嵌 C++ 引擎，必须启用 CGO。`duckdb` 标签不包含在 `full` 中，需显式 `-tags duckdb`。详见 [`CONSTITUTION.md`](../CONSTITUTION.md) 第 4 条。
+
+**发布流程**：`bash release.sh` 自动化双版发布，Phase 1 产出 5 平台 -std，Phase 2 产出当前平台 -duckdb。详见 [`DEPLOY.md`](../DEPLOY.md)。
 
 ### 内部包重构完成（v0.1.1）
 
@@ -465,7 +483,7 @@ Password Mode:
 1. **Streaming 输出** — 全量 Schema 在内存组装后输出，不支持流式。v1.0 前不实现
 2. **Schema Diff** — `diff/` 包已实现（字段级变更检测），`cache.Store.DiffDetailed()` 使用快照对比输出 `diff.DiffResult`，`dbexplain diff` CLI 子命令
 3. **MCP Server / IDE 集成** — 未来考虑独立仓库实现，dbexplain 不内嵌 serve 模式
-4. **CSV/XLSX 定位** — 视为"文件数据源"而非"数据库"，不扩展更多文件格式（Parquet/Avro）
+4. **CSV/XLSX 定位** — 视为"文件数据源"而非"数据库"，不扩展更多文件格式（Avro）。Parquet/JSON 文件可通过 DuckDB 连接器间接查询（需 `-tags duckdb` 构建）
 5. **数据库层只读双保险** — 工具层 sqlguard + policy 为第一道防线，强烈建议配合数据库 GRANT SELECT ONLY 使用
 
 ---
@@ -512,6 +530,7 @@ Password Mode:
 
 | 日期 | 版本 | 说明 |
 |------|------|------|
+| 2026-06-03 | v5 | v0.1.3: 新增构建架构双版本策略（CGO 例外）；CSV/XLSX 定位更新（Parquet 通过 DuckDB 间接支持） |
 | 2026-05-29 | v4 | v0.1.0: CapSQL 架构落地、P0/P1 安全加固；新增已知限制章节 |
 | 2026-05-20 | v3 | 新增安全性章节，密码防泄漏为第一要义 |
 | 2026-05-20 | v2 | Phase 1-3 已完成，更新路线图状态 |

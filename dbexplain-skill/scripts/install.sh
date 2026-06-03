@@ -2,7 +2,7 @@
 set -e
 
 # ============================================================
-# dbexplain v0.1.2 — One-click installer (Linux / macOS)
+# dbexplain v0.1.3 — One-click installer (Linux / macOS)
 # ============================================================
 # Installs the dbexplain binary system-wide and optionally
 # deploys the AI Agent skill to supported platforms.
@@ -13,10 +13,12 @@ set -e
 #   bash install.sh --no-skill          Skip skill installation
 #   bash install.sh --update            Overwrite existing installation
 #   bash install.sh --lang en           Install with English skill
+#   bash install.sh --edition std       Install standard edition (default)
+#   bash install.sh --edition duckdb    Install DuckDB edition (requires CGO build)
 #   bash install.sh --help              Show this help
 # ============================================================
 
-VERSION="v0.1.2"
+VERSION="v0.1.3"
 REPO="IamWWT/dbexplain"
 TOOL_NAME="dbexplain"
 
@@ -34,6 +36,8 @@ UPDATE_MODE=false
 OFFLINE_PATH="" # optional pre-placed binary path for --offline
 LANG_SKILL=""   # empty means interactive (ask user)
 INSTALL_DIR=""  # resolved later
+EDITION=""      # empty means interactive (ask user); std or duckdb
+BINARY_SUFFIX="std"  # default fallback
 
 # ── Color output ──
 RED='\033[0;31m'
@@ -62,14 +66,17 @@ Options:
   --update           Update mode: overwrite existing binary and skill files
                      without touching config.
   --lang zh|en       Skill language: zh=中文 (default), en=English.
+  --edition std|duckdb  Edition to install: std (pure Go, default) or
+                     duckdb (requires CGO, current platform only).
   --help             Show this help message and exit.
 
 Examples:
   bash install.sh                          # Full interactive install
   bash install.sh --lang en                # Full install with English skill
   bash install.sh --no-skill               # Tool only, no skill
+  bash install.sh --edition duckdb         # Install DuckDB edition
   bash install.sh --offline                # Offline: you provide the binary
-  bash install.sh --offline ./dbexplain    # Offline: use specified binary
+  bash install.sh --offline ./dbexplain-linux-amd64-std  # Offline with path
   bash install.sh --update                 # Update to latest version
 
 After install:
@@ -100,6 +107,15 @@ while [ $# -gt 0 ]; do
                 shift
             else
                 echo "Unknown --lang value: $2 (expected zh or en)"
+                print_help; exit 1
+            fi
+            ;;
+        --edition)
+            if [ "$2" = "std" ] || [ "$2" = "duckdb" ]; then
+                EDITION="$2"
+                shift
+            else
+                echo "Unknown --edition value: $2 (expected std or duckdb)"
                 print_help; exit 1
             fi
             ;;
@@ -140,8 +156,32 @@ detect_platform() {
             ;;
     esac
 
-    BINARY_DOWNLOAD="dbexplain-${OS}-${ARCH}"
     info "Detected platform: ${OS}/${ARCH}"
+}
+
+# ── Edition selection ──
+select_edition() {
+    if [ -n "$EDITION" ]; then
+        BINARY_SUFFIX="$EDITION"
+        info "Edition: ${EDITION}"
+    else
+        echo ""
+        step "Select edition:"
+        echo "  1) Standard edition (-std) — pure Go, no DuckDB, zero runtime deps"
+        echo "  2) DuckDB edition (-duckdb) — includes DuckDB, requires C libs (system pre-installed)"
+        echo ""
+        echo "  Note: DuckDB edition enables Parquet/JSON/CSV file analysis via DuckDB engine."
+        echo "        Only available for the current platform (no cross-compile)."
+        echo ""
+        read -r -p "  Choose [1/2] (default: 1): " choice
+        case "$choice" in
+            2|duckdb) BINARY_SUFFIX="duckdb" ;;
+            *)        BINARY_SUFFIX="std" ;;
+        esac
+        info "Selected edition: ${BINARY_SUFFIX}"
+    fi
+
+    BINARY_DOWNLOAD="dbexplain-${OS}-${ARCH}-${BINARY_SUFFIX}"
 }
 
 # ── Resolve install directory ──
@@ -396,6 +436,7 @@ main() {
     echo ""
 
     detect_platform
+    select_edition
     resolve_install_dir
 
     if [ "$UPDATE_MODE" = true ]; then

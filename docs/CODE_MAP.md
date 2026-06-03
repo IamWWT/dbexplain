@@ -13,6 +13,7 @@
 | **DSN 解析** | `internal/dsn` | `src/internal/dsn/dsn.go`, `src/internal/dsn/dsn_test.go` | `docs/CONFIG_SEARCH.md` |
 | **Schema 数据模型** | `schema` | `src/internal/schema/types.go`, `src/internal/schema/errors.go`, `src/internal/schema/infer.go`, `src/internal/schema/infer_test.go` | — |
 | **Connector 接口** | `connector` | `src/internal/connector/connector.go` (接口), `src/internal/connector/registry.go` (注册表), `src/internal/connector/runner.go` (Panic保护), `src/internal/connector/query.go` (SQL执行共享实现) | — |
+| **DuckDB** | `connector` | `src/internal/connector/duckdb.go` | `docs/DUCKDB.md` |
 | **MySQL** | `connector` | `src/internal/connector/mysql.go` | `docs/MYSQL.md` |
 | **PostgreSQL** | `connector` | `src/internal/connector/postgres.go` | `docs/POSTGRESQL.md` |
 | **SQLite** | `connector` | `src/internal/connector/sqlite.go` | `docs/SQLITE.md` |
@@ -50,6 +51,7 @@
 | MySQL | ✓ | — | ✓ | ✓ | — | ✓ | — | — | — |
 | PostgreSQL | ✓ | — | ✓ | ✓ | ✓ | ✓ | — | — | — |
 | SQLite | ✓ | — | ✓ | — | — | ✓ | — | — | — |
+| DuckDB | ✓ | — | ✓ | ✓ | ✓ | ✓ | — | — | — |
 | ClickHouse | ✓ | — | — | — | ✓ | ✓ | — | ✓ | — |
 | Redis | — | — | — | — | — | ✓ | ✓ | — | — |
 | ES | ✓ | — | — | ✓ | — | — | — | — | — |

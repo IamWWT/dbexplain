@@ -74,6 +74,7 @@
 - [ ] **子查询 LIMIT 绕过** — `AutoLimit()` 使用 `hasOuterLimit()` 剥离括号内容后检测 LIMIT，防止子查询内部 LIMIT 绕过自动注入
 - [ ] **Redis 通配符** — `globMatch()` 替代 `filepath.Match`，确保 `/` 不截断 `*` 通配符匹配
 - [ ] **文件路径** — `--log-dir`、`--context`、`--cache`、`-o` 等路径参数防止路径遍历
+- [ ] **DuckDB 文件访问控制** — `read_parquet`/`read_csv_auto`/`read_json` 等文件函数受 `allowed_path` DSN 参数限制；未配置时拒绝所有文件读取函数调用；已配置时路径必须在前缀范围内（`filepath.Clean` + `strings.HasPrefix`），多路径逗号分隔合法
 
 ---
 
@@ -99,8 +100,8 @@
 - [ ] **连接隔离** — 每实例独立连接，单实例 panic 不影响其他实例
 - [ ] **超时控制** — 所有数据库连接有合理的连接/读写超时
 - [ ] **并发安全** — sync.Map 或 mutex 保护共享状态
-- [ ] **终端注入防御** — `formatHuman()` 中单元格值经过 `sanitizeCell()` 剥离 ANSI 转义序列和控制字符（仅 `--human` 输出，覆盖全部 12 种数据源（9 种数据库 + 3 种文件源）；JSON 输出经 Go `json.Encoder` 原生转义，无需额外处理）
-- [ ] **列宽上限** — `formatHuman()` 列宽 cap 于 256 字符，超长 cell 截断并追加 `…`（仅 `--human` 输出，覆盖全部 12 种数据源（9 种数据库 + 3 种文件源））
+- [ ] **终端注入防御** — `formatHuman()` 中单元格值经过 `sanitizeCell()` 剥离 ANSI 转义序列和控制字符（仅 `--human` 输出，覆盖全部 13 种数据源（含可选 DuckDB）；JSON 输出经 Go `json.Encoder` 原生转义，无需额外处理）
+- [ ] **列宽上限** — `formatHuman()` 列宽 cap 于 256 字符，超长 cell 截断并追加 `…`（仅 `--human` 输出，覆盖全部 13 种数据源（含可选 DuckDB））
 
 ---
 

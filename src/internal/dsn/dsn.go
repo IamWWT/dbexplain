@@ -21,6 +21,7 @@ type DSN struct {
 	TLS      bool // ?tls=true (ES/Redis HTTPS)
 	SSLMode  string // ?sslmode=require|disable (PostgreSQL)
 	TLSSkipVerify bool // ?tls-skip-verify=true (ES/Redis)
+	AllowedPath string // ?allowed_path=/data/ (DuckDB file access)
 }
 
 // ParseDSN accepts: scheme://[user[:pass]@]host[:port][/dbname][?label=alias]
@@ -63,6 +64,8 @@ func ParseDSN(raw string) (*DSN, error) {
 		d.Kind = "csv" // tsv reuses csv connector with ?delimiter=\t
 	case "xlsx":
 		d.Kind = "xlsx"
+	case "duckdb":
+		d.Kind = "duckdb"
 	default:
 		return nil, fmt.Errorf("unsupported scheme %q", scheme)
 	}
@@ -91,6 +94,9 @@ func ParseDSN(raw string) (*DSN, error) {
 	}
 	if v := u.Query().Get("sslmode"); v != "" {
 		d.SSLMode = v
+	}
+	if v := u.Query().Get("allowed_path"); v != "" {
+		d.AllowedPath = v
 	}
 	return d, nil
 }

@@ -717,3 +717,102 @@ func printManualXLSX(p func(string, string) string) {
 
 `))
 }
+
+func printManualDuckDB(p func(string, string) string) {
+	fmt.Print(p(`
+
+─── DuckDB ────────────────────────────────────────────────────
+
+    DSN 格式:
+      duckdb:///绝对路径?label=别名      文件数据库
+      duckdb:///:memory:?label=别名     内存模式
+
+    别名: duckdb
+
+    说明:
+      嵌入式 SQL 引擎，可选 CGO 构建 (需 -tags duckdb)。
+      标准版 (-std) 不含 DuckDB 驱动。
+
+    特有参数:
+      allowed_path=<路径>   Parquet/JSON/CSV 文件读取路径白名单
+
+    采集机制:
+      • 表列表   — information_schema.tables: 表名、类型 (跳过系统表)
+      • 列信息   — pragma_table_info(): 名称、类型、可空、默认值、主键
+      • 行数     — SELECT COUNT(*) (直接查询)
+      • 约束     — duckdb_constraints(): 主键/唯一/外键
+      • 注释推断 — 首行数据 + 规则引擎 (DuckDB 无原生注释)
+      • 文件分析 — 通过 read_parquet/read_csv_auto/read_json 函数查询
+                   外部 Parquet/CSV/JSON 文件，需 allowed_path 参数授权
+
+    安全机制:
+      • 自动 access_mode=READ_ONLY 只读模式
+      • read_*() 文件函数需 allowed_path DSN 参数授权
+      • 路径越界检查：filepath.Clean + strings.HasPrefix 防御性验证
+
+    构建要求:
+      • DuckDB 驱动需要 CGO (gcc/clang) 和 C 工具链
+      • 编译命令: CGO_ENABLED=1 go build -tags duckdb ./cmd/dbexplain
+      • build.sh 通过 duckdb tag 自动启用 CGO:
+          bash build.sh minimal duckdb,mysql,postgres,csv,xlsx
+      • release.sh 自动产出 -duckdb 后缀的 DuckDB 版二进制
+      • 当前平台原生编译，不支持交叉编译
+
+    示例:
+      dbexplain -dsn 'duckdb:///:memory:?label=analysis'
+      dbexplain execute -dsn 'duckdb:///:memory:?label=analysis' 'SELECT 1'
+      dbexplain -dsn 'duckdb:///data/warehouse.db?label=warehouse'
+
+    文件分析示例 (需 allowed_path):
+      dbexplain execute -dsn 'duckdb:///:memory:?allowed_path=/data/' \\
+        "SELECT region, SUM(amount) FROM read_parquet('/data/sales.parquet') GROUP BY region"
+`,
+		`
+
+─── DuckDB ────────────────────────────────────────────────────
+
+    DSN format:
+      duckdb:///absolute/path?label=alias     File database
+      duckdb:///:memory:?label=alias          In-memory mode
+
+    Alias: duckdb
+
+    Notes:
+      Embedded SQL engine, optional CGO build (requires -tags duckdb).
+      Standard edition (-std) does not include DuckDB driver.
+
+    DSN parameters:
+      allowed_path=<path>   File read whitelist for Parquet/JSON/CSV
+
+    Collection mechanism:
+      • Table list  — information_schema.tables: name, type (skips system tables)
+      • Column info — pragma_table_info(): name, type, nullable, default, PK
+      • Row count   — SELECT COUNT(*) (direct query)
+      • Constraints — duckdb_constraints(): PK/Unique/FK
+      • Comment inf.— First row sampling + rule engine (DuckDB has no native comments)
+      • File analysis — read_parquet/read_csv_auto/read_json functions for
+                    external Parquet/CSV/JSON files; requires allowed_path
+
+    Safety:
+      • Auto-enforces access_mode=READ_ONLY
+      • read_*() file functions require allowed_path DSN parameter
+      • Path traversal defense: filepath.Clean + strings.HasPrefix
+
+    Build requirements:
+      • DuckDB driver requires CGO (gcc/clang) and C toolchain
+      • Build command: CGO_ENABLED=1 go build -tags duckdb ./cmd/dbexplain
+      • build.sh auto-enables CGO when duckdb tag is present:
+          bash build.sh minimal duckdb,mysql,postgres,csv,xlsx
+      • release.sh auto-produces -duckdb suffixed binary
+      • Native build only (current platform), no cross-compilation
+
+    Examples:
+      dbexplain -dsn 'duckdb:///:memory:?label=analysis'
+      dbexplain execute -dsn 'duckdb:///:memory:?label=analysis' 'SELECT 1'
+      dbexplain -dsn 'duckdb:///data/warehouse.db?label=warehouse'
+
+    File analysis example (requires allowed_path):
+      dbexplain execute -dsn 'duckdb:///:memory:?allowed_path=/data/' \\
+        "SELECT region, SUM(amount) FROM read_parquet('/data/sales.parquet') GROUP BY region"
+`))
+}

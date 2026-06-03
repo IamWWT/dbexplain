@@ -75,7 +75,7 @@ func classifySource(kind string) SourceKind {
 	switch kind {
 	case "csv", "xlsx", "tsv":
 		return SourceFile
-	case "mysql", "postgres", "sqlite", "clickhouse", "gaussdb":
+	case "mysql", "postgres", "sqlite", "clickhouse", "gaussdb", "duckdb":
 		return SourceSQL
 	default:
 		// Redis, MongoDB, Qdrant, Elasticsearch → native

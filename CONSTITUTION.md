@@ -63,6 +63,8 @@
 - SQLite 驱动使用 `github.com/glebarez/go-sqlite`（纯 Go，无 CGO）
 - 交叉编译覆盖 5 个平台：linux/amd64, linux/arm64, darwin/amd64, darwin/arm64, windows/amd64
 
+> **例外：`-tags duckdb` 可选编译**：DuckDB 连接器需 CGO 和 C 工具链（gcc/clang/mingw），仅在编译期依赖。构建命令 `CGO_ENABLED=1 go build -tags duckdb`。所有不含 `duckdb` 标签的构建仍保持零 CGO。DuckDB 是项目唯一 CGO 例外。
+
 ### 5. 统一错误处理
 
 - 所有数据库错误使用 `schema.NewDBError()` 包裹（`schema/errors.go`）
@@ -123,12 +125,13 @@
 
 ---
 
-## 项目边界 (v0.1.2)
+## 项目边界 (v0.1.3)
 
 ### 数据源范围
 - **核心**: MySQL, PostgreSQL, GaussDB, ClickHouse, SQLite, Redis, Elasticsearch, MongoDB, Qdrant
 - **文件数据源**（非"数据库"）: CSV, TSV, XLSX — 可做 Schema 采集和只读查询，但不扩展更多文件格式
-- **不支持的**: Parquet, Avro, Google Sheets — 超出"数据库上下文编译器"定位
+- **可选连接器**（需 `-tags duckdb` 构建）: DuckDB — 嵌入式 SQL 引擎，支持本地数据库查询和 Parquet/JSON/CSV 文件分析
+- **不支持的**: Avro, Google Sheets — 超出"数据库上下文编译器"定位
 
 ### DSL 查询
 - `--dsl` flag 提供统一 DSL 查询入口，支持 `@label.table` 语法引用数据源
@@ -162,6 +165,7 @@
 
 | 日期 | 版本 | 说明 |
 |------|------|------|
+| 2026-06-03 | v7 | 第 4 条新增 DuckDB CGO 例外；项目边界更新至 v0.1.3，DuckDB 可选连接器 + Parquet 间接支持 |
 | 2026-06-03 | v6 | 核心交付物更新（去除未实现的 IR Product 概念）；Principle 3 区分 Collect/Query 阶段并更新 MongoDB 描述；构建与发布章节精简为 DEPLOY.md 引用 |
 | 2026-06-03 | v5 | 新增 DSL 联邦查询、REPL 模式、Build Tags 能力；项目边界更新至 v0.1.2 |
 | 2026-05-29 | v3 | 第 10 条确认落地；新增"项目边界"章节，定义数据源范围和集成策略 |

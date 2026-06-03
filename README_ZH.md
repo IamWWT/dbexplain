@@ -4,7 +4,7 @@
 
 > **数据库上下文编译器** — 为 AI Agent 与工程团队提供确定性、可证实的数据结构信息。
 
-`dbexplain` 是一个**单二进制、零运行时依赖**的命令行工具，支持 **11 种异构数据源**的 Schema 采集与只读查询执行，所有操作在统一的安全沙箱下审计可追溯。
+`dbexplain` 是一个**单二进制、零运行时依赖**的命令行工具，支持 **12 种异构数据源**（含可选 DuckDB）的 Schema 采集与只读查询执行，所有操作在统一的安全沙箱下审计可追溯。
 
 核心理念：**只输出可证实的事实，LLM 在外部消费结构化输出来做推理。**
 
@@ -12,7 +12,7 @@
 
 ## 为什么用 dbexplain？
 
-- **异构统一** — 一套工具管理 MySQL / PG / Redis / ES / Mongo / 文件 等 11 种数据源
+- **异构统一** — 一套工具管理 MySQL / PG / Redis / ES / Mongo / 文件 / DuckDB 等 12 种数据源
 - **确定性优先** — 相同输入 → 相同输出，无 AI 幻觉，所有推断关系明确标注 `inferred=true`
 - **单二进制部署** — 零依赖，CGO_ENABLED=0，一条命令即可运行
 - **安全三层防护** — AST 只读校验 + 策略引擎 + AutoLimit，适用于生产环境查询
@@ -39,6 +39,7 @@
 | GaussDB | `gaussdb://` | ✅ | ✅ | ✅ | ✅ | — | PostgreSQL 协议兼容 |
 | ClickHouse | `clickhouse://` | ✅ | ✅ | ✅ | ✅ | — | 排序键 / 分区键 / 主键 |
 | SQLite | `sqlite://` | ✅ | ✅ | ✅ | ✅ | — | 纯 Go 驱动，无 CGO |
+| DuckDB | `duckdb://` | ✅ | ✅ | ✅ | ✅ | — | 嵌入式 SQL 引擎，Parquet/CSV 文件分析，可选构建需 `-tags duckdb` |
 | Redis | `redis://` | ✅ | — | ✅ | — | — | 键模式推断、集群、TTL 风险诊断 |
 | MongoDB | `mongodb://` | ✅ | — | ✅ | — | — | 近似文档数 |
 | Elasticsearch | `elasticsearch://` | ✅ | ⚠️ SQL via `_sql` | — | — | — | 索引映射、HTTPS |
@@ -147,7 +148,7 @@ EOF
 | Schema 采集 | `dbexplain -env / -dsn <url> / -json / -human / -o <file>` |
 | | `dbexplain collect -env --human`（显式子命令，v0.1.2+） |
 | 查询执行 | `dbexplain execute -env --db <N> / --label <name> / --dsl / --human` |
-| 交互式查询 | `dbexplain repl --dsn <url>` 或 `dbexplain repl -env`（v0.1.2+，支持 11 种数据源，不支持 DSL 模式） |
+| 交互式查询 | `dbexplain repl --dsn <url>` 或 `dbexplain repl -env`（v0.1.2+，支持 12 种数据源，不支持 DSL 模式） |
 | 文件查询 | `dbexplain execute -dsn "csv://file.csv" "SELECT ..."` |
 | Schema 对比 | `dbexplain diff --cache <file> --since <ver>` |
 | 查看 DSN | `dbexplain list -env` |
@@ -164,9 +165,12 @@ go vet ./...                                # 静态分析
 go test ./... -count=1                      # 单元测试
 bash build.sh                               # 发布：5 平台 + 全驱动 + UPX
 bash build.sh dev                           # 开发：当前平台 + 全驱动
+bash release.sh                             # 正式发布：标准版(std) + DuckDB 版(duckdb)
 bash build.sh minimal mysql,postgres        # 精简：按需驱动
 bash build.sh --help                        # 查看全部参数
 ```
+
+> **命名规范**：标准版（纯 Go 全量，无 DuckDB）后缀 `-std`，如 `dbexplain-linux-amd64-std`；DuckDB 版（含全部驱动 + DuckDB）后缀 `-duckdb`，如 `dbexplain-linux-amd64-duckdb`。详见 [`DEPLOY.md`](docs/DEPLOY.md)。
 
 ---
 

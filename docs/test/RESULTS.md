@@ -1,9 +1,9 @@
-# 测试结果报告 v0.1.2
+# 测试结果报告 v0.1.3
 
 > 执行日期: 2026-06-03
 > 测试环境: Linux x86-64 (amd64), Go 1.26.1
-> 数据源: 15 个 (mysql, clickhouse, sqlite×2, qdrant, es, postgres, redis×2, mongodb, xlsx×2, csv×2, tsv)
-> 二进制: dbexplain-linux-amd64 v0.1.2
+> 数据源: 16 个 (mysql, clickhouse, sqlite×2, qdrant, es, postgres, redis×2, mongodb, xlsx×2, csv×2, tsv, duckdb)
+> 二进制: dbexplain-linux-amd64-std + dbexplain-linux-amd64-duckdb v0.1.3
 
 ---
 
@@ -26,8 +26,9 @@
 | L7 | [14-schema-diff.md](14-schema-diff.md) | **PASS** | 5/5 | 单元测试 + 快照 + CLI + 多版本基线 |
 | L7 | [15-window-functions.md](15-window-functions.md) | **PASS** | 6/6 | 排名/值引用/聚合窗口/框架 |
 | L8 | [12-capability-routing.md](12-capability-routing.md) | **PASS** | 7/7 | CapSQL路由/JSON包装/多Schema/CTE |
+| L8 | [16-duckdb.md](16-duckdb.md) | **PASS** | 20/20 | DuckDB 内存/文件/DSL/安全/构建隔离 |
 
-**总计: 108/108 测试项通过 (100%)**
+**总计: 128/128 测试项通过 (100%)**
 
 ---
 
@@ -47,6 +48,20 @@
 | Build Tags + UPX | ✅ | build.sh prod/dev/test/minimal 4 模式, 42MB→9.5MB |
 | SKILL_AUTHORING.md | ✅ | Karpathy 上下文工程 + 完整示例模板 |
 
+## 新增 v0.1.3 验证项
+
+| 特性 | 状态 | 验证方式 |
+|------|------|---------|
+| DuckDB 连接器 | ✅ | 内存模式采集/查询/EXPLAIN 全部通过 |
+| DuckDB 文件分析 | ✅ | 文件数据库模式采集+查询 |
+| DuckDB 安全控制 | ✅ | allowed_path 拒绝/允许 边界正确 |
+| DSL @label.duckdb 绑定 | ✅ | DSL 模式正确解析 duckdb 数据源 |
+| 构建隔离 -std vs -duckdb | ✅ | std 无 duckdb 符号，带构建提示 |
+| 版本号 v0.1.3 | ✅ | `--version` 显示 v0.1.3 |
+| CLI 帮助区分 duckdb | ✅ | std 版显示 build 提示，duckdb 版显示正常 |
+| release.sh 双版发布 | ✅ | 5 平台 -std + 当前平台 -duckdb |
+| 安装脚本 -std 后缀 | ✅ | install.sh/install.ps1 下载 URL 使用 `-std` 后缀 |
+
 ---
 
 ## 详细测试结果
@@ -62,7 +77,9 @@
 | 1.5 按需编译 | PASS | dev + minimal 模式编译通过, 二进制版本正确 |
 | 1.6 Git 安全审计 | PASS | .env, logs/, *.enc 均未追踪 |
 | 1.7 Shell 语法 | PASS | 4/4 脚本通过: install.sh, uninstall.sh, install-skill.sh, uninstall-skill.sh |
-| 1.8 版本确认 | PASS | `dbexplain v0.1.2` |
+| 1.8 版本确认 (std) | PASS | `dbexplain v0.1.3` |
+| 1.9 版本确认 (duckdb) | PASS | `dbexplain v0.1.3` (CGO=1 构建) |
+| 1.10 release.sh 双版本 | PASS | 5 平台 -std + 当前平台 -duckdb |
 
 ### L3: Schema 采集 & CLI 帮助
 
@@ -197,16 +214,18 @@
 | SQL 数据库 (mysql,postgres,clickhouse,sqlite) | 12 MB | 3.6 MB | 70% |
 | NoSQL 数据库 (redis,mongodb,es,qdrant) | 35 MB | 7.0 MB | 80% |
 | SQL + NoSQL (全部远程库) | 40 MB | 8.5 MB | 79% |
-| 全驱动 (full) | 42 MB | 9.1 MB | 78% |
+| 全驱动标准版 (full, -std) | 42 MB | 9.1 MB | 78% |
+| DuckDB 全量版 (duckdb+all, -duckdb) | 100 MB | 23 MB | 77% |
 
 ### build.sh 4 模式
 
 | 模式 | 命令 | 说明 |
 |------|------|------|
-| prod | `bash build.sh` | 5平台 + 全驱动 + UPX |
+| prod | `bash build.sh` | 5平台 + 全驱动 + UPX, 产出 -std 后缀标准版 |
 | dev | `bash build.sh dev` | 当前平台 + 全驱动 + 快速编译 |
 | test | `bash build.sh test` | 当前平台 + 全驱动 + -race |
 | minimal | `bash build.sh minimal <tags>` | 当前平台 + 按需驱动 |
+| release | `bash release.sh` | Phase 1: 5平台 -std + Phase 2: 当前平台 -duckdb |
 
 ---
 
@@ -220,6 +239,7 @@
 | TSV kind 为 csv | 低 | csv.go 硬编码 Kind: "csv" |
 | Redis _server_info 无 columns | 低 | Redis INFO 返回 key-value 元数据 |
 | QueryLock 跨进程不共享 | 低 | CLI 每次为独立进程 (库模式正常) |
+| DuckDB 非静态链接 | 中 | duckdb 版依赖 libstdc++/libc | 运行时需 C 库; CGO 不可避免 |
 
 ---
 
@@ -270,4 +290,4 @@ echo -e ".conn aiops-es\n{\"query\":{\"match_all\":{}}}\n.exit" | ./release/dbex
 
 ---
 
-*测试基准: v0.1.0 (91/91) → v0.1.1 (91/91) → v0.1.2 (108/108). 历史版本报告已归档.*
+*测试基准: v0.1.0 (91/91) → v0.1.1 (91/91) → v0.1.2 (108/108) → v0.1.3 (128/128). 历史版本报告已归档.*

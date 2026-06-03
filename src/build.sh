@@ -28,8 +28,12 @@ set -e
 #
 #  Tag reference — each db type can be included individually:
 #    mysql postgres sqlite clickhouse redis mongodb
-#    elasticsearch qdrant csv xlsx
-#    full   — all drivers (default for prod/dev/test)
+#    elasticsearch qdrant csv xlsx duckdb
+#    full   — all drivers except duckdb (duckdb requires CGO)
+#
+#  Note: duckdb tag is NOT included in "full". To build with DuckDB,
+#  use "minimal" mode and explicitly include: bash build.sh minimal duckdb,mysql,postgres
+#  DuckDB builds require CGO (C toolchain: gcc/clang on Linux/macOS, mingw on Windows).
 #
 #  Tag → Kind → DSN scheme mapping:
 #    mysql       → mysql           → mysql://, mariadb://
@@ -96,7 +100,7 @@ if [ "$MODE" = "prod" ]; then
 fi
 
 # ── Common ldflags ────────────────────────────────────────────
-LDFLAGS="-s -w -X github.com/IamWWT/dbexplain/internal/version.Version=v0.1.2"
+LDFLAGS="-s -w -X github.com/IamWWT/dbexplain/internal/version.Version=v0.1.3"
 EXTRALDFLAGS=""
 
 # ── Mode-specific flags ───────────────────────────────────────
@@ -123,6 +127,15 @@ case "$MODE" in
     ;;
 esac
 
+# ── CGO detection (duckdb tag) ────────────────────────────────
+if [[ ",$TAGS," == *",duckdb,"* ]]; then
+  CGO_ENABLED=1
+  echo "[build] duckdb tag detected: CGO_ENABLED=1 (requires C toolchain)"
+  echo "[build] WARNING: cross-compilation with CGO may fail; use native GOOS/GOARCH"
+else
+  CGO_ENABLED=0
+fi
+
 # ── Build loop ────────────────────────────────────────────────
 for platform in "${PLATFORMS[@]}"; do
   GOOS="${platform%/*}"
@@ -134,7 +147,7 @@ for platform in "${PLATFORMS[@]}"; do
   echo ""
   echo "Building $base (GOOS=$GOOS GOARCH=$GOARCH, tags=$TAGS)..."
 
-  CGO_ENABLED=0 GOOS=$GOOS GOARCH=$GOARCH go build \
+  CGO_ENABLED=$CGO_ENABLED GOOS=$GOOS GOARCH=$GOARCH go build \
     -tags "$TAGS" \
     -trimpath \
     -ldflags="$LDFLAGS" \

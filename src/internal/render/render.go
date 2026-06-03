@@ -49,7 +49,7 @@ func Print(result *analyze.Result, human bool) {
 			totalTables += len(db.Tables)
 		}
 		fmt.Printf("  %s  %s  %s\n",
-			cyan(fmt.Sprintf("%-30s", inst.Label)),
+			cyan(pad(inst.Label, 30)),
 			yellow(inst.Kind),
 			dim(fmt.Sprintf("%d db(s), %d tables", len(inst.Databases), totalTables)),
 		)
@@ -166,8 +166,8 @@ func printTable(inst *schema.Instance, db *schema.Database, t *schema.Table, hum
 
 	w0, w1 := 4, 4
 	for _, c := range t.Columns {
-		if len(c.Name) > w0 { w0 = len(c.Name) }
-		if len(c.Type) > w1 { w1 = len(c.Type) }
+		if vw := visualWidth(c.Name); vw > w0 { w0 = vw }
+		if vw := visualWidth(c.Type); vw > w1 { w1 = vw }
 	}
 	if w0 > 40 { w0 = 40 }
 	if w1 > 40 { w1 = 40 }

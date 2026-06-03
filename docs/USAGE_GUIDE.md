@@ -11,7 +11,7 @@
 1. **看数据库结构** —— 连上数据库，自动列出所有表、字段、索引、外键
 2. **查数据** —— 安全地执行查询（只能查，不能改）
 
-一个工具搞定 **11 种数据源**：MySQL / PostgreSQL / GaussDB / ClickHouse / SQLite / Redis / Elasticsearch / MongoDB / Qdrant / CSV / Excel。
+一个工具搞定 **12 种数据源**：MySQL / PostgreSQL / GaussDB / ClickHouse / SQLite / DuckDB / Redis / Elasticsearch / MongoDB / Qdrant / CSV / Excel。
 
 > 本文档覆盖全部数据源的全部使用场景。需要更详细的例子见 [`CLI_EXAMPLES.md`](CLI_EXAMPLES.md)。
 
@@ -28,6 +28,8 @@ wget https://github.com/IamWWT/dbexplain/releases/download/v0.1.2/dbexplain-linu
 chmod +x dbexplain
 ./dbexplain --version
 ```
+
+> 标准版命名格式为 `dbexplain-{平台}-{架构}-std`（如 `dbexplain-linux-amd64-std`），DuckDB 版为 `dbexplain-{平台}-{架构}-duckdb`。v0.1.3+ 下载时选择对应版本。
 
 ### macOS
 
@@ -58,7 +60,7 @@ Invoke-WebRequest https://github.com/IamWWT/dbexplain/releases/download/v0.1.2/d
 
 **Windows：** 文件放在 `%USERPROFILE%\.config\dbexplain\.env.dbexplain`
 
-### 全部 11 种数据源的配置写法
+### 全部 12 种数据源的配置写法
 
 把下面"你的情况"对应的那行复制到配置文件里，改掉地址/密码即可：
 
@@ -69,6 +71,7 @@ Invoke-WebRequest https://github.com/IamWWT/dbexplain/releases/download/v0.1.2/d
 | **GaussDB** | `DB3=gaussdb://用户:密码@127.0.0.1:5432/库名?label=my-gauss` |
 | **ClickHouse** | `DB4=clickhouse://用户:密码@127.0.0.1:8123/库名?label=my-ch` |
 | **SQLite** | `DB5=sqlite:////tmp/数据库文件.db?label=my-sqlite` |
+| **DuckDB** | `DB12=duckdb:///tmp/分析.db?label=my-duckdb`（可选，需 `-tags duckdb` 构建） |
 | **Redis** | `DB6=redis://:密码@127.0.0.1:6379/0?label=my-redis` |
 | **Elasticsearch** | `DB7=elasticsearch://用户:密码@127.0.0.1:9200?label=my-es` |
 | **MongoDB** | `DB8=mongodb://用户:密码@127.0.0.1:27017/库名?label=my-mongo` |
@@ -152,7 +155,7 @@ dbexplain execute -env --db 1 --timeout 60 --limit 500 "SELECT * FROM logs" --hu
 ```
 
 > **REPL 模式说明：**
-> - 支持所有 11 种数据源：SQL（MySQL/PG/ClickHouse/SQLite 等）、NoSQL（Redis/ES/Mongo/Qdrant）、文件（CSV/Excel）
+> - 支持所有 12 种数据源：SQL（MySQL/PG/ClickHouse/SQLite/DuckDB 等）、NoSQL（Redis/ES/Mongo/Qdrant）、文件（CSV/Excel）
 > - **不支持 DSL 模式**（`@label.table` 语法）。REPL 每次只能查当前连接的一个数据源
 > - 配合 `-env` 启动后，可用 `.conn <label>` 在已配置的多个数据源之间切换
 > - 跨源 JOIN/UNION（联邦查询）请走命令行的 `--dsl` 模式，REPL 内不支持

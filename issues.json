@@ -816,6 +816,17 @@
       "description": "REPL 新增 .list / .databases 命令，显示所有已配置数据源的序号、label、kind、当前连接标记（← current）。涉及文件：repl.go（dot command 新增）、REPL.md（文档更新）、CLI_EXAMPLES.md §13.1（示例更新）、09-cli-help.md（测试用例新增）、RESULTS.md（测试计数更新）。",
       "file": "src/cmd/dbexplain/repl.go",
       "created": "2026-06-03"
+    },
+    {
+      "id": "ISSUE-075",
+      "title": "DuckDB 连接器引入 — 嵌入式 SQL 引擎 + 文件分析",
+      "status": "closed",
+      "closed": "2026-06-03",
+      "priority": "medium",
+      "category": "feature",
+      "description": "可选 DuckDB 连接器，通过 `-tags duckdb` 构建。能力：SQL 数据库连接（Collect/ExecQuery）、Parquet/CSV/JSON 文件分析（通过 `read_parquet/read_csv_auto/read_json`）。DSN 参数 `allowed_path` 控制文件读取安全边界。不在 `full` 标签中，需显式指定。涉及文件：duckdb.go、dsn.go、binder.go、executor.go、build.sh、DUCKDB.md。",
+      "file": "src/internal/connector/duckdb.go",
+      "created": "2026-06-03"
     }
   ]
 }

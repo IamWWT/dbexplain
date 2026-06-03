@@ -1,5 +1,70 @@
 # Changelog
 
+## v0.1.3 (2026-06-03) — DuckDB Optional Connector + Dual-Build Release
+
+### ✨ New Features
+
+- **DuckDB Embedded SQL Engine**
+  Supports in-memory mode (`duckdb:///:memory:`) and file database mode (`duckdb:///path/to/file.db`). Full metadata collection via system functions `duckdb_tables/columns/constraints` + row counting + sampling, plus `ExecQuery`, DSL `@label.duckdb` binding, and `EXPLAIN` format adaptation. Forces `access_mode=READ_ONLY` for read-only safety.
+
+- **DuckDB File Analysis Engine**
+  Analyze Parquet/CSV/JSON files directly via `read_parquet()`/`read_csv_auto()`/`read_json()`. The `allowed_path` parameter controls readable directories, preventing path traversal.
+
+- **Dual-Release Pipeline**
+  - **Standard edition (`-std`)**: Pure Go, no CGO dependencies, cross-compiled for 5 platforms (Linux/Windows/macOS amd64/arm64)
+  - **DuckDB full edition (`-duckdb`)**: Current platform + DuckDB support, CGO requires gcc/clang
+  `release.sh` automates the two-phase build process.
+
+- **CLI Help Hierarchy Restructuring**
+  Commands grouped under `Schema` / `Query` / `Utility` / `Help`; data sources categorized as `SQL` / `NoSQL` / `File`. Standard builds show DuckDB build hint, DuckDB builds show normal entry.
+
+### 🐛 Fixes
+
+- **DuckDB DSN Parsing**
+  `duckdb://:memory:` misparsed by Go's standard library as a port number → changed to `duckdb:///:memory:` (triple slash), with a dedicated handling branch in the connection string builder.
+
+- **Missing Subcommand Registration**
+  `main.go` was missing the `duckdb` case, causing silent exit → now added.
+
+- **Goroutine Panic Recovery**
+  Three locations missing `defer/recover()` (Schema collection goroutine outer layer, output capture `io.Copy` goroutines) — all patched to prevent single-point crashes from bringing down the process.
+
+- **Path Prefix Matching Security Hole**
+  `allowed_path` used `strings.HasPrefix` without a separator guard (e.g., `/data` incorrectly matched `/data_backup`) → added trailing separator check.
+
+- **Error Log Loss**
+  - XLSX query original error swallowed by `ErrNotSupported` → added `log.Printf` to preserve context
+  - ClickHouse/ES `io.ReadAll` errors silently discarded via `_` → changed to log recording
+  - Delta/Diff JSON `WriteFile`/`MarshalIndent` errors silently ignored → added error logging
+
+- **CJK Table Alignment**
+  `fmt.Sprintf("%-30s")` padded by byte count, causing Chinese character misalignment in chart view → replaced with visual-width-aware `pad(inst.Label, 30)`.
+
+### 🏗️ Build & Release
+
+- **CGO Introduction & Constitutional Exception**
+  Project's first CGO dependency (DuckDB Go driver embeds C++ engine). `CONSTITUTION.md` Article 4 amended with an exception clause.
+
+- **UPX Maximum Compression**
+  - DuckDB full edition: 100 MB → 23 MB (-77%)
+  - Standard edition: 42 MB → 9.1 MB (-78%)
+  Full verification chain: `file`/`ldd`/`nm -D`/`upx -t` all passed.
+
+- **Build Tag Isolation**
+  DuckDB requires explicit `-tags duckdb` + `CGO_ENABLED=1`, excluded from the `full` tag set. Stub files provide friendly build hints.
+
+- **Full Verification**
+  `go build ./...` / `go vet ./...` / `go test ./...` + `bash build.sh prod/minimal` + `bash release.sh` all passing.
+
+### 📚 Documentation
+
+- **Added** `DUCKDB.md` (usage guide) and `DUCKDB_IMPL.md` (implementation boundaries & security model)
+- **README bilingual sync**: Source count 11 → 12, capability matrix gains DuckDB row, dev guide updated with `release.sh` and naming conventions
+- **Test docs**: New `16-duckdb.md` (20 E2E tests), `RESULTS.md` updated (128/128), test overview updated (16 data sources)
+- **SECURITY_CHECKLIST.md** adds DuckDB file path security check items
+- **Install scripts**: `install.sh`/`install.ps1` version v0.1.2 → v0.1.3, download URL uses `-std` suffix
+- **CHANGELOG bilingual sync**: This version fully recorded in both languages.
+
 ## v0.1.2 (2026-06-03) — CLI Enhancement + DSL Federated Query + Build System Optimization
 
 ### New Features

@@ -104,6 +104,8 @@ func wrapExplain(sql string, kind string) string {
 		return "EXPLAIN QUERY PLAN " + sql
 	case "clickhouse":
 		return "EXPLAIN PLAN " + sql
+	case "duckdb":
+		return "EXPLAIN " + sql
 	default:
 		return "EXPLAIN " + sql
 	}

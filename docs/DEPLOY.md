@@ -48,27 +48,42 @@ cd src && bash build.sh            # 默认 prod 模式：5 平台全驱动编�
 | test | `bash build.sh test` | 当前 GOOS/GOARCH (如 linux/amd64) + 全驱动 + -race |
 | minimal | `bash build.sh minimal mysql,postgres` | 当前 GOOS/GOARCH (如 linux/amd64) + 按需驱动 |
 
+发布构建使用 `release.sh`，一次产出两套二进制：
+
+| 版本 | 命令 | 后缀 | 说明 |
+|------|------|------|------|
+| **标准版**（默认） | `bash release.sh` (Phase 1) | `-std` | 5 平台交叉编译，CGO=0，tags=full，UPX |
+| **DuckDB 版** | `bash release.sh` (Phase 2) | `-duckdb` | 当前平台原生编译，CGO=1，tags=全驱动+duckdb |
+
+> 命名说明：标准版后缀 `-std` 表示纯 Go 全量（不含 DuckDB），DuckDB 版后缀 `-duckdb` 表示含 DuckDB 的全量驱动。文件名示例：`dbexplain-linux-amd64-std`、`dbexplain-linux-amd64-duckdb`。
+>
+> DuckDB 版因 CGO 限制不能交叉编译，每平台需各自原生构建。
+
 > **UPX**（Ultimate Packer for eXecutables）是构建时可执行文件压缩工具。`build.sh` 在 prod/minimal 模式自动调用 UPX 压缩产物。压缩后的二进制为独立自解压文件，**用户运行时不需要安装 UPX**，零额外依赖。本地未安装 UPX 时自动跳过压缩。`upx` 可从 https://github.com/upx/upx/releases 下载。
 >
 > 实测压缩效果（UPX lzma）：全驱动 42 MB → 9.5 MB（-78%），单平台 prod 产物仅 9.5 MB。
 
-驱动标签（minimal 模式使用）：`mysql` `postgres` `sqlite` `clickhouse` `redis` `mongodb` `elasticsearch` `qdrant` `csv` `xlsx`
+驱动标签（minimal 模式使用）：`mysql` `postgres` `sqlite` `clickhouse` `redis` `mongodb` `elasticsearch` `qdrant` `csv` `xlsx` `duckdb`
+
+> **DuckDB 特殊说明**：`duckdb` 标签 **不在 "full" 中**，需要显式指定。DuckDB 构建需要 CGO 和 C 工具链（gcc/clang/mingw），不能交叉编译。使用 `bash build.sh minimal duckdb,mysql,postgres` 时为当前平台原生构建。
 
 编译产物在 `release/` 目录，覆盖 5 个平台：
 
-| 平台 | 文件名 | 体积参考 |
-|------|--------|---------|
-| Linux amd64 | `release/dbexplain-linux-amd64` | 全驱动 ~42MB / 3驱动 ~11MB / 仅基础 ~4MB |
-| Linux arm64 | `release/dbexplain-linux-arm64` | 同上 |
-| macOS amd64 | `release/dbexplain-darwin-amd64` | 同上 |
-| macOS arm64 | `release/dbexplain-darwin-arm64` | 同上 |
-| Windows amd64 | `release/dbexplain-windows-amd64.exe` | 同上 |
+| 平台 | 标准版（纯 Go 全量） | DuckDB 版 |
+|------|---------------------|-----------|
+| Linux amd64 | `release/dbexplain-linux-amd64-std` | `release/dbexplain-linux-amd64-duckdb` |
+| Linux arm64 | `release/dbexplain-linux-arm64-std` | （需 arm64 机器原生编译） |
+| macOS amd64 | `release/dbexplain-darwin-amd64-std` | （需 macOS 机器原生编译） |
+| macOS arm64 | `release/dbexplain-darwin-arm64-std` | （需 macOS 机器原生编译） |
+| Windows amd64 | `release/dbexplain-windows-amd64-std.exe` | （需 Windows 机器原生编译） |
+
+体积参考（UPX 压缩后）：标准版 ~9MB / 3驱动 ~4MB，DuckDB 版 ~25MB（含全部驱动）。
 
 ### 快速验证
 
 ```bash
 echo "CREATE TABLE t(id int);" | sqlite3 /tmp/test.db
-./release/dbexplain-linux-amd64 -dsn "sqlite:////tmp/test.db"
+./release/dbexplain-linux-amd64-std -dsn "sqlite:////tmp/test.db"
 ```
 
 ---
@@ -93,13 +108,13 @@ bash dbexplain-skill/scripts/install.sh --lang en  # English Skill
 
 ```bash
 # 在有网络的机器上下载
-wget https://github.com/IamWWT/dbexplain/releases/download/v0.1.2/dbexplain-linux-amd64
+wget https://github.com/IamWWT/dbexplain/releases/download/v0.1.3/dbexplain-linux-amd64-std
 
 # 复制到离线环境后安装
-bash dbexplain-skill/scripts/install.sh --offline ./dbexplain-linux-amd64
+bash dbexplain-skill/scripts/install.sh --offline ./dbexplain-linux-amd64-std
 
 # 仅安装工具，不部署 Skill
-bash dbexplain-skill/scripts/install.sh --offline ./dbexplain-linux-amd64 --no-skill
+bash dbexplain-skill/scripts/install.sh --offline ./dbexplain-linux-amd64-std --no-skill
 ```
 
 ### Windows 安装
@@ -113,7 +128,7 @@ cd dbexplain
 .\dbexplain-skill\scripts\install.ps1 -Lang en  # English Skill
 ```
 
-脚本自动下载 `dbexplain-windows-amd64.exe` 到 `%LOCALAPPDATA%\dbexplain\`，添加到用户 PATH。
+脚本自动下载 `dbexplain-windows-amd64-std.exe` 到 `%LOCALAPPDATA%\dbexplain\`，添加到用户 PATH。
 
 ---
 

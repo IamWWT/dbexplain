@@ -4,7 +4,7 @@
 
 > **Database Context Compiler** — Deterministic ground truth for AI agents and engineering teams.
 
-`dbexplain` is a **single-binary, zero-runtime-dependency** CLI tool that compiles database metadata and executes read-only queries across **11 heterogeneous data sources** — all under a unified, auditable security sandbox.
+`dbexplain` is a **single-binary, zero-runtime-dependency** CLI tool that compiles database metadata and executes read-only queries across **12 heterogeneous data sources** (including optional DuckDB) — all under a unified, auditable security sandbox.
 
 Core philosophy: **deterministic facts only — LLMs consume structured IR externally.**
 
@@ -39,6 +39,7 @@ All inferred relationships (e.g., naming-pattern FK matches) are tagged with `in
 | GaussDB | `gaussdb://` | ✅ | ✅ | ✅ | ✅ | — | PostgreSQL-protocol compatible |
 | ClickHouse | `clickhouse://` | ✅ | ✅ | ✅ | ✅ | — | Sort / partition / primary keys |
 | SQLite | `sqlite://` | ✅ | ✅ | ✅ | ✅ | — | Pure Go driver, no CGO |
+| DuckDB | `duckdb://` | ✅ | ✅ | ✅ | ✅ | — | Embedded SQL engine, Parquet/CSV file analysis, optional `-tags duckdb` build |
 | Redis | `redis://` | ✅ | — | ✅ | — | — | Key pattern inference, cluster, TTL |
 | MongoDB | `mongodb://` | ✅ | — | ✅ | — | — | Estimated document counts |
 | Elasticsearch | `elasticsearch://` | ✅ | ⚠️ SQL via `_sql` | — | — | — | Index mapping, HTTPS |
@@ -147,7 +148,7 @@ EOF
 | Schema collection | `dbexplain -env / -dsn <url> / -json / -human / -o <file>` |
 | | `dbexplain collect -env --human` (explicit subcommand, v0.1.2+) |
 | Query execution | `dbexplain execute -env --db <N> / --label <name> / --dsl / --human` |
-| Interactive REPL | `dbexplain repl --dsn <url>` or `dbexplain repl -env` (v0.1.2+, all 11 sources, no DSL mode) |
+| Interactive REPL | `dbexplain repl --dsn <url>` or `dbexplain repl -env` (v0.1.3+, all 12 sources, no DSL mode) |
 | File query | `dbexplain execute -dsn "csv://file.csv" "SELECT ..."` |
 | Schema diff | `dbexplain diff --cache <file> --since <ver>` |
 | List DSNs | `dbexplain list -env` |
@@ -164,9 +165,12 @@ go vet ./...                                # Static analysis
 go test ./... -count=1                      # Unit tests
 bash build.sh                               # Release: 5 platforms + full + UPX
 bash build.sh dev                           # Dev: current platform + all drivers
+bash release.sh                             # Full release: standard(-std) + DuckDB(-duckdb)
 bash build.sh minimal mysql,postgres        # Minimal: selective drivers
 bash build.sh --help                        # View all options
 ```
+
+> **Naming convention**: Standard edition (pure Go, no DuckDB) uses `-std` suffix e.g. `dbexplain-linux-amd64-std`; DuckDB edition (all drivers + DuckDB) uses `-duckdb` suffix e.g. `dbexplain-linux-amd64-duckdb`. See [`DEPLOY.md`](docs/DEPLOY.md) for details.
 
 ---
 

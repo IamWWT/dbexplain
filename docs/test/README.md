@@ -83,13 +83,14 @@ cd src && $BIN diff --cache /tmp/e2e.cache --list-versions
 | L6 | 查询执行 | SQL + NoSQL + 文件 execute | [03-execute-sql.md](03-execute-sql.md)、[04-execute-nosql.md](04-execute-nosql.md)、[05-file-processing.md](05-file-processing.md) |
 | L7 | 文档验证 | 版本一致性、文档引用正确性 | [10-regression.md](10-regression.md) |
 | L8 | 能力架构 | CapSQL 路由、PostgreSQL 多 Schema、策略引擎增强、JSON 包装格式 | [12-capability-routing.md](12-capability-routing.md) |
+| L8 | DuckDB 连接器 | DuckDB 采集/查询/安全/DSL/构建隔离 | [16-duckdb.md](16-duckdb.md) |
 
 ## 测试概览
 
 | 维度 | 数据 |
 |------|------|
-| 数据源 | 15 (mysql/clickhouse/sqlite/qdrant/es/postgres/redis×2/mongo/sqlite/xlsx×2/csv/tsv/csv) |
-| 二进制架构 | 单二进制，含全部数据库类型 + xlsx 支持 |
+| 数据源 | 16 (mysql/clickhouse/sqlite/qdrant/es/postgres/redis×2/mongo/xlsx×2/csv/tsv/duckdb) |
+| 二进制架构 | 双版本: 标准版(-std 纯 Go) + DuckDB版(-duckdb CGO=1) |
 | Go 版本 | 1.26 |
 | 测试环境 | Linux x86-64 (amd64) |
 
@@ -157,7 +158,7 @@ dbexplain execute -dsn 'csv:///tmp/test.csv?label=test' "SELECT *"
 
 ## 最新测试结果
 
-完整测试结果报告见 [RESULTS.md](RESULTS.md)。v0.1.2 测试结果: **全部单元测试通过**，含 DSL 35 测试、Schema Diff 24 测试、窗口函数 33 测试。
+完整测试结果报告见 [RESULTS.md](RESULTS.md)。v0.1.3 测试结果: **全部单元测试通过**，含 DuckDB 连接器 20 测试、DSL 35 测试、Schema Diff 24 测试、窗口函数 33 测试。
 
 ## 快速导航
 

@@ -1,5 +1,5 @@
 # ============================================================
-# dbexplain v0.1.2 — One-click installer (Windows PowerShell)
+# dbexplain v0.1.3 — One-click installer (Windows PowerShell)
 # ============================================================
 # Installs the dbexplain binary and optionally deploys
 # the AI Agent skill.
@@ -10,6 +10,7 @@
 #   .\install.ps1 -NoSkill          Skip skill installation
 #   .\install.ps1 -Update           Overwrite existing installation
 #   .\install.ps1 -Lang en           Install with English skill
+#   .\install.ps1 -Edition duckdb   Install DuckDB edition
 #   .\install.ps1 -Help             Show this help
 # ============================================================
 
@@ -19,13 +20,16 @@ param(
     [switch]$Update,
     [ValidateSet("zh", "en")]
     [string]$Lang = "",
+    [ValidateSet("std", "duckdb")]
+    [string]$Edition = "",
     [switch]$Help
 )
 
-$VERSION = "v0.1.2"
+$VERSION = "v0.1.3"
 $REPO = "IamWWT/dbexplain"
 $TOOL_NAME = "dbexplain"
-$BINARY_DOWNLOAD = "dbexplain-windows-amd64.exe"
+$EditionSuffix = if ($Edition) { $Edition } else { "" }  # resolved below
+$BINARY_DOWNLOAD = "dbexplain-windows-amd64-std.exe"
 $BINARY_DEST = "dbexplain.exe"
 
 $InstallDir = "$env:LOCALAPPDATA\dbexplain"
@@ -54,12 +58,14 @@ Options:
   -Update     Update mode: overwrite existing binary and skill files
               without touching config.
   -Lang zh|en Skill language: zh=中文 (default), en=English.
+  -Edition std|duckdb  Edition: std (pure Go, default) or duckdb (requires CGO).
   -Help       Show this help message and exit.
 
 Examples:
   .\install.ps1                  # Full interactive install
   .\install.ps1 -Lang en          # Full install with English skill
   .\install.ps1 -NoSkill          # Tool only, no skill
+  .\install.ps1 -Edition duckdb   # Install DuckDB edition
   .\install.ps1 -Offline          # Offline: you provide the binary
   .\install.ps1 -Update           # Update to latest version
 
@@ -93,6 +99,25 @@ if (-not $is64) {
     exit 1
 }
 Write-Info "Detected platform: windows/amd64"
+
+# ── Edition selection ──
+if ($Edition -eq "") {
+    Write-Host ""
+    Write-Step "Select edition:"
+    Write-Host "  1) Standard edition (-std) — pure Go, no DuckDB, zero runtime deps"
+    Write-Host "  2) DuckDB edition (-duckdb) — includes DuckDB, requires CGO build"
+    Write-Host ""
+    $choice = Read-Host "  Choose [1/2] (default: 1)"
+    if ($choice -eq "2" -or $choice -eq "duckdb") {
+        $EditionSuffix = "duckdb"
+    } else {
+        $EditionSuffix = "std"
+    }
+} else {
+    $EditionSuffix = $Edition
+}
+$BINARY_DOWNLOAD = "dbexplain-windows-amd64-$EditionSuffix.exe"
+Write-Info "Selected edition: $EditionSuffix"
 
 # ── Resolve install directory ──
 $DestBin = Join-Path $InstallDir $BINARY_DEST

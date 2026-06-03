@@ -27,6 +27,9 @@ func GetConnector(kind string) (Connector, error) {
     constructor, ok := registry[kind]
     if !ok {
         registryMu.Unlock()
+        if kind == "duckdb" {
+            return nil, fmt.Errorf("duckdb connector not available in this build; rebuild from source with -tags duckdb (requires CGO)")
+        }
         return nil, fmt.Errorf("no connector for %q", kind)
     }
     c := constructor()

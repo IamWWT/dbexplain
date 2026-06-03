@@ -57,7 +57,8 @@ func main() {
 		case "mysql", "postgres", "postgresql", "pg", "gaussdb",
 			"clickhouse", "ch", "sqlite", "sqlite3",
 			"redis", "mongodb", "elasticsearch", "es", "qdrant",
-			"csv", "tsv", "xlsx":
+			"csv", "tsv", "xlsx",
+			"duckdb":
 			manual.PrintDBManual(os.Args[1], os.Args[2:])
 			return
 		case "all":
@@ -214,6 +215,11 @@ func main() {
 		go func() {
 			defer wg.Done()
 			defer func() { <-sem }() // release
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("PANIC: collect %s: %v", rawDSN, r)
+				}
+			}()
 			parsed, err := dsn.ParseDSN(rawDSN)
 			if err != nil {
 				log.Printf("invalid DSN: %v", config.SanitizeErr(err))
@@ -287,11 +293,16 @@ func main() {
 		}
 		delta := store.Diff(universe)
 		if len(delta.Added)+len(delta.Removed)+len(delta.Changed) > 0 {
-			data, _ := json.MarshalIndent(delta, "", "  ")
+			data, err := json.MarshalIndent(delta, "", "  ")
+			if err != nil {
+				log.Printf("[delta] marshal: %v", err)
+			}
 			fmt.Fprintf(os.Stderr, "[delta] %d added, %d removed, %d changed\n",
 				len(delta.Added), len(delta.Removed), len(delta.Changed))
 			deltaFile := strings.TrimSuffix(*cacheFile, ".json") + "_delta.json"
-			os.WriteFile(deltaFile, data, 0644)
+			if err := os.WriteFile(deltaFile, data, 0644); err != nil {
+				log.Printf("[delta] write %s: %v", deltaFile, err)
+			}
 
 			// Output field-level detailed diff
 			detail := store.DiffDetailed(universe)
@@ -591,6 +602,11 @@ func handleCollect(args []string) {
 		go func() {
 			defer wg.Done()
 			defer func() { <-sem }()
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("PANIC: collect %s: %v", rawDSN, r)
+				}
+			}()
 			parsed, err := dsn.ParseDSN(rawDSN)
 			if err != nil {
 				log.Printf("invalid DSN: %v", config.SanitizeErr(err))
@@ -662,17 +678,27 @@ func handleCollect(args []string) {
 		}
 		delta := store.Diff(universe)
 		if len(delta.Added)+len(delta.Removed)+len(delta.Changed) > 0 {
-			data, _ := json.MarshalIndent(delta, "", "  ")
+			data, err := json.MarshalIndent(delta, "", "  ")
+			if err != nil {
+				log.Printf("[delta] marshal: %v", err)
+			}
 			fmt.Fprintf(os.Stderr, "[delta] %d added, %d removed, %d changed\n",
 				len(delta.Added), len(delta.Removed), len(delta.Changed))
 			deltaFile := strings.TrimSuffix(*cacheFile, ".json") + "_delta.json"
-			os.WriteFile(deltaFile, data, 0644)
+			if err := os.WriteFile(deltaFile, data, 0644); err != nil {
+				log.Printf("[delta] write %s: %v", deltaFile, err)
+			}
 
 			detail := store.DiffDetailed(universe)
 			if len(detail.Tables) > 0 {
-				detailData, _ := json.MarshalIndent(detail, "", "  ")
+				detailData, err := json.MarshalIndent(detail, "", "  ")
+				if err != nil {
+					log.Printf("[diff] marshal: %v", err)
+				}
 				diffFile := strings.TrimSuffix(*cacheFile, ".json") + "_diff.json"
-				os.WriteFile(diffFile, detailData, 0644)
+				if err := os.WriteFile(diffFile, detailData, 0644); err != nil {
+					log.Printf("[diff] write %s: %v", diffFile, err)
+				}
 				fmt.Fprintf(os.Stderr, "[diff] %d tables with field-level changes → %s\n",
 					len(detail.Tables), diffFile)
 			}
