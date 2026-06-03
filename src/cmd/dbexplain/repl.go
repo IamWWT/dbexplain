@@ -227,7 +227,7 @@ func printREPLHelp() {
 	fmt.Print(`
 dbexplain REPL — Interactive query mode
 ========================================
-Supported: All 11 data sources (SQL / NoSQL / Files)
+Supported: All 12 data sources (SQL / NoSQL / Files), DuckDB requires -tags duckdb build
 Not supported: DSL mode (@label.table), federated cross-source queries,
                 Elasticsearch native JSON queries
 
