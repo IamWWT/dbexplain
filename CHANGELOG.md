@@ -39,6 +39,11 @@
 - **`docs/test/RESULTS.md` 整理**: 合并 v0.1.0/v0.1.1/重复 v0.1.2 三个冗余章节为单一 v0.1.2 报告，新增"本次闭环验证修复"清单
 - **`docs/REPL.md` 更新**: 移除 ClickHouse 分号限制（已修复），ES 限制补充详细绕过方案 (SQL via `_sql`/collect)
 - **`docs/test/09-cli-help.md` 扩展**: 新增 ClickHouse 分号和 ES JSON 测试用例
+- **REPL .list/.databases 命令** (ISSUE-074): 新增 REPL 内 `list`/`.databases` 命令，显示所有已配置数据源的序号、label、kind 及当前连接标记
+- **CONSTITUTION.md 审查更新**: 核心交付物修正（去除未实现的 IR Product 概念）；Principle 3 区分 Collect/Query 阶段并更新 MongoDB 描述；构建与发布章节精简为 DEPLOY.md 引用
+- **SECURITY_CHECKLIST.md 增强**: 新增 §5a 提交前快速检查（5 项，~30 秒）；§6 新增 5 项发布前检查（脚本版本一致性、测试文档版本预期、Markdown 链接有效性、全平台版本一致性、dev 二进制 -tags full 验证）；§6 新增"历史上的坑"表格
+- **全量文档陈旧引用修复**: 10 个测试文档 CONFIG_SEARCH.md 路径修复（`../docs/`→`../`）、DEPLOY.md/file_index.md 断裂链接修复、脚本版本号一致性等 20+ 处修复
+- **脚本版本号同步**: install.sh/uninstall.sh/install.ps1/uninstall.ps1 注释和 `$VERSION` 统一更新为 v0.1.2（此前残留 v0.1.0）
 
 ## v0.1.1 (结构整理 + 统一 DSL 查询入口)
 

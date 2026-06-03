@@ -39,6 +39,11 @@
 - **`docs/test/RESULTS.md` consolidation**: Merged 3 redundant sections (v0.1.0/v0.1.1/duplicate v0.1.2) into a single v0.1.2 report, added "Closed-Loop Verification Fixes" section
 - **`docs/REPL.md` updated**: Removed ClickHouse semicolon limitation (fixed); ES limitation expanded with detailed workarounds (SQL via `_sql`/collect)
 - **`docs/test/09-cli-help.md` expanded**: Added ClickHouse semicolon and ES JSON test cases
+- **REPL `.list`/`.databases` command** (ISSUE-074): New REPL dot commands to list all configured data sources with index, label, kind, and current connection marker
+- **CONSTITUTION.md review and update**: Core deliverables corrected (removed unimplemented IR Product concept); Principle 3 split into Collect/Query phases with updated MongoDB descriptions; Build & Release section streamlined to DEPLOY.md reference
+- **SECURITY_CHECKLIST.md enhanced**: New §5a pre-commit quick check (5 items, ~30s); §6 added 5 new pre-release checks (script version consistency, test doc version expectations, Markdown link validity, cross-platform version consistency, dev binary `-tags full` verification); §6 new "Historical Pitfalls" table
+- **Full stale reference cleanup**: Fixed `../docs/CONFIG_SEARCH.md` → `../CONFIG_SEARCH.md` in 10 test docs; fixed broken links in DEPLOY.md and file_index.md; 20+ stale references corrected project-wide
+- **Script version sync**: install.sh/uninstall.sh/install.ps1/uninstall.ps1 headers and `$VERSION` uniformly updated to v0.1.2 (previously lingering v0.1.0)
 
 ## v0.1.1 (2026-06-02) — Internal Restructuring + Unified DSL Query Entry
 
