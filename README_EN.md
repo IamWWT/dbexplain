@@ -52,6 +52,12 @@ All inferred relationships (e.g., naming-pattern FK matches) are tagged with `in
 
 ---
 
+## Architecture Diagram
+
+![dbexplain Architecture](docs/assets/DBEXPLAIN-ARCH.png)
+
+---
+
 ## Core Capabilities
 
 ### Schema Collection
@@ -148,7 +154,7 @@ EOF
 | Schema collection | `dbexplain -env / -dsn <url> / -json / -human / -o <file>` |
 | | `dbexplain collect -env --human` (explicit subcommand, v0.1.2+) |
 | Query execution | `dbexplain execute -env --db <N> / --label <name> / --dsl / --human` |
-| Interactive REPL | `dbexplain repl --dsn <url>` or `dbexplain repl -env` (v0.1.3+, all 12 sources, no DSL mode) |
+| Interactive REPL | `dbexplain repl --dsn <url>` or `dbexplain repl -env` (v0.1.3+, support DSL single-source & federated cross-source JOIN) |
 | File query | `dbexplain execute -dsn "csv://file.csv" "SELECT ..."` |
 | Schema diff | `dbexplain diff --cache <file> --since <ver>` |
 | List DSNs | `dbexplain list -env` |

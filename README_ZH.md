@@ -52,6 +52,12 @@
 
 ---
 
+## 系统架构图
+
+![dbexplain Architecture](docs/assets/DBEXPLAIN-ARCH.png)
+
+---
+
 ## 核心能力
 
 ### Schema 采集
@@ -148,7 +154,7 @@ EOF
 | Schema 采集 | `dbexplain -env / -dsn <url> / -json / -human / -o <file>` |
 | | `dbexplain collect -env --human`（显式子命令，v0.1.2+） |
 | 查询执行 | `dbexplain execute -env --db <N> / --label <name> / --dsl / --human` |
-| 交互式查询 | `dbexplain repl --dsn <url>` 或 `dbexplain repl -env`（v0.1.2+，支持 12 种数据源，不支持 DSL 模式） |
+| 交互式查询 | `dbexplain repl --dsn <url>` 或 `dbexplain repl -env`（v0.1.3+，支持 DSL 单源/联邦跨源 JOIN） |
 | 文件查询 | `dbexplain execute -dsn "csv://file.csv" "SELECT ..."` |
 | Schema 对比 | `dbexplain diff --cache <file> --since <ver>` |
 | 查看 DSN | `dbexplain list -env` |
