@@ -13,7 +13,7 @@
 |------|---------|------|----------|------|
 | L1 | [01-environment.md](01-environment.md) | **PASS** | 7/7 | go build/vet/test, 交叉编译, Shell语法, 构建模式分析 |
 | L3 | [02-schema-collection.md](02-schema-collection.md) | **PASS** | 6/6 | 15/15 DSN采集成功, JSON结构, 类型/label过滤 |
-| L3 | [09-cli-help.md](09-cli-help.md) | **PASS** | 30/30 | 版本号/帮助/子命令 + collect/repl 扩展 + REPL 安全切换/拒绝/边界完整覆盖 |
+| L3 | [09-cli-help.md](09-cli-help.md) | **PASS** | 32/32 | 版本号/帮助/子命令 + collect/repl 扩展 + REPL 安全切换/拒绝/边界 + DSL 单源/联邦 |
 | L4 | [11-end-to-end.md](11-end-to-end.md) | **PASS** | 3/3 | 全量采集+JSON, 15 DSN逐类型执行 |
 | L5 | [06-security-sqlguard.md](06-security-sqlguard.md) | **PASS** | 6/6 | 读放行/写拒绝/多语句/AutoLimit/EXPLAIN |
 | L5 | [07-policy-engine.md](07-policy-engine.md) | **PASS** | 10/10 | DENY_TABLES/COLUMNS/STATEMENTS/MASK_COLUMNS |
@@ -28,7 +28,7 @@
 | L8 | [12-capability-routing.md](12-capability-routing.md) | **PASS** | 7/7 | CapSQL路由/JSON包装/多Schema/CTE |
 | L8 | [16-duckdb.md](16-duckdb.md) | **PASS** | 20/20 | DuckDB 内存/文件/DSL/安全/构建隔离 |
 
-**总计: 128/128 测试项通过 (100%)**
+**总计: 130/130 测试项通过 (100%)**
 
 ---
 
@@ -61,6 +61,9 @@
 | CLI 帮助区分 duckdb | ✅ | std 版显示 build 提示，duckdb 版显示正常 |
 | release.sh 双版发布 | ✅ | 5 平台 -std + 当前平台 -duckdb |
 | 安装脚本 -std 后缀 | ✅ | install.sh/install.ps1 下载 URL 使用 `-std` 后缀 |
+| REPL DSL 单源查询 | ✅ | `SELECT * FROM @ops-data-csv.ops_data` CSV 采集/聚合/过滤 全部通过 |
+| REPL DSL 联邦跨源 JOIN | ✅ | 混合源(SQL+File)跨源 JOIN 材料化合并 |
+| REPL DSL 非 DSL 查询兼容 | ✅ | 不含 `@` 的查询走原 `execQuery` 路径，行为不变 |
 
 ---
 
@@ -233,8 +236,8 @@
 
 | 问题 | 影响 | 说明 |
 |------|------|------|
-| REPL 不支持 DSL/联邦查询 | 低 | DSL `@label.table` 语法仅在 `execute -env --dsl` 模式可用 |
 | Elasticsearch 原生 JSON 不支持 REPL | 低 | ES 驱动注册为 CapSQL, JSON 查询在 sqlguard 中无法解析; 使用 `execute -env --label` 或 SQL 语法绕过 |
+| DSL 同源类型联邦受限 | 低 | 仅同类型数据源(CSV+TSV)的 DSL JOIN 暂不支持, 需走混合源(文件+SQL)联邦路径; 与 CLI `execute --dsl` 行为一致 |
 | MySQL 单连接模式 | 低 | `SET max_execution_time` 后 `SetMaxOpenConns(1)` |
 | TSV kind 为 csv | 低 | csv.go 硬编码 Kind: "csv" |
 | Redis _server_info 无 columns | 低 | Redis INFO 返回 key-value 元数据 |
@@ -286,8 +289,18 @@ echo -e ".conn aiops-clickhouse\nSHOW TABLES;\n.exit" | ./release/dbexplain repl
 
 # ES JSON 健壮提示验证
 echo -e ".conn aiops-es\n{\"query\":{\"match_all\":{}}}\n.exit" | ./release/dbexplain repl -env
+
+# REPL DSL 单源验证（文件源）
+echo -e "SELECT COUNT(*) AS cnt FROM @ops-data-csv.ops_data\n.exit" | ./release/dbexplain repl -env
+
+# REPL DSL 联邦验证（混合源 SQL+文件）
+# 需数据库可达环境, 本地使用 CSV+SQL 混合验证
+echo -e "SELECT * FROM @ops-data-csv.ops_data LIMIT 1\n.exit" | ./release/dbexplain repl -env
+
+# REPL 非 DSL 查询兼容性验证
+echo -e "SELECT COUNT(*) AS cnt FROM ops_data\n.exit" | ./release/dbexplain repl --dsn "csv:///test.csv?label=test"
 ```
 
 ---
 
-*测试基准: v0.1.0 (91/91) → v0.1.1 (91/91) → v0.1.2 (108/108) → v0.1.3 (128/128). 历史版本报告已归档.*
+*测试基准: v0.1.0 (91/91) → v0.1.1 (91/91) → v0.1.2 (108/108) → v0.1.3 (130/130). 历史版本报告已归档.*
