@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -10,8 +11,10 @@ import (
 
 	"github.com/IamWWT/dbexplain/internal/capabilities"
 	"github.com/IamWWT/dbexplain/internal/connector"
+	"github.com/IamWWT/dbexplain/internal/connector/filequery"
 	"github.com/IamWWT/dbexplain/internal/dsn"
 	"github.com/IamWWT/dbexplain/internal/config"
+	"github.com/IamWWT/dbexplain/internal/dsl"
 	"github.com/IamWWT/dbexplain/internal/executor"
 	"github.com/IamWWT/dbexplain/internal/query"
 	"github.com/IamWWT/dbexplain/internal/queryutil"
@@ -159,9 +162,14 @@ func handleREPL(args []string) {
 			continue
 		}
 
-		// Execute query
+		// Execute query — DSL or single-source
 		start := time.Now()
-		err := execQuery(currentEntry.Raw, line, *limit, *timeout, allEntries)
+		var err error
+		if strings.Contains(line, "@") {
+			err = replExecDSL(line, allEntries, *limit, *timeout)
+		} else {
+			err = execQuery(currentEntry.Raw, line, *limit, *timeout, allEntries)
+		}
 		elapsed := time.Since(start)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
@@ -223,13 +231,217 @@ func execQuery(dsnRaw string, sql string, limit int, timeout int, allEntries []c
 	return nil
 }
 
+// ── DSL support (REPL-safe versions, return error instead of os.Exit) ──
+
+// replExecDSL parses and executes a DSL query with @label.table references.
+// Handles single-source (SQL/file) and federated (cross-source) execution.
+func replExecDSL(line string, allEntries []config.DSNEntry, limit int, timeoutSec int) error {
+	dslQuery, err := dsl.Parse(line)
+	if err != nil {
+		return err
+	}
+	if !dslQuery.HasSourceRefs() {
+		return fmt.Errorf("no @ references found in query")
+	}
+
+	bound, err := dsl.Bind(dslQuery, allEntries)
+	if err != nil {
+		return err
+	}
+
+	kinds := bound.SourceKinds()
+	if len(kinds) == 0 {
+		return fmt.Errorf("DSL error: no source references resolved")
+	}
+
+	// Federated: multiple source kinds → materialize all + filequery merge
+	if len(kinds) > 1 {
+		return replExecFederated(dslQuery, bound, allEntries, limit, timeoutSec)
+	}
+
+	// Single source
+	switch kinds[0] {
+	case dsl.SourceSQL:
+		return replExecSQL(dslQuery, bound, limit, timeoutSec, allEntries)
+	case dsl.SourceFile:
+		return replExecFile(dslQuery, bound, limit, allEntries)
+	default:
+		return fmt.Errorf("DSL error: %s data sources not supported in DSL mode", kindName(kinds[0]))
+	}
+}
+
+// replExecSQL executes a DSL query against a single SQL data source.
+func replExecSQL(dslQuery *dsl.DSLQuery, bound *dsl.BoundQuery, limit int, timeoutSec int, allEntries []config.DSNEntry) error {
+	compiledSQL, err := dsl.CompileToSQL(dslQuery, bound)
+	if err != nil {
+		return err
+	}
+
+	primary := bound.PrimarySource()
+	if primary == nil {
+		return fmt.Errorf("DSL error: no resolved source")
+	}
+	parsed := primary.DSN
+
+	c, err := connector.GetConnector(parsed.Kind)
+	if err != nil {
+		return err
+	}
+
+	policies := policy.Load(envKeyForLabel(primary.DSN.Label, allEntries))
+
+	result, execErr := executor.ExecQuery(&executor.ExecOptions{
+		Conn: c, Parsed: parsed, SQL: compiledSQL,
+		Limit: limit, Explain: false, TimeoutSec: timeoutSec,
+		Policies: policies, Lock: query.NewQueryLock(), IsSQL: true,
+	})
+	if execErr != nil {
+		return execErr
+	}
+
+	fmt.Print(render.FormatHuman(result))
+	return nil
+}
+
+// replExecFile executes a DSL query against a single file data source.
+func replExecFile(dslQuery *dsl.DSLQuery, bound *dsl.BoundQuery, limit int, allEntries []config.DSNEntry) error {
+	primary := bound.PrimarySource()
+	if primary == nil {
+		return fmt.Errorf("DSL error: no resolved source")
+	}
+	parsed := primary.DSN
+	policies := policy.Load(envKeyForLabel(parsed.Label, allEntries))
+	queryutil.HandleFileExecute(parsed, dslQuery.SQL, true, limit, policies, allEntries)
+	return nil
+}
+
+// replExecFederated executes a DSL query referencing multiple source kinds
+// by materializing all data in memory and merging via the file query engine.
+func replExecFederated(dslQuery *dsl.DSLQuery, bound *dsl.BoundQuery, allEntries []config.DSNEntry, limit int, timeoutSec int) error {
+	type materialized struct {
+		alias  string
+		header []string
+		rows   [][]string
+	}
+	var allData []materialized
+
+	for _, bs := range bound.Sources {
+		switch bs.Kind {
+		case dsl.SourceSQL:
+			selectSQL := fmt.Sprintf("SELECT * FROM %s", bs.Ref.Table)
+			c, err := connector.GetConnector(bs.DSN.Kind)
+			if err != nil {
+				return fmt.Errorf("connector error for @%s.%s: %v", bs.Ref.Label, bs.Ref.Table, err)
+			}
+			policies := policy.Load(envKeyForLabel(bs.DSN.Label, allEntries))
+			result, execErr := executor.ExecQuery(&executor.ExecOptions{
+				Conn: c, Parsed: bs.DSN, SQL: selectSQL,
+				Limit: limit, Explain: false, TimeoutSec: timeoutSec,
+				Policies: policies, Lock: query.NewQueryLock(), IsSQL: true,
+			})
+			if execErr != nil {
+				return fmt.Errorf("query error for @%s.%s: %v", bs.Ref.Label, bs.Ref.Table, execErr)
+			}
+
+			rows := make([][]string, len(result.Rows))
+			for i, r := range result.Rows {
+				srow := make([]string, len(r))
+				for j, cell := range r {
+					if cell != nil {
+						srow[j] = *cell
+					}
+				}
+				rows[i] = srow
+			}
+			header := make([]string, len(result.Columns))
+			for i, col := range result.Columns {
+				header[i] = col.Name
+			}
+			allData = append(allData, materialized{
+				alias:  bs.Ref.Placeholder,
+				header: header,
+				rows:   rows,
+			})
+
+		case dsl.SourceFile:
+			c, err := connector.GetConnector(bs.DSN.Kind)
+			if err != nil {
+				return fmt.Errorf("connector error for @%s.%s: %v", bs.Ref.Label, bs.Ref.Table, err)
+			}
+			q, ok := c.(query.Queryable)
+			if !ok {
+				return fmt.Errorf("QUERY_NOT_SUPPORTED: %s", bs.DSN.Kind)
+			}
+			ctx := context.Background()
+			fileOpts := query.ExecuteOpts{
+				DSN: bs.DSN, SQL: "SELECT *",
+				MaxRows: limit, Timeout: timeoutSec,
+			}
+			result, err := q.ExecQuery(ctx, fileOpts)
+			if err != nil {
+				return fmt.Errorf("file query error for @%s.%s: %v", bs.Ref.Label, bs.Ref.Table, err)
+			}
+
+			rows := make([][]string, len(result.Rows))
+			for i, r := range result.Rows {
+				srow := make([]string, len(r))
+				for j, cell := range r {
+					if cell != nil {
+						srow[j] = *cell
+					}
+				}
+				rows[i] = srow
+			}
+			header := make([]string, len(result.Columns))
+			for i, col := range result.Columns {
+				header[i] = col.Name
+			}
+			allData = append(allData, materialized{
+				alias:  bs.Ref.Placeholder,
+				header: header,
+				rows:   rows,
+			})
+
+		case dsl.SourceNative:
+			return fmt.Errorf("DSL error: native sources not supported in federated queries: @%s.%s", bs.Ref.Label, bs.Ref.Table)
+		}
+	}
+
+	if len(allData) == 0 {
+		return fmt.Errorf("DSL error: no materialized data")
+	}
+
+	// Build filequery-compatible SQL by replacing placeholders with table names
+	fileSQL := dslQuery.SQL
+	for _, bs := range bound.Sources {
+		fileSQL = strings.ReplaceAll(fileSQL, bs.Ref.Placeholder, bs.Ref.Table)
+	}
+
+	// Primary source as main table, rest as extras
+	primary := allData[0]
+	var extras []filequery.NamedData
+	for _, d := range allData[1:] {
+		extras = append(extras, filequery.NamedData{
+			Alias: d.alias, Header: d.header, Rows: d.rows,
+		})
+	}
+
+	result, execErr := filequery.Execute(fileSQL, primary.header, primary.rows, extras, limit)
+	if execErr != nil {
+		return fmt.Errorf("QUERY_ERROR: %v", execErr)
+	}
+
+	fmt.Print(render.FormatHuman(result))
+	return nil
+}
+
 func printREPLHelp() {
 	fmt.Print(`
 dbexplain REPL — Interactive query mode
 ========================================
 Supported: All 12 data sources (SQL / NoSQL / Files), DuckDB requires -tags duckdb build
-Not supported: DSL mode (@label.table), federated cross-source queries,
-                Elasticsearch native JSON queries
+DSL syntax: @label.table references supported (single-source & federated cross-source JOIN)
+Not supported: Elasticsearch native JSON queries
 
 Commands:
   .conn <label>   Switch to another data source by label (load with -env)
@@ -239,6 +451,11 @@ Commands:
   .help           Show this help
   .exit / .quit   Exit REPL
   Ctrl+D          Exit REPL
+
+DSL Examples:
+  @mydb.users u JOIN @analytics.orders o ON u.id = o.user_id
+  SELECT * FROM @csv.report WHERE region = 'APAC'
+  @pg.employees e LEFT JOIN @mysql.dept d ON e.dept_id = d.id
 
 Examples:
   dbexplain repl --dsn "sqlite:////tmp/test.db"
