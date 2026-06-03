@@ -51,7 +51,7 @@ LLM 在外部消费 IR 做推理
 
 ## 3. 目标架构
 
-### 当前目录结构（v0.1.1，实际代码）
+### 当前目录结构（v0.1.2，实际代码）
 
 ```
 src/
@@ -458,7 +458,7 @@ Password Mode:
 3. **AI 关系猜测** — 不做 LLM-based relation inference
 4. **Embedding-first** — 先做 deterministic graph，不做向量化优先级
 
-### 已知限制（v0.1.0）
+### 已知限制（当前实现）
 
 这些是当前实现层面的已知限制，不改变核心定位：
 

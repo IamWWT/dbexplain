@@ -1,6 +1,6 @@
 # dbexplain CLI 查询案例库
 
-> 所有查询均已在本环境（v0.1.1, 15 数据源）跑通验证。`--human` 用于可读表格输出，不加则为 JSON（供 AI Agent 消费）。
+> 所有查询均已在本环境（v0.1.2, 15 数据源）跑通验证。`--human` 用于可读表格输出，不加则为 JSON（供 AI Agent 消费）。
 > `--human` 可放在查询语句之前或之后：`dbexplain execute -env --db 1 --human "SELECT 1"` 与 `dbexplain execute -env --db 1 "SELECT 1" --human` 等价。
 
 ---
@@ -81,7 +81,7 @@ dbexplain execute -env --db 2 --human \
    LIMIT 10"
 ```
 
-> **注意**：ClickHouse 查询**不要加分号**，否则会触发 `Multi-statements are not allowed` 错误。
+> **注意**：ClickHouse 查询加分号时 REPL 模式会自动去除尾部 `;`；`execute` 命令行模式建议不加分号。
 
 ---
 
@@ -345,7 +345,287 @@ dbexplain execute -env --db 1 --human "SELECT id, name FROM users"
 
 ---
 
-## 当前环境数据库一览
+## 13. REPL 交互模式 — 全数据源切换与查询实录
+
+> 以下为实际环境验证结果（v0.1.2，15 个 DSN 条目，12 种数据源类型）。
+
+### 13.1 启动与帮助
+
+```bash
+$ dbexplain repl -env
+dbexplain REPL (connected: aiops-mysql)
+Type .help for commands, .exit to quit
+
+dbexplain[aiops-mysql]> .help
+
+dbexplain REPL — Interactive query mode
+========================================
+Supported: All 11 data sources (SQL / NoSQL / Files)
+Not supported: DSL mode (@label.table), federated cross-source queries
+
+Commands:
+  .conn <label>   Switch to another data source by label (load with -env)
+  .dsn <label>    Alias for .conn
+  .list           List all configured databases
+  .databases      Alias for .list
+  .help           Show this help
+  .exit / .quit   Exit REPL
+  Ctrl+D          Exit REPL
+
+dbexplain[aiops-mysql]> .list
+Configured databases:
+  #    Label             Kind             Status
+  ---  ------            ----             ------
+  1    aiops-mysql       mysql            ← current
+  2    aiops-clickhouse  clickhouse
+  3    veinmap-sqlite    sqlite
+  4    video-pg          postgres
+  5    aiops-pg          postgres
+  6    aiops-redis       redis
+  7    openim-redis      redis
+  8    aiops-mongo       mongodb
+  9    aiops-es          elasticsearch
+  10   aiops-qdrant      qdrant
+  11   aiops-csv         csv
+  12   aiops-tsv         tsv
+  13   aiops-xlsx        xlsx
+```
+
+> `.list` 显示所有 `-env` 加载的 DSN 条目及当前连接状态，方便快速定位目标 label 后通过 `.conn` 切换。
+
+### 13.2 SQL 数据源切换与查询
+
+```bash
+# ── MySQL ──
+dbexplain[aiops-mysql]> SELECT COUNT(*) AS cnt FROM port
++-----+
+| cnt |
++-----+
+| 33  |
++-----+
+1 row(s) in set (585µs)
+(query completed in 2ms)
+
+dbexplain[aiops-mysql]> SELECT ID, hostip, arch, owner FROM iplist LIMIT 3
++----+---------------------+--------------+--------+
+| ID | hostip              | arch         | owner  |
++----+---------------------+--------------+--------+
+| 34 | 192.168.0.127       | archtestMASK | 王婉婷 |
+| 35 | 192.168.0.127:11434 | archtestMASK | 王婉婷 |
+| 36 | 192.168.0.127:9443  | archtestMASK | 王婉婷 |
++----+---------------------+--------------+--------+
+3 row(s) in set (217µs)
+# arch=archtestMASK → MASK_COLUMNS 生效
+
+# ── ClickHouse（不带分号） ──
+dbexplain[aiops-mysql]> .conn aiops-clickhouse
+Switched to: aiops-clickhouse
+
+dbexplain[aiops-clickhouse]> SELECT COUNT(*) AS total FROM system.tables
++-------+
+| total |
++-------+
+| 162   |
++-------+
+1 row(s) in set (2ms)
+
+# ── PostgreSQL ──
+dbexplain[aiops-clickhouse]> .conn video-pg
+Switched to: video-pg
+
+dbexplain[video-pg]> SELECT 1 AS test
++------+
+| test |
++------+
+| 1    |
++------+
+1 row(s) in set (120µs)
+(query completed in 3ms)
+
+# ── SQLite ──
+dbexplain[video-pg]> .conn veinmap-sqlite
+Switched to: veinmap-sqlite
+
+dbexplain[veinmap-sqlite]> SELECT name FROM sqlite_master WHERE type='table' LIMIT 5
++-------------------+
+| name              |
++-------------------+
+| feedback          |
+| sqlite_sequence   |
+| profile_passwords |
+| login_history     |
+| profiles          |
++-------------------+
+5 row(s) in set (734µs)
+```
+
+### 13.3 NoSQL 数据源切换与查询
+
+```bash
+# ── Redis ──
+dbexplain[aiops-mysql]> .conn openim-redis
+Switched to: openim-redis
+
+dbexplain[openim-redis]> PING
++--------+
+| result |
++--------+
+| PONG   |
++--------+
+1 row(s) in set (737µs)
+
+dbexplain[openim-redis]> EXISTS user:1
++--------+
+| result |
++--------+
+| 0      |
++--------+
+1 row(s) in set (264µs)
+
+# SCAN（安全替代 KEYS）
+dbexplain[openim-redis]> .conn video-redis
+Switched to: video-redis
+
+dbexplain[video-redis]> SCAN 0 COUNT 5
++--------+
+| result |
++--------+
+| 0      |
+| []     |
++--------+
+2 row(s) in set (626µs)
+
+# ── MongoDB ──
+dbexplain[video-redis]> .conn openim-mongo
+Switched to: openim-mongo
+
+dbexplain[openim-mongo]> {"find":"groups","filter":{},"limit":1}
+(empty result)
+(query completed in 3ms)
+
+# ── Qdrant ──
+dbexplain[openim-mongo]> .conn aiops-qdrant
+Switched to: aiops-qdrant
+
+dbexplain[aiops-qdrant]> {"scroll":"aiops"}
++------------+--------------+
+| collection | points_count |
++------------+--------------+
++------------+--------------+
+0 row(s) in set (296µs)
+(query completed in 2ms)
+```
+
+### 13.4 文件数据源查询
+
+```bash
+# ── CSV ──
+dbexplain[aiops-qdrant]> .conn ops-data-csv
+Switched to: ops-data-csv
+
+dbexplain[ops-data-csv]> SELECT category, COUNT(*) AS cnt FROM data GROUP BY category ORDER BY cnt DESC
++--------------+-----+
+| category     | cnt |
++--------------+-----+
+| 操作系统运维  | 280 |
+| 网络运维      | 180 |
+| 中间件运维    | 135 |
+| 信息安全运维  | 103 |
+| 应用业务运维  | 95  |
+| 基础设施运维  | 88  |
+| 软件架构运维  | 58  |
+| 数据库运维    | 44  |
+| 系统架构运维  | 11  |
++--------------+-----+
+9 row(s) in set (78µs)
+(query completed in 1ms)
+
+# ── XLSX ──
+dbexplain[ops-data-csv]> .conn tsf-xlsx
+Switched to: tsf-xlsx
+
+dbexplain[tsf-xlsx]> SELECT * LIMIT 2
++-------------+-----------+--------------+------------------+
+| 分类        | 模块名称  | 进程名称     | 启停方式         |
++-------------+-----------+--------------+------------------+
+| tsf-storage | tsf-mysql | mysqld       | systemctl start  |
+|             | tsf-ctsdb | tsf-ctsdb    | cd /data/common/ |
++-------------+-----------+--------------+------------------+
+2 row(s) in set (8ms)
+
+# ── TSV ──
+dbexplain[tsf-xlsx]> .conn tsv-test-data
+Switched to: tsv-test-data
+
+dbexplain[tsv-test-data]> SELECT * LIMIT 3
++---+---------+
+| $ | centavo |
++---+---------+
+| € | céntimo |
+| £ | penique |
+| ₩ | chon    |
++---+---------+
+3 row(s) in set (0s)
+```
+
+### 13.5 安全策略验证
+
+```bash
+# 写操作拒绝
+dbexplain[aiops-mysql]> DROP TABLE iplist
+ERROR: READ_ONLY_VIOLATION: write operation "DROP" is not allowed
+
+dbexplain[aiops-mysql]> INSERT INTO iplist VALUES(1)
+ERROR: READ_ONLY_VIOLATION: write operation "INSERT" is not allowed
+
+dbexplain[aiops-mysql]> DELETE FROM iplist
+ERROR: READ_ONLY_VIOLATION: write operation "DELETE" is not allowed
+
+# DENY_TABLES
+dbexplain[aiops-mysql]> SELECT * FROM information_schema.tables LIMIT 1
+ERROR: ACCESS_DENIED: table "information_schema" is not allowed for query
+
+dbexplain[video-pg]> SELECT * FROM pg_catalog.pg_tables LIMIT 1
+ERROR: ACCESS_DENIED: table "pg_catalog" is not allowed for query
+
+# DENY_COLUMNS（限定列名）
+dbexplain[aiops-mysql]> SELECT iplist.owner FROM iplist LIMIT 1
+ERROR: ACCESS_DENIED: column "iplist.owner" is not allowed for query
+
+# MongoDB 写入拒绝
+dbexplain[openim-mongo]> {"insert":"test","documents":[{"x":1}]}
+ERROR: QUERY_ERROR: READ_ONLY_VIOLATION: mongo query must specify "find"
+
+# Redis 危险命令拒绝
+dbexplain[video-redis]> KEYS *
+ERROR: QUERY_ERROR: READ_ONLY_VIOLATION: redis command "KEYS"
+```
+
+### 13.6 已知限制演示
+
+```bash
+# ClickHouse 尾部 ; 已自动去除，不再触发多语句错误
+
+# Elasticsearch 暂不支持
+dbexplain[aiops-es]> {"query":{"match_all":{}}}
+ERROR: READ_ONLY_VIOLATION: unknown or unsupported SQL verb
+
+# 无效 label
+dbexplain[aiops-mysql]> .conn nonexistent
+No DSN with label "nonexistent" found
+
+# 未知命令
+dbexplain[aiops-mysql]> .unknown
+Unknown command: .unknown (try .help)
+
+# .dsn 别名
+dbexplain[aiops-mysql]> .dsn openim-redis
+Switched to: openim-redis
+```
+
+> 完整 REPL 文档见 [`docs/REPL.md`](REPL.md)。已知限制详情及绕过方案见 REPL.md 已知限制章节。
+
+---
 
 | DB | Label | Kind | 关键表/集合 | 数据量 |
 |----|-------|------|-----------|--------|
@@ -367,4 +647,4 @@ dbexplain execute -env --db 1 --human "SELECT id, name FROM users"
 
 ---
 
-*案例库持续更新中。v0.1.1 新增 DSL 模式（`--dsl`）、Schema Diff、窗口函数、`internal/` 结构整理。全部查询已通过 --human 实测验证。*
+*案例库持续更新中。v0.1.2 新增 DSL 联邦查询 + REPL 模式（`--dsl`）、Schema Diff、窗口函数、`internal/` 结构整理。全部查询已通过 --human 实测验证。*

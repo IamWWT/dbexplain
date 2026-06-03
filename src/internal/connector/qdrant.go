@@ -1,3 +1,5 @@
+//go:build qdrant || full
+
 package connector
 
 import (

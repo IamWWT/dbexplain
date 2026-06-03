@@ -1,3 +1,5 @@
+//go:build redis || full
+
 package connector
 
 import (

@@ -145,7 +145,13 @@ func (d *DSN) SQLitePath() string {
 	if i := strings.Index(after, "?"); i >= 0 {
 		after = after[:i]
 	}
-	return after
+	after, _ = url.PathUnescape(after)
+	// Windows: sqlite:///C:/path → /C:/path → C:/path
+	if runtime.GOOS == "windows" && len(after) >= 3 &&
+		after[0] == '/' && after[2] == ':' {
+		after = after[1:]
+	}
+	return filepath.FromSlash(after)
 }
 
 // FilePath extracts the filesystem path for file-based connectors (csv, xlsx).
@@ -166,7 +172,7 @@ func (d *DSN) FilePath() string {
 		after[0] == '/' && after[2] == ':' {
 		after = after[1:]
 	}
-	return filepath.FromSlash(after)
+	return filepath.Clean(filepath.FromSlash(after))
 }
 
 // DSNParam returns the value of a query parameter from the raw DSN string.

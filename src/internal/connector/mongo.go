@@ -1,3 +1,5 @@
+//go:build mongodb || full
+
 package connector
 
 import (

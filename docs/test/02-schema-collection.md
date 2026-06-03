@@ -13,7 +13,7 @@ BIN="../release/dbexplain"
 ```
 
 > **配置优先级**：运行 `-env` 前确保 CWD 中有 `.env.dbexplain` 或设置 `DBPROBE_ENV_FILE=.env`。
-> 详见 [README.md](README.md#配置优先级说明) 和 [docs/CONFIG_SEARCH.md](../docs/CONFIG_SEARCH.md)。
+> 详见 [README.md](README.md#配置优先级说明) 和 [docs/CONFIG_SEARCH.md](../CONFIG_SEARCH.md)。
 
 ## 2.1 全量 Schema 采集 (JSON)
 

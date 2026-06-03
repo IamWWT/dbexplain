@@ -80,6 +80,9 @@ func handleREPL(args []string) {
 			break // EOF (Ctrl+D)
 		}
 		line := strings.TrimSpace(scanner.Text())
+		// Strip trailing semicolons — ClickHouse driver appends SETTINGS/FORMAT JSON
+		// after the query, and a trailing ; breaks it as multi-statement.
+		line = strings.TrimRight(line, ";")
 		if line == "" {
 			continue
 		}
@@ -92,6 +95,42 @@ func handleREPL(args []string) {
 				return
 			case line == ".help":
 				printREPLHelp()
+			case line == ".list" || line == ".databases":
+				fmt.Println("Configured databases:")
+				// Find max label width for alignment
+				maxLabel := 8
+				entries := make([]struct {
+					label string
+					kind  string
+				}, len(allEntries))
+				for i, entry := range allEntries {
+					d, err := dsn.ParseDSN(entry.Raw)
+					if err != nil {
+						entries[i].label = "(invalid)"
+						entries[i].kind = "?"
+						continue
+					}
+					lbl := d.Label
+					if lbl == "" {
+						lbl = d.Kind
+					}
+					entries[i].label = lbl
+					entries[i].kind = d.Kind
+					if len(lbl) > maxLabel {
+						maxLabel = len(lbl)
+					}
+				}
+				// Header
+				fmt.Printf("  %-3s  %-*s  %-14s  Status\n", "#", maxLabel, "Label", "Kind")
+				fmt.Printf("  %-3s  %-*s  %-14s  %s\n", "---", maxLabel, "------", "----", "------")
+				// Rows
+				for i, e := range entries {
+					current := ""
+					if e.label == currentLabel {
+						current = "← current"
+					}
+					fmt.Printf("  %-3d  %-*s  %-14s  %s\n", i+1, maxLabel, e.label, e.kind, current)
+				}
 			case strings.HasPrefix(line, ".conn") || strings.HasPrefix(line, ".dsn"):
 				parts := strings.Fields(line)
 				if len(parts) < 2 {
@@ -150,6 +189,14 @@ func execQuery(dsnRaw string, sql string, limit int, timeout int, allEntries []c
 
 	policies := policy.Load("")
 
+	// Elasticsearch JSON native queries are not supported in REPL.
+	// Detect JSON input early to give a clear error instead of
+	// the cryptic "READ_ONLY_VIOLATION: unknown or unsupported SQL verb"
+	// from sqlguard.
+	if parsed.Kind == "elasticsearch" && isJSONLike(sql) {
+		return fmt.Errorf("ES JSON native queries not supported in REPL; use 'dbexplain execute -env --label %s --human SQL_QUERY' with SQL syntax, or 'dbexplain collect -env --label %s' to collect schemas", parsed.Label, parsed.Label)
+	}
+
 	if isFile {
 		// File datasource: reuse HandleFileExecute but without os.Exit
 		queryutil.HandleFileExecute(parsed, sql, true, limit, policies, allEntries)
@@ -181,11 +228,14 @@ func printREPLHelp() {
 dbexplain REPL — Interactive query mode
 ========================================
 Supported: All 11 data sources (SQL / NoSQL / Files)
-Not supported: DSL mode (@label.table), federated cross-source queries
+Not supported: DSL mode (@label.table), federated cross-source queries,
+                Elasticsearch native JSON queries
 
 Commands:
   .conn <label>   Switch to another data source by label (load with -env)
   .dsn <label>    Alias for .conn
+  .list           List all configured databases
+  .databases      Alias for .list
   .help           Show this help
   .exit / .quit   Exit REPL
   Ctrl+D          Exit REPL
@@ -195,4 +245,10 @@ Examples:
   dbexplain repl -env
   dbexplain repl -env --limit 5000 --timeout 60
 `)
+}
+
+// isJSONLike performs a quick check for JSON-like input (starts with '{' or '[').
+func isJSONLike(s string) bool {
+	s = strings.TrimSpace(s)
+	return len(s) > 0 && (s[0] == '{' || s[0] == '[')
 }

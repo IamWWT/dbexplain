@@ -8,7 +8,7 @@
 
 ### 消费方
 
-- **AI Agent**：通过 `dbexplain-skill/SKILL.md` 定义的技能接口调用，Agent 读取 stdout 中的 Markdown 报告或 `-json` 输出的结构化数据
+- **AI Agent**：通过 `dbexplain-skill/SKILL_ZH.md` / `SKILL_EN.md` 定义的技能接口调用，Agent 读取 stdout 中的 Markdown 报告或 `-json` 输出的结构化数据
 - **人类运维/DBA**：直接在终端执行，阅读格式化报告或 JSON 输出进行数据库巡检和结构分析
 
 ### 核心交付物
@@ -16,8 +16,12 @@
 一个**单文件静态二进制**，无运行时依赖（无 CGO、无 libc 版本依赖、无外部进程），可跨 5 平台直接运行。
 
 最终交付物包括：
-- **CLI Product**：Markdown + Diagnostics（DBA/运维向）
-- **IR Product**：Graph + Summary + Retrieval Chunks + Topology（AI Agent 向）
+- **JSON schema 输出**（`--json`）：结构化 IR，供 AI Agent 消费
+- **Markdown / 人类可读报告**（`--human` / 默认终端输出）：DBA/运维向
+- **查询执行结果**（`execute` 子命令）：只读查询的标准化输出
+- **AI 上下文导出**（`--context`）：为 LLM 预处理的上下文文件
+
+> 注意：内部图模型（Graph/Node/Edge）是分析 pipeline 的实现细节，不作为独立交付物暴露。
 
 ---
 
@@ -38,10 +42,19 @@
 
 ### 3. 只读安全
 
-- 工具**仅执行**只读操作：SELECT、SHOW、DESCRIBE、PRAGMA、SCAN、INFO、_cat、_mapping 等
-- **严禁**任何写操作：INSERT、UPDATE、DELETE、DROP、CREATE、ALTER 等
-- MongoDB 连接器连 `find()` 都不执行，仅使用 `ListCollectionNames` + `EstimatedDocumentCount`
-- Redis 连接器仅用 GETRANGE/HSCAN/XRANGE 安全采样，不读全量数据
+整个工具**仅执行**只读操作，不区分 Collect（Schema 采集）和 Query（用户查询）：
+
+**Collect 阶段** — 每个 Connector 仅采集元数据：
+- SQL 数据库：SELECT FROM information_schema / SHOW / DESCRIBE / PRAGMA
+- MongoDB：仅 ListCollectionNames + EstimatedDocumentCount（不执行用户查询）
+- Redis：仅 GETRANGE/HSCAN/XRANGE 安全采样（不读全量数据）
+- Elasticsearch：仅 _cat/_mapping 端点
+- Qdrant：仅 grpc 健康检查 + 集合信息
+
+**Query 阶段**（`execute` 子命令）— 用户查询通过安全管道：
+- SQL 数据库：sqlguard AST 级只读校验（8 个读动词放行、11 个写动词拒绝）+ policy 引擎 + AutoLimit
+- NoSQL 数据库：各自的原生命令白名单或查询校验器
+- **严禁**任何写操作：INSERT、UPDATE、DELETE、DROP、CREATE、ALTER 等（无论 Collect 还是 Query 阶段）
 
 ### 4. 零 CGO
 
@@ -110,7 +123,7 @@
 
 ---
 
-## 项目边界 (v0.1.1)
+## 项目边界 (v0.1.2)
 
 ### 数据源范围
 - **核心**: MySQL, PostgreSQL, GaussDB, ClickHouse, SQLite, Redis, Elasticsearch, MongoDB, Qdrant
@@ -120,7 +133,7 @@
 ### DSL 查询
 - `--dsl` flag 提供统一 DSL 查询入口，支持 `@label.table` 语法引用数据源
 - DSL 编译流程：预处理 → sqlast 解析 → 符号绑定 → 后端路由
-- v0.1.1 限制：单数据源查询（不支持跨源 JOIN），原生源（Redis/Mongo/Qdrant/ES）不支持
+- v0.1.2 支持跨源联邦查询（SQL ↔ 文件 JOIN/UNION），原生源（Redis/Mongo/Qdrant/ES）仍不支持 DSL 模式
 - DSL 是可选入口，原生 SQL/原生命令通道完全保留
 
 ### 集成策略
@@ -136,10 +149,12 @@
 
 ## 构建与发布
 
-- 构建脚本：`src/build.sh`（交叉编译 + `file` 命令校验架构）
-- 输出目录：`release/`
-- 无 CI/CD，手动构建发布
-- 版本号遵循 semver，CHANGELOG.md 维护
+见 [docs/DEPLOY.md](docs/DEPLOY.md) — 构建方式、产物目录、部署方式、发布流程在该文档中完整维护。
+
+宪法层面仅约束：
+- **单二进制交付**：无动态依赖、无外部进程、`CGO_ENABLED=0`
+- **版本号**：遵循 semver，版本一致性子命令 `--version` 和 CHANGELOG.md 对齐
+- **无 CI/CD**：手动构建发布，发布前必须执行 `docs/SECURITY_CHECKLIST.md` 所有检查项
 
 ---
 
@@ -147,7 +162,8 @@
 
 | 日期 | 版本 | 说明 |
 |------|------|------|
-| 2026-06-02 | v4 | 新增第 11-12 条（项目结构、DSL 确定性）；项目边界更新至 v0.1.1；新增 DSL 通道安全说明 |
+| 2026-06-03 | v6 | 核心交付物更新（去除未实现的 IR Product 概念）；Principle 3 区分 Collect/Query 阶段并更新 MongoDB 描述；构建与发布章节精简为 DEPLOY.md 引用 |
+| 2026-06-03 | v5 | 新增 DSL 联邦查询、REPL 模式、Build Tags 能力；项目边界更新至 v0.1.2 |
 | 2026-05-29 | v3 | 第 10 条确认落地；新增"项目边界"章节，定义数据源范围和集成策略 |
 | 2026-05-19 | v1 | 初始宪法，基于 v0.0.2 代码库提取 |
 | 2026-05-20 | v2 | 项目重新定义为 Database Context Compiler；新增第 8-10 条：Deterministic Only、Graph First、Capability Architecture |

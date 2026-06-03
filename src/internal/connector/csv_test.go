@@ -1,3 +1,5 @@
+//go:build csv || full
+
 package connector
 
 import (

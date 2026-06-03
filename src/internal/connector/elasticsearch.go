@@ -1,3 +1,5 @@
+//go:build elasticsearch || full
+
 package connector
 
 import (

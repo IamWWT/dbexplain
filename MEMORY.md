@@ -97,7 +97,7 @@ scheme://[user[:pass]@]host[:port][/dbname][?label=别名&其他参数]
 
 ## 消费方
 
-- **AI Agent**：通过 `SKILL.md` 调用，消费 stdout Markdown 报告或 `-json` 结构化输出
+- **AI Agent**：通过 `SKILL_ZH.md` / `SKILL_EN.md` 调用，消费 stdout Markdown 报告或 `-json` 结构化输出
 - **人类 DBA/运维**：终端直接运行，阅读格式化报告
 
 ## 已知限制与待办
@@ -124,7 +124,7 @@ scheme://[user[:pass]@]host[:port][/dbname][?label=别名&其他参数]
 
 **当前开放（ISSUE-033, ISSUE-035）：** Phase 4 LLM 生态集成、GBase/HBase/OceanBase 评估。
 
-**DSL v0.1.1 限制：** 仅支持单数据源查询（不支持跨源 JOIN），不支持原生源（Redis/Mongo/Qdrant/ES）。
+**DSL 限制：** 不支持原生源（Redis/Mongo/Qdrant/ES）；SQL ↔ 文件联邦查询已支持跨源 JOIN/UNION。
 
 ## 新增 Connector 模板
 
@@ -219,11 +219,12 @@ wc -c /tmp/perf-prev-1.json /tmp/perf-curr-1.json
 | 3 | **已完成 (v0.0.4)** | Query-Aware Metadata + Operational Graph |
 | 4 | **已完成 (v0.1.0)** | CapSQL 架构落地 + P0/P1 安全加固 + 文档全面对齐 |
 | 5 | **已完成 (v0.1.1)** | 结构整理 + 统一 DSL 查询入口 + AST 级安全升级 + Schema Diff + 窗口函数 |
-| 6 | 规划中 | LLM Ecosystem Integration + MCP Server + 企业特性 |
+| 6 | **已完成 (v0.1.2)** | DSL 联邦查询 + REPL + Build Tags + 9.5MB UPX |
+| 7 | 规划中 | LLM Ecosystem Integration + MCP Server + 企业特性 |
 
-当前版本：**v0.1.1** — 结构整理 + 统一 DSL 查询入口 (`--dsl` flag) + Schema Diff P1-P4 + 窗口函数 Phase 1-4 + 文件查询引擎增强 + 向后兼容。
+当前版本：**v0.1.2** — DSL 联邦查询 + REPL 交互模式 + Build Tags 按需编译 + 42MB→9.5MB UPX 压缩 + 安全加固。
 
-## 最新测试 (v0.1.1)
+## 最新测试 (v0.1.2)
 
 - **编译验证**: `go build ./...` + `go vet ./...` + `bash build.sh` 全平台通过
 - **链接验证**: Linux `ldd` 静态链接确认，macOS `otool -L` 无非系统动态依赖

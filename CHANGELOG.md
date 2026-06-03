@@ -1,6 +1,6 @@
 # 变更日志
 
-## v0.1.2 (2026-06-02) — CLI 交互增强 + DSL 联邦查询
+## v0.1.2 (2026-06-03) — CLI 交互增强 + DSL 联邦查询 + 构建系统优化
 
 ### 新功能
 - **DSL 联邦查询** (ISSUE-069): 跨数据源 JOIN/UNION 支持。移除 `len(kinds)>1` 阻断，数据物化 + filequery 联邦合并层。SQL ↔ 文件 ↔ 混合源 JOIN 全支持
@@ -10,13 +10,35 @@
 
 ### 修复
 - **DSL 文件 JOIN 修复** (ISSUE-069): `dslExecFile()` 传入 `nil allEntries` 导致文件源 DSL 模式下 JOIN 无法解析。改为传入全局 entries
+- **ClickHouse REPL 尾部分号冲突修复**: ClickHouse 驱动在查询后追加 `SETTINGS max_execution_time=N FORMAT JSON`，尾部 `;` 导致多语句错误。`repl.go` 新增 `TrimRight(";")` 自动清除尾部分号
+- **Elasticsearch REPL JSON 查询友好提示**: JSON 原生查询在 REPL 中原返回 `READ_ONLY_VIOLATION` 混淆提示。新增 JSON 前置检测，输出清晰绕过方案（`execute -env --label` SQL 模式或 `collect` 采集 Schema）
+- **Windows 原子写入修复**: `cache.go` `os.Rename` 在目标文件存在时失败。新增 `runtime.GOOS == "windows"` 时先 `os.Remove`
+- **CJK 显示修复**: `render/table.go` 列宽使用 `len()`（字节）导致中文/韩文/全角字符表格错位。新增 `visualWidth()` 按显示宽度计算并补偿 padding
+- **`render.go` `pad()`/`truncate()` UTF-8 修复**: 字节切片可能产生无效 UTF-8 序列。改为基于 `[]rune` 视觉宽度截断
+- **`dsn.go` `SQLitePath()` Windows 修复**: 缺少 Windows `/C:` 前缀剥离逻辑，导致绝对路径 DSN 在 Windows 上可能失败
+- **`dsn.go` `FilePath()` 安全加固**: 新增 `filepath.Clean()` 防止路径遍历
+
+### 构建与发布
+- **构建标签（Build Tags）**: 10 个 connector 文件添加 `//go:build mysql || full` 等条件编译，支持按需选择数据库驱动
+- **`build.sh` 4 种编译模式**: prod（5 平台全驱动+UPX）、dev（当前平台+全驱动）、test（+race）、minimal（按需驱动）
+- **UPX 极致压缩**: `--best --lzma` 压缩，全驱动 42 MB → 9.5 MB（-78%），零运行时依赖。`upx -t` 完整性验证通过
+  - Linux/Windows 全量压缩；darwin (Mach-O) 交叉编译产物因 UPX 5.0.0 兼容性限制跳过压缩，macOS 原生编译时 UPX 正常工作
+- **`build.sh --help`**: 新增 `--help`/`-h` 参数，输出完整使用说明、Tag→Kind→DSN scheme 全景映射
+- **`--no-upx`/`--upx` 动态控制**: 从命令行任意位置传入，强制跳过或启用 UPX 压缩
+- **产物安全验证**: `file`(statically linked) / `ldd`(无动态引用) / `nm -D`(无动态符号) / `upx -t`(完整性) / 隔离运行全链路通过
+- 全量 `go build ./...` + `go vet ./...` + `go test ./...` + `bash build.sh` 验证通过
 
 ### 文档
 - **发布前检查标准补充** (ISSUE-073): SECURITY_CHECKLIST.md §6 追加版本一致性、CHANGELOG 完整性、issues.json 有效性、二进制冒烟测试、产物完整性、文档陈旧引用检查
-
-### 构建与发布
-- `build.sh` / `version.go` 版本号更新为 v0.1.2
-- 全量 `go build ./...` + `go vet ./...` + `go test ./...` + `bash build.sh` 验证通过
+- **`docs/test/01-environment.md` 大幅扩展**: 新增 §1.9 构建模式因素影响分析（编译时间/体积/功能/UPX/安全/场景推荐/安全验证/结论），实际实测数据
+- **`docs/test/RESULTS.md` 构建优化段**: 更新 5 种标签组合实测体积、全景 Tag→Kind→DSN scheme 映射、安全验证表
+- **`docs/DEPLOY.md` build.sh 表格**: 模式说明更新为明确的 GOOS/GOARCH 列表
+- **`docs/SKILL_AUTHORING.md` 全面优化**: 融入 Karpathy 上下文工程理念 — 新增上下文经济/可验证性原则、元数据入口强调块、description 写作公式、输入定义章节、失败处理规则、渐进披露指南、eval-first 迭代流程、完整示例模板
+- **SKILL_ZH.md / SKILL_EN.md 重构**: 330→197 行（符合 200 行上限）。移除 SQL 语法表/错误处理表（引用 references/），新增输入定义/失败处理规则，精简 DSL/增量检测/参数表等冗余内容
+- **README 能力全景映射矩阵**: "支持的数据源"表替换为 5 列能力模块（Schema采集/SQL查询/REPL/DSL联邦/文件引擎）× 11 数据源的能力矩阵，一图览全局
+- **`docs/test/RESULTS.md` 整理**: 合并 v0.1.0/v0.1.1/重复 v0.1.2 三个冗余章节为单一 v0.1.2 报告，新增"本次闭环验证修复"清单
+- **`docs/REPL.md` 更新**: 移除 ClickHouse 分号限制（已修复），ES 限制补充详细绕过方案 (SQL via `_sql`/collect)
+- **`docs/test/09-cli-help.md` 扩展**: 新增 ClickHouse 分号和 ES JSON 测试用例
 
 ## v0.1.1 (结构整理 + 统一 DSL 查询入口)
 

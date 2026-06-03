@@ -28,21 +28,26 @@
 
 ---
 
-## 支持的数据源
+## 能力全景映射
 
-| 数据源 | 协议 | 亮点 |
-|--------|------|------|
-| MySQL | `mysql://` | 外键、索引、字段注释推断 |
-| PostgreSQL | `postgres://` | 多 Schema、行数统计、SSL 可配 |
-| GaussDB | `gaussdb://` | PostgreSQL 协议兼容 |
-| ClickHouse | `clickhouse://` | 排序键 / 分区键 / 主键 |
-| SQLite | `sqlite://` | 纯 Go 驱动，无 CGO |
-| Redis | `redis://` | 键模式推断、集群、TTL 风险诊断 |
-| Elasticsearch | `elasticsearch://` | 索引映射、HTTPS |
-| MongoDB | `mongodb://` | 近似文档数 |
-| Qdrant | `qdrant://` | 向量集合元数据 |
-| CSV / TSV | `csv://` `tsv://` | 内置文件查询引擎 |
-| Excel | `xlsx://` | 内置文件查询引擎 |
+> 数据源 × 能力模块矩阵。✅ 支持，— 不适用，⚠️ 有条件支持。
+
+| 数据源 | 协议 | Schema采集 | SQL查询 | REPL交互 | DSL联邦 | 文件引擎 | 亮点 |
+|--------|------|:----------:|:-------:|:--------:|:-------:|:--------:|------|
+| MySQL | `mysql://` | ✅ | ✅ | ✅ | ✅ | — | 外键、索引、字段注释推断 |
+| PostgreSQL | `postgres://` | ✅ | ✅ | ✅ | ✅ | — | 多 Schema、行数统计、SSL 可配 |
+| GaussDB | `gaussdb://` | ✅ | ✅ | ✅ | ✅ | — | PostgreSQL 协议兼容 |
+| ClickHouse | `clickhouse://` | ✅ | ✅ | ✅ | ✅ | — | 排序键 / 分区键 / 主键 |
+| SQLite | `sqlite://` | ✅ | ✅ | ✅ | ✅ | — | 纯 Go 驱动，无 CGO |
+| Redis | `redis://` | ✅ | — | ✅ | — | — | 键模式推断、集群、TTL 风险诊断 |
+| MongoDB | `mongodb://` | ✅ | — | ✅ | — | — | 近似文档数 |
+| Elasticsearch | `elasticsearch://` | ✅ | ⚠️ SQL via `_sql` | — | — | — | 索引映射、HTTPS |
+| Qdrant | `qdrant://` | ✅ | — | ✅ | — | — | 向量集合元数据 |
+| CSV / TSV | `csv://` `tsv://` | ✅ | — | ✅ | ✅ | ✅ | 内置文件查询引擎 |
+| Excel | `xlsx://` | ✅ | — | ✅ | ✅ | ✅ | 内置文件查询引擎 |
+
+> **ES REPL**：原生 JSON 查询暂不支持，使用 `execute -env --label` 命令行模式。<br>
+> **DSL 限制**：Redis/Mongo/ES/Qdrant 原生查询暂不支持 DSL 联邦（不走 SQL 接口）。
 
 ---
 
@@ -73,7 +78,7 @@ dbexplain execute -env --label redis "PING"
 dbexplain execute -env --dsl "SELECT * FROM @my-mysql.users LIMIT 10" --human
 ```
 
-> v0.1.1 限制：DSL 模式仅支持单数据源。v0.1.2 已支持跨源 JOIN/UNION（联邦查询），仍不支持 Redis / Mongo / Qdrant / ES 原生数据源。
+> DSL 联邦查询支持 SQL ↔ 文件 跨源 JOIN/UNION，不支持 Redis / Mongo / Qdrant / ES 原生数据源。
 
 ### 文件查询引擎
 CSV / TSV / XLSX 由**内置纯 Go SQL 引擎**驱动，无需外部数据库。支持：
@@ -102,7 +107,7 @@ dbexplain diff --cache schema.json --since v1.0 --human
 | 场景 | 文档 |
 |------|------|
 | 傻瓜用法手册（5 分钟上手） | [`docs/USAGE_GUIDE.md`](docs/USAGE_GUIDE.md) |
-| 查询案例（13 个实测示例） | [`docs/CLI_EXAMPLES.md`](docs/CLI_EXAMPLES.md) |
+| 查询案例（15+ 个实测示例，含 REPL） | [`docs/CLI_EXAMPLES.md`](docs/CLI_EXAMPLES.md) |
 | 部署安装（源码/二进制/Skill） | [`docs/DEPLOY.md`](docs/DEPLOY.md) |
 | 排障指南（连接/查询/文件问题） | [`dbexplain-skill/references/troubleshooting.md`](dbexplain-skill/references/troubleshooting.md) |
 | 安全策略配置（DENY_TABLES 等） | [`docs/POLICY.md`](docs/POLICY.md) |
@@ -115,8 +120,11 @@ dbexplain diff --cache schema.json --since v1.0 --human
 ## 快速开始
 
 ```bash
-# 1. 构建
-cd src && CGO_ENABLED=0 go build -o ../release/dbexplain ./cmd/dbexplain
+# 1. 构建（单平台全驱动，快速）
+cd src && bash build.sh dev
+
+# 或全平台发布版（5 个 GOOS/GOARCH + UPX 压缩）
+cd src && bash build.sh
 
 # 2. 配置（自动搜索 6 级路径）
 mkdir -p ~/.config/dbexplain && cat > ~/.config/dbexplain/.env.dbexplain << EOF
@@ -154,7 +162,10 @@ cd src
 go build ./...                              # 编译检查
 go vet ./...                                # 静态分析
 go test ./... -count=1                      # 单元测试
-bash build.sh                               # 交叉编译 5 平台
+bash build.sh                               # 发布：5 平台 + 全驱动 + UPX
+bash build.sh dev                           # 开发：当前平台 + 全驱动
+bash build.sh minimal mysql,postgres        # 精简：按需驱动
+bash build.sh --help                        # 查看全部参数
 ```
 
 ---

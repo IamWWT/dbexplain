@@ -104,6 +104,25 @@
 
 ---
 
+## 5a. 提交前快速检查
+
+每次 `git commit` 前，至少确认以下 5 项通过（约 30 秒）：
+
+```
+[ ] go build ./... 无错误
+[ ] go vet ./...   无警告
+[ ] go test ./... -count=1 全部通过
+[ ] grep -rn "v0\.1\.[01]" --include="*.md" --include="*.sh" --include="*.ps1" . \
+      | grep -v CHANGELOG | grep -v RELEASE_WECHAT | grep -v "history\|introduced in\|requires\|已完成\|v0.1.[01] landed\|v0.1.[01] 新增\|v0.1.[01] 已\|已迁移\|Phase.*v0.1.[01]" \
+      | grep -v "\.git/" | grep -v testdata/
+    # 确认无残留旧版本号（只允许历史记录/CHANGELOG中的引用）
+[ ] issues.json 有效性: python3 -m json.tool issues.json > /dev/null
+```
+
+> 完整发布检查见 §6，耗时约 3-5 分钟。
+
+---
+
 ## 6. 发布前快速检查
 
 每次发布前，逐项执行：
@@ -114,9 +133,12 @@
 [ ] go test ./... 全部通过
 [ ] 版本一致性: version.go / build.sh ldflags / CHANGELOG.md 版本号一致
 [ ] CHANGELOG 完整性: 当前版本所有已关闭 Issue 在 CHANGELOG 列出
+[ ] CHANGELOG 中英文同步: CHANGELOG_EN.md 条目与 CHANGELOG.md 保持一致
 [ ] issues.json 有效性: python3 -m json.tool issues.json 无语法错误
 [ ] 交叉编译 5 平台全部成功（bash build.sh）
-[ ] release/ 目录下 5 平台二进制存在，file 命令确认架构正确
+[ ] release/ 目录下 6 平台二进制存在（含 dev 版本），file 命令确认架构正确
+[ ] 全平台版本一致性: 5 平台二进制各自 --version 全部输出 v0.x.x
+[ ] dev 二进制使用 -tags full 构建（42MB 全驱动，非 3.7MB 精简版）
 [ ] 二进制冒烟测试: --version 输出正确版本号，基本查询正常
 [ ] .gitignore 包含: src/.env, .env, .env.dbexplain, src/logs/
 [ ] grep -r "e\.raw" src/        # 确认无原始 DSN 输出
@@ -124,6 +146,13 @@
 [ ] grep -r "\.env" src/ --include="*.go" | grep -v test | grep -v example  # 检查引用
 [ ] 以 UTF-8 BOM 编码的 .env.dbexplain 测试 -env 正常加载
 [ ] 文档陈旧引用检查: grep 在 docs/ 中查找已删除文件路径的引用
+[ ] 文档版本一致性: grep -rn "v0\.[01]\.[01]" docs/test/*.md 确认测试预期均更新为本版本
+[ ] 脚本版本一致性: grep "\$VERSION\s*=" dbexplain-skill/scripts/*.{sh,ps1} 确认版本号最新
+[ ] 脚本头部版本: head -5 dbexplain-skill/scripts/*.{sh,ps1} 确认注释中版本号最新
+[ ] Markdown 链接有效性: find docs/ -name "*.md" -exec grep -oP '\[.+?\]\([^)]+\)' {} \; \
+      | grep -v "http" | grep -v "#" | grep -v "\.\./" \
+      | while read -r link; do echo "CHECK: $link"; done
+    # 确认相对链接指向的文件存在（排除外部URL和锚点）
 [ ] 确认 CHANGELOG.md 列出所有安全问题
 [ ] 确认 SECURITY_CHECKLIST.md 追加新发现的问题
 [ ] 加密输出文件权限为 0600
@@ -131,6 +160,16 @@
 [ ] 加密文件解密失败不暴露内部错误细节
 [ ] .gitignore 包含 *.enc
 ```
+
+### 历史上的坑
+
+| 版本 | 问题 | 修复 |
+|------|------|------|
+| v0.1.2 | 10 个测试文档 `../docs/CONFIG_SEARCH.md` 链接多一层 `docs/` 路径（应为 `../CONFIG_SEARCH.md`） | §5a 新增版本一致性 grep + §6 新增文档版本一致性检查 |
+| v0.1.2 | PowerShell 脚本 `$VERSION = "v0.1.0"` 未随版本更新 | §6 新增脚本版本一致性 + 脚本头部版本检查 |
+| v0.1.2 | 测试文档中版本预期（09-cli-help.md）残留 v0.1.1 | §5a 新增旧版本号 grep 检查 |
+| v0.1.2 | dev 二进制未加 `-tags full` 仅 3.7MB（精简版） | §6 新增 dev 二进制 -tags full 检查 |
+| v0.1.2 | `docs/file_index.md` 引用已删除的 RELEASE_WECHAT_v0.1.1.md | §6 新增 Markdown 链接有效性检查 |
 
 ---
 

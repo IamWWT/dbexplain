@@ -95,7 +95,7 @@ cd src && $BIN diff --cache /tmp/e2e.cache --list-versions
 
 ## 配置优先级说明
 
-> 详细搜索机制见 [docs/CONFIG_SEARCH.md](../docs/CONFIG_SEARCH.md)。
+> 详细搜索机制见 [docs/CONFIG_SEARCH.md](../CONFIG_SEARCH.md)。
 
 `-env` 模式按以下顺序查找配置文件（命中即停）：
 
@@ -157,7 +157,7 @@ dbexplain execute -dsn 'csv:///tmp/test.csv?label=test' "SELECT *"
 
 ## 最新测试结果
 
-完整测试结果报告见 [RESULTS.md](RESULTS.md)。v0.1.1 测试结果: **全部单元测试通过**，含 DSL 35 测试、Schema Diff 24 测试、窗口函数 33 测试。
+完整测试结果报告见 [RESULTS.md](RESULTS.md)。v0.1.2 测试结果: **全部单元测试通过**，含 DSL 35 测试、Schema Diff 24 测试、窗口函数 33 测试。
 
 ## 快速导航
 
@@ -187,7 +187,7 @@ dbexplain execute -dsn 'csv:///tmp/test.csv?label=test' "SELECT *"
 | SQL 只读校验 | 高 | 100% | 28 用例 + 实机 8 动词验证 |
 | 查询引擎 | 高 | 100% | 15 DSN 实机执行 (SQL/NoSQL/文件) |
 | 交叉编译 | 高 | 100% | 5/5 平台成功 |
-| 文档同步 | 高 | 100% | 全部文件版本 v0.1.1 一致 |
+| 文档同步 | 高 | 100% | 全部文件版本 v0.1.2 一致 |
 | 文件处理 (CSV/TSV/XLSX) | 中 | 90% | 基本功能覆盖，边界场景需补充 |
 | 能力架构 (CapSQL) | 高 | 100% | 全 15 连接器路由验证 |
 

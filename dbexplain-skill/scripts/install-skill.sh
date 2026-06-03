@@ -23,7 +23,7 @@ SKILL_MD_EN="${SKILL_DIR}/SKILL_EN.md"
 ENV_EXAMPLE="${SKILL_DIR}/.env.dbexplain.example"
 REF_DIR="${SKILL_DIR}/references"
 SKILL_NAME="dbexplain-skill"
-VERSION="v0.1.0"
+VERSION="v0.1.2"
 LANG="zh"        # default: Chinese
 LANG_VIA_CLI=""  # non-empty when --lang was passed on command line
 
@@ -193,7 +193,10 @@ install_to() {
     _step "references/ → ${target_dir}/${SKILL_NAME}/references/"
   fi
 
-  # Install binary (as "dbexplain" — platform-agnostic name)
+  # Install binary in tools/ as fallback entry point
+  # Purpose: ensures AI Agent can find dbexplain even when system PATH
+  # is restricted or not inherited. The AGENT should prefer the system-wide
+  # dbexplain (in PATH) — tools/ exists for fallback only.
   local dest_bin="${target_dir}/${SKILL_NAME}/tools/dbexplain"
 
   if [ -n "$SYSTEM_DBEXPLAIN" ]; then

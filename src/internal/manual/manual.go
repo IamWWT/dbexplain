@@ -49,7 +49,10 @@ func PrintHelp() {
 			"Usage:\n"+
 			"  dbexplain [flags]              Collect & analyze database schemas\n"+
 			"  dbexplain list                 List all configured databases\n"+
+			"  dbexplain collect [flags]      Explicit schema collection subcommand\n"+
 			"  dbexplain execute <query>      Run read-only query (SQL / JSON / native)\n"+
+			"  dbexplain diff [flags]         Schema diff / delta detection\n"+
+			"  dbexplain repl                 Interactive REPL mode\n"+
 			"  dbexplain encrypt <file>       Encrypt .env config with machine fingerprint\n"+
 			"  dbexplain <dbtype>             Database-specific reference (e.g. mysql, redis)\n"+
 			"  dbexplain all                  Full reference manual\n\n",
@@ -57,7 +60,10 @@ func PrintHelp() {
 			"Usage:\n"+
 			"  dbexplain [flags]              Collect & analyze database schemas\n"+
 			"  dbexplain list                 List all configured databases\n"+
+			"  dbexplain collect [flags]      Explicit schema collection subcommand\n"+
 			"  dbexplain execute <query>      Run read-only query (SQL / JSON / native)\n"+
+			"  dbexplain diff [flags]         Schema diff / delta detection\n"+
+			"  dbexplain repl                 Interactive REPL mode\n"+
 			"  dbexplain encrypt <file>       Encrypt .env config with machine fingerprint\n"+
 			"  dbexplain <dbtype>             Database-specific reference (e.g. mysql, redis)\n"+
 			"  dbexplain all                  Full reference manual\n\n",
@@ -578,6 +584,163 @@ DESCRIPTION
       dbexplain list                    # List all databases from .env
       dbexplain list --config db.json   # List from JSON config file
 
+─── 显式 Schema 采集 ──────────────────────────────────────────
+
+    子命令:
+      dbexplain collect [flags]
+
+    显式执行 Schema 采集，与顶层 dbexplain -env 等效但通过子命令调用。
+
+    参数:
+      -env                      从配置文件加载 DSN
+      -dsn <string>             直接指定连接串
+      -config <file>            JSON 配置文件
+      -include/-exclude         按 DB 类型/标签过滤
+      -label <name>             按 label 过滤
+      -json                     输出 JSON 格式
+      -human                    人类友好输出
+      -context <dir>            AI 上下文目录
+      -cache <file>             Schema 指纹缓存
+      -o <file>                 输出到文件
+
+    示例:
+      dbexplain collect -env                        # 从 .env 采集全部
+      dbexplain collect -env --include mysql,redis   # 仅采集 MySQL 和 Redis
+      dbexplain collect -env --context ./ctx         # 输出 AI 上下文目录
+      dbexplain collect -env --cache ./cache.json    # 启用增量变更检测
+
+─── EXPLICIT SCHEMA COLLECTION ────────────────────────────────
+
+    Subcommand:
+      dbexplain collect [flags]
+
+    Explicit schema collection, equivalent to dbexplain -env but called
+    as a subcommand.
+
+    Flags:
+      -env                      Load DSNs from config file
+      -dsn <string>             Direct DSN string
+      -config <file>            JSON config file
+      -include/-exclude         Filter by kind/label
+      -label <name>             Filter by label
+      -json                     Output JSON
+      -human                    Human-friendly output
+      -context <dir>            AI context directory
+      -cache <file>             Fingerprint cache file
+      -o <file>                 Output to file
+
+    Examples:
+      dbexplain collect -env                        # Collect all from .env
+      dbexplain collect -env --include mysql,redis   # Collect MySQL and Redis only
+      dbexplain collect -env --context ./ctx         # AI context output
+      dbexplain collect -env --cache ./cache.json    # Enable delta detection
+
+─── Schema 差异对比 ──────────────────────────────────────────
+
+    子命令:
+      dbexplain diff [flags]
+
+    比较两个 Schema 快照或缓存版本的差异，支持字段级变更追踪。
+
+    模式:
+      1. --cache FILE --current FILE    缓存 vs 当前采集结果
+      2. --cache FILE --since VERSION   缓存 vs 历史版本标签
+      3. --before FILE --after FILE     两个历史 JSON 文件对比
+      4. --cache FILE --list-versions   列出所有已存储版本
+
+    参数:
+      --cache <file>            Schema 指纹缓存文件
+      --current <file>          当前扫描 JSON 文件
+      --before <file>           之前的扫描 JSON 文件
+      --after <file>            之后的扫描 JSON 文件
+      --since <version>         与指定版本标签对比
+      --list-versions           列出所有存储的版本标签
+      -human                    人类友好输出（默认 JSON）
+
+    示例:
+      dbexplain diff --cache cache.json --current report.json --human
+      dbexplain diff --cache cache.json --since v20260601 --human
+      dbexplain diff --before old.json --after new.json
+      dbexplain diff --cache cache.json --list-versions
+
+─── SCHEMA DIFF ───────────────────────────────────────────────
+
+    Subcommand:
+      dbexplain diff [flags]
+
+    Compare two schema snapshots or cache versions with field-level tracking.
+
+    Modes:
+      1. --cache FILE --current FILE    Cache vs current scan
+      2. --cache FILE --since VERSION   Cache vs historical version label
+      3. --before FILE --after FILE     Two JSON files comparison
+      4. --cache FILE --list-versions   List all stored version labels
+
+    Flags:
+      --cache <file>            Fingerprint cache file
+      --current <file>          Current scan JSON file
+      --before <file>           Previous scan JSON file
+      --after <file>            Later scan JSON file
+      --since <version>         Compare against this version label
+      --list-versions           List stored version labels
+      -human                    Human-friendly output (default JSON)
+
+    Examples:
+      dbexplain diff --cache cache.json --current report.json --human
+      dbexplain diff --cache cache.json --since v20260601 --human
+      dbexplain diff --before old.json --after new.json
+      dbexplain diff --cache cache.json --list-versions
+
+─── REPL 交互模式 ─────────────────────────────────────────────
+
+    子命令:
+      dbexplain repl [flags]
+
+    交互式只读查询终端，支持 SQL / 原生 / DSL 查询。
+
+    参数:
+      -env                      从配置文件加载 DSN
+      -dsn <string>             直接指定连接串
+      -config <file>            JSON 配置文件
+      --label <name>            按 label 匹配 DSN
+      --db <N>                  按 DB 编号匹配
+      --dsl                     启用 DSL 模式
+
+    REPL 内命令:
+      .help                     显示帮助
+      .exit, .quit              退出 REPL
+      Ctrl+D                    退出 REPL
+
+    示例:
+      dbexplain repl -env --label mysql
+      dbexplain repl -env --dsl --label mysql
+      dbexplain repl -dsn 'mysql://user:pass@host:3306/mydb'
+
+─── REPL INTERACTIVE MODE ─────────────────────────────────────
+
+    Subcommand:
+      dbexplain repl [flags]
+
+    Interactive read-only query terminal supporting SQL / native / DSL queries.
+
+    Flags:
+      -env                      Load DSNs from config file
+      -dsn <string>             Direct DSN string
+      -config <file>            JSON config file
+      --label <name>            Match DSN by label
+      --db <N>                  Match DSN by index
+      --dsl                     Enable DSL mode
+
+    REPL commands:
+      .help                     Show help
+      .exit, .quit              Exit REPL
+      Ctrl+D                    Exit REPL
+
+    Examples:
+      dbexplain repl -env --label mysql
+      dbexplain repl -env --dsl --label mysql
+      dbexplain repl -dsn 'mysql://user:pass@host:3306/mydb'
+
 ─── 只读查询执行 ──────────────────────────────────────────────
 
     子命令:
@@ -620,6 +783,85 @@ DESCRIPTION
       • 密码脱敏 — 查询结果不含任何连接信息或密码
 `,
 		`
+
+─── EXPLICIT SCHEMA COLLECTION ────────────────────────────────
+
+    Subcommand:
+      dbexplain collect [flags]
+
+    Explicit schema collection, equivalent to dbexplain -env but called
+    as a subcommand.
+
+    Flags:
+      -env                      Load DSNs from config file
+      -dsn <string>             Direct DSN string
+      -config <file>            JSON config file
+      -include/-exclude         Filter by kind/label
+      -label <name>             Filter by label
+      -json                     Output JSON
+      -human                    Human-friendly output
+      -context <dir>            AI context directory
+      -cache <file>             Fingerprint cache file
+      -o <file>                 Output to file
+
+    Examples:
+      dbexplain collect -env                        # Collect all from .env
+      dbexplain collect -env --include mysql,redis   # Collect MySQL and Redis only
+      dbexplain collect -env --context ./ctx         # AI context output
+      dbexplain collect -env --cache ./cache.json    # Enable delta detection
+
+─── SCHEMA DIFF ───────────────────────────────────────────────
+
+    Subcommand:
+      dbexplain diff [flags]
+
+    Compare two schema snapshots or cache versions with field-level tracking.
+
+    Modes:
+      1. --cache FILE --current FILE    Cache vs current scan
+      2. --cache FILE --since VERSION   Cache vs historical version label
+      3. --before FILE --after FILE     Two JSON files comparison
+      4. --cache FILE --list-versions   List all stored version labels
+
+    Flags:
+      --cache <file>            Fingerprint cache file
+      --current <file>          Current scan JSON file
+      --before <file>           Previous scan JSON file
+      --after <file>            Later scan JSON file
+      --since <version>         Compare against this version label
+      --list-versions           List stored version labels
+      -human                    Human-friendly output (default JSON)
+
+    Examples:
+      dbexplain diff --cache cache.json --current report.json --human
+      dbexplain diff --cache cache.json --since v20260601 --human
+      dbexplain diff --before old.json --after new.json
+      dbexplain diff --cache cache.json --list-versions
+
+─── REPL INTERACTIVE MODE ─────────────────────────────────────
+
+    Subcommand:
+      dbexplain repl [flags]
+
+    Interactive read-only query terminal supporting SQL / native / DSL queries.
+
+    Flags:
+      -env                      Load DSNs from config file
+      -dsn <string>             Direct DSN string
+      -config <file>            JSON config file
+      --label <name>            Match DSN by label
+      --db <N>                  Match DSN by index
+      --dsl                     Enable DSL mode
+
+    REPL commands:
+      .help                     Show help
+      .exit, .quit              Exit REPL
+      Ctrl+D                    Exit REPL
+
+    Examples:
+      dbexplain repl -env --label mysql
+      dbexplain repl -env --dsl --label mysql
+      dbexplain repl -dsn 'mysql://user:pass@host:3306/mydb'
 
 ─── READ-ONLY QUERY EXECUTION ─────────────────────────────────
 

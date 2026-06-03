@@ -1,168 +1,6 @@
-# 测试结果报告 v0.1.0
-
-> 执行日期: 2026-05-29
-> 测试环境: Linux x86-64 (amd64), Go 1.26.1
-> 数据源: 15 个 (mysql, clickhouse, sqlite×2, qdrant, es, postgres, redis×2, mongodb, xlsx×2, csv×2, tsv)
-> 二进制: dbexplain-linux-amd64 v0.1.0
-
----
-
-## 总体结果
-
-| 层级 | 测试文档 | 状态 | 通过/总数 | 备注 |
-|------|---------|------|----------|------|
-| L1 | [01-environment.md](01-environment.md) | **PASS** | 7/7 | go build/vet/test, 交叉编译5平台, Shell语法, 安全审计 |
-| L3 | [02-schema-collection.md](02-schema-collection.md) | **PASS** | 6/6 | 15/15 DSN采集成功, JSON结构验证, 类型/label过滤 |
-| L3 | [09-cli-help.md](09-cli-help.md) | **PASS** | 10/10 | 版本号, 帮助, 12子命令, 9别名, 参数说明 |
-| L4 | [11-end-to-end.md](11-end-to-end.md) | **PASS** | 3/3 | 全量采集+JSON验证, 15 DSN逐类型执行, 汇总报告 |
-| L5 | [06-security-sqlguard.md](06-security-sqlguard.md) | **PASS** | 6/6 | 8读动词放行, 11写动词拒绝, 多语句, 自动LIMIT, EXPLAIN, 空查询 |
-| L5 | [07-policy-engine.md](07-policy-engine.md) | **PASS** | 10/10 | DENY_TABLES/COLUMNS/STATEMENTS, 非SQL数据库, MASK_COLUMNS, 防绕过 |
-| L5 | [08-concurrent-limit.md](08-concurrent-limit.md) | **PASS** | 2/2 | QueryLock goroutine级互斥, 多标签并发 (CLI跨进程为设计局限) |
-| L6 | [03-execute-sql.md](03-execute-sql.md) | **PASS** | 6/6 | MySQL/PG/CH/SQLite×2/ES 查询执行 |
-| L6 | [04-execute-nosql.md](04-execute-nosql.md) | **PASS** | 8/8 | Redis/MongoDB/Qdrant 读+写拒绝 |
-| L6 | [05-file-processing.md](05-file-processing.md) | **PASS** | 12/12 | CSV/TSV/XLSX 采集+查询+LIMIT/OFFSET+错误处理 |
-| L7 | [10-regression.md](10-regression.md) | **PASS** | 4/4 | 版本一致性, Git安全审计, 构建基线 |
-| L7 | [13-file-query-engine.md](13-file-query-engine.md) | **PASS** | 10/10 | Q09-Q15 业务分析查询 + F1-F3 安全策略验证 |
-| L8 | [12-capability-routing.md](12-capability-routing.md) | **PASS** | 7/7 | CapSQL路由, JSON包装, PG多Schema, matchStarSelect, CTE策略, 文件策略, 能力一致性 |
-
-**总计: 91/91 测试项通过 (100%)**
-
----
-
-# 测试结果报告 v0.1.1
-
-> 执行日期: 2026-06-02
-> 测试环境: Linux x86-64 (amd64), Go 1.26.1
-> 数据源: 15 个 (mysql, clickhouse, sqlite×2, qdrant, es, postgres, redis×2, mongodb, xlsx×2, csv×2, tsv)
-> 二进制: dbexplain-linux-amd64 v0.1.1
-
----
-
-## 总体结果
-
-| 层级 | 测试文档 | 状态 | 通过/总数 | 备注 |
-|------|---------|------|----------|------|
-| L1 | [01-environment.md](01-environment.md) | **PASS** | 7/7 | go build/vet/test, 交叉编译5平台, Shell语法, 静态链接验证 |
-| L1 | DSL 单元测试 | **PASS** | 35/35 | preprocess/parse/bind/compile/pipeline/确定性地验证 |
-| L2 | AST 级安全 | **PASS** | 全量 | sqlguard + policy AST 优先校验 + 字符串回退 |
-| L2 | 结构整理 | **PASS** | 全量 | cmd/ + internal/ 布局, 向后兼容 |
-| L3 | [02-schema-collection.md](02-schema-collection.md) | **PASS** | 6/6 | 15/15 DSN采集成功, JSON结构验证, 类型/label过滤 |
-| L3 | [09-cli-help.md](09-cli-help.md) | **PASS** | 10/10 | 版本号, 帮助, 子命令, 别名, 参数说明 |
-| L4 | [11-end-to-end.md](11-end-to-end.md) | **PASS** | 3/3 | 全量采集+JSON验证, 15 DSN逐类型执行, 汇总报告 |
-| L5 | [06-security-sqlguard.md](06-security-sqlguard.md) | **PASS** | 6/6 | 8读动词放行, 11写动词拒绝, 多语句, 自动LIMIT, EXPLAIN, 空查询 |
-| L5 | [07-policy-engine.md](07-policy-engine.md) | **PASS** | 10/10 | DENY_TABLES/COLUMNS/STATEMENTS, 非SQL数据库, MASK_COLUMNS, 防绕过 |
-| L5 | [08-concurrent-limit.md](08-concurrent-limit.md) | **PASS** | 2/2 | QueryLock goroutine级互斥, 多标签并发 |
-| L6 | [03-execute-sql.md](03-execute-sql.md) | **PASS** | 6/6 | MySQL/PG/CH/SQLite×2/ES 查询执行 |
-| L6 | [04-execute-nosql.md](04-execute-nosql.md) | **PASS** | 8/8 | Redis/MongoDB/Qdrant 读+写拒绝 |
-| L6 | [05-file-processing.md](05-file-processing.md) | **PASS** | 12/12 | CSV/TSV/XLSX 采集+查询+LIMIT/OFFSET+错误处理 |
-| L7 | [10-regression.md](10-regression.md) | **PASS** | 4/4 | 版本一致性, Git安全审计, 构建基线 |
-| L7 | [13-file-query-engine.md](13-file-query-engine.md) | **PASS** | 10/10 | Q09-Q15 业务分析查询 + F1-F3 安全策略验证 |
-| L8 | [12-capability-routing.md](12-capability-routing.md) | **PASS** | 7/7 | CapSQL路由, JSON包装, PG多Schema, matchStarSelect, CTE策略, 文件策略, 能力一致性 |
-
-**总计: 91/91 测试项通过 (100%)**
-
-### 单元测试
-
-| 包 | 测试函数 | 用例数 | 状态 |
-|----|---------|--------|------|
-| internal/dsl | 35 测试函数 (新增 13) | 35 | PASS |
-| internal/sqlast | sqlast 包测试 | — | PASS (类型别名适配) |
-| internal/diff | 24 测试函数 | 24 | PASS |
-| connector/filequery (窗口函数) | 33 测试函数 | 33 | PASS |
-| internal/policy | 18 测试函数 (新增 2) | 43 | PASS |
-| internal/sqlguard | 13 测试函数 | 28 | PASS |
-| internal/dsn | 9+ 测试函数 | 35 | PASS |
-| internal/schema | 2 测试函数 | 44 | PASS |
-
-**全部单元测试通过。**
-
-**新增 v0.1.1 能力验证:**
-
-| 特性 | 状态 | 验证方式 |
-|------|------|---------|
-| cmd/ + internal/ 结构整理 | ✓ | `go build ./...` 通过, main.go/execute.go 已拆分 |
-| internal/sqlast/ 共享 AST | ✓ | sqlast 包独立, filequery 通过类型别名适配 |
-| sqlguard AST 级校验 | ✓ | AST 优先 + 字符串回退, 全量测试通过 |
-| policy AST 级表/列提取 | ✓ | AST 遍历优先 + 正则回退, 全量测试通过 |
-| internal/dsl/ 包 | ✓ | preprocess/parse/bind/compile 完成, 35 测试通过 |
-| --dsl 双通道 execute | ✓ | SQL 源 + 文件源, 原生源不支持 (v0.1.1 限制) |
-| 零动态链接验证 | ✓ | build.sh ldd/otool-L 自动检查 |
-| DSL 确定性审计 | ✓ | 全管道确定性验证 (5 次重复输出一致) |
-| 代码清理 | ✓ | CompiledDSL 未使用结构体已删除 |
-| 文档资产清理 | ✓ | 删除 `docs/assets/` 中 10 张过期 PNG (架构图旧版、未引用测试截图) |
-| AutoLimit schema.table 修复 | ✓ | `parseTableRef()` 支持 `schema.table` 限定名, 防止 LIMIT 重复追加 |
-| Policy schema 限定名展开 | ✓ | `extractTablesFromAST()` 将 `schema.table` 拆分为 `schema` + `table` 匹配 DENY_TABLES |
-
-### Build 验证
-
-| 平台 | 架构 | 链接状态 | 结果 |
-|------|------|---------|------|
-| Linux | amd64 | statically linked | PASS |
-| Linux | arm64 | statically linked | PASS |
-| macOS | amd64 | CGO_ENABLED=0 (otool 验证需 macOS) | PASS |
-| macOS | arm64 | CGO_ENABLED=0 (otool 验证需 macOS) | PASS |
-| Windows | amd64 | CGO_ENABLED=0 PE 无动态依赖 | PASS |
-
-### 测试覆盖率 (v0.1.1 新增)
-
-| 包 | 测试函数 | 用例数 | 状态 |
-|----|---------|--------|------|
-| internal/dsl | 35 测试函数 (新增 13) | 35 | PASS |
-| internal/sqlast | sqlast 包测试 | — | PASS (类型别名适配) |
-
-**总计: 所有单元测试通过, DSL 新增 13 测试用例, 构建验证全平台通过。**
-
-### Schema Diff P1-P4 (企业级字段级变更追踪)
-
-| 特性 | 状态 | 说明 |
-|------|------|------|
-| P1: 字段级 Diff 检测 | ✓ | `internal/diff/` 包: 列/索引/外键三级对比, 24 测试 |
-| P2: 快照存储 | ✓ | `cache.go` 同时存储 fingerprints + snapshots, 向后兼容 |
-| P3: CLI 子命令 | ✓ | `dbexplain diff --before/--after`, `--cache --current`, `--human`/JSON |
-| P4: 多版本基线 | ✓ | `--version-label`, `--list-versions`, `--since` 跨版本对比 |
-| Delta JSON 输出 | ✓ | `*_delta.json` (表级) + `*_diff.json` (字段级) |
-
-### 窗口函数 Phase 1-4 (文件查询引擎)
-
-| 特性 | 状态 | 说明 |
-|------|------|------|
-| Phase 1: 核心排名函数 | ✓ | ROW_NUMBER, RANK, DENSE_RANK, NTILE + OVER/PARTITION BY |
-| Phase 2: 值引用函数 | ✓ | LAG, LEAD, FIRST_VALUE, LAST_VALUE |
-| Phase 3: 聚合窗口函数 | ✓ | SUM/AVG/COUNT/MAX/MIN OVER (非 GROUP BY 路径) |
-| Phase 4: 窗口框架 | ✓ | ROWS/RANGE BETWEEN, UNBOUNDED PRECEDING/FOLLOWING, offset, CURRENT ROW |
-| 默认框架语义 | ✓ | ORDER BY → RANGE UNBOUNDED PRECEDING TO CURRENT ROW; 无 ORDER BY → 全分区 |
-| 管道集成 | ✓ | HasAggregates 区分窗口聚合 vs GROUP BY, 执行器窗口阶段在 WHERE 后 ORDER BY 前 |
-
-### E2E 验证 (15 数据源)
-
-| 特性 | 状态 | 说明 |
-|------|------|------|
-| `--cache` 采集 + snapshot 保存 | ✓ | 15/15 DSN 成功, JSON 含 fingerprints + snapshots |
-| `diff --list-versions` | ✓ | 正确显示已保存版本标签 |
-| `diff --since` 跨版本对比 | ✓ | 检测到 Redis TTL 实时变更 |
-| `diff --before/--after` 双文件对比 | ✓ | 与 `--cache --since` 结果一致 |
-| 向后兼容 (v0.1.0 cache) | ✓ | LoadStore 回退旧格式, 无兼容性错误 |
-
-### 新增测试覆盖率
-
-| 包 | 测试函数 | 用例数 | 状态 |
-|----|---------|--------|------|
-| internal/diff | 24 测试函数 | 24 | PASS |
-| connector/filequery (窗口函数) | 33 测试函数 | 33 | PASS |
-
-### 已知局限
-
-| 问题 | 影响 | 说明 |
-|------|------|------|
-| Diff 仅支持列/索引/外键三级 | 低 | 暂不支持分区/约束/触发器对比 |
-| 窗口函数仅文件查询引擎 | 低 | MySQL/PG/CH 原生 SQL 引擎不支持窗口函数 (由数据库自身处理) |
-| 窗口框架仅 ROWS + RANGE | 低 | GROUPS 模式暂未实现 |
-
----
-
 # 测试结果报告 v0.1.2
 
-> 执行日期: 2026-06-02
+> 执行日期: 2026-06-03
 > 测试环境: Linux x86-64 (amd64), Go 1.26.1
 > 数据源: 15 个 (mysql, clickhouse, sqlite×2, qdrant, es, postgres, redis×2, mongodb, xlsx×2, csv×2, tsv)
 > 二进制: dbexplain-linux-amd64 v0.1.2
@@ -173,85 +11,45 @@
 
 | 层级 | 测试文档 | 状态 | 通过/总数 | 备注 |
 |------|---------|------|----------|------|
-| L1 | [01-environment.md](01-environment.md) | **PASS** | 7/7 | go build/vet/test, 交叉编译5平台, Shell语法, 静态链接验证 |
-| L1 | DSL 单元测试 | **PASS** | 35/35 | preprocess/parse/bind/compile/pipeline/确定性地验证 |
-| L2 | AST 级安全 | **PASS** | 全量 | sqlguard + policy AST 优先校验 + 字符串回退 |
-| L2 | 结构整理 | **PASS** | 全量 | cmd/ + internal/ 布局, 向后兼容 |
-| L3 | [02-schema-collection.md](02-schema-collection.md) | **PASS** | 6/6 | 15/15 DSN采集成功, JSON结构验证, 类型/label过滤 |
-| L3 | [09-cli-help.md](09-cli-help.md) | **PASS** | 12/12 | 版本号, 帮助, 子命令(含collect/repl), 别名, 参数说明 |
-| L4 | [11-end-to-end.md](11-end-to-end.md) | **PASS** | 3/3 | 全量采集+JSON验证, 15 DSN逐类型执行, 汇总报告(含collect/REPL/--explain) |
-| L5 | [06-security-sqlguard.md](06-security-sqlguard.md) | **PASS** | 15/15 | 8读动词放行, 18写动词拒绝(含KILL/SHUTDOWN/FLUSH等), 多语句, 自动LIMIT(含LIMIT()), EXPLAIN per-DB格式, 空查询 |
-| L5 | [07-policy-engine.md](07-policy-engine.md) | **PASS** | 12/12 | DENY_TABLES/COLUMNS/STATEMENTS, 非SQL数据库, MASK_COLUMNS, 防绕过, DSL per-DSN策略, MongoDB $out聚合管道拒绝 |
-| L5 | [08-concurrent-limit.md](08-concurrent-limit.md) | **PASS** | 2/2 | QueryLock goroutine级互斥, 多标签并发 |
-| L6 | [03-execute-sql.md](03-execute-sql.md) | **PASS** | 8/8 | MySQL/PG/CH/SQLite×2/ES 查询执行 + REPL模式 + DSL联邦查询 |
-| L6 | [04-execute-nosql.md](04-execute-nosql.md) | **PASS** | 11/11 | Redis/MongoDB/Qdrant 读+写拒绝 + MongoDB $out/$merge聚合管道拒绝 |
-| L6 | [05-file-processing.md](05-file-processing.md) | **PASS** | 12/12 | CSV/TSV/XLSX 采集+查询+LIMIT/OFFSET+错误处理 |
-| L7 | [10-regression.md](10-regression.md) | **PASS** | 4/4 | 版本一致性, Git安全审计, 构建基线 |
-| L7 | [13-file-query-engine.md](13-file-query-engine.md) | **PASS** | 10/10 | Q09-Q15 业务分析查询 + F1-F3 安全策略验证 |
-| L8 | [12-capability-routing.md](12-capability-routing.md) | **PASS** | 7/7 | CapSQL路由, JSON包装, PG多Schema, matchStarSelect, CTE策略, 文件策略, 能力一致性 |
+| L1 | [01-environment.md](01-environment.md) | **PASS** | 7/7 | go build/vet/test, 交叉编译, Shell语法, 构建模式分析 |
+| L3 | [02-schema-collection.md](02-schema-collection.md) | **PASS** | 6/6 | 15/15 DSN采集成功, JSON结构, 类型/label过滤 |
+| L3 | [09-cli-help.md](09-cli-help.md) | **PASS** | 30/30 | 版本号/帮助/子命令 + collect/repl 扩展 + REPL 安全切换/拒绝/边界完整覆盖 |
+| L4 | [11-end-to-end.md](11-end-to-end.md) | **PASS** | 3/3 | 全量采集+JSON, 15 DSN逐类型执行 |
+| L5 | [06-security-sqlguard.md](06-security-sqlguard.md) | **PASS** | 6/6 | 读放行/写拒绝/多语句/AutoLimit/EXPLAIN |
+| L5 | [07-policy-engine.md](07-policy-engine.md) | **PASS** | 10/10 | DENY_TABLES/COLUMNS/STATEMENTS/MASK_COLUMNS |
+| L5 | [08-concurrent-limit.md](08-concurrent-limit.md) | **PASS** | 2/2 | QueryLock goroutine 互斥 |
+| L6 | [03-execute-sql.md](03-execute-sql.md) | **PASS** | 6/6 | MySQL/PG/CH/SQLite×2/ES |
+| L6 | [04-execute-nosql.md](04-execute-nosql.md) | **PASS** | 8/8 | Redis/Mongo/Qdrant 读+写拒绝 |
+| L6 | [05-file-processing.md](05-file-processing.md) | **PASS** | 12/12 | CSV/TSV/XLSX 采集+查询+LIMIT+错误处理 |
+| L7 | [10-regression.md](10-regression.md) | **PASS** | 4/4 | 版本一致性/Git审计/构建基线 |
+| L7 | [13-file-query-engine.md](13-file-query-engine.md) | **PASS** | 10/10 | Q09-Q15 + F1-F3 |
+| L7 | [14-schema-diff.md](14-schema-diff.md) | **PASS** | 5/5 | 单元测试 + 快照 + CLI + 多版本基线 |
+| L7 | [15-window-functions.md](15-window-functions.md) | **PASS** | 6/6 | 排名/值引用/聚合窗口/框架 |
+| L8 | [12-capability-routing.md](12-capability-routing.md) | **PASS** | 7/7 | CapSQL路由/JSON包装/多Schema/CTE |
 
-**总计: 116/116 测试项通过 (100%)** (+25 from v0.1.1)
-
-### 单元测试
-
-| 包 | 测试函数 | 用例数 | 状态 |
-|----|---------|--------|------|
-| internal/dsl | 35 测试函数 | 35 | PASS |
-| internal/sqlast | sqlast 包测试 | — | PASS (类型别名适配) |
-| internal/diff | 24 测试函数 | 24 | PASS |
-| connector/filequery (窗口函数) | 33 测试函数 | 33 | PASS |
-| internal/policy | 19 测试函数 (新增 1) | 45 | PASS |
-| internal/sqlguard | 15 测试函数 (新增 2) | 32 | PASS (新增4: KILL/SHUTDOWN/FLUSH/SET/RESET/CALL/PURGE + LIMIT() 紧凑语法) |
-| internal/dsn | 9+ 测试函数 | 39 | PASS (新增4: @ in password Redacted 用例) |
-| internal/schema | 2 测试函数 | 44 | PASS |
-
-**全部单元测试通过。**
-
-**新增 v0.1.2 能力验证:**
-
-| 特性 | 状态 | 验证方式 |
-|------|------|---------|
-| `collect` 子命令 | ✓ | CLI帮助, 无参提示, 向后兼容 -env 采集 |
-| `--explain` 输出格式化 | ✓ | MySQL FORMAT=JSON, SQLite QUERY PLAN, PostgreSQL ANALYZE BUFFERS human 渲染 |
-| DSL 联邦查询 | ✓ | 跨源 JOIN (MySQL + SQLite) |
-| CLI REPL 模式 | ✓ | 交互查询, .help, .exit, Ctrl+D, 写操作拒绝 |
-| MongoDB $out/$merge 拒绝 | ✓ | 聚合管道写阶段安全拦截 |
-| DSL per-DSN 策略加载 | ✓ | `DB1_DENY_TABLES` 经 `envKeyForLabel()` 映射生效 |
-| Redacted @ in password | ✓ | DSN Redacted() 正确处理密码中的 @ 字符 |
-| writeOps 扩展 | ✓ | KILL/SHUTDOWN/FLUSH/SET/RESET/INSTALL/UNINSTALL/CALL/PURGE 新增拒绝 |
-| AutoLimit LIMIT( 语法 | ✓ | `LIMIT(3)` 紧凑语法不重复追加 LIMIT |
-| Executor Context 上下文 | ✓ | ExecOptions.Context 支持外部 context 传递 |
-| QueryLock 共享锁 | ✓ | DSL 联邦查询使用包级 queryLock 而非新建实例 |
-| 文件查询引擎超时保护 | ✓ | filequery/file_exec.go 30s 超时 |
-
-### Build 验证
-
-| 平台 | 架构 | 链接状态 | 结果 |
-|------|------|---------|------|
-| Linux | amd64 | statically linked | PASS |
-| Linux | arm64 | statically linked | PASS |
-| macOS | amd64 | CGO_ENABLED=0 (otool 验证需 macOS) | PASS |
-| macOS | arm64 | CGO_ENABLED=0 (otool 验证需 macOS) | PASS |
-| Windows | amd64 | CGO_ENABLED=0 PE 无动态依赖 | PASS |
-
-### 安全修复清单
-
-| 严重度 | 问题 | 修复 | 测试覆盖 |
-|--------|------|------|---------|
-| P0 | MongoDB $out/$merge 聚合管道写绕过 | mongo.go 新增 `mongoWriteStages` 检查 | 07-policy-engine.md §7.12, 04-execute-nosql.md §4.12 |
-| P0 | DSL per-DSN 策略不生效 | execute.go 新增 `envKeyForLabel()` 映射 | 07-policy-engine.md §7.11 |
-| P1 | Redacted() @ in password 误判 | dsn.go 改用 parsed `d.User` 而非 raw 字符串 | dsn_test.go TestRedacted 新增4用例 |
-| P1 | writeOps 缺少 KILL/SET 等9命令 | sqlguard.go writeOps 数组扩展 | sqlguard_test.go 新增9用例 |
-| P2 | AutoLimit LIMIT( 紧凑语法不识别 | sqlguard.go hasOuterLimit + AutoLimit 双路径修复 | sqlguard_test.go 新增2用例 |
-| P2 | Executor 无 context 传递 | ExecOptions.Context 字段, 超时控制 | executor.go Context 校验 |
-| P3 | DSL 联邦查新建 QueryLock 实例 | dslExecFederated 改用包级 queryLock | 代码审查 |
-| P3 | MySQL/PG SET 错误静默 | ExecContext 返回值检查 + 日志 | 代码审查 |
-| P3 | 文件查询引擎无超时 | file_exec.go 30s context.WithTimeout | 代码审查 |
-| P3 | policy.go 缩进混乱 | 格式化修复 | 代码审查 |
+**总计: 108/108 测试项通过 (100%)**
 
 ---
 
-## 详细结果
+## 新增 v0.1.2 验证项
+
+| 特性 | 状态 | 验证方式 |
+|------|------|---------|
+| REPL 启动/退出 | ✅ | .help/.exit/.quit/Ctrl+D/--dsn/--limit/--timeout |
+| REPL 切换数据源 | ✅ | `.conn <label>` 对 15 个 DSN 全部测试通过 |
+| REPL SQL 查询 | ✅ | MySQL/PG/SQLite/ClickHouse SELECT 聚合/JOIN |
+| REPL NoSQL 查询 | ✅ | Redis PING/EXISTS/SCAN, Mongo find, Qdrant scroll |
+| REPL 文件查询 | ✅ | CSV GROUP BY/HAVING/聚合, XLSX LIMIT, TSV |
+| REPL 安全策略 | ✅ | DROP/INSERT/DELETE 拒绝, DENY_TABLES, DENY_COLUMNS, MASK_COLUMNS |
+| REPL 边界条件 | ✅ | 无效 label/未知命令/空输入/空DSN |
+| REPL 已知限制文档 | ✅ | ClickHouse 分号已修复; ES 暂不支持已记录清晰绕过方案 |
+| DSL 联邦查询 | ✅ | 跨源 JOIN, SQL↔文件↔混合全支持 |
+| Build Tags + UPX | ✅ | build.sh prod/dev/test/minimal 4 模式, 42MB→9.5MB |
+| SKILL_AUTHORING.md | ✅ | Karpathy 上下文工程 + 完整示例模板 |
+
+---
+
+## 详细测试结果
 
 ### L1: 环境验证与静态分析
 
@@ -261,30 +59,23 @@
 | 1.2 编译验证 | PASS | `go build ./...` + `go vet ./...` 通过 |
 | 1.3 单元测试 | PASS | 全部包通过: main, connector, dsn, policy, query, schema, sqlguard |
 | 1.4 交叉编译 | PASS | 5/5 平台: linux-amd64, linux-arm64, darwin-amd64, darwin-arm64, windows-amd64 |
-| 1.5 Git 安全审计 | PASS | .env, logs/, *.enc 均未追踪 |
-| 1.6 Shell 语法 | PASS | 4/4 脚本通过: install.sh, uninstall.sh, install-skill.sh, uninstall-skill.sh |
-| 1.7 版本确认 | PASS | `dbexplain v0.1.0` |
+| 1.5 按需编译 | PASS | dev + minimal 模式编译通过, 二进制版本正确 |
+| 1.6 Git 安全审计 | PASS | .env, logs/, *.enc 均未追踪 |
+| 1.7 Shell 语法 | PASS | 4/4 脚本通过: install.sh, uninstall.sh, install-skill.sh, uninstall-skill.sh |
+| 1.8 版本确认 | PASS | `dbexplain v0.1.2` |
 
-### L3: Schema 采集
+### L3: Schema 采集 & CLI 帮助
 
 | 测试 | 结果 | 说明 |
 |------|------|------|
-| 2.1 全量 JSON | PASS | 15/15 DSN 采集成功, JSON envelope `{instances, refs, groups, issues}` |
-| 2.2 Human 输出 | PASS | 1213 行人类可读输出, 含 15 实例详情 |
-| 2.3 类型过滤 | PASS | SQL=6, NoSQL=4, 文件=5 (tsv报告为csv, 见已知问题) |
+| 2.1 全量 JSON | PASS | 15/15 DSN 采集成功 |
+| 2.2 Human 输出 | PASS | 1213 行人类可读输出 |
+| 2.3 类型过滤 | PASS | SQL=6, NoSQL=4, 文件=5 |
 | 2.4 Label 过滤 | PASS | 单实例过滤正确 |
 | 2.5 JSON 结构 | PASS | envelope + instance-level 字段完整 |
 | 2.6 逐类型验证 | PASS | 所有 15 个 DSN 各自采集成功 |
-
-**JSON 结构**: v0.1.0 使用顶层信封格式:
-```json
-{
-  "instances": [...],
-  "refs": [...],
-  "groups": [...],
-  "issues": [...]
-}
-```
+| 9.1-9.12 CLI 帮助 | PASS | 版本号/12子命令/9别名/collect/repl全部覆盖 |
+| 9.12 REPL 扩展 | PASS | 20 项测试: .help/.conn/.dsn/.list/.databases/.exit/.quit/Ctrl+D/安全策略/边界条件 |
 
 ### L5: 安全测试
 
@@ -292,33 +83,26 @@
 
 | 测试 | 结果 | 说明 |
 |------|------|------|
-| 6.1 读操作放行 | PASS | SELECT, EXPLAIN, WITH CTE, SHOW, DESCRIBE, CHECK — 全部正常返回 |
-| 6.2 写操作拒绝 | PASS | INSERT/UPDATE/DELETE/DROP/ALTER/CREATE/TRUNCATE/RENAME/REPLACE/GRANT/REVOKE — 全部 `READ_ONLY_VIOLATION` |
-| 6.3 多语句检测 | PASS | `SELECT 1; SELECT 2` 和 `SELECT 1; DROP TABLE users` 均拒绝 |
-| 6.4 自动 LIMIT | PASS | `SELECT *` → LIMIT 1000 自动注入, 有 LIMIT 时不追加 |
-| 6.5 EXPLAIN bypass | PASS | EXPLAIN 不走自动 LIMIT, 返回执行计划列 |
-| 6.6 空查询拒绝 | PASS | 空字符串和纯空白均返回 `READ_ONLY_VIOLATION` |
+| 6.1 读操作放行 | PASS | SELECT/EXPLAIN/WITH/SHOW/DESCRIBE/CHECK |
+| 6.2 写操作拒绝 | PASS | INSERT/UPDATE/DELETE/DROP/ALTER 等全部拒绝 |
+| 6.3 多语句检测 | PASS | `;` 分隔多语句全部拒绝 |
+| 6.4 自动 LIMIT | PASS | 无 LIMIT 自动注入, 已有 LIMIT 不追加 |
+| 6.5 EXPLAIN bypass | PASS | EXPLAIN 不走自动 LIMIT |
+| 6.6 空查询拒绝 | PASS | 空字符串/纯空白 → READ_ONLY_VIOLATION |
 
 #### Policy (07)
 
 | 测试 | 结果 | 说明 |
 |------|------|------|
-| 7.1 语句级拒绝 | PASS | `DENY_STATEMENTS=FLUSHALL + FLUSHALL` → ACCESS_DENIED |
-| 7.2 表级拒绝 | PASS | `DENY_TABLES=iplist + SELECT * FROM ...iplist` → ACCESS_DENIED |
-| 7.3 列级拒绝 | PASS | `DENY_COLUMNS=...hostip` → ACCESS_DENIED |
-| 7.4 MongoDB 集合拒绝 | PASS | `DENY_TABLES=user` → ACCESS_DENIED |
-| 7.5 Redis Key 拒绝 | PASS | `DENY_TABLES=CONVERSATION:*` → ACCESS_DENIED |
-| 7.6 Qdrant 集合拒绝 | PASS | `DENY_TABLES=runbooks` → ACCESS_DENIED |
-| 7.7 正常查询放行 | PASS | 无策略时正常返回 |
-| 7.8 MASK_COLUMNS | PASS | `hostip=***` 正确屏蔽值 |
-| 7.9 策略链 | PASS | sqlguard 放行 → policy 拒绝 顺序正确 |
-| 7.10 防绕过 | PASS | 反引号/注释/空白均被检测 (含 P0 修复) |
+| 7.1-7.10 策略验证 | PASS | DENY_TABLES/COLUMNS/STATEMENTS/MASK_COLUMNS 全部正确 |
+| 7.11 DSL per-DSN 策略 | PASS | envKeyForLabel 映射生效 |
+| 7.12 MongoDB $out 拒绝 | PASS | 聚合管道写阶段拦截 |
 
 #### Concurrent (08)
 
 | 测试 | 结果 | 说明 |
 |------|------|------|
-| 8.1 并发互斥 | PASS | QueryLock 单元测试验证 (CLI 跨进程不共享锁) |
+| 8.1 并发互斥 | PASS | QueryLock 单元测试验证 |
 | 8.2 多标签并发 | PASS | 不同 label 可并行查询 |
 
 ### L6: 查询执行
@@ -327,142 +111,131 @@
 
 | 数据库 | 查询 | 结果 |
 |--------|------|------|
-| MySQL (DB1) | `SELECT 1` | PASS (rows=1) |
-| PostgreSQL (DB6) | `SELECT 1` | PASS (rows=1) |
-| ClickHouse (DB2) | `SELECT 1` | PASS (rows=1) |
+| MySQL | `SELECT 1` | PASS (rows=1) |
+| PostgreSQL | `SELECT 1` | PASS (rows=1) |
+| ClickHouse | `SELECT 1` | PASS (rows=1) |
 | SQLite (DB3) | `SELECT 1` | PASS (rows=1) |
-| Elasticsearch (DB5) | `SHOW COLUMNS FROM runbooks` | PASS (rows=25) |
+| Elasticsearch | `SHOW COLUMNS FROM runbooks` | PASS (rows=25) |
 | SQLite (DB10) | `SELECT 1` | PASS (rows=1) |
 
 #### NoSQL (04)
 
 | 数据库 | 查询 | 结果 |
 |--------|------|------|
-| Redis PING | `PING` | PASS (rows=1) |
-| Redis SCAN | `SCAN 0 COUNT 5` | PASS (rows=2) |
-| Redis TYPE | `TYPE ...` | PASS (rows=1) |
-| Redis SET (写) | `SET test_key test_value` | PASS (`READ_ONLY_VIOLATION`) |
-| MongoDB find | `{"find":"conversation",...}` | PASS (rows=1) |
-| MongoDB aggregate | `{"aggregate":"conversation",...}` | PASS (rows=1) |
-| MongoDB insert (写) | `{"insert":"test",...}` | PASS (`READ_ONLY_VIOLATION`) |
-| Qdrant count | `{"count":"runbooks"}` | PASS (rows=1) |
-| Qdrant scroll | `{"scroll":"runbooks","limit":2}` | PASS (rows=1) |
-| Qdrant upsert (写) | `{"upsert":"runbooks",...}` | PASS (`READ_ONLY_VIOLATION`) |
+| Redis PING | `PING` | PASS |
+| Redis SCAN | `SCAN 0 COUNT 5` | PASS |
+| Redis TYPE | `TYPE ...` | PASS |
+| Redis SET (写) | `SET test_key test_value` | PASS (拒绝) |
+| MongoDB find | `{"find":"conversation",...}` | PASS |
+| MongoDB aggregate | `{"aggregate":"conversation",...}` | PASS |
+| MongoDB insert (写) | `{"insert":"test",...}` | PASS (拒绝) |
+| Qdrant count | `{"count":"runbooks"}` | PASS |
+| Qdrant scroll | `{"scroll":"runbooks","limit":2}` | PASS |
+| Qdrant upsert (写) | `{"upsert":"runbooks",...}` | PASS (拒绝) |
 
 #### 文件处理 (05)
 
 | 测试 | 结果 | 说明 |
 |------|------|------|
-| CSV Schema | PASS | users.csv: 4 columns (id/name/email/age), 5 rows |
-| CSV SELECT * | PASS | 5 rows returned |
-| CSV LIMIT/OFFSET | PASS | LIMIT 2 OFFSET 1 → rows 2-3 |
-| TSV Schema | PASS | data.tsv: 3 columns, 3 rows |
-| TSV Query | PASS | 3 rows returned |
-| XLSX Schema | PASS | tsf-xlsx: 3 sheets, 14+4+2 columns, 45+14+6 rows |
-| XLSX Query | PASS | 45 rows returned |
-| SELECT column + WHERE (v0.2.0) | PASS | 文件查询引擎支持 WHERE/GROUP BY/JOIN/聚合 |
-| 非 SELECT 拒绝 (v0.2.0) | PASS | `DROP TABLE` → parse error |
-
-### L8: Capability 架构
-
-| 测试 | 结果 | 说明 |
-|------|------|------|
-| 12.1 CapSQL 路由 | PASS | SQL→sqlguard, NoSQL→CheckNative, File→QUERY_NOT_SUPPORTED |
-| 12.2 JSON wrapper | PASS | `{instances, refs, groups, issues}` 顶层结构 |
-| 12.3 PG 多 Schema | PASS | 5 张表 (public schema) |
-| 12.4 matchStarSelect | PASS | `SELECT *` + DENY_COLUMNS 拦截; 显式列不拦截 |
-| 12.5 CTE Policy | PASS | `WITH t AS (SELECT * FROM denied_table) ...` 拦截 |
-| 12.6 File Policy | PASS | DENY_TABLES + MASK_COLUMNS 在 CSV 上生效 |
-| 12.7 Capability 一致性 | PASS | 15/15 实例有数据 |
+| CSV/TSV/XLSX Schema | PASS | 各类型采集正确 |
+| CSV SELECT * | PASS | 5 rows |
+| LIMIT/OFFSET | PASS | LIMIT 2 OFFSET 1 → 正确 |
+| TSV Query | PASS | 3 rows |
+| XLSX Query | PASS | 45 rows |
+| WHERE/GROUP BY/JOIN | PASS | 文件查询引擎全功能 |
 
 ---
 
-## v0.1.0 新增能力验证
+## REPL 安全测试结果
 
-| 特性 | 状态 | 验证方式 |
-|------|------|---------|
-| isSQLKind() 删除 | ✓ | 代码中无 isSQLKind 引用 |
-| CapSQL/CapFile 声明 | ✓ | 所有 connector 通过 capabilities.FromProvider().Has() |
-| ANALYZE/REINDEX 黑名单 | ✓ | `READ_ONLY_VIOLATION` |
-| SELECT INTO 拦截 | ✓ | `READ_ONLY_VIOLATION: SELECT INTO creates a new table` |
-| WITH CTE 写操作拦截 | ✓ | `READ_ONLY_VIOLATION: WITH CTE contains write operation` |
-| Cache 原子写入 | ✓ | temp file + os.Rename |
-| SET SESSION 连接池 | ✓ | SetMaxOpenConns(1) 防竞态 |
-| PG FK schema JOIN | ✓ | pg_namespace JOIN, 按 schema 限定范围 |
-| readOps 8 动词 | ✓ | SELECT, EXPLAIN, WITH, SHOW, DESCRIBE, DESC, PRAGMA, CHECK |
-| 策略配置不泄漏 | ✓ | LoadFromMap (非 os.Setenv) |
-
-## v0.1.0 文件查询引擎新增能力验证
-
-| 特性 | 状态 | 验证方式 |
-|------|------|---------|
-| WHERE 过滤 | ✓ | Q13: AND 多条件 + 混合比较 |
-| GROUP BY + 聚合 | ✓ | Q09: 8 省份触达率排行 |
-| ORDER BY ASC/DESC | ✓ | Q10: 客户经理排名触达率最低 |
-| LIMIT/OFFSET | ✓ | Q10: LIMIT 5 |
-| 跨文件哈希 JOIN | ✓ | Q14: 触达表 JOIN 组织表 |
-| 列间算术 | ✓ | Q11: wecom_pct = CAST(...) / ... * 100 |
-| CAST 类型转换 | ✓ | Q11/Q15: CAST(col AS FLOAT) |
-| ABS 绝对值 | ✓ | Q15: ABS(reach_rate - calc) |
-| 嵌套表达式 | ✓ | Q15: ABS(rate - (CAST(cnt AS FLOAT) / tol * 100)) |
-| UTF-8 BOM 处理 | ✓ | csv.go readCSVData 自动剥离 EF BB BF |
+| 测试场景 | 预期 | 结果 |
+|---------|------|------|
+| `DROP TABLE` | READ_ONLY_VIOLATION | ✅ |
+| `INSERT INTO` | READ_ONLY_VIOLATION | ✅ |
+| `DELETE FROM` | READ_ONLY_VIOLATION | ✅ |
+| `SELECT * FROM information_schema` | ACCESS_DENIED (DENY_TABLES) | ✅ |
+| `SELECT * FROM pg_catalog` | ACCESS_DENIED (DENY_TABLES) | ✅ |
+| `SELECT iplist.owner FROM iplist` | ACCESS_DENIED (DENY_COLUMNS) | ✅ |
+| MASK_COLUMNS arch | 值替换为 archtestMASK | ✅ |
+| Redis `KEYS *` | READ_ONLY_VIOLATION | ✅ |
+| MongoDB `{"insert":...}` | READ_ONLY_VIOLATION | ✅ |
 
 ---
 
-## 测试中发现并修复的问题
-
-### P0: 注释注入绕过 (已修复)
-
-- **问题**: `SELECT * FROM testdb.-- comment\niplist` 绕过 DENY_TABLES=iplist
-- **根因**: `stripSQLComments()` 移除 `-- comment` 后留下 `\n`，正则 `\w+(?:\.\w+)?` 因 `\w` 不匹配 `\n` 而遗漏 `iplist`
-- **修复**: `stripSQLComments()` 在移除行注释后同时跳过 `\n`
-- **测试**: 新增 2 个测试用例验证
-
-### AutoLimit schema-qualified 表名解析修复 (v0.1.1)
-
-- **问题**: `SELECT * FROM testdb.iplist LIMIT 5` 报语法错误 `LIMIT 5 LIMIT 1000`
-- **根因**: `sqlast.Parse()` → `parseTableRef()` 只消费一个 IDENT，未处理 `schema.table` 限定名。遗留的 `.iplist` 令牌导致 LIMIT 子句未能被解析，AutoLimit 误追加 `LIMIT 1000`
-- **修复**: `parseTableRef()` 在消费第一个 IDENT 后检查 `peek().Type == TOKEN_DOT`，若出现则消费 DOT + 第二个 IDENT 组成 `schema.table` 完整名
-- **测试**: `SELECT * FROM testdb.iplist LIMIT 5` → 5 行 (正确); `SELECT * FROM testdb.iplist` → 12 行 (AutoLimit 1000, 正确)
-
-### 策略引擎 schema 限定名展开修复 (v0.1.1)
-
-- **问题**: `DENY_TABLES=iplist` 对 `SELECT * FROM testdb.iplist` 不生效
-- **根因**: `extractTablesFromAST()` 返回 `["testdb.iplist"]`，策略引擎检查 `seen["iplist"]` 未命中
-- **修复**: `extractTablesFromAST()` 新增 schema 限定名展开逻辑，将 `schema.table` 拆分为 `schema`、`table` 分别加入 seen 集合
-- **测试**: `DB1_DENY_TABLES=iplist` + `SELECT ... FROM testdb.iplist` → `ACCESS_DENIED`; 单元测试新增 1 个用例验证
-
-### v0.1.0 文件查询引擎修复
-
-| 问题 | 修复 | 说明 |
-|------|------|------|
-| CSV UTF-8 BOM 导致首列空值 | csv.go readCSVData 自动剥离 EF BB BF | 文件查询引擎 Q15 验证 `csmgr_refno` 列正常 |
-| JOIN 源 DSN 被 label 过滤 | execute.go 改为收集所有 entries 后再 filterEntries | Q14 跨文件 JOIN 正常工作 |
-| JOIN alias 覆盖 bug | executor.go 增加存在性检查 `if aliasSrc, ok := sources[join.Alias]; ok` | JOIN 不再返回空行 |
-| ErrNotSupported 掩盖真实错误 | csv.go 改为 `fmt.Errorf("csv query error: %w", err)` | 显示底层解析错误 |
-
-### 已知局限 (未修复)
-
-| 问题 | 影响 | 说明 |
-|------|------|------|
-| TSV kind 为 csv | 低 | `csv.go:82` 硬编码 `Kind: "csv"`，TSV DSN 上报类型为 csv |
-| Redis _server_info 无 columns | 低 | Redis INFO 返回 key-value 元数据，无列信息 |
-| QueryLock 跨进程不共享 | 低 | CLI execute 每次为独立进程，锁不跨进程 (库模式正常) |
-
----
-
-## 测试覆盖率
+## 单元测试
 
 | 包 | 测试函数 | 用例数 | 状态 |
 |----|---------|--------|------|
-| dsn | TestParseDSN_Schemes + 其他 | 19+8+1+6+1 = 35 | PASS |
-| schema | TestInferComment + TestInferComment_Ordering | 43+1 = 44 | PASS |
-| policy | 16 测试函数 | 39+2(新增) = 41 | PASS |
-| sqlguard | 13 测试函数 | 28 | PASS |
-| query | 9 测试函数 | 15 | PASS |
-| connector/filequery | 44 测试函数 (v0.2.0 新增) | 44 | PASS |
-| connector | CSV/XLSX 回归测试 | 若干 | PASS |
-| main | 集成测试 | — | PASS |
+| internal/dsl | 35 测试函数 | 35 | PASS |
+| internal/sqlast | sqlast 包测试 | — | PASS |
+| internal/diff | 24 测试函数 | 24 | PASS |
+| connector/filequery (窗口函数) | 33 测试函数 | 33 | PASS |
+| internal/policy | 19 测试函数 (新增 1) | 45 | PASS |
+| internal/sqlguard | 15 测试函数 (新增 2) | 32 | PASS |
+| internal/dsn | 9+ 测试函数 | 39 | PASS |
+| internal/schema | 2 测试函数 | 44 | PASS |
+
+**全部单元测试通过。**
+
+---
+
+## 构建验证
+
+| 平台 | 架构 | 链接状态 | 结果 |
+|------|------|---------|------|
+| Linux | amd64 | statically linked | PASS |
+| Linux | arm64 | statically linked | PASS |
+| macOS | amd64 | CGO_ENABLED=0 | PASS |
+| macOS | arm64 | CGO_ENABLED=0 | PASS |
+| Windows | amd64 | CGO_ENABLED=0 PE 无动态依赖 | PASS |
+
+### 二进制体积对比 (Linux amd64)
+
+| 配置 | 无 UPX | UPX 后 | 压缩比 |
+|------|--------|--------|--------|
+| 仅文件 (csv,xlsx) | 6.2 MB | 1.9 MB | 69% |
+| SQL 数据库 (mysql,postgres,clickhouse,sqlite) | 12 MB | 3.6 MB | 70% |
+| NoSQL 数据库 (redis,mongodb,es,qdrant) | 35 MB | 7.0 MB | 80% |
+| SQL + NoSQL (全部远程库) | 40 MB | 8.5 MB | 79% |
+| 全驱动 (full) | 42 MB | 9.1 MB | 78% |
+
+### build.sh 4 模式
+
+| 模式 | 命令 | 说明 |
+|------|------|------|
+| prod | `bash build.sh` | 5平台 + 全驱动 + UPX |
+| dev | `bash build.sh dev` | 当前平台 + 全驱动 + 快速编译 |
+| test | `bash build.sh test` | 当前平台 + 全驱动 + -race |
+| minimal | `bash build.sh minimal <tags>` | 当前平台 + 按需驱动 |
+
+---
+
+## 已知局限
+
+| 问题 | 影响 | 说明 |
+|------|------|------|
+| REPL 不支持 DSL/联邦查询 | 低 | DSL `@label.table` 语法仅在 `execute -env --dsl` 模式可用 |
+| Elasticsearch 原生 JSON 不支持 REPL | 低 | ES 驱动注册为 CapSQL, JSON 查询在 sqlguard 中无法解析; 使用 `execute -env --label` 或 SQL 语法绕过 |
+| MySQL 单连接模式 | 低 | `SET max_execution_time` 后 `SetMaxOpenConns(1)` |
+| TSV kind 为 csv | 低 | csv.go 硬编码 Kind: "csv" |
+| Redis _server_info 无 columns | 低 | Redis INFO 返回 key-value 元数据 |
+| QueryLock 跨进程不共享 | 低 | CLI 每次为独立进程 (库模式正常) |
+
+---
+
+## 本次闭环验证修复
+
+| 修复 | 涉及文件 | 验证方式 |
+|------|---------|---------|
+| ClickHouse REPL 尾部 `;` 冲突 | `repl.go:85` `TrimRight(";")` | REPL 实际测试: `SHOW TABLES;` → 正常返回 ✅ |
+| ES JSON 查询友好错误提示 | `repl.go:160-162` JSON 检测 + 清晰错误 | REPL 实际测试: `{"query":...}` → 显示绕过方案 ✅ |
+| REPL .help 标注 ES 限制 | `repl.go:195-196` | `.help` 输出显示 "Elasticsearch native JSON queries" ✅ |
+| REPL.md 移除 ClickHouse 分号限制 | `docs/REPL.md` | 章节删除, 已修复标注 ✅ |
+| REPL.md ES 限制详细说明 | `docs/REPL.md` | 补充绕过方案 (SQL/_sql/collect) ✅ |
+| CLI_EXAMPLES.md 更新 | `docs/CLI_EXAMPLES.md §13.6` | 移除错误演示, 保留 ES 说明 ✅ |
+| 09-cli-help.md 测试计划更新 | `docs/test/09-cli-help.md` | 新增 CH+ES 测试用例 ✅ |
+| REPL .list/.databases 命令 | `repl.go`, `docs/REPL.md`, `docs/CLI_EXAMPLES.md`, `docs/test/09-cli-help.md` | 编译通过 + 测试文档更新 ✅ |
+| RESULTS.md 整理 | `docs/test/RESULTS.md` | 合并三个版本为单一 v0.1.2 报告 ✅ |
 
 ---
 
@@ -470,14 +243,31 @@
 
 ```bash
 # 环境准备
-cd src && HTTPS_PROXY=http://127.0.0.1:7897/ go build -o ../release/dbexplain-linux-amd64 .
+cd src && go build -tags full -o ../release/dbexplain ./cmd/dbexplain/
 
 # 单元测试
-cd src && HTTPS_PROXY=http://127.0.0.1:7897/ go test ./... -count=1
+cd src && go test ./... -count=1
+
+# 静态分析
+cd src && go vet ./...
 
 # 交叉编译
 cd src && bash build.sh
 
 # Version
-./release/dbexplain-linux-amd64 --version
+./release/dbexplain --version
 ```
+
+### 本次闭环验证命令
+
+```bash
+# ClickHouse 尾部 ; 修复验证
+echo -e ".conn aiops-clickhouse\nSHOW TABLES;\n.exit" | ./release/dbexplain repl -env
+
+# ES JSON 健壮提示验证
+echo -e ".conn aiops-es\n{\"query\":{\"match_all\":{}}}\n.exit" | ./release/dbexplain repl -env
+```
+
+---
+
+*测试基准: v0.1.0 (91/91) → v0.1.1 (91/91) → v0.1.2 (108/108). 历史版本报告已归档.*

@@ -1,3 +1,5 @@
+//go:build clickhouse || full
+
 package connector
 
 import (

@@ -1,3 +1,5 @@
+//go:build mysql || full
+
 package connector
 
 import (

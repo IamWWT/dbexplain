@@ -805,6 +805,17 @@
       "file": "docs/SECURITY_CHECKLIST.md",
       "created": "2026-06-02",
       "labels": ["v0.1.2", "debt"]
+    },
+    {
+      "id": "ISSUE-074",
+      "title": "REPL .list / .databases 命令 — 列出所有可连接的数据库",
+      "status": "closed",
+      "closed": "2026-06-03",
+      "priority": "low",
+      "category": "feature",
+      "description": "REPL 新增 .list / .databases 命令，显示所有已配置数据源的序号、label、kind、当前连接标记（← current）。涉及文件：repl.go（dot command 新增）、REPL.md（文档更新）、CLI_EXAMPLES.md §13.1（示例更新）、09-cli-help.md（测试用例新增）、RESULTS.md（测试计数更新）。",
+      "file": "src/cmd/dbexplain/repl.go",
+      "created": "2026-06-03"
     }
   ]
 }

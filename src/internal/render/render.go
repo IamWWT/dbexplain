@@ -267,13 +267,32 @@ func keyPatternStr(t *schema.Table) string {
 }
 
 func pad(s string, n int) string {
-	if len(s) >= n { return s }
-	return s + strings.Repeat(" ", n-len(s))
+	if visualWidth(s) >= n { return s }
+	// fmt padding uses byte count, compensate for CJK
+	padByte := n - visualWidth(s)
+	return s + strings.Repeat(" ", padByte)
 }
 
 func truncate(s string, n int) string {
-	if len(s) <= n { return s }
-	return s[:n-1] + "..."
+	if visualWidth(s) <= n { return s }
+	// Truncate by visual width, not byte length
+	runes := []rune(s)
+	w := 0
+	i := 0
+	for _, r := range runes {
+		rw := 1
+		if (r >= 0x4E00 && r <= 0x9FFF) || (r >= 0xAC00 && r <= 0xD7AF) ||
+			(r >= 0x3000 && r <= 0x303F) || (r >= 0xFF01 && r <= 0xFF60) ||
+			(r >= 0xFFE0 && r <= 0xFFE6) || r >= 0x20000 {
+			rw = 2
+		}
+		if w+rw > n-2 {
+			break
+		}
+		w += rw
+		i++
+	}
+	return string(runes[:i]) + "..."
 }
 
 func fmtSize(b int64) string {

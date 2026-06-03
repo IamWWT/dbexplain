@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -240,9 +241,13 @@ func (s *Store) Save() error {
 		return err
 	}
 	// Atomic write: temp file + rename (atomic on POSIX, same filesystem)
+	// On Windows, os.Rename fails if target exists — remove first.
 	tmpPath := s.path + ".tmp"
 	if err := os.WriteFile(tmpPath, data, 0644); err != nil {
 		return err
+	}
+	if runtime.GOOS == "windows" {
+		os.Remove(s.path)
 	}
 	return os.Rename(tmpPath, s.path)
 }

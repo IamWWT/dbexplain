@@ -28,21 +28,26 @@ All inferred relationships (e.g., naming-pattern FK matches) are tagged with `in
 
 ---
 
-## Supported Data Sources
+## Capability Matrix
 
-| Source | Protocol | Highlights |
-|--------|----------|------------|
-| MySQL | `mysql://` | FK, indexes, column comment inference |
-| PostgreSQL | `postgres://` | Multi-schema, row count stats, SSL configurable |
-| GaussDB | `gaussdb://` | PostgreSQL-protocol compatible |
-| ClickHouse | `clickhouse://` | Sort / partition / primary keys |
-| SQLite | `sqlite://` | Pure Go driver, no CGO |
-| Redis | `redis://` | Key pattern inference, cluster, TTL risk diagnostics |
-| Elasticsearch | `elasticsearch://` | Index mapping, HTTPS |
-| MongoDB | `mongodb://` | Estimated document counts |
-| Qdrant | `qdrant://` | Vector collection metadata |
-| CSV / TSV | `csv://` `tsv://` | Built-in file query engine |
-| Excel | `xlsx://` | Built-in file query engine |
+> Data source × capability module. ✅ supported, — N/A, ⚠️ conditional.
+
+| Source | Protocol | Collect | SQL Query | REPL | DSL Federated | File Engine | Highlights |
+|--------|----------|:-------:|:---------:|:----:|:-------------:|:-----------:|------------|
+| MySQL | `mysql://` | ✅ | ✅ | ✅ | ✅ | — | FK, indexes, column comment inference |
+| PostgreSQL | `postgres://` | ✅ | ✅ | ✅ | ✅ | — | Multi-schema, row counts, SSL |
+| GaussDB | `gaussdb://` | ✅ | ✅ | ✅ | ✅ | — | PostgreSQL-protocol compatible |
+| ClickHouse | `clickhouse://` | ✅ | ✅ | ✅ | ✅ | — | Sort / partition / primary keys |
+| SQLite | `sqlite://` | ✅ | ✅ | ✅ | ✅ | — | Pure Go driver, no CGO |
+| Redis | `redis://` | ✅ | — | ✅ | — | — | Key pattern inference, cluster, TTL |
+| MongoDB | `mongodb://` | ✅ | — | ✅ | — | — | Estimated document counts |
+| Elasticsearch | `elasticsearch://` | ✅ | ⚠️ SQL via `_sql` | — | — | — | Index mapping, HTTPS |
+| Qdrant | `qdrant://` | ✅ | — | ✅ | — | — | Vector collection metadata |
+| CSV / TSV | `csv://` `tsv://` | ✅ | — | ✅ | ✅ | ✅ | Built-in file query engine |
+| Excel | `xlsx://` | ✅ | — | ✅ | ✅ | ✅ | Built-in file query engine |
+
+> **ES REPL**: native JSON queries not supported; use `execute -env --label` command mode.<br>
+> **DSL limitation**: Redis/Mongo/ES/Qdrant native queries not supported in DSL federated mode.
 
 ---
 
@@ -73,7 +78,7 @@ dbexplain execute -env --label redis "PING"
 dbexplain execute -env --dsl "SELECT * FROM @my-mysql.users LIMIT 10" --human
 ```
 
-> v0.1.1 limitation: DSL mode was single-source only. v0.1.2 adds cross-source JOIN/UNION (federated query). Redis / Mongo / Qdrant / ES native sources still not supported in DSL mode.
+> DSL federated queries support cross-source JOIN/UNION (SQL ↔ File). Redis / Mongo / Qdrant / ES native sources not supported in DSL mode.
 
 ### File Query Engine
 CSV / TSV / XLSX powered by a **built-in pure-Go SQL engine** — no external database required:
@@ -102,7 +107,7 @@ Non-SQL databases have their own command allow-lists or native query validators.
 | Scenario | Doc |
 |----------|-----|
 | Quick start guide (5 min) | [`docs/USAGE_GUIDE.md`](docs/USAGE_GUIDE.md) |
-| Query examples (13 verified) | [`docs/CLI_EXAMPLES.md`](docs/CLI_EXAMPLES.md) |
+| Query examples (15+ verified, incl. REPL) | [`docs/CLI_EXAMPLES.md`](docs/CLI_EXAMPLES.md) |
 | Installation (source/binary/Skill) | [`docs/DEPLOY.md`](docs/DEPLOY.md) |
 | Troubleshooting (connection/query/files) | [`dbexplain-skill/references/troubleshooting.md`](dbexplain-skill/references/troubleshooting.md) |
 | Security policy config (DENY_TABLES, etc.) | [`docs/POLICY.md`](docs/POLICY.md) |
@@ -115,8 +120,11 @@ Non-SQL databases have their own command allow-lists or native query validators.
 ## Quick Start
 
 ```bash
-# 1. Build
-cd src && CGO_ENABLED=0 go build -o ../release/dbexplain ./cmd/dbexplain
+# 1. Build (single platform, all drivers, fast)
+cd src && bash build.sh dev
+
+# Or full release (5 GOOS/GOARCH + UPX compression)
+cd src && bash build.sh
 
 # 2. Configure (6-level auto-discovery)
 mkdir -p ~/.config/dbexplain && cat > ~/.config/dbexplain/.env.dbexplain << EOF
@@ -154,7 +162,10 @@ cd src
 go build ./...                              # Compile check
 go vet ./...                                # Static analysis
 go test ./... -count=1                      # Unit tests
-bash build.sh                               # Cross-compile 5 platforms
+bash build.sh                               # Release: 5 platforms + full + UPX
+bash build.sh dev                           # Dev: current platform + all drivers
+bash build.sh minimal mysql,postgres        # Minimal: selective drivers
+bash build.sh --help                        # View all options
 ```
 
 ---

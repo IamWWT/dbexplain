@@ -71,7 +71,8 @@
 | `ARCHITECTURE.md` | 全局 | 架构愿景、Phase 路线图、目录结构 |
 | `EXECUTE.md` | `cmd/dbexplain/execute.go`, `sqlguard/`, `internal/query/`, `internal/executor/`, `policy/` | 三层安全、AutoLimit、sqlguard 动词白名单 |
 | `USAGE_GUIDE.md` | 无（综合用法文档） | 傻瓜用法手册：从下载到查询的 5 分钟完整流程 |
-| `CLI_EXAMPLES.md` | `execute.go` | 13 条实测查询案例 |
+| `CLI_EXAMPLES.md` | `execute.go`, `repl.go` | 15+ 条实测查询案例（含 REPL 全流程） |
+| `REPL.md` | `cmd/dbexplain/repl.go` | REPL 交互模式：启动/命令/安全/限制/测试结果 |
 | `POLICY.md` | `policy/policy.go`, `policy/policy_test.go` | DENY_TABLES/COLUMNS/STATEMENTS + MASK_COLUMNS |
 | `CONFIG_SEARCH.md` | `cmd/dbexplain/main.go`, `internal/dsn/dsn.go`, `crypto/` | 6 级路径搜索、加密配置自动解密 |
 | `DEPLOY.md` | `build.sh`, `dbexplain-skill/scripts/` | 安装部署、Skill 集成 |
@@ -122,6 +123,9 @@ INPUT ──→ COLLECT ──→ ANALYZE ──→ OUTPUT
 |--------|---------|------|
 | `dbexplain` (默认) | `cmd/dbexplain/main.go` → `handleCollect()` | Schema 采集 |
 | `dbexplain execute` | `cmd/dbexplain/execute.go` → `handleExecute()` | 只读查询执行（原生 SQL + `--dsl` DSL 模式） |
+| `dbexplain repl` | `cmd/dbexplain/repl.go` → `handleREPL()` | 交互式 REPL 查询模式 |
+| `dbexplain collect` | `cmd/dbexplain/main.go` → `handleCollect()` | 显式 Schema 采集子命令 |
+| `dbexplain diff` | `cmd/dbexplain/diff.go` → `handleDiff()` | Schema 变更对比 |
 | `dbexplain list` | `internal/list/handler.go` → `handleList()` | 列出已配置 DSN |
 | `dbexplain all` | `internal/manual/` → `handleManual()` | 全部参考手册 |
 | `dbexplain <dbtype>` | `internal/manual/` → `handleManual()` | 专项手册（mysql/redis/...） |
@@ -134,7 +138,7 @@ INPUT ──→ COLLECT ──→ ANALYZE ──→ OUTPUT
 
 | 测试文档 | 覆盖内容 | 关联源码 |
 |---------|---------|---------|
-| `docs/test/RESULTS.md` | 测试结果报告 v0.1.1 | — |
+| `docs/test/RESULTS.md` | 测试结果报告 v0.1.2 | — |
 | `docs/test/01-environment.md` | 环境准备、DSN 模板 | `internal/dsn/dsn.go` |
 | `docs/test/02-schema-collection.md` | 全数据源 Schema 采集 | 所有 `connector/*.go` |
 | `docs/test/03-execute-sql.md` | SQL 查询执行 | `execute.go`, `sqlguard/` |
@@ -143,10 +147,12 @@ INPUT ──→ COLLECT ──→ ANALYZE ──→ OUTPUT
 | `docs/test/06-security-sqlguard.md` | sqlguard 只读校验 | `sqlguard/sqlguard.go` |
 | `docs/test/07-policy-engine.md` | 策略引擎绕过测试 | `policy/policy.go` |
 | `docs/test/08-concurrent-limit.md` | 并发限制 | `connector/runner.go`, `internal/query/types.go` |
-| `docs/test/09-cli-help.md` | CLI 帮助、子命令 | `main.go` |
+| `docs/test/09-cli-help.md` | CLI 帮助、子命令、REPL | `main.go`, `repl.go` |
 | `docs/test/10-regression.md` | 回归测试 | 全局 |
 | `docs/test/11-end-to-end.md` | 端到端集成测试 | 全局 |
 | `docs/test/12-capability-routing.md` | CapSQL 路由、PostgreSQL 多 Schema | `capabilities/`, `connector/postgres.go` |
+| `docs/test/14-schema-diff.md` | Schema Diff 24 项 | `internal/diff/` |
+| `docs/test/15-window-functions.md` | 窗口函数 36 项 | `connector/filequery/` |
 
 ---
 

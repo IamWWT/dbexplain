@@ -8,6 +8,28 @@ import (
 	"github.com/IamWWT/dbexplain/internal/query"
 )
 
+// visualWidth returns the display width of a string, where CJK/Hangul/wide
+// characters count as 2 and ASCII as 1. This is needed because fmt.Printf("%-*s")
+// pads by byte count, not visual width.
+func visualWidth(s string) int {
+	w := 0
+	for _, r := range s {
+		// CJK Unified Ideographs, Hangul, fullwidth forms
+		if r >= 0x4E00 && r <= 0x9FFF ||
+			r >= 0xAC00 && r <= 0xD7AF ||
+			r >= 0x3000 && r <= 0x303F ||
+			r >= 0xFF01 && r <= 0xFF60 ||
+			r >= 0xFFE0 && r <= 0xFFE6 ||
+			r >= 0x20000 && r <= 0x2FFFF ||
+			r >= 0x30000 && r <= 0x3FFFF {
+			w += 2
+		} else {
+			w += 1
+		}
+	}
+	return w
+}
+
 const maxColWidth = 256
 
 // FormatHuman renders a QueryResult as an ASCII table for human consumption.
@@ -36,15 +58,15 @@ func FormatHuman(r *query.QueryResult) string {
 		strRows[i] = strRow
 	}
 
-	// Calculate column widths
+	// Calculate column widths (using visual width for CJK support)
 	widths := make([]int, len(headers))
 	for i, h := range headers {
-		widths[i] = len(h)
+		widths[i] = visualWidth(h)
 	}
 	for _, row := range strRows {
 		for i, cell := range row {
-			if len(cell) > widths[i] {
-				widths[i] = len(cell)
+			if w := visualWidth(cell); w > widths[i] {
+				widths[i] = w
 			}
 		}
 	}
@@ -72,10 +94,32 @@ func FormatHuman(r *query.QueryResult) string {
 		var b strings.Builder
 		b.WriteByte('|')
 		for i, cell := range cells {
-			if len(cell) > widths[i] {
-				cell = cell[:widths[i]-1] + "…"
+			// Truncate if visual width exceeds column width
+			if visualWidth(cell) > widths[i] {
+				runes := []rune(cell)
+				// Estimate: truncate to runes that fit visually
+				n, w := 0, 0
+				for _, r := range runes {
+					rw := 1
+					if (r >= 0x4E00 && r <= 0x9FFF) || (r >= 0xAC00 && r <= 0xD7AF) ||
+						(r >= 0x3000 && r <= 0x303F) || (r >= 0xFF01 && r <= 0xFF60) ||
+						(r >= 0xFFE0 && r <= 0xFFE6) || r >= 0x20000 {
+						rw = 2
+					}
+					if w+rw > widths[i]-1 {
+						break
+					}
+					w += rw
+					n++
+				}
+				cell = string(runes[:n]) + "…"
 			}
-			fmt.Fprintf(&b, " %-*s |", widths[i], cell)
+			// Adjust padding: fmt.Printf pads by bytes, compensate for CJK
+			padAdjust := len(cell) - visualWidth(cell)
+			if padAdjust < 0 {
+				padAdjust = 0
+			}
+			fmt.Fprintf(&b, " %-*s |", widths[i]+padAdjust, cell)
 		}
 		b.WriteByte('\n')
 		return b.String()

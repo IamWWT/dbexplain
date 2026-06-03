@@ -1,3 +1,5 @@
+//go:build xlsx || full
+
 package connector
 
 import (

@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.1.2 (2026-06-02) — CLI Enhancement + DSL Federated Query
+## v0.1.2 (2026-06-03) — CLI Enhancement + DSL Federated Query + Build System Optimization
 
 ### New Features
 - **DSL Federated Query** (ISSUE-069): Cross-source JOIN/UNION support. Removed `len(kinds)>1` blocker, data materialization + filequery federated merge layer. SQL ↔ file ↔ mixed source JOIN fully supported
@@ -10,13 +10,35 @@
 
 ### Fixes
 - **DSL file JOIN fix** (ISSUE-069): `dslExecFile()` passed `nil allEntries`, causing file-source DSL JOIN resolution to fail. Changed to pass global entries
+- **ClickHouse REPL trailing semicolon fix**: ClickHouse connector appends `SETTINGS max_execution_time=N FORMAT JSON` after query; trailing `;` caused multi-statement error. `repl.go` adds `TrimRight(";")` auto-strip
+- **Elasticsearch REPL JSON query clear error**: Native JSON queries in REPL previously returned confusing `READ_ONLY_VIOLATION`. Added JSON pre-check with clear workaround message (`execute -env --label` SQL mode or `collect` schema collection)
+- **Windows atomic write fix**: `cache.go` `os.Rename` fails when target exists. Added `os.Remove` before rename on `runtime.GOOS == "windows"`
+- **CJK display fix**: `render/table.go` column width used `len()` (bytes) breaking Chinese/Korean/fullwidth character alignment. Added `visualWidth()` for display-width calculation with padding compensation
+- **`render.go` `pad()`/`truncate()` UTF-8 fix**: Byte slicing could produce invalid UTF-8. Changed to `[]rune`-based visual width truncation
+- **`dsn.go` `SQLitePath()` Windows fix**: Missing Windows `/C:` prefix stripping, causing absolute path DSNs to fail on Windows
+- **`dsn.go` `FilePath()` security hardening**: Added `filepath.Clean()` to prevent path traversal
+
+### Build & Release
+- **Build Tags**: 10 connector files added `//go:build mysql || full` conditional compilation, enabling selective driver selection
+- **`build.sh` 4 modes**: prod (5 platforms + full + UPX), dev (current + full), test (+race), minimal (custom tags)
+- **UPX compression**: `--best --lzma` reduces full driver binary 42 MB → 9.5 MB (-78%), zero runtime dependency. `upx -t` integrity verified
+  - Linux/Windows fully compressed; darwin (Mach-O) cross-compiled binaries skipped due to UPX 5.0.0 compatibility limitation — native macOS builds work fine
+- **`build.sh --help`**: New `--help`/`-h` flag with full usage, Tag→Kind→DSN scheme panorama
+- **`--no-upx`/`--upx` dynamic control**: Pass from anywhere in args, force skip or enable UPX
+- **Binary security verification**: `file`(statically linked) / `ldd`(no dynamic refs) / `nm -D`(no dyn symbols) / `upx -t`(integrity) / isolated run — all passed
+- Full `go build ./...` + `go vet ./...` + `go test ./...` + `bash build.sh` verification passing
 
 ### Documentation
 - **Pre-release checklist supplement** (ISSUE-073): SECURITY_CHECKLIST.md §6 added version consistency, CHANGELOG completeness, issues.json validation, binary smoke test, artifact integrity, stale doc reference check
-
-### Build & Release
-- `build.sh` / `version.go` version bumped to v0.1.2
-- Full `go build ./...` + `go vet ./...` + `go test ./...` + `bash build.sh` verification passing
+- **`docs/test/01-environment.md` expanded**: New §1.9 build mode factor analysis (compile time/size/functionality/UPX/security/scenario guide/verification/conclusions) with measured data
+- **`docs/test/RESULTS.md` build optimization**: 5 tag combinations with measured sizes, panorama Tag→Kind→DSN scheme mapping, security verification table
+- **`docs/DEPLOY.md` build table**: Mode descriptions updated with explicit GOOS/GOARCH lists
+- **`docs/SKILL_AUTHORING.md` overhaul**: Karpathy context engineering principles — added context economy/verifiability principles, metadata entry emphasis, description formula, input definition section, failure handling rules, progressive disclosure guide, eval-first iteration flow, complete example template
+- **SKILL_ZH.md / SKILL_EN.md refactored**: 330→197 lines (within 200-line cap). Removed SQL syntax/error tables (referenced via references/), added input definition/failure handling, streamlined DSL/delta detection/params redundancy
+- **README Capability Matrix**: Replaced simple "Supported Data Sources" table with a 5-column capability matrix (Collect/SQL Query/REPL/DSL Federated/File Engine) × 11 data sources — one-glance panorama
+- **`docs/test/RESULTS.md` consolidation**: Merged 3 redundant sections (v0.1.0/v0.1.1/duplicate v0.1.2) into a single v0.1.2 report, added "Closed-Loop Verification Fixes" section
+- **`docs/REPL.md` updated**: Removed ClickHouse semicolon limitation (fixed); ES limitation expanded with detailed workarounds (SQL via `_sql`/collect)
+- **`docs/test/09-cli-help.md` expanded**: Added ClickHouse semicolon and ES JSON test cases
 
 ## v0.1.1 (2026-06-02) — Internal Restructuring + Unified DSL Query Entry
 
