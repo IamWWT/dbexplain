@@ -18,6 +18,9 @@
 - **CLI 帮助层次化重构**
   命令按 `Schema` / `Query` / `Utility` / `Help` 分组展示，数据源按 `SQL` / `NoSQL` / `File` 分类。标准版提示 DuckDB 构建方式，DuckDB 版正常显示入口。
 
+- **REPL DSL 语法与联邦查询**
+  REPL 模式现自动检测 `@label.table` DSL 语法，支持单源（SQL/文件）和联邦跨源 JOIN。查询含 `@` 时路由至 DSL 执行路径，不含时走原有单源查询路径。添加 4 个 REPL-safe DSL 分发函数。
+
 ### 🐛 修复
 
 - **DuckDB DSN 解析**
@@ -64,6 +67,9 @@
 - **SECURITY_CHECKLIST.md** 增加 DuckDB 文件路径安全检查项
 - **安装脚本**：`install.sh`/`install.ps1` 版本号 v0.1.2 → v0.1.3，下载 URL 使用 `-std` 后缀
 - **CHANGELOG 中英同步**：本版本完整记录双语言版本。
+- **README 架构图**: 能力矩阵与核心能力之间新增 `DBEXPLAIN-ARCH.png` 系统架构图
+- **README REPL DSL 说明修复**: 更新失效的"不支持 DSL 模式"标注为"支持 DSL 单源/联邦跨源 JOIN"
+- **测试文档**: RESULTS.md 更新为 130/130 测试项，移除"REPL 不支持 DSL/联邦查询"已知局限
 
 ## v0.1.2 (2026-06-03) — CLI 交互增强 + DSL 联邦查询 + 构建系统优化
 

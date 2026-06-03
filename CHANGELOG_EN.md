@@ -18,6 +18,9 @@
 - **CLI Help Hierarchy Restructuring**
   Commands grouped under `Schema` / `Query` / `Utility` / `Help`; data sources categorized as `SQL` / `NoSQL` / `File`. Standard builds show DuckDB build hint, DuckDB builds show normal entry.
 
+- **REPL DSL Syntax & Federated Query**
+  REPL now auto-detects `@label.table` DSL syntax for single-source (SQL/file) and federated cross-source JOIN. Queries containing `@` route through the DSL path; queries without it follow the existing single-source path. Added 4 REPL-safe DSL dispatch functions.
+
 ### 🐛 Fixes
 
 - **DuckDB DSN Parsing**
@@ -64,6 +67,9 @@
 - **SECURITY_CHECKLIST.md** adds DuckDB file path security check items
 - **Install scripts**: `install.sh`/`install.ps1` version v0.1.2 → v0.1.3, download URL uses `-std` suffix
 - **CHANGELOG bilingual sync**: This version fully recorded in both languages.
+- **README architecture diagram**: Added `DBEXPLAIN-ARCH.png` system architecture diagram between capability matrix and core capabilities
+- **README REPL DSL note fix**: Updated stale "no DSL mode" label to "supports DSL single-source & federated cross-source JOIN"
+- **Test docs**: RESULTS.md updated to 130/130 test items, removed "REPL does not support DSL/federated queries" from known limitations
 
 ## v0.1.2 (2026-06-03) — CLI Enhancement + DSL Federated Query + Build System Optimization
 
