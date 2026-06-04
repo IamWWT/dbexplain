@@ -35,8 +35,9 @@ set -e
 #  use "minimal" mode and explicitly include: bash build.sh minimal duckdb,mysql,postgres
 #  DuckDB builds require CGO (C toolchain: gcc/clang on Linux/macOS, mingw on Windows).
 #  DuckDB linux/amd64 builds use -extldflags=-static for a fully self-contained binary.
-#  DuckDB linux/arm64 builds use -static-libgcc -static-libstdc++ (Ubuntu 22.04
-#    cross toolchain glibc has R_AARCH64_LD64_GOTPAGE_LO15 GOT overflow with -static).
+#  DuckDB linux/arm64 native builds use -static (full static); cross-compiled arm64
+#    uses -static-libgcc -static-libstdc++ (Ubuntu 22.04 cross toolchain glibc has
+#    R_AARCH64_LD64_GOTPAGE_LO15 GOT overflow with -static).
 #  DuckDB darwin builds retain /usr/lib/libSystem.B.dylib (macOS cannot fully static link).
 #
 #  Tag → Kind → DSN scheme mapping:
@@ -161,6 +162,8 @@ if [[ ",$TAGS," == *",duckdb,"* ]]; then
 fi
 
 # ── Build loop ────────────────────────────────────────────────
+HOST_GOOS="$(go env GOOS)"
+HOST_GOARCH="$(go env GOARCH)"
 for platform in "${PLATFORMS[@]}"; do
   GOOS="${platform%/*}"
   GOARCH="${platform#*/}"
@@ -181,12 +184,18 @@ for platform in "${PLATFORMS[@]}"; do
         DUCKDB_EXTLDFLAGS="-extldflags=-static"
         ;;
       linux/arm64)
-        # Older glibc cross toolchains (Ubuntu 22.04) have GOT overflow with -static.
-        # -static-libgcc -static-libstdc++ avoids glibc static linking but keeps
-        # C++ runtime static. glibc .so is required at runtime (present on all Linux).
-        # NOTE: entire -extldflags=... is quoted so Go 1.26+ quoted.Split treats it
-        # as a single field (quotes at field start, not mid-field).
-        DUCKDB_EXTLDFLAGS="'-extldflags=-static-libgcc -static-libstdc++'"
+        if [ "$GOOS/$GOARCH" = "$HOST_GOOS/$HOST_GOARCH" ]; then
+          # Native ARM64 build: use native gcc, full -static works
+          DUCKDB_EXTLDFLAGS="-extldflags=-static"
+        else
+          # Cross-compilation from another arch (e.g. x86_64):
+          # Ubuntu 22.04 cross toolchain glibc has GOT overflow with -static.
+          # -static-libgcc -static-libstdc++ avoids glibc static linking but keeps
+          # C++ runtime static. glibc .so is required at runtime (present on all Linux).
+          # NOTE: entire -extldflags=... is quoted so Go 1.26+ quoted.Split treats it
+          # as a single field (quotes at field start, not mid-field).
+          DUCKDB_EXTLDFLAGS="'-extldflags=-static-libgcc -static-libstdc++'"
+        fi
         ;;
       darwin/*)
         # macOS has no static libSystem — fully static impossible.
