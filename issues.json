@@ -903,6 +903,16 @@
       "description": "DSL 联邦查询通过 filequery 引擎在内存中合并多源数据，本质是无状态的全内存操作：无两阶段提交、无事务边界、无隔离级别。评估是否需要为联邦查询引入 ACID 保证：(1) 只读联邦查询不需要写事务，ACID 主要影响读一致性；(2) 文件数据源（CSV/XLSX）不支持事务，SQL 数据库的 SNAPSHOT ISOLATION 在联邦上下文中无意义；(3) 结论：当前阶段不需要 ACID 保证。仅记录设计决策供未来参考。",
       "file": "src/cmd/dbexplain/execute.go",
       "created": "2026-06-04"
+    },
+    {
+      "id": "ISSUE-083",
+      "title": "musl libc 与 DuckDB 不兼容 — ARM64 全静态交叉编译不可行",
+      "status": "open",
+      "priority": "low",
+      "category": "build",
+      "description": "尝试通过 musl 交叉编译器（aarch64-linux-musl-gcc）从 x86_64 构建全静态 ARM64 DuckDB 版二进制失败。DuckDB 的 C++ 引擎依赖 glibc-only 函数：backtrace、backtrace_symbols（glibc execinfo.h）、__res_init（glibc resolv.h）。musl libc 未实现这些函数，链接时报 undefined reference。使用 musl 不会影响功能（编译期的限制，非运行时）：musl 本身实现了完整的 POSIX API，但 backtrace/__res_init 是 glibc 扩展，musl 不提供。结论：ARM64 全静态 DuckDB 只能在原生 ARM64 机器上用原生 gcc + -static 构建。交叉编译只能做到 -static-libgcc -static-libstdc++（glibc 动态链接）。",
+      "file": "src/build.sh",
+      "created": "2026-06-04"
     }
   ]
 }

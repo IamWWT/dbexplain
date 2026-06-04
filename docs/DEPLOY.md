@@ -69,6 +69,8 @@ cd src && bash build.sh            # 默认 prod 模式：5 平台全驱动编�
 驱动标签（minimal 模式使用）：`mysql` `postgres` `sqlite` `clickhouse` `redis` `mongodb` `elasticsearch` `qdrant` `csv` `xlsx` `duckdb`
 
 > **DuckDB 特殊说明**：`duckdb` 标签 **不在 "full" 中**，需要显式指定。DuckDB 构建需要 CGO 和 C 工具链（gcc/clang/mingw），不能交叉编译。使用 `bash build.sh minimal duckdb,mysql,postgres` 时为当前平台原生构建。
+>
+> **ARM64 静态链接说明**：原生 ARM64 构建使用 `-static` 可达到零动态依赖。但从 x86_64 交叉编译 ARM64 时，Ubuntu 22.04 交叉工具链的静态 glibc 有 `R_AARCH64_LD64_GOTPAGE_LO15` GOT overflow，只能使用 `-static-libgcc -static-libstdc++`（glibc 动态链接）。musl 交叉编译器不兼容 DuckDB（依赖 glibc-only 函数 `backtrace` / `__res_init`），不要尝试。详见 `docs/databases/relational/DUCKDB_IMPL.md §2.5` 和 ISSUE-083。
 
 编译产物在 `release/` 目录，覆盖 5 个平台：
 

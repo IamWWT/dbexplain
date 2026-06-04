@@ -40,7 +40,7 @@
 | 安装/卸载脚本 | `dbexplain-skill/scripts/` |
 | CHANGELOG（中文） | `CHANGELOG.md` |
 | CHANGELOG（英文） | `CHANGELOG_EN.md` |
-| 测试文档 | `docs/test/README.md`（15 个文件全覆盖） |
+| 测试文档 | `docs/test/README.md`（20 个文件全覆盖） |
 | 项目宪法 | `CONSTITUTION.md` |
 | 架构愿景 | `docs/ARCHITECTURE.md` |
 | 算法文档 | `docs/ALGORITHMS.md` |
@@ -55,8 +55,13 @@
 ```bash
 cd src && go build ./...        # 编译检查
 cd src && go vet ./...          # 静态分析
-cd src && bash build.sh         # 交叉编译 5 平台
+cd src && bash build.sh         # 开发者构建（默认 prod 模式：5 平台+全驱动+UPX）
+cd src && bash release.sh       # 官方发布（零参数：双版 -std/-duckdb + tarball）
 ```
+
+**`build.sh` vs `release.sh` 定位**：
+- `build.sh` — 面向开发者的构建脚本，4 种模式（prod/dev/test/minimal），支持按需驱动选择和 UPX 控制
+- `release.sh` — 官方发布命令，零参数一次性产出全量 artifacts（5 平台 -std + 当前平台 -duckdb + tarball）
 
 ## DSN 格式
 
@@ -133,7 +138,7 @@ scheme://[user[:pass]@]host[:port][/dbname][?label=别名&其他参数]
 3. 在 `init()` 中调用 `Register("kind", func() Connector { return ... })`
 4. 在 `src/internal/dsn/dsn.go` 的 `ParseDSN()` 中添加 scheme 映射
 5. 在 `docs/` 下添加专项文档
-6. 运行 `bash build.sh` 重新编译
+6. 运行 `bash build.sh minimal <tag>` 测试选择性编译，或 `bash build.sh` 全量发布
 
 参考最小的 connector：`clickhouse.go` 或 `qdrant.go`
 
@@ -194,7 +199,7 @@ cd /tmp/prev-build/src && go build -o /tmp/dbexplain-prev .
 git worktree remove /tmp/prev-build
 
 # 构建当前版本
-cd src && go build -o /tmp/dbexplain-curr .
+cd src && go build -tags "full" -o /tmp/dbexplain-curr ./cmd/dbexplain
 
 # 各跑 3 次
 for v in prev curr; do
@@ -222,14 +227,10 @@ wc -c /tmp/perf-prev-1.json /tmp/perf-curr-1.json
 | 6 | **已完成 (v0.1.2)** | DSL 联邦查询 + REPL + Build Tags + 9.5MB UPX |
 | 7 | 规划中 | LLM Ecosystem Integration + MCP Server + 企业特性 |
 
-当前版本：**v0.1.2** — DSL 联邦查询 + REPL 交互模式 + Build Tags 按需编译 + 42MB→9.5MB UPX 压缩 + 安全加固。
+当前版本：**v0.1.4** — Prometheus 时序数据库连接器 + 采集指标收集
 
-## 最新测试 (v0.1.2)
+## 最新测试 (v0.1.4)
 
-- **编译验证**: `go build ./...` + `go vet ./...` + `bash build.sh` 全平台通过
-- **链接验证**: Linux `ldd` 静态链接确认，macOS `otool -L` 无非系统动态依赖
-- **单元测试**: `go test ./... -count=1` 全部通过（filequery 100+ 测试、diff 24 测试、dsl 35 测试）
-- **DSL 确定性审计**: preprocess/parse/bind/compile 全路径确定性验证通过
-- **AST 级安全**: sqlguard + policy 均通过 AST 优先校验 + 字符串回退
-- **Schema Diff P1-P4**: 字段级变更检测、快照存储、CLI 子命令、多版本基线 — 全部通过
-- **窗口函数 Phase 1-4**: 排名/值引用/聚合窗口/框架规格 — 36+ 测试全部通过
+- **编译验证**: `go build ./...` + `go vet ./...` + `go test ./...` 全部通过
+- **Prometheus 连接器 E2E**: 采集 10 tables / 206 labels / 657 metrics，PromQL 查询 39 rows ~211µs
+- **16 DSN 向后兼容**: 原有数据源采集与查询不受影响

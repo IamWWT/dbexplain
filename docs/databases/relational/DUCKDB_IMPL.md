@@ -93,10 +93,22 @@ CGO_ENABLED=1 go build -tags duckdb -o dbexplain ./cmd/dbexplain
 
 ### 2.5 运行时依赖
 
-DuckDB 版二进制在 Linux 上**不**静态链接 libstdc++/libc，运行时需要：
-- Linux: `libstdc++.so.6`, `libc.so.6`（几乎每台 Linux 都有）
-- macOS: 系统自带
-- Windows: 需要 `VCRUNTIME140.dll`（通常已预装）
+DuckDB 版二进制在 Linux 上的静态链接情况因平台和工具链而异：
+
+| 平台 / 工具链 | C++ 运行时 | libc (glibc) | 说明 |
+|--------------|-----------|-------------|------|
+| **linux/amd64** (native, gcc) | 静态 | 静态 | `-extldflags=-static`，零动态依赖 |
+| **linux/arm64** (native ARM64, gcc) | 静态 | 静态 | `-extldflags=-static`，零动态依赖 |
+| **linux/arm64** (cross from x86_64, `aarch64-linux-gnu-gcc`) | 静态 | **动态** | Ubuntu 22.04 交叉工具链 glibc GOT overflow，只能 `-static-libgcc -static-libstdc++` |
+| **darwin/amd64** (native macOS) | 静态 | N/A (macOS) | 保留 `/usr/lib/libSystem.B.dylib`（所有 Mac 都有） |
+| **darwin/arm64** (native macOS) | 静态 | N/A (macOS) | 保留 `/usr/lib/libSystem.B.dylib` |
+| **windows/amd64** (mingw) | 静态 | N/A (Windows) | mingw 默认静态链接 |
+
+运行时依赖详情：
+- **linux/amd64 和原生 ARM64**: 完全静态，`ldd` 显示 `not a dynamic executable`，单文件真实零依赖
+- **交叉编译 ARM64**: 运行时需 `libc.so.6`、`ld-linux-aarch64.so.1`（几乎每台 Linux 都有）
+- **macOS**: 系统自带 `/usr/lib/libSystem.B.dylib`，无需额外安装
+- **Windows**: 需 `VCRUNTIME140.dll`（通常已预装）
 
 这不是传统意义上的"安装依赖"——C 运行时在所有主流系统上预装。**单文件部署模式不变**。
 
@@ -345,6 +357,7 @@ case "duckdb":
 | `:memory:` DSN 三斜杠要求 | 已修复 | `duckdb:///:memory:` 非直觉但被迫 |
 | `duckdb` 子命令未注册 | 已修复 | v0.1.3 早期版本缺失，已补 |
 | 路径验证 SQL 注入 | 已评估 | `validateFileAccess` 只扫描字符串字面量，不作为安全边界 |
+| **musl 与 DuckDB 不兼容** | 永久限制 | DuckDB C++ 引擎依赖 glibc-only 函数（`backtrace`、`backtrace_symbols`、`__res_init`），musl libc 未实现这些函数，链接时报 undefined reference。因此无法通过 `aarch64-linux-musl-gcc` 实现 ARM64 全静态交叉编译。**唯一可行的全静态 ARM64 DuckDB 方案是原生 ARM64 机器上使用原生 `gcc` + `-static` 构建。** 详细见 ISSUE-083。 |
 
 ### 8.3 Phase 路线图
 
