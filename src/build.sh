@@ -216,8 +216,13 @@ for platform in "${PLATFORMS[@]}"; do
   if $IS_DUCKDB; then
     case "$GOOS/$GOARCH" in
       linux/arm64)
-        # aarch64-linux-gnu-gcc targets ARM64 Linux with glibc
-        CC="aarch64-linux-gnu-gcc"
+        if [ "$GOOS/$GOARCH" = "$HOST_GOOS/$HOST_GOARCH" ]; then
+          # Native ARM64 build: use native gcc
+          CC="gcc"
+        else
+          # Cross-compilation from another arch (e.g. x86_64 → ARM64)
+          CC="aarch64-linux-gnu-gcc"
+        fi
         ;;
       # windows/amd64)  CC="x86_64-w64-mingw32-gcc-posix" ;;  # uncomment when ready
     esac
