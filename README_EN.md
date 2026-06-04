@@ -177,14 +177,16 @@ Non-SQL databases have their own command allow-lists or native query validators.
 
 ## Binary Variants
 
-| Variant | Build Command | CGO | Size | After UPX |
-|---------|--------------|:---:|:----:|:---------:|
-| **Standard (-std)** | `bash build.sh prod` | ❌ Off | 42 MB | 9.2 MB (78%) |
-| **DuckDB Edition (-duckdb)** | `bash release.sh` | ✅ On | 91 MB | 22 MB (75%) |
+| Variant | Build Command | CGO | Raw Size | After UPX |
+|---------|--------------|:---:|:--------:|:---------:|
+| **Standard (-std)** | `bash build.sh prod` (default) | ❌ Off | 42 MB | 9.2 MB (78%) |
+| **DuckDB Edition (-duckdb)** | `bash build.sh minimal duckdb,...`¹ | ✅ On | 91 MB | 22 MB (75%) |
 
-> **Startup speed**: UPX editions add ~435ms of self-decompression overhead on first launch (cold start). The decompression happens each time the binary is invoked — the executable must decompress itself into memory before any application code runs. After decompression completes, runtime execution performance is **identical** to the uncompressed version.
+> ¹ Full DuckDB tag list: `duckdb,mysql,postgres,sqlite,clickhouse,redis,mongodb,elasticsearch,qdrant,csv,xlsx,prometheus`.
 >
-> **Release**: `bash release.sh` with zero arguments produces 5-platform -std + 2-platform -duckdb + 12 tarballs.
+> **Startup speed (cold start)**: UPX editions add ~435ms of self-decompression overhead on each invocation (the executable must decompress itself into memory before any application code runs). noUPX: ~3ms. Runtime execution is **identical** after decompression.
+>
+> **Release**: `bash release.sh` with zero arguments produces all variants — 5-platform -std + 2-platform -duckdb, each with UPX/noUPX dual variants, 12 tarballs total.
 
 ---
 

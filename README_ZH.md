@@ -174,13 +174,15 @@ dbexplain diff --cache schema.json --since v1.0 --human
 
 ## 二进制变体
 
-| 变体 | 构建命令 | CGO | 体积 | UPX 后 |
-|------|---------|:---:|:----:|:------:|
-| **标准版 (-std)** | `bash build.sh prod` | ❌ 关闭 | 42 MB | 9.2 MB (78%) |
-| **DuckDB 版 (-duckdb)** | `bash release.sh` | ✅ 开启 | 91 MB | 22 MB (75%) |
+| 变体 | 构建命令 | CGO | 原始体积 | UPX 后 |
+|------|---------|:---:|:--------:|:------:|
+| **标准版 (-std)** | `bash build.sh prod`（默认） | ❌ 关闭 | 42 MB | 9.2 MB (78%) |
+| **DuckDB 版 (-duckdb)** | `bash build.sh minimal duckdb,...`¹ | ✅ 开启 | 91 MB | 22 MB (75%) |
 
+> ¹ DuckDB 版完整标签：`duckdb,mysql,postgres,sqlite,clickhouse,redis,mongodb,elasticsearch,qdrant,csv,xlsx,prometheus`。
+>
 > **启动速度（冷启动）**: UPX 版每次调用时增加约 435ms 的自解压开销（可执行文件在运行任何应用代码前需先将自身解压到内存），noUPX 版约 3ms。解压完成后运行时性能**完全一致**。
-> **发布**: `bash release.sh` 零参数产出 5 平台 -std + 2 平台 -duckdb + 12 个 tarball。
+> **发布**: `bash release.sh` 零参数一键产出全部变体——5 平台 -std + 2 平台 -duckdb，每变体含 UPX/noUPX 双版本，共 12 个 tarball。
 
 ---
 
