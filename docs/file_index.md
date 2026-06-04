@@ -96,6 +96,7 @@
 | 文件 | 说明 |
 |------|------|
 | [`RELEASE_WECHAT_v0.1.2.md`](RELEASE_WECHAT_v0.1.2.md) | v0.1.2 公众号发布文案 |
+| [`RELEASE_WECHAT_v0.1.4.md`](RELEASE_WECHAT_v0.1.4.md) | v0.1.4 公众号发布文案（新增 Prometheus + 采集指标 + 9.2MB 极致压缩） |
 | [`dbexplain_wechat_article.html`](dbexplain_wechat_article.html) | 微信公众号文章 HTML |
 
 ---
