@@ -45,6 +45,10 @@ const (
 	// File sources are inherently read-only and bypass sqlguard,
 	// but still enforce policy engine rules (DENY_TABLES, MASK_COLUMNS).
 	CapFile Capability = "file"
+
+	// CapPromQL — the connector accepts PromQL queries (Prometheus).
+	// PromQL goes through native validation (CheckNative), not sqlguard.
+	CapPromQL Capability = "promql"
 )
 
 // Provider is something that declares which capabilities it supports.

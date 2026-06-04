@@ -40,7 +40,7 @@ else:
 
 预期输出示例:
 ```
-Total data sources collected: 15
+Total data sources collected: 17
   [mysql]          aiops-mysql           databases=1 tables=['iplist', 'port']
   [clickhouse]     aiops-clickhouse      databases=2 tables=[...]
   ...
@@ -118,7 +118,7 @@ print('Execute JSON structure OK ✓')
 ## 11.5 汇总报告
 
 ```bash
-echo "=== dbexplain v0.1.2 集成测试报告 ==="
+echo "=== dbexplain v0.1.4 集成测试报告 ==="
 echo "日期: $(date '+%Y-%m-%d %H:%M')"
 echo "Go 版本: $(go version)"
 echo ""
@@ -144,7 +144,7 @@ echo ""
 echo "--- 版本 ---"
 $BIN --version
 echo ""
-echo "--- v0.1.2 新增功能验证 ---"
+echo "--- v0.1.4 新增功能验证 ---"
 echo "--- collect 子命令 ---"
 $BIN collect -env --human 2>&1 | head -5
 echo ""

@@ -10,6 +10,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -130,8 +131,9 @@ func (esConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instance, e
 	return inst, nil
 }
 
-// ExecQuery implements query.Queryable for Elasticsearch via _sql endpoint.
-// ES supports standard SQL since v6.3 — read-only-only, validated by sqlguard.
+// ExecQuery implements query.Queryable for Elasticsearch.
+// Detects JSON native queries (starts with '{' or '[') and routes to _search endpoint.
+// SQL queries are routed to _sql endpoint (ES SQL support since v6.3).
 func (esConnector) ExecQuery(ctx context.Context, opts query.ExecuteOpts) (*query.QueryResult, error) {
 	host := opts.DSN.Host
 	if host == "" {
@@ -144,6 +146,12 @@ func (esConnector) ExecQuery(ctx context.Context, opts query.ExecuteOpts) (*quer
 	scheme := "http"
 	if opts.DSN.TLS {
 		scheme = "https"
+	}
+
+	// Detect JSON native query → route to _search
+	sql := strings.TrimSpace(opts.SQL)
+	if len(sql) > 0 && (sql[0] == '{' || sql[0] == '[') {
+		return esSearchQuery(ctx, host, port, scheme, opts)
 	}
 
 	// Build _sql request
@@ -222,6 +230,90 @@ func (esConnector) ExecQuery(ctx context.Context, opts query.ExecuteOpts) (*quer
 	if len(esResp.Rows) > opts.MaxRows {
 		result.RowCount = opts.MaxRows
 	}
+	result.ExecutionTime = time.Since(start).String()
+	return result, nil
+}
+
+// esSearchQuery executes a JSON native query via ES _search endpoint.
+// Parses hits.hits[]._source to extract dynamic columns and rows.
+func esSearchQuery(ctx context.Context, host, port, scheme string, opts query.ExecuteOpts) (*query.QueryResult, error) {
+	reqURL := fmt.Sprintf("%s://%s:%s/_search", scheme, host, port)
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", reqURL, strings.NewReader(opts.SQL))
+	if err != nil {
+		return nil, fmt.Errorf("es search request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	if opts.DSN.User != "" {
+		httpReq.SetBasicAuth(opts.DSN.User, opts.DSN.Password)
+	}
+
+	httpCli := &http.Client{Timeout: time.Duration(opts.Timeout+5) * time.Second}
+	if opts.DSN.TLS {
+		httpCli.Transport = &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: opts.DSN.TLSSkipVerify},
+		}
+	}
+
+	start := time.Now()
+	resp, err := httpCli.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("es search: %w", err)
+	}
+	defer resp.Body.Close()
+	rbody, readErr := io.ReadAll(resp.Body)
+	if readErr != nil {
+		log.Printf("[elasticsearch] read search response body: %v", readErr)
+	}
+
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("es search HTTP %d: %s", resp.StatusCode, string(rbody))
+	}
+
+	// Parse _search response: extract _source from each hit
+	var searchResp struct {
+		Hits struct {
+			Hits []struct {
+				Source map[string]interface{} `json:"_source"`
+			} `json:"hits"`
+		} `json:"hits"`
+	}
+	if err := json.Unmarshal(rbody, &searchResp); err != nil {
+		return nil, fmt.Errorf("es search parse: %w\nbody: %s", err, string(rbody[:min(300, len(rbody))]))
+	}
+
+	// Collect all unique column keys from _source for deterministic output
+	colSet := make(map[string]bool)
+	for _, h := range searchResp.Hits.Hits {
+		for k := range h.Source {
+			colSet[k] = true
+		}
+	}
+	columns := make([]string, 0, len(colSet))
+	for k := range colSet {
+		columns = append(columns, k)
+	}
+	sort.Strings(columns)
+
+	// Build result
+	result := &query.QueryResult{}
+	for _, col := range columns {
+		result.Columns = append(result.Columns, query.ColumnInfo{Name: col, Type: "TEXT"})
+	}
+	for i, h := range searchResp.Hits.Hits {
+		if i >= opts.MaxRows {
+			result.Truncated = true
+			break
+		}
+		row := make([]*string, len(columns))
+		for j, col := range columns {
+			if val, ok := h.Source[col]; ok && val != nil {
+				s := fmt.Sprintf("%v", val)
+				row[j] = &s
+			}
+		}
+		result.Rows = append(result.Rows, row)
+	}
+	result.RowCount = len(result.Rows)
 	result.ExecutionTime = time.Since(start).String()
 	return result, nil
 }

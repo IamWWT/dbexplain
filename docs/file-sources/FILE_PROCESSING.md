@@ -252,5 +252,71 @@ dbexplain xlsx
 - `src/internal/connector/csv.go` — CSV/TSV 连接器实现
 - `src/internal/connector/xlsx.go` — XLSX 连接器实现（含 excelize 封装）
 - `src/internal/connector/infer.go` — 类型推断共享逻辑
+- `src/internal/connector/filequery/executor.go` — 文件查询引擎执行器 + 哈希索引优化
+- `src/internal/connector/filequery/evaluator.go` — 表达式求值引擎
 - `src/cmd/dbexplain/execute.go` — `handleFileExecute()` 独立执行路径
 - `docs/test/05-file-processing.md` — 文件处理测试用例
+
+---
+
+## 12. 性能优化
+
+### 12.1 最大行数控制
+
+| 层级 | 默认值 | 作用域 | 说明 |
+|------|--------|--------|------|
+| Schema 采集采样 | 100 行 | csv.go `readCSVFile()` | 类型推断用，不可配置 |
+| 查询结果上限 | `--limit 1000` | `execute`/`repl` CLI 标志 | 可通过 `--limit N` 调整 |
+| `SELECT *` 快速路径 | `--limit` | csv.go `execCSVSelectStar()` | 受 `--limit` 约束 |
+| 文件查询引擎 | `--limit` | `filequery.Execute()` 的 `maxRows` | 所有查询路径均受此约束 |
+
+`--limit` 标志（默认 1000）控制所有查询路径的最大返回行数。在 REPL 和 `execute` 模式下均生效，防止意外全表导出。
+
+### 12.2 哈希索引优化
+
+> 文件位置: `src/internal/connector/filequery/executor.go`
+
+**原理**: 对 `WHERE col = 'literal'` 形式的简单相等条件，在内存中构建临时哈希索引（`map[string][]int`，值 → 行索引），将 O(n) 全表扫描降为 O(1) 哈希查找。
+
+```
+示例: SELECT * FROM data WHERE region = '华东'
+                        ↓
+                构建哈希索引: "华东" → [3, 17, 42, ...]
+                        ↓
+                O(1) 直接返回匹配行，跳过全表扫描
+```
+
+**触发条件**:
+- WHERE 条件包含 `ColumnRef = LiteralValue`（或对称 `LiteralValue = ColumnRef`）
+- 等式左侧或右侧为字面量（字符串或数字），非子查询或表达式
+- 支持 `AND` 链中的等值条件（取第一个等式构建索引，其余条件在子集上回退到完整求值）
+- `OR`、`LIKE`、`BETWEEN`、`IS NULL`、`IN` 等复杂条件自动回退到全表扫描
+
+**优势**:
+- 无预热成本（纯内存操作，数据已全量驻留）
+- 哈希索引按需构建，查询结束后自动释放
+- 对等值过滤场景（`WHERE id = '42'`）加速显著
+- 不影响复杂查询的正确性（始终对哈希结果做完整 WHERE 重校验）
+
+**限制**:
+- 仅加速 `=` 相等条件，不加速范围查询（`>`、`<`、`BETWEEN`）、模糊查询（`LIKE`）、`IN` 列表
+- 对大数据集（百万行以上）哈希索引的构建本身有 O(n) 成本
+- 多个相等条件时仅使用第一个等式，其余通过完整求值（非组合索引）
+
+### 12.3 实现架构
+
+```
+WHERE col = 'val' AND other > 0
+        ↓
+extractEqualityCondition() → 提取 col = 'val'
+        ↓
+buildHashIndex(col, data) → map[string][]int{"val": [3,17,42]}
+        ↓
+hash["val"] → [3,17,42] → 取出候选行
+        ↓
+hasAdditionalConditions()? → true (有 AND other > 0)
+        ↓
+filterRows() → 在候选行子集上执行完整 WHERE 求值
+        ↓
+最终结果
+```

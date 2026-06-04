@@ -51,14 +51,14 @@ LLM 在外部消费 IR 做推理
 
 ## 3. 目标架构
 
-### 当前目录结构（v0.1.3，实际代码）
+### 当前目录结构（v0.1.4，实际代码）
 
 ```
 src/
   cmd/dbexplain/        # CLI 入口：main.go + execute.go
   internal/             # 全部内部包（对外不可见）
     capabilities/       # Capability 枚举（含 CapSQL/CapFile）
-    connector/          # 连接器自注册（12 种数据源，含可选 DuckDB）
+    connector/          # 连接器自注册（14 种数据源，含可选 DuckDB 和 Prometheus）
       filequery/        # 文件查询引擎（纯 Go 内存 SQL）
     sqlguard/           # SQL 只读校验（P0 安全边界）
     policy/             # 细粒度访问控制（DENY_TABLES/COLUMNS/STATEMENTS）
@@ -88,7 +88,7 @@ src/
     version/            # 版本信息
 ```
 
-### 构建架构：双版本策略（v0.1.3）
+### 构建架构：双版本策略（v0.1.3+）
 
 项目输出两套二进制，满足不同场景：
 
@@ -531,6 +531,7 @@ Password Mode:
 | 日期 | 版本 | 说明 |
 |------|------|------|
 | 2026-06-03 | v5 | v0.1.3: 新增构建架构双版本策略（CGO 例外）；CSV/XLSX 定位更新（Parquet 通过 DuckDB 间接支持） |
+| 2026-06-04 | v6 | v0.1.4: 新增 Prometheus 连接器（PromQL）、DSL IR 重构、采集指标；连接器扩展至 14 种数据源 |
 | 2026-05-29 | v4 | v0.1.0: CapSQL 架构落地、P0/P1 安全加固；新增已知限制章节 |
 | 2026-05-20 | v3 | 新增安全性章节，密码防泄漏为第一要义 |
 | 2026-05-20 | v2 | Phase 1-3 已完成，更新路线图状态 |

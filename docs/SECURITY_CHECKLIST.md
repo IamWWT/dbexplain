@@ -100,8 +100,8 @@
 - [ ] **连接隔离** — 每实例独立连接，单实例 panic 不影响其他实例
 - [ ] **超时控制** — 所有数据库连接有合理的连接/读写超时
 - [ ] **并发安全** — sync.Map 或 mutex 保护共享状态
-- [ ] **终端注入防御** — `formatHuman()` 中单元格值经过 `sanitizeCell()` 剥离 ANSI 转义序列和控制字符（仅 `--human` 输出，覆盖全部 13 种数据源（含可选 DuckDB）；JSON 输出经 Go `json.Encoder` 原生转义，无需额外处理）
-- [ ] **列宽上限** — `formatHuman()` 列宽 cap 于 256 字符，超长 cell 截断并追加 `…`（仅 `--human` 输出，覆盖全部 13 种数据源（含可选 DuckDB））
+- [ ] **终端注入防御** — `formatHuman()` 中单元格值经过 `sanitizeCell()` 剥离 ANSI 转义序列和控制字符（仅 `--human` 输出，覆盖全部 14 种数据源（含可选 DuckDB 和 Prometheus）；JSON 输出经 Go `json.Encoder` 原生转义，无需额外处理）
+- [ ] **列宽上限** — `formatHuman()` 列宽 cap 于 256 字符，超长 cell 截断并追加 `…`（仅 `--human` 输出，覆盖全部 14 种数据源（含可选 DuckDB 和 Prometheus））
 
 ---
 

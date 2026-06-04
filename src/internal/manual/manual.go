@@ -56,8 +56,8 @@ func PrintHelp() {
 			"    dbexplain collect [flags]      Explicit schema collection subcommand\n"+
 			"    dbexplain diff [flags]         Schema diff / delta detection\n"+
 			"  Query:\n"+
-			"    dbexplain execute <query>      Run read-only query (SQL / JSON / native)\n"+
-			"    dbexplain repl                 Interactive REPL mode\n"+
+			"    dbexplain execute <query>      Run read-only query (SQL / JSON / PromQL / native)\n"+
+			"    dbexplain repl                 Interactive REPL mode (DSL + multi-source)\n"+
 			"  Utility:\n"+
 			"    dbexplain list                 List all configured databases\n"+
 			"    dbexplain encrypt <file>       Encrypt .env config with machine fingerprint\n"+
@@ -71,8 +71,8 @@ func PrintHelp() {
 			"    dbexplain collect [flags]      Explicit schema collection subcommand\n"+
 			"    dbexplain diff [flags]         Schema diff / delta detection\n"+
 			"  Query:\n"+
-			"    dbexplain execute <query>      Run read-only query (SQL / JSON / native)\n"+
-			"    dbexplain repl                 Interactive REPL mode\n"+
+			"    dbexplain execute <query>      Run read-only query (SQL / JSON / PromQL / native)\n"+
+			"    dbexplain repl                 Interactive REPL mode (DSL + multi-source)\n"+
 			"  Utility:\n"+
 			"    dbexplain list                 List all configured databases\n"+
 			"    dbexplain encrypt <file>       Encrypt .env config with machine fingerprint\n"+
@@ -86,11 +86,13 @@ func PrintHelp() {
 			"  SQL:   mysql, postgres/pg, gaussdb, clickhouse/ch, sqlite/sqlite3,\n"+
 			"       "+duckdbHelp+
 			"  NoSQL: redis, mongodb, elasticsearch/es, qdrant\n"+
+			"  TSDB:  prometheus\n"+
 			"  File:  csv, tsv, xlsx\n\n",
 		"Supported databases:\n"+
 			"  SQL:   mysql, postgres/pg, gaussdb, clickhouse/ch, sqlite/sqlite3,\n"+
 			"       "+duckdbHelp+
 			"  NoSQL: redis, mongodb, elasticsearch/es, qdrant\n"+
+			"  TSDB:  prometheus\n"+
 			"  File:  csv, tsv, xlsx\n\n",
 	))
 
@@ -271,6 +273,8 @@ var DBSubcommands = map[string]func(func(string, string) string){
 	"csv":           printManualFile,
 	"tsv":           printManualFile,
 	"xlsx":          printManualXLSX,
+	"prometheus":    printManualPrometheus,
+	"prom":          printManualPrometheus,
 	"duckdb":        printManualDuckDB,
 }
 
@@ -297,6 +301,8 @@ func PrintDBManual(sub string, _ []string) {
 		displayName = "clickhouse"
 	} else if displayName == "es" {
 		displayName = "elasticsearch"
+	} else if displayName == "prom" {
+		displayName = "prometheus"
 	} else if displayName == "sqlite3" {
 		displayName = "sqlite"
 	} else if displayName == "postgresql" {
@@ -469,6 +475,7 @@ DESCRIPTION
     elasticsearch    9200      Cat Indices            索引映射
     mongodb          27017     ListCollections        近似文档数
     qdrant           6334      gRPC                   集合向量维度
+    prometheus       9090      /api/v1/query             指标名 + 标签，PromQL 即时/范围向量
     csv              -         文件首行/采样            列名+类型推断
     tsv              -         文件首行/采样            列名+类型推断
     xlsx             -         excelize 库             多Sheet、列名+类型推断
@@ -489,6 +496,7 @@ DESCRIPTION
     elasticsearch    9200     Cat Indices            Index mappings
     mongodb          27017    ListCollections        Estimated doc counts
     qdrant           6334     gRPC                   Collection vector dimensions
+    prometheus       9090     /api/v1/query              Metric names + labels, PromQL instant/range vectors
     csv              -        File header/sampling    Column names + type inference
     tsv              -        File header/sampling    Column names + type inference
     xlsx             -        excelize library        Multi-sheet, column names + type inference
@@ -505,6 +513,7 @@ DESCRIPTION
 	printManualElasticsearch(p)
 	printManualMongoDB(p)
 	printManualQdrant(p)
+	printManualPrometheus(p)
 	printManualDuckDB(p)
 
 	fmt.Print(p(`
@@ -723,7 +732,9 @@ DESCRIPTION
     子命令:
       dbexplain repl [flags]
 
-    交互式只读查询终端，支持 SQL / 原生 / DSL 查询。
+    交互式只读查询终端，支持 SQL / PromQL / 原生 / DSL 查询。
+    支持 14 种数据源，DSL 模式下 Prometheus 的 PromQL 可通过 SQL
+    语法编译生成（SELECT * FROM @label.metric [WHERE label="val"]）。
 
     参数:
       -env                      从配置文件加载 DSN
@@ -748,7 +759,9 @@ DESCRIPTION
     Subcommand:
       dbexplain repl [flags]
 
-    Interactive read-only query terminal supporting SQL / native / DSL queries.
+    Interactive read-only query terminal supporting SQL / PromQL / native / DSL queries.
+    Supports 14 data sources. In DSL mode, Prometheus PromQL is compiled from SQL syntax
+    (SELECT * FROM @label.metric [WHERE label="val"]).
 
     Flags:
       -env                      Load DSNs from config file
@@ -785,7 +798,7 @@ DESCRIPTION
       --limit <N>               最大返回行数 (默认 1000)
       --timeout <N>             查询超时秒数 (默认 30)
       --explain                 包裹 EXPLAIN 返回查询计划
-      --dsl                     使用 DSL 模式（支持 @label.table 语法）
+      --dsl                     使用 DSL 模式（支持 @label.table 语法，SQL/PromQL/文件统一入口）
 
     SQL 查询 (MySQL/PG/GaussDB/SQLite/ClickHouse/ES):
       dbexplain execute -env --label shop-db 'SELECT COUNT(*) FROM orders'
@@ -796,15 +809,20 @@ DESCRIPTION
       dbexplain execute -env --label mydb --dsl 'SELECT * FROM @mydb.users WHERE id > 10'
       dbexplain execute -env --label csv-data --dsl 'SELECT col1, col2 FROM @csv-data.data'
 
+    DSL 查询 PromQL（SQL 语法编译为 PromQL）:
+      dbexplain execute -env --label prom --dsl 'SELECT * FROM @prom.up WHERE job="node"'
+      dbexplain execute -env --label prom --dsl 'SELECT * FROM @prom.node_cpu_seconds_total'
+
     非 SQL 原生查询:
       dbexplain execute -env --label mongo '{"find":"users","filter":{},"limit":10}'
       dbexplain execute -env --label redis 'GET user:1001'
       dbexplain execute -env --label qdrant '{"count":"documents"}'
+      dbexplain execute -env --label prom --dsl 'SELECT * FROM @prom.up'
 
     安全保护:
       • SQL 三层校验 — 动词白名单 + 多语句检测 + 自动 LIMIT
       • DSL 通道 AST 级校验 — 统一 AST 解析，覆盖所有数据源
-      • 非 SQL 内部白名单 — Redis 30+ 命令，MongoDB find/aggregate
+      • 非 SQL 内部白名单 — Redis 30+ 命令，MongoDB find/aggregate，Prometheus PromQL
       • 并发互斥 — 同一 label 同时仅一个查询
       • 双超时 — 应用层 context + 数据库层语句超时
       • 密码脱敏 — 查询结果不含任何连接信息或密码
@@ -870,7 +888,9 @@ DESCRIPTION
     Subcommand:
       dbexplain repl [flags]
 
-    Interactive read-only query terminal supporting SQL / native / DSL queries.
+    Interactive read-only query terminal supporting SQL / PromQL / native / DSL queries.
+    Supports 14 data sources. In DSL mode, Prometheus PromQL is compiled from SQL syntax
+    (SELECT * FROM @label.metric [WHERE label="val"]).
 
     Flags:
       -env                      Load DSNs from config file
@@ -907,7 +927,7 @@ DESCRIPTION
       --limit <N>               Max rows returned (default 1000)
       --timeout <N>             Query timeout in seconds (default 30)
       --explain                 Wrap with EXPLAIN for query plan
-      --dsl                     Enable DSL mode (supports @label.table syntax)
+      --dsl                     Enable DSL mode (supports @label.table syntax, unified SQL/PromQL/file entry)
 
     SQL queries (MySQL/PG/GaussDB/SQLite/ClickHouse/ES):
       dbexplain execute -env --label shop-db 'SELECT COUNT(*) FROM orders'
@@ -918,15 +938,20 @@ DESCRIPTION
       dbexplain execute -env --label mydb --dsl 'SELECT * FROM @mydb.users WHERE id > 10'
       dbexplain execute -env --label csv-data --dsl 'SELECT col1, col2 FROM @csv-data.data'
 
+    DSL PromQL queries (SQL syntax compiled to PromQL):
+      dbexplain execute -env --label prom --dsl 'SELECT * FROM @prom.up WHERE job="node"'
+      dbexplain execute -env --label prom --dsl 'SELECT * FROM @prom.node_cpu_seconds_total'
+
     Non-SQL native queries:
       dbexplain execute -env --label mongo '{"find":"users","filter":{},"limit":10}'
       dbexplain execute -env --label redis 'GET user:1001'
       dbexplain execute -env --label qdrant '{"count":"documents"}'
+      dbexplain execute -env --label prom --dsl 'SELECT * FROM @prom.up'
 
     Security:
       • SQL triple-layer check — verb whitelist + multi-statement detect + auto LIMIT
       • DSL AST-level validation — unified AST parsing, covers all datasources
-      • Non-SQL internal whitelist — Redis 30+ commands, MongoDB find/aggregate
+      • Non-SQL internal whitelist — Redis 30+ commands, MongoDB find/aggregate, Prometheus PromQL
       • Concurrent mutex — only one query per label at a time
       • Dual timeout — application context + database statement timeout
       • Password redaction — query results contain no connection info or passwords

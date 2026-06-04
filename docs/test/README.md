@@ -1,6 +1,6 @@
 # dbexplain 测试框架
 
-> 分层测试方法论，覆盖全部 12 种数据源 + 安全引擎 + 性能基准。
+> 分层测试方法论，覆盖全部 13 种数据源类型 + 安全引擎 + 性能基准。
 
 ---
 
@@ -11,11 +11,12 @@
 ### 构建命令
 
 ```bash
-cd src && go build -o ../release/dbexplain ./cmd/dbexplain
+cd src && go build -tags "full" -o ../release/dbexplain ./cmd/dbexplain
 ```
 
 二进制输出到项目根目录的 `release/dbexplain`（无架构后缀，用于本地开发测试）。
-交叉编译使用 `cd src && bash build.sh`，输出到 `release/dbexplain-{os}-{arch}`。
+交叉编译使用 `cd src && bash build.sh prod`，输出到 `release/dbexplain-{os}-{arch}`。
+官方发布使用 `cd src && bash release.sh`（零参数全量产出）。
 
 ### 标准变量
 
@@ -52,12 +53,12 @@ $BIN execute -env --db 1 "SELECT 1" --human
 
 ```bash
 # 1. 构建
-cd src && go build -o ../release/dbexplain ./cmd/dbexplain
+cd src && go build -tags "full" -o ../release/dbexplain ./cmd/dbexplain
 
 # 2. 单元测试（全部）
 cd src && go test ./... -count=1
 
-# 3. Schema 采集（15 数据源）
+# 3. Schema 采集（17 DSN 条目）
 cd src && $BIN -env --json | python3 -c "import json,sys;d=json.load(sys.stdin);print(f'{len(d[\"instances\"])} instances')"
 
 # 4. 查询执行（抽样验证）
@@ -84,12 +85,14 @@ cd src && $BIN diff --cache /tmp/e2e.cache --list-versions
 | L7 | 文档验证 | 版本一致性、文档引用正确性 | [10-regression.md](10-regression.md) |
 | L8 | 能力架构 | CapSQL 路由、PostgreSQL 多 Schema、策略引擎增强、JSON 包装格式 | [12-capability-routing.md](12-capability-routing.md) |
 | L8 | DuckDB 连接器 | DuckDB 采集/查询/安全/DSL/构建隔离 | [16-duckdb.md](16-duckdb.md) |
+| L8 | 采集指标收集 | Prometheus 文本输出/JSON嵌入/向后兼容 | [17-metrics.md](17-metrics.md) |
+| L8 | Prometheus 连接器 | Prometheus targets/labels/metrics 采集 + PromQL 查询 | [18-prometheus.md](18-prometheus.md) |
 
 ## 测试概览
 
 | 维度 | 数据 |
 |------|------|
-| 数据源 | 16 (mysql/clickhouse/sqlite/qdrant/es/postgres/redis×2/mongo/xlsx×2/csv/tsv/duckdb) |
+| 数据源 | 17 (mysql/clickhouse/sqlite/qdrant/es/postgres/redis×2/mongo/xlsx×2/csv/tsv/duckdb/prometheus) |
 | 二进制架构 | 双版本: 标准版(-std 纯 Go) + DuckDB版(-duckdb CGO=1) |
 | Go 版本 | 1.26 |
 | 测试环境 | Linux x86-64 (amd64) |
@@ -158,7 +161,7 @@ dbexplain execute -dsn 'csv:///tmp/test.csv?label=test' "SELECT *"
 
 ## 最新测试结果
 
-完整测试结果报告见 [RESULTS.md](RESULTS.md)。v0.1.3 测试结果: **全部单元测试通过**，含 DuckDB 连接器 20 测试、DSL 35 测试、Schema Diff 24 测试、窗口函数 33 测试。
+完整测试结果报告见 [RESULTS.md](RESULTS.md)。v0.1.4 测试结果: **153/153 测试项通过 (100%)**，含 DuckDB 连接器 20 测试、DSL 35 测试、Schema Diff 24 测试、窗口函数 33 测试、Metrics 5 测试、Prometheus 连接器 13 测试。
 
 ## 快速导航
 
@@ -176,6 +179,9 @@ dbexplain execute -dsn 'csv:///tmp/test.csv?label=test' "SELECT *"
 10-regression.md     # 回归测试
 11-end-to-end.md     # 全量集成
 12-capability-routing.md  # 能力架构
+16-duckdb.md           # DuckDB 连接器
+17-metrics.md          # 采集指标
+18-prometheus.md       # Prometheus 连接器
 ```
 
 ## 测试充分性评估
@@ -186,9 +192,9 @@ dbexplain execute -dsn 'csv:///tmp/test.csv?label=test' "SELECT *"
 | 字段推断 | 高 | 95% | 44 用例 |
 | 安全策略引擎 | 高 | 99% | 41 用例覆盖全部三层 + 12-DB 类型 + 防绕过 |
 | SQL 只读校验 | 高 | 100% | 28 用例 + 实机 8 动词验证 |
-| 查询引擎 | 高 | 100% | 15 DSN 实机执行 (SQL/NoSQL/文件) |
+| 查询引擎 | 高 | 100% | 17 DSN 实机执行 (SQL/NoSQL/文件/PromQL) |
 | 交叉编译 | 高 | 100% | 5/5 平台成功 |
-| 文档同步 | 高 | 100% | 全部文件版本 v0.1.2 一致 |
+| 文档同步 | 高 | 100% | 全部文件版本 v0.1.4 一致 |
 | 文件处理 (CSV/TSV/XLSX) | 中 | 90% | 基本功能覆盖，边界场景需补充 |
 | 能力架构 (CapSQL) | 高 | 100% | 全 15 连接器路由验证 |
 
@@ -201,6 +207,9 @@ dbexplain execute -dsn 'csv:///tmp/test.csv?label=test' "SELECT *"
 | Windows 实机未验证 | 中 | install.ps1 仅语法审查 | PowerShell 语法检查通过 |
 | 大文件 CSV/XLSX 性能 | 中 | 全量读入内存 | 文档标注限制 |
 | 超大结果集 human 输出 | 低 | maxColWidth=256 截断 | 防御性设计 |
-| TSV kind 报告为 csv | 低 | csv.go 硬编码 Kind 为 csv | 仅标签问题，功能和查询正常 |
+| TSV kind 报告为 csv | 低 | csv.go 硬编码 Kind 为 csv | ✅ 已修复，`Collect()` 检测 `tsv://` 前缀后设为 `"tsv"` |
 | Redis _server_info 无 columns | 低 | 元数据格式无列信息 | schema 采集正确，仅无列信息 |
+| REPL 断开支持 | 低 | 无配置时启动报错退出 | ✅ 已修复，空 DSN 进入 `(disconnected)` 状态，支持 `.connect` 命令 |
+| ES 原生 JSON REPL | 低 | REPL 中 ES JSON 查询被阻塞 | ✅ 已修复，路由到 `_search` 端点 + `IsSQL=false` 路径 |
+| Prometheus 联邦查询 | 低 | 原生源无法参与跨源 JOIN | ✅ 已修复，`SourceNative` + `VendorPromQL` 分支 |
 | QueryLock CLI 跨进程 | 低 | 每次 execute 为独立进程 | 库模式正常，单元测试验证 |

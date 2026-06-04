@@ -95,8 +95,8 @@
       "closed": "2026-05-19",
       "priority": "medium",
       "category": "docs",
-      "description": "docs/REDIS.md 2.5 节声明集群模式不支持。待 ISSUE-002 实现后更新文档。",
-      "file": "docs/REDIS.md",
+      "description": "docs/databases/nosql/REDIS.md 2.5 节声明集群模式不支持。待 ISSUE-002 实现后更新文档。",
+      "file": "docs/databases/nosql/REDIS.md",
       "created": "2026-05-19"
     },
     {
@@ -106,8 +106,8 @@
       "closed": "2026-05-19",
       "priority": "low",
       "category": "docs",
-      "description": "docs/ELASTICSEARCH.md 1.1 节和 2.1 节记录了 HTTP-only 限制。待 ISSUE-003 实现后更新文档。",
-      "file": "docs/ELASTICSEARCH.md",
+      "description": "docs/databases/nosql/ELASTICSEARCH.md 1.1 节和 2.1 节记录了 HTTP-only 限制。待 ISSUE-003 实现后更新文档。",
+      "file": "docs/databases/nosql/ELASTICSEARCH.md",
       "created": "2026-05-19"
     },
     {
@@ -695,7 +695,7 @@
       "priority": "medium",
       "category": "docs",
       "description": "文档更新：(1) 新建 docs/CLI_EXAMPLES.md — 7 数据源 13 条实测查询命令，全部经本环境验证通过；(2) 9 份 DB 文档补全 execute 章节（GAUSSDB.md/SQLITE.md/QDRANT.md 新建，6 份已有文档新增 execute 小节）；(3) EXECUTE.md 新增 9-DB 执行行为速览索引表；(4) README.md/README_EN.md 重构——DSN 格式前置、使用方式拆分 Schema采集/只读查询/列出数据库/参考手册四个子节、截图归入 execute 小节；(5) CHANGELOG 中英双语新增 --human + CLI_EXAMPLES 条目；(6) RELEASE_WECHAT_v0.0.7.md 新增 --human 输出示例和 CLI_EXAMPLES 链接。",
-      "file": "docs/CLI_EXAMPLES.md, docs/GAUSSDB.md, docs/SQLITE.md, docs/QDRANT.md, docs/EXECUTE.md, docs/MYSQL.md, docs/POSTGRESQL.md, docs/CLICKHOUSE.md, docs/REDIS.md, docs/MONGO.md, docs/ELASTICSEARCH.md, README.md, README_EN.md, CHANGELOG.md, CHANGELOG_EN.md, docs/RELEASE_WECHAT_v0.0.7.md",
+      "file": "docs/CLI_EXAMPLES.md, docs/databases/relational/GAUSSDB.md, docs/databases/relational/SQLITE.md, docs/databases/nosql/QDRANT.md, docs/EXECUTE.md, docs/databases/relational/MYSQL.md, docs/databases/relational/POSTGRESQL.md, docs/databases/analytical/CLICKHOUSE.md, docs/databases/nosql/REDIS.md, docs/databases/nosql/MONGO.md, docs/databases/nosql/ELASTICSEARCH.md, README.md, README_EN.md, CHANGELOG.md, CHANGELOG_EN.md, docs/RELEASE_WECHAT_v0.0.7.md",
       "created": "2026-05-26"
     },
     {
@@ -827,6 +827,82 @@
       "description": "可选 DuckDB 连接器，通过 `-tags duckdb` 构建。能力：SQL 数据库连接（Collect/ExecQuery）、Parquet/CSV/JSON 文件分析（通过 `read_parquet/read_csv_auto/read_json`）。DSN 参数 `allowed_path` 控制文件读取安全边界。不在 `full` 标签中，需显式指定。涉及文件：duckdb.go、dsn.go、binder.go、executor.go、build.sh、DUCKDB.md。",
       "file": "src/internal/connector/duckdb.go",
       "created": "2026-06-03"
+    },
+    {
+      "id": "ISSUE-076",
+      "title": "Metrics Collection + Prometheus Exposition",
+      "status": "closed",
+      "closed": "2026-06-04",
+      "priority": "medium",
+      "category": "feature",
+      "description": "Add structured collection metrics: per-DSN timing/success/fail/table counts. JSON output includes 'metrics' field. --metrics flag outputs Prometheus text format. New internal/metrics/ package. (metrics collection only, not Prometheus data source connector)",
+      "file": "src/internal/metrics/",
+      "created": "2026-06-04"
+    },
+    {
+      "id": "ISSUE-079",
+      "title": "Prometheus 时序数据库连接器（第 13 种数据源）",
+      "status": "closed",
+      "closed": "2026-06-04",
+      "priority": "medium",
+      "category": "feature",
+      "description": "新增 prometheus:// DSN，支持 Prometheus HTTP API v2.x targets/labels/metadata 采集(Collect)与 PromQL 即时查询(ExecQuery)。新建 src/internal/connector/prometheus.go，修改 dsn.go/capabilities.go，文档及测试。",
+      "file": "src/internal/connector/prometheus.go",
+      "created": "2026-06-04"
+    },
+    {
+      "id": "ISSUE-077",
+      "title": "macOS UPX 压缩无效 — darwin/arm64 无支持 + darwin/amd64 交叉编译 CantUnpackException",
+      "status": "closed",
+      "closed": "2026-06-04",
+      "priority": "medium",
+      "category": "build",
+      "description": "两个独立的 macOS UPX 问题：(1) darwin/arm64 — UPX 任何版本均不支持 arm64 Mach-O，UPX 的解压 stub 未实现该架构，为永久性限制；(2) darwin/amd64 交叉编译（从 Linux 构建）— UPX 5.x 对 Go 交叉编译的 Mach-O 抛出 CantUnpackException。同时修复了 `| tail -1` 管道静默吞掉 UPX 错误码的问题（set -e 对管道左侧不生效）。修复：添加显式的 darwin 平台检测——darwin/arm64 和 darwin/amd64+非 Darwin 宿主机均跳过 UPX，打印具体原因。原生 macOS 构建的 darwin/amd64 二进制（UPX ≤ 4.x）不受影响。",
+      "file": "src/build.sh",
+      "created": "2026-06-04"
+    },
+    {
+      "id": "ISSUE-078",
+      "title": "DuckDB 二进制非静态链接 — 依赖 libc/libstdc++/libgcc_s",
+      "status": "closed",
+      "closed": "2026-06-04",
+      "priority": "medium",
+      "category": "build",
+      "description": "duckdb-go-bindings 已内嵌 libduckdb.a 静态库，DuckDB 本体是静态链接的。但 CGO 构建默认动态链接 C/C++ 运行时（libc.so.6、libstdc++.so.6、libgcc_s.so.1）。当前 build.sh 在检测到 duckdb tag 时仅设置 CGO_ENABLED=1，没有添加任何 -extldflags。修复：在 build loop 内添加平台特定的 DUCKDB_EXTLDFLAGS——Linux 用 -extldflags=-static（ldd 显示 'not a dynamic executable'），macOS 用 -extldflags='-static-libgcc -static-libstdc++'（仅保留 /usr/lib/libSystem.B.dylib，所有 Mac 都有），Windows 默认静态。",
+      "file": "src/build.sh",
+      "created": "2026-06-04"
+    },
+    {
+      "id": "ISSUE-080",
+      "title": "Go 1.26+ -extldflags 引号兼容性 — quoted.Split 字段首字符引号限制",
+      "status": "closed",
+      "closed": "2026-06-04",
+      "priority": "medium",
+      "category": "build",
+      "description": "Go 1.26+ 的 cmd/internal/quoted.Split 只将单引号/双引号作为字段引号字符处理（当引号出现在字段首字符时）。因此 `-extldflags='-static-libgcc -static-libstdc++'`（引号在值内）会被按空格切分为 `['-extldflags='-static-libgcc', '-static-libstdc++'']` 两个字段，导致 linker 收到不完整的 extldflags 值并报 unterminated quote 错误。修复：将整个 `-extldflags=...` 包裹在引号中：`'-extldflags=-static-libgcc -static-libstdc++'`，使 Split 将其识别为单字段。详见 src/build.sh。",
+      "file": "src/build.sh",
+      "created": "2026-06-04"
+    },
+    {
+      "id": "ISSUE-081",
+      "title": "DuckDB linux/arm64 CGO 交叉编译 — Ubuntu 22.04 工具链 + GOT overflow",
+      "status": "closed",
+      "closed": "2026-06-04",
+      "priority": "medium",
+      "category": "build",
+      "description": "从 Linux amd64 交叉编译 DuckDB linux/arm64 所需的完整方案：(1) 安装 aarch64-linux-gnu-gcc（gcc-aarch64-linux-gnu）和 g++-aarch64-linux-gnu（提供了 libstdc++ 交叉编译支持）；(2) 设置 CC=aarch64-linux-gnu-gcc；(3) 最初尝试 -extldflags=-static 全静态链接，但 Ubuntu 22.04 的 aarch64-linux-gnu-gcc (11.x) 静态 glibc 库编译时未启用 -fPIC，在 ARM64 位置无关可执行文件（PIE）中触发 R_AARCH64_LD64_GOTPAGE_LO15 GOT overflow 报错；(4) 降级为 -extldflags=-static-libgcc -static-libstdc++，仅静态链接 C++ 运行时，glibc 动态链接（运行时必须有 ld-linux-aarch64.so.1 + libc.so.6）。amd64 完全静态不受影响。详见 src/build.sh。",
+      "file": "src/build.sh",
+      "created": "2026-06-04"
+    },
+    {
+      "id": "ISSUE-082",
+      "title": "DSL 联邦查询无分布式事务 — 评估 ACID 必要性",
+      "status": "open",
+      "priority": "low",
+      "category": "debt",
+      "description": "DSL 联邦查询通过 filequery 引擎在内存中合并多源数据，本质是无状态的全内存操作：无两阶段提交、无事务边界、无隔离级别。评估是否需要为联邦查询引入 ACID 保证：(1) 只读联邦查询不需要写事务，ACID 主要影响读一致性；(2) 文件数据源（CSV/XLSX）不支持事务，SQL 数据库的 SNAPSHOT ISOLATION 在联邦上下文中无意义；(3) 结论：当前阶段不需要 ACID 保证。仅记录设计决策供未来参考。",
+      "file": "src/cmd/dbexplain/execute.go",
+      "created": "2026-06-04"
     }
   ]
 }

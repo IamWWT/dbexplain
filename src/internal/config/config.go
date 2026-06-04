@@ -360,3 +360,83 @@ func PrintDSNMapping(entries []DSNEntry) {
 	fmt.Fprintln(os.Stderr)
 }
 
+// ── Config source display ──
+
+// DescribeConfigSource returns a human-friendly description of where config is loaded from.
+// Shortens ~/home paths for readability.
+func DescribeConfigSource(configPath string) string {
+	if configPath == "" {
+		return "command-line flags (-dsn / -config)"
+	}
+	absPath, err := filepath.Abs(configPath)
+	if err != nil {
+		return configPath
+	}
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return absPath
+	}
+	if strings.HasPrefix(absPath, homeDir) {
+		return strings.Replace(absPath, homeDir, "~", 1)
+	}
+	return absPath
+}
+
+// PrintNoConfigFound prints a helpful message when no config file is found
+// and guides the user to create one.
+func PrintNoConfigFound() {
+	fmt.Fprint(os.Stderr, `No config file found.
+
+To get started, create a configuration file:
+
+  1. Copy the template to the user config directory:
+
+     mkdir -p `+ConfigDirDisplay()+`
+     cp dbexplain-skill/.env.dbexplain.example `+ConfigDirDisplay()+`.env.dbexplain
+
+  2. Edit `+ConfigDirDisplay()+`.env.dbexplain and uncomment/add your database connections.
+
+     Format: DB<n>=<scheme>://[user:pass@]host[:port][/db][?label=alias]
+
+     Examples:
+       DB1=mysql://root:pass@localhost:3306/mydb?label=my-mysql
+       DB2=postgres://user:pass@localhost:5432/mydb?label=my-pg
+       DB3=redis://:pass@localhost:6379/0?label=my-redis
+
+  3. Run again:
+
+     dbexplain list          # list configured databases
+     dbexplain -env          # collect schemas from all databases
+
+`)
+}
+
+// PrintEmptyConfigFound prints a helpful message when a config file exists
+// but has no active DSN connections (all entries commented out or empty).
+func PrintEmptyConfigFound(configPath string) {
+	displayPath := DescribeConfigSource(configPath)
+	fmt.Fprintf(os.Stderr, `Config file found at: %s
+
+No active DSN connections detected (all entries may be commented out).
+
+Edit this file to uncomment or add your database connections, for example:
+
+  DB1=mysql://root:pass@localhost:3306/mydb?label=my-mysql
+  DB2=postgres://user:pass@localhost:5432/mydb?label=my-pg
+  DB3=redis://:pass@localhost:6379/0?label=my-redis
+
+Or copy the full template from dbexplain-skill/.env.dbexplain.example
+and customize it for your environment.
+
+`, displayPath)
+}
+
+// PrintConfigSource prints the active config source to stderr.
+func PrintConfigSource(configPath string) {
+	if configPath == "" {
+		fmt.Fprintf(os.Stderr, "Config source: command-line flags (-dsn / -config)\n")
+		return
+	}
+	fmt.Fprintf(os.Stderr, "Config source: %s\n", DescribeConfigSource(configPath))
+}
+

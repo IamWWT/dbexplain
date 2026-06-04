@@ -132,7 +132,7 @@ echo "SELECT 1 AS val;" | $BIN repl --dsn "sqlite:////tmp/test.db?label=test" 2>
 
 # REPL .help 命令
 echo ".help" | $BIN repl --dsn "sqlite:////tmp/test.db?label=test" 2>&1 | grep -E "Supported|Commands"
-# 预期: 显示 Supported: All 11 data sources 和 Commands 列表
+# 预期: 显示 Supported: All 14 data sources 和 Commands 列表
 
 # REPL 写操作拒绝
 echo "DROP TABLE t;" | $BIN repl --dsn "sqlite:////tmp/test.db?label=test" 2>&1 | grep "READ_ONLY_VIOLATION"

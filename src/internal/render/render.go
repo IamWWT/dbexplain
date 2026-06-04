@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/IamWWT/dbexplain/internal/analyze"
+	"github.com/IamWWT/dbexplain/internal/metrics"
 	"github.com/IamWWT/dbexplain/internal/schema"
 )
 
@@ -332,6 +333,7 @@ type jsonResult struct {
 	Refs      []jsonRef      `json:"refs"`
 	Groups    []jsonGroup    `json:"groups,omitempty"`
 	Issues    []jsonIssue    `json:"issues"`
+	Metrics   []metrics.Snapshot `json:"metrics,omitempty"`
 }
 
 type jsonInstance struct {
@@ -534,6 +536,10 @@ func buildJSONResult(r *analyze.Result) *jsonResult {
 			Table:    iss.Format(),
 			Message:  iss.Message,
 		})
+	}
+
+	if len(r.Metrics) > 0 {
+		jr.Metrics = r.Metrics
 	}
 
 	return jr

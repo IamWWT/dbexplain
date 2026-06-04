@@ -1,6 +1,6 @@
 # dbexplain CLI 查询案例库
 
-> 所有查询均已在本环境（v0.1.2, 15 数据源）跑通验证。`--human` 用于可读表格输出，不加则为 JSON（供 AI Agent 消费）。
+> 所有查询均已在本环境（v0.1.4, 17+ DSN 条目）跑通验证。`--human` 用于可读表格输出，不加则为 JSON（供 AI Agent 消费）。
 > `--human` 可放在查询语句之前或之后：`dbexplain execute -env --db 1 --human "SELECT 1"` 与 `dbexplain execute -env --db 1 "SELECT 1" --human` 等价。
 
 ---
@@ -257,45 +257,183 @@ JSON 文件自动写入 `*_delta.json`（表级变更）+ `*_diff.json`（字段
 
 ---
 
-## 通用技巧
-
-### 输出模式切换
+## 11. Prometheus — PromQL 即时向量查询
 
 ```bash
-# JSON（默认，供 AI Agent 消费）
-dbexplain execute -env --db 1 "SELECT 1"
+# 查询 up 指标（检查所有 target 健康状态）
+dbexplain execute --dsn 'prometheus://192.168.0.127:9440?label=prom' --human "up"
+# → 返回 __name__ / instance / job / value 等字段
+#   value=1 表示 target 正常，value=0 表示异常
 
-# 人类可读表格
-dbexplain execute -env --db 1 --human "SELECT 1"
+# 按 job 标签过滤
+dbexplain execute --dsn 'prometheus://192.168.0.127:9440?label=prom' --human \
+  "up{job=\"prometheus\"}"
+# → 仅 prometheus 自身的 up 状态
+
+# 查询 node_cpu_seconds_total（带多维标签）
+dbexplain execute --dsn 'prometheus://192.168.0.127:9440?label=prom' --human \
+  "node_cpu_seconds_total"
+# → cpu / mode / instance / job / value（每秒 CPU 时间累积值）
+
+# 查询 TSDB 内部指标
+dbexplain execute --dsn 'prometheus://192.168.0.127:9440?label=prom' --human \
+  "prometheus_tsdb_head_series"
+# → 当前 head 中的 time series 数量
 ```
 
-### DSN 匹配方式
+### DSL 模式（SQL 语法 → PromQL）
 
 ```bash
-dbexplain execute -env --db N ...       # 按编号
-dbexplain execute -env --label xxx ...  # 按标签
-dbexplain execute -dsn 'mysql://...' ... # 直接 DSN
+# DSL 模式：SELECT * FROM @label.metric [WHERE label="val"]
+dbexplain execute --dsn 'prometheus://192.168.0.127:9440?label=prom' \
+  --dsl --human 'SELECT * FROM @prom.up WHERE job="prometheus"'
+# → 等价于 up{job="prometheus"}，输出 __name__/instance/job/value
+
+# DSL 模式：不加 WHERE 返回全量
+dbexplain execute --dsn 'prometheus://192.168.0.127:9440?label=prom' \
+  --dsl --human 'SELECT * FROM @prom.prometheus_tsdb_head_series'
+
+# DSL 模式：字符串标签条件（IsStr=true → label matcher）
+dbexplain execute --dsn 'prometheus://192.168.0.127:9440?label=prom' \
+  --dsl --human 'SELECT * FROM @prom.node_cpu_seconds_total WHERE cpu="0" AND mode="idle"'
+# → 等价于 node_cpu_seconds_total{cpu="0",mode="idle"}
 ```
 
-### EXPLAIN 查询计划
+> **DSL PromQL 限制（Phase 1）**：不支持聚合（COUNT/SUM/AVG）、GROUP BY、ORDER BY、数值 WHERE（>0）、JOIN、LIMIT。这些构造会返回明确的错误信息。Phase 2 将逐步支持。
+
+### REPL 模式
 
 ```bash
-dbexplain execute -env --db 6 --human --explain \
-  "SELECT * FROM public.abnormal_events WHERE severity >= 4"
+# 直接输入 PromQL（非 DSL）
+$ dbexplain repl --dsn 'prometheus://192.168.0.127:9440?label=prom'
+dbexplain[prom]> up
+# → 40+ 行即时向量结果
+
+dbexplain[prom]> up{job="prometheus"}
+# → 1 行，label matcher 生效
+
+dbexplain[prom]> prometheus_tsdb_head_series
+# → 当前 series 总数
+
+# DSL 模式（SELECT * FROM @label.metric）
+dbexplain[prom]> SELECT * FROM @prom.up WHERE job="prometheus"
+# → DSL → PromQL 编译 → 执行输出
 ```
 
-### 自定义超时和行数
+### 安全策略
+
+```env
+# .env.dbexplain 中配置
+DENY_TABLES=up,node_cpu_seconds_total   # 禁止查询敏感 metric
+DENY_COLUMNS=node_cpu_seconds_total.value   # PromQL 标签级别控制
+MASK_COLUMNS=up.value=REDACTED              # 列值屏蔽（执行后替换）
+```
 
 ```bash
-dbexplain execute -env --db 6 --timeout 60 --limit 500 --human \
-  "SELECT * FROM public.video_descriptions"
+dbexplain execute --dsn 'prometheus://192.168.0.127:9440?label=prom' --human "up"
+# → ACCESS_DENIED: metric "up" is not allowed for query（如果已配置 DENY_TABLES）
 ```
 
-### 列出已配置数据库
+> Prometheus 走 CheckNative 验证路径（非 sqlguard），支持三层安全策略 + MASK_COLUMNS。Layer 1 在 DSL 编译层 pre-check metric name。详见 [`docs/POLICY.md`](POLICY.md)。
+
+---
+
+## 12. DSL 联邦查询 — Prometheus × MySQL 跨源 JOIN
+
+> 联邦查询通过 filequery 引擎在内存中物化多源数据后执行 JOIN，支持任意两个数据源类型的组合。
+> Prometheus 与 SQL 数据库的联邦查询在本轮（v0.1.4）首次支持。
+
+### 前置说明
+
+测试环境中的 Prometheus 通过 blackbox_exporter 和 node_exporter 监控 `testdb.iplist` 和 `testdb.port` 表中定义的目标：
+
+| 监控目标来源 | Prometheus Target 示例 | 对应 `up` 标签 |
+|-------------|----------------------|---------------|
+| `iplist.hostip = 192.168.0.127` | `192.168.0.127` | `hostip="192.168.0.127"` |
+| `port.host = 192.168.0.127 + port.port = 9443` | `192.168.0.127:9443` | `instance="192.168.0.127:9443"` |
+
+以下联邦查询利用这一关系进行跨源分析：
+
+### 示例 1: 检查 target 健康状态 + 设备类型
 
 ```bash
-dbexplain list -env
+# Prometheus up × MySQL iplist — 查看各 target 的 device_type 和 owner
+dbexplain execute --dsn 'prometheus://192.168.0.127:9440?label=prom' \
+  --dsn 'mysql://.../testdb?label=mysql' \
+  --dsl --human \
+  'SELECT p.__name__, p.instance, i.device_type, i.datacenter, i.owner, p.value
+   FROM @prom.up p
+   JOIN @mysql.iplist i ON p.hostip = i.hostip
+   ORDER BY i.device_type'
 ```
+
+预期输出（示意）：
+```
++----------+---------------------+-------------+------------+--------+-------+
+| __name__ | instance            | device_type | datacenter | owner  | value |
++----------+---------------------+-------------+------------+--------+-------+
+| up       | 192.168.0.127       | PHY         | xa         | 王婉婷 | 1     |
+| up       | 192.168.0.127:9443  | URL         | xa         | 王婉婷 | 1     |
+| up       | 192.168.0.127:11434 | AI          | xa         | 王婉婷 | 1     |
++----------+---------------------+-------------+------------+--------+-------+
+```
+
+### 示例 2: 按 device_type 聚合统计
+
+```bash
+# 统计各种设备类型的 target 数量和健康率
+dbexplain execute --dsn 'prometheus://192.168.0.127:9440?label=prom' \
+  --dsn 'mysql://.../testdb?label=mysql' \
+  --dsl --human \
+  'SELECT i.device_type, COUNT(*) AS target_count,
+          ROUND(AVG(CAST(p.value AS FLOAT)) * 100, 1) AS health_pct
+   FROM @prom.up p
+   JOIN @mysql.iplist i ON p.hostip = i.hostip
+   GROUP BY i.device_type
+   ORDER BY target_count DESC'
+```
+
+### 示例 3: 端口服务监控分析
+
+```bash
+# 关联 port 表查看各协议端口的 up 状态
+dbexplain execute --dsn 'prometheus://192.168.0.127:9440?label=prom' \
+  --dsn 'mysql://.../testdb?label=mysql' \
+  --dsl --human \
+  'SELECT p.instance, po.protocol, po.port, po.service_name, p.value
+   FROM @prom.up p
+   JOIN @mysql.port po ON p.instance = CONCAT(po.host, ":", po.port)
+   ORDER BY po.protocol'
+```
+
+### 示例 4: REPL 模式联邦查询
+
+```bash
+$ dbexplain repl -env
+dbexplain[aiops-mysql]> .conn prom
+Switched to: prom
+
+# REPL 中直接输入 DSL 联邦查询
+dbexplain[prom]> SELECT p.__name__, p.hostip, i.device_type, p.value
+                 FROM @prom.up p
+                 JOIN @mysql.iplist i ON p.hostip = i.hostip
+                 WHERE i.device_type = 'PHY'
++----------+---------------+-------------+-------+
+| __name__ | hostip        | device_type | value |
++----------+---------------+-------------+-------+
+| up       | 192.168.0.127 | PHY         | 1     |
++----------+---------------+-------------+-------+
+1 row(s) in set (15ms)
+```
+
+### 联邦查询限制
+
+| 限制 | 说明 |
+|------|------|
+| **全内存操作** | 所有源数据物化后合并，大数据集需注意内存 |
+| **无分布式事务** | 不提供 ACID 保证（只读联邦查询不需要） |
+| **`--limit` 约束** | 物化时已应用 LIMIT，大数据源建议先过滤 |
+| **不支持原生源** | Redis/Mongo/Qdrant 不能参与联邦（Prometheus 除外） |
 
 ### 安全策略控制 (v0.1.0+)
 
@@ -334,6 +472,27 @@ MASK_COLUMNS=user_id=*** dbexplain execute -env --db 9 --human \
   '{"find":"user","filter":{},"limit":3}'
 # → user_id 列显示 ***
 
+# ── Prometheus ──
+dbexplain[tsv-test-data]> .conn prom
+Switched to: prom
+
+dbexplain[prom]> up
++----------+------+---------------+-------------+------+--------+------------------+--------------------+---------------------+---------------------+--------+------------------------+---------+--------------------+-------------------------------------+-----------+---------------------+---------------------+--------------------+-------+
+| __name__ | arch | bmcip         | card        | dc   | dcloc  | device_type      | hostip             | instance            | ip                  | iptype | job                    | product | project            | service                             | source    | subproduct          | url                 | timestamp          | value |
++----------+------+---------------+-------------+------+--------+------------------+--------------------+---------------------+---------------------+--------+------------------------+---------+--------------------+-------------------------------------+-----------+---------------------+---------------------+--------------------+-------+
+| up       | NULL | NULL          | NULL        | NULL | NULL   | NULL             | NULL               | localhost:9090      | NULL                | NULL   | prometheus             | NULL    | NULL               | NULL                                | NULL      | NULL                | NULL                | 1.780541009798e+09 | 1     |
+...
++----------+------+---------------+-------------+------+--------+------------------+--------------------+---------------------+---------------------+--------+------------------------+---------+--------------------+-------------------------------------+-----------+---------------------+---------------------+--------------------+-------+
+41 row(s) in set (199µs)
+
+dbexplain[prom]> SELECT * FROM @prom.up WHERE job="prometheus"
++----------+----------------+------------+--------------------+-------+
+| __name__ | instance       | job        | timestamp          | value |
++----------+----------------+------------+--------------------+-------+
+| up       | localhost:9090 | prometheus | 1.780541020834e+09 | 1     |
++----------+----------------+------------+--------------------+-------+
+1 row(s) in set (12µs)
+
 # 支持通配符和 table. 前缀
 MASK_COLUMNS=testdb.iplist.hostip=REDACTED dbexplain execute -env --db 1 --human \
   "SELECT hostip, device_type FROM testdb.iplist LIMIT 2"
@@ -347,7 +506,7 @@ dbexplain execute -env --db 1 --human "SELECT id, name FROM users"
 
 ## 13. REPL 交互模式 — 全数据源切换与查询实录
 
-> 以下为实际环境验证结果（v0.1.2，15 个 DSN 条目，12 种数据源类型）。
+> 以下为实际环境验证结果（v0.1.4，17 个 DSN 条目，13 种数据源类型）。
 
 ### 13.1 启动与帮助
 
@@ -360,10 +519,12 @@ dbexplain[aiops-mysql]> .help
 
 dbexplain REPL — Interactive query mode
 ========================================
-Supported: All 11 data sources (SQL / NoSQL / Files)
-Not supported: DSL mode (@label.table), federated cross-source queries
+Supported: All 13 data sources (SQL / NoSQL / TSDB / Files), DuckDB requires -tags duckdb build
+DSL syntax: @label.table references supported (single-source & federated cross-source JOIN)
+  Prometheus PromQL via DSL: SELECT * FROM @label.metric [WHERE label="val"]
 
 Commands:
+  .connect <dsn>  Connect to a new data source by DSN URL
   .conn <label>   Switch to another data source by label (load with -env)
   .dsn <label>    Alias for .conn
   .list           List all configured databases
@@ -374,24 +535,25 @@ Commands:
 
 dbexplain[aiops-mysql]> .list
 Configured databases:
-  #    Label             Kind             Status
-  ---  ------            ----             ------
-  1    aiops-mysql       mysql            ← current
-  2    aiops-clickhouse  clickhouse
-  3    veinmap-sqlite    sqlite
-  4    video-pg          postgres
-  5    aiops-pg          postgres
-  6    aiops-redis       redis
-  7    openim-redis      redis
-  8    aiops-mongo       mongodb
-  9    aiops-es          elasticsearch
-  10   aiops-qdrant      qdrant
-  11   aiops-csv         csv
-  12   aiops-tsv         tsv
-  13   aiops-xlsx        xlsx
+  #    Label             DSN                                                                           Kind            Status
+  ---  ------            ---                                                                           ----            ------
+  1    aiops-mysql       mysql://{dbuser}:{dbpassword}@localhost:9433/testdb?label=aiops-mysql         mysql           ← current
+  2    aiops-clickhouse  clickhouse://{dbuser}:{dbpassword}@localhost:9421?label=aiops-clickhouse      clickhouse
+  3    veinmap-sqlite    sqlite:///home/.../veinmap.db?label=veinmap-sqlite                            sqlite
+  4    video-pg          postgres://{dbuser}:{dbpassword}@localhost:5432/videomon?label=video-pg       postgres
+  5    aiops-pg          postgres://{dbuser}:{dbpassword}@localhost:5433/aiops?label=aiops-pg          postgres
+  6    aiops-redis       redis://{dbpassword}@localhost:6380/0?label=aiops-redis                       redis
+  7    openim-redis      redis://{dbpassword}@localhost:6389/0?label=openim-redis                      redis
+  8    aiops-mongo       mongodb://{dbuser}:{dbpassword}@192.168.0.127:27017/aiops?label=aiops-mongo   mongodb
+  9    aiops-es          elasticsearch://{dbuser}:{dbpassword}@localhost:9422?label=aiops-es            elasticsearch
+  10   aiops-qdrant      qdrant://{dbpassword}@localhost:9426?label=aiops-qdrant                       qdrant
+  11   aiops-csv         csv:///home/.../ops_data.csv?label=aiops-csv                                  csv
+  12   aiops-tsv         tsv:///home/.../data.tsv?label=aiops-tsv                                      csv
+  13   aiops-xlsx        xlsx:///home/.../data.xlsx?label=aiops-xlsx                                   xlsx
+  14   prom              prometheus://192.168.0.127:9440?label=prom                                     prometheus
 ```
 
-> `.list` 显示所有 `-env` 加载的 DSN 条目及当前连接状态，方便快速定位目标 label 后通过 `.conn` 切换。
+> `.list` 显示所有 DSN 条目的 Label、DSN（密码自动脱敏）、Kind 及当前连接状态，方便快速定位目标后通过 `.conn` 切换。
 
 ### 13.2 SQL 数据源切换与查询
 
@@ -606,9 +768,13 @@ ERROR: QUERY_ERROR: READ_ONLY_VIOLATION: redis command "KEYS"
 ```bash
 # ClickHouse 尾部 ; 已自动去除，不再触发多语句错误
 
-# Elasticsearch 暂不支持
-dbexplain[aiops-es]> {"query":{"match_all":{}}}
-ERROR: READ_ONLY_VIOLATION: unknown or unsupported SQL verb
+# Elasticsearch 原生 JSON 查询（_search 端点）
+dbexplain[aiops-es]> {"query":{"match_all":{},"size":3}}
++------------+------+-------------+...+
+| _index     | _id  | title       |   |
++------------+------+-------------+...+
+| runbooks   | 1    | Nginx 502   |   |
++------------+------+-------------+...+
 
 # 无效 label
 dbexplain[aiops-mysql]> .conn nonexistent
@@ -644,7 +810,8 @@ Switched to: openim-redis
 | DB13 | csv-users | csv | users | 3 行 |
 | DB14 | csv-test-data | csv | users, products, types | 3 表 |
 | DB15 | tsv-test-data | tsv | data | 2 行 |
+| DB16 | prom | prometheus | up, node_cpu_*, prometheus_tsdb_* | 1000+ time series |
 
 ---
 
-*案例库持续更新中。v0.1.2 新增 DSL 联邦查询 + REPL 模式（`--dsl`）、Schema Diff、窗口函数、`internal/` 结构整理。全部查询已通过 --human 实测验证。*
+*案例库持续更新中。v0.1.4 新增 Prometheus 连接器 + PromQL 查询 + DSL IR 重构 + REPL Prometheus 完备支持（含 DSL 与安全策略）+ ES 原生 JSON 查询 REPL 支持 + Prometheus × SQL 联邦查询 + 文件引擎哈希索引优化。全部查询已通过 --human 实测验证。*

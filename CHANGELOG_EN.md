@@ -1,5 +1,51 @@
 # Changelog
 
+## v0.1.4 (2026-06-04) — Prometheus Time Series DB Connector + Collection Metrics
+
+### ✨ New Features
+
+- **Prometheus Time Series Database Connector** (ISSUE-079): New `prometheus://` DSN scheme — the 13th data source type. Uses Prometheus HTTP API v2.x to collect targets (grouped by scrapePool as tables), label names (`_labels` table), and metric metadata (`_metrics` table with name/type/help/unit). Supports PromQL instant queries with 4 result types (vector/matrix/scalar/string) mapped to the standard `QueryResult`. Default 10s timeout, configurable via `?timeout=N` and `?tls=true` DSN parameters. Automatically included in `full` builds.
+
+- **CapPromQL Capability**: New `CapPromQL` capability constant indicating PromQL query support. Routes through the non-SQL execution path (`opts.IsSQL=false`), bypassing sqlguard/AutoLimit/EXPLAIN for direct PromQL execution.
+
+- **Collection Metrics & Prometheus Text Exposition** (ISSUE-076): Collection pipeline auto-captures per-DSN timing, success/failure status, and table counts. JSON output includes a `"metrics"` top-level field; `--metrics` flag outputs Prometheus text format to stderr without polluting stdout.
+
+- **CLI Interaction Enhancements**: Auto `-env` config discovery — when no `-dsn`/`-config` is specified, DSNs are automatically loaded from the config file without requiring an explicit `-env` flag. `dbexplain list` now displays the config source path at the top of the output. Empty config file / template detection with clear guidance showing the file path and instructions to edit and add connections.
+
+### 🐛 Fixes
+
+- **REPL Prometheus DSL routing fix**: `replExecDSL()` was dispatching by `SourceKind` (SourceSQL/SourceFile/SourceNative), causing the Prometheus `SourceNative` type to fall through to the default error branch. Changed to dispatch by `primary.Vendor` (VendorSQL/VendorFile/VendorPromQL), matching the `handleDSLExecute()` routing in `execute.go`. Added `replExecPromQL()` function for PromQL compilation and execution. Ensures REPL and execute subcommands use a unified DSL routing architecture.
+
+### 📚 Documentation
+
+- **Added** `docs/databases/prometheus.md` (Prometheus data source usage guide)
+- **Added** `docs/test/18-prometheus.md` (13 E2E tests: DSN parsing/collection/queries/REPL/security/backward compat)
+- **README bilingual sync**: source count 12 → 13, capability matrix gains "Time Series" Prometheus row (Collect/REPL/PromQL)
+- **README architecture restructure**: Both languages gain architecture hierarchy (5-layer ASCII diagram + layer description table). Tabularized capability matrix, core capabilities, output formats, security layers, binary variants, CLI quick reference, doc navigation. ES REPL marker updated to ✅, Prometheus DSL footnote updated for federation support.
+- **docs/file_index.md**: Added prometheus.md to §3 Time Series category
+- **docs/CODE_MAP.md**: Module mapping for Prometheus connector + CapPromQL capability matrix column + doc cross-references
+- **CLI_EXAMPLES.md**: New Section 11 — Prometheus execution examples (execute/DSL/REPL/security checks), updated Section 13 REPL output and data source table
+- **docs/test/README.md**: Test overview updated (17 data sources / 153 test items / L8 Prometheus)
+- **docs/test/RESULTS.md**: v0.1.4 test results, 153/153 passed (100%)
+- **CHANGELOG bilingual sync**: This version fully recorded in both languages.
+
+### 🏗️ Build & Release
+
+- **Build tag**: Prometheus connector uses `//go:build prometheus || full` standard pattern, automatically included in `full` builds and all standard edition binaries. No stub needed.
+- **DuckDB linux/arm64 cross-compilation** (ISSUE-081): release.sh auto-detects `aarch64-linux-gnu-gcc` toolchain, producing `dbexplain-linux-arm64-duckdb` when available. ARM64 uses `-static-libgcc -static-libstdc++` instead of `-static` (Ubuntu 22.04 cross toolchain glibc has `R_AARCH64_LD64_GOTPAGE_LO15` GOT overflow limitation).
+- **Go 1.26+ linker quoting compatibility** (ISSUE-080): Go 1.26+'s `cmd/internal/quoted.Split` only treats quotes at the START of a field as quoting characters, so `-extldflags='-static-libgcc ...'` was incorrectly split at the space. Fixed by using `'-extldflags=-static-libgcc -static-libstdc++'` (whole-token quoting).
+- **macOS UPX skip detection**: darwin/arm64 (UPX has no arm64 Mach-O support) and darwin/amd64 cross-compiled (UPX 5.x CantUnpackException) explicitly skip UPX compression with specific reasons. Fixed `| tail -1` pipe silently swallowing UPX exit codes.
+- **Tarball packaging** (release.sh Phase 3): Release script now produces per-platform tarballs, named `dbexplain-${VERSION}-${plat}-${edition}-{upx,noupx}.tar.gz`, each containing a single binary with UPX status in the filename. 12 tarballs total (std × 5 × 2 variants + duckdb × 2 × 2 variants, darwin noupx-only).
+- **TSV Kind fix**: `csv.go Collect()` detects `d.Raw` prefix `tsv://` and sets `Kind="tsv"` instead of hardcoded `"csv"`. Backward compatible: TSV DSN routing still uses the csv connector, only the schema instance `kind` field is correct.
+- **REPL disconnected startup + .connect**: When no DSN entries are available, REPL enters `(disconnected)` state with friendly guidance. New `.connect <dsn-url>` command dynamically connects to a data source, adds to `allEntries`, and supports subsequent `.conn` switching.
+- **REPL ES JSON native queries**: ES JSON queries (`{"query":{"match_all":{}}}`) route to the `/_search` REST endpoint. `ExecQuery()` detects JSON input and takes the `IsSQL=false` path, bypassing sqlguard. Response extracted from `hits.hits[]._source` with dynamic column names and row data.
+- **File query engine hash index**: `filequery/executor.go` builds a temporary `map[string][]int` hash index for `WHERE col = literal` equality conditions, reducing O(n) full table scans to O(1) hash lookups. Complex expressions (OR/LIKE/BETWEEN) fall back to full scan.
+- **Prometheus DSL federated query**: `dslExecFederated()` and `replExecFederated()` `SourceNative` case dispatches by `VendorPromQL` — gets the Prometheus connector, executes PromQL via `ExecQuery(IsSQL:false)`, transforms results to `filequery.NamedData` for federated merge.
+- **ACID assessment (ISSUE-082)**: DSL federated queries are read-only, in-memory operations — no distributed transactions needed. File sources don't support transactions; SQL database SNAPSHOT ISOLATION is meaningless in federated context. Conclusion: ACID guarantees not needed at this stage.
+- **install.sh tarball directory match fix**: `grep -E` regex in `extract_from_tarball()` matched directory names (trailing `/`), causing `cp` to fail without `-r`. Added `grep -v '/$'` to exclude directory entries.
+- **4 binary variant closed-loop verification**: std-noupx/std-upx/duckdb-noupx/duckdb-upx — 65-67 tests each, all PASS. New `docs/test/test-runner.sh` automated test script (layered L1-L8 + new features + E2E external DBs). UPX compression: 42MB→9.2MB (78% savings), ~430ms startup latency.
+- **Full verification**: `go build ./...` / `go vet ./...` / `go test ./...` all passing, all 4 binary variants verified.
+
 ## v0.1.3 (2026-06-03) — DuckDB Optional Connector + Dual-Build Release
 
 ### ✨ New Features
@@ -58,6 +104,12 @@
 
 - **Full Verification**
   `go build ./...` / `go vet ./...` / `go test ./...` + `bash build.sh prod/minimal` + `bash release.sh` all passing.
+
+- **DuckDB Fully Static Linking**
+  DuckDB builds now use platform-specific `-extldflags`: Linux uses `-static` for zero ldd dependencies (`ldd` reports "not a dynamic executable"); macOS uses `-static-libgcc -static-libstdc++`, retaining only `/usr/lib/libSystem.B.dylib` (present on every Mac).
+
+- **macOS UPX Skip Logic Fix**
+  Two macOS UPX issues fixed: (1) darwin/arm64 — UPX has no arm64 Mach-O support in any version, now explicitly skipped with a reason; (2) darwin/amd64 cross-compiled — UPX 5.x throws `CantUnpackException` on Go cross-compiled Mach-O, previously silently swallowed by `| tail -1` pipeline, now correctly captures exit code and outputs diagnostics. Native macOS darwin/amd64 builds (UPX ≤ 4.x) are unaffected.
 
 ### 📚 Documentation
 

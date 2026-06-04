@@ -1,5 +1,51 @@
 # 变更日志
 
+## v0.1.4 (2026-06-04) — Prometheus 时序数据库连接器 + 采集指标收集
+
+### ✨ 新功能
+
+- **Prometheus 时序数据库连接器** (ISSUE-079): 新增 `prometheus://` DSN 方案，第 13 种数据源类型。通过 Prometheus HTTP API v2.x 采集 targets（scrapePool 分组为表）、标签名（`_labels` 表）与指标元数据（`_metrics` 表含 name/type/help/unit）。支持 PromQL 即时查询，四种结果类型（vector/matrix/scalar/string）映射为标准 `QueryResult`。默认 10s 超时，支持 `?timeout=N`、`?tls=true` DSN 参数。`full` 构建标签自动包含。
+
+- **CapPromQL 能力**: 新增 `CapPromQL` 能力常量，声明连接器支持 PromQL 查询能力。在非 SQL 执行路径下（`opts.IsSQL=false`）绕过 sqlguard/AutoLimit/EXPLAIN，直接执行 PromQL。
+
+- **采集指标收集与 Prometheus 文本输出** (ISSUE-076): 采集管道自动收集每个 DSN 的执行耗时、成功/失败状态、表数量等结构化指标。JSON 输出嵌入 `"metrics"` 顶层字段；`--metrics` 标志将 Prometheus 文本格式输出到 stderr，不污染 stdout。
+
+- **CLI 交互增强**: `-env` 配置自动发现——用户执行命令不指定 `-dsn`/`-config` 时自动从配置文件加载 DSN，无需显式 `-env` 标志。`dbexplain list` 输出顶部显示当前配置来源路径；空配置文件/模板检测，输出文件路径和编辑引导，提示用户修改文件并增加自己的连接配置。
+
+### 🐛 修复
+
+- **REPL Prometheus DSL 路由修复**: `replExecDSL()` 原来按 `SourceKind`（SourceSQL/SourceFile/SourceNative）分发查询，Prometheus 的 `SourceNative` 类型走入默认错误分支。改为按 `primary.Vendor`（VendorSQL/VendorFile/VendorPromQL）分发，与 `execute.go` 的 `handleDSLExecute()` 路由逻辑一致。新增 `replExecPromQL()` 函数处理 PromQL 编译和执行。确保 REPL 与 execute 子命令使用统一的 DSL 路由架构。
+
+### 📚 文档
+
+- **新增** `docs/databases/prometheus.md`（Prometheus 数据源使用手册）
+- **新增** `docs/test/18-prometheus.md`（13 项 E2E 测试：DSN 解析/采集/查询/REPL/安全/向后兼容）
+- **README 中英同步**：数据源计数 12 → 13，能力矩阵新增时序型 Prometheus 行(Collect/REPL/PromQL)
+- **README 架构重构**: 双语言新增架构层次描述（5 层 ASCII 图 + 层级说明表格）。二维表化能力全景映射矩阵、核心能力、输出格式、安全防护、二进制变体、CLI 常用参数、文档导航。更新 ES REPL 标记为✅，Prometheus DSL 脚注改为支持联邦。
+- **docs/file_index.md**：新增 prometheus.md 到§三时序型类别
+- **docs/CODE_MAP.md**：模块映射新增 Prometheus 连接器 + CapPromQL 能力矩阵列 + 文档交叉引用
+- **CLI_EXAMPLES.md**: 新增第 11 章 Prometheus 执行示例（execute/DSL/REPL/安全检查），更新第 13 章 REPL 输出和数据源表格
+- **docs/test/README.md**：测试总览更新（17 数据源/153 测试项/L8 Prometheus）
+- **docs/test/RESULTS.md**：v0.1.4 测试结果，153/153 测试项通过（100%）
+- **CHANGELOG 中英同步**：本版本完整记录双语言版本。
+
+### 🏗️ 构建与发布
+
+- **构建标签**: prometheus 连接器使用 `//go:build prometheus || full` 标准模式，自动包含在 `full` 构建和所有标准版二进制中。无 stub 需要。
+- **DuckDB linux/arm64 交叉编译** (ISSUE-081): release.sh 自动检测 `aarch64-linux-gnu-gcc` 工具链，可用时额外产出 `dbexplain-linux-arm64-duckdb` 交叉编译二进制。ARM64 平台使用 `-static-libgcc -static-libstdc++` 替代 `-static`（Ubuntu 22.04 交叉工具链 glibc 存在 `R_AARCH64_LD64_GOTPAGE_LO15` GOT overflow 限制）。
+- **Go 1.26+ linker 引号兼容** (ISSUE-080): Go 1.26+ 的 `cmd/internal/quoted.Split` 仅将字段首字符的引号视为引号字符，`-extldflags='-static-libgcc ...'` 被按空格错误切分。修复：改用 `'-extldflags=-static-libgcc -static-libstdc++'` 整字段引号包裹。
+- **macOS UPX 跳过检测**: darwin/arm64（UPX 无 arm64 Mach-O 支持）和 darwin/amd64 交叉编译（UPX 5.x CantUnpackException）显式跳过 UPX 压缩，打印具体原因。修复 `| tail -1` 管道静默吞 UPX 错误码的问题。
+- **tar 分类打包** (release.sh Phase 3): 发布脚本按平台粒度产出独立 tarball，命名 `dbexplain-${VERSION}-${plat}-${edition}-{upx,noupx}.tar.gz`，每包仅含单一平台二进制，文件名标示 UPX 压缩状态。共 12 个（std × 5 × 2 变体 + duckdb × 2 × 2 变体，darwin 仅 noupx）。
+- **TSV Kind 修正**: `csv.go Collect()` 检测 `d.Raw` 前缀 `tsv://` 后设 `Kind="tsv"`，不再硬编码 `"csv"`。向下兼容：TSV DSN 路由仍走 csv 连接器，仅 schema 实例的 `kind` 字段正确。
+- **REPL 无配置启动 + .connect 命令**: 无 DSN 条目时进入 `(disconnected)` 状态，显示友好提示。新增 `.connect <dsn-url>` 命令动态连接数据源，添加到 `allEntries` 列表并支持后续 `.conn` 切换。
+- **REPL ES JSON 原生查询**: ES JSON 查询（`{"query":{"match_all":{}}}`）路由到 `/_search` REST 端点。ES connector 的 `ExecQuery()` 检测 JSON 入参后执行 `IsSQL=false` 路径，绕过 sqlguard。响应从 `hits.hits[]._source` 提取动态列名和行数据。
+- **文件查询引擎哈希索引**: `filequery/executor.go` 对 `WHERE col = literal` 简单等值条件构建临时 `map[string][]int` 哈希索引，将 O(n) 全表扫描降为 O(1) 哈希查找。`OR`/`LIKE`/`BETWEEN` 等复杂条件自动回退到全表扫描。
+- **Prometheus DSL 联邦查询**: `dslExecFederated()` 和 `replExecFederated()` 的 `SourceNative` case 按 `VendorPromQL` 二次分发——获取 Prometheus 连接器，通过 `ExecQuery(IsSQL:false)` 执行 PromQL，转换结果到 `filequery.NamedData` 参与联邦合并。
+- **ACID 评估 (ISSUE-082)**: DSL 联邦查询无分布式事务评估——只读联邦查询不需要写事务，文件数据源不支持事务，SQL 数据库的 SNAPSHOT ISOLATION 在联邦上下文中无意义。当前阶段不需要 ACID 保证。
+- **install.sh tarball 目录匹配修复**: `extract_from_tarball()` 中 `grep -E` 正则匹配目录名（尾部带 `/`）后 `cp` 因缺少 `-r` 失败。添加 `grep -v '/$'` 排除目录条目，确保仅匹配文件。
+- **4 二进制变体闭环验证**: std-noupx/std-upx/duckdb-noupx/duckdb-upx 各 65-67 项测试全部通过。新增 `docs/test/test-runner.sh` 自动测试脚本（分层 L1-L8 + 新增特性 + E2E 外部数据库）。UPX 压缩体积 42MB→9.2MB（78%），启动延迟约 430ms。
+- **全量验证**: `go build ./...` / `go vet ./...` / `go test ./...` 全部通过，4 二进制变体全部验证通过。
+
 ## v0.1.3 (2026-06-03) — DuckDB 可选连接器 + 构建系统双版本发布
 
 ### ✨ 新功能
@@ -58,6 +104,12 @@
 
 - **全量验证**
   `go build ./...` / `go vet ./...` / `go test ./...` + `bash build.sh prod/minimal` + `bash release.sh` 全部通过。
+
+- **DuckDB 完全静态链接**
+  DuckDB 构建新增平台特定 `-extldflags`：Linux 使用 `-static` 实现零 ldd 依赖（`ldd` 显示 "not a dynamic executable"）；macOS 使用 `-static-libgcc -static-libstdc++`，仅保留系统必有的 `/usr/lib/libSystem.B.dylib`。
+
+- **macOS UPX 跳过逻辑修复**
+  修复了两个 macOS 平台的 UPX 问题：(1) darwin/arm64 — UPX 任何版本均不支持 arm64 Mach-O，现显式跳过并打印原因；(2) darwin/amd64 交叉编译 — UPX 5.x 对 Go 交叉编译的 Mach-O 抛出 `CantUnpackException`，前因 `| tail -1` 管道静默吞掉错误码，现修复为正确捕获退出码并输出诊断。原生 macOS 构建的 darwin/amd64 二进制（UPX ≤ 4.x）不受影响。
 
 ### 📚 文档
 

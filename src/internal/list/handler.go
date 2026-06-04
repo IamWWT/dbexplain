@@ -20,6 +20,7 @@ func Handle(args []string) {
 	fs.Parse(args)
 
 	var entries []config.DSNEntry
+	configPath := ""
 
 	if *configFile != "" {
 		for _, raw := range config.LoadFromConfig(*configFile) {
@@ -32,7 +33,7 @@ func Handle(args []string) {
 	}
 
 	if *envMode && *configFile == "" && *dsnFlag == "" {
-		configPath := config.FindConfigFile()
+		configPath = config.FindConfigFile()
 		if configPath == "" {
 			fmt.Fprintln(os.Stderr, "  no config file found. Create .env.dbexplain (or .env.dbexplain.enc) in",
 				config.ConfigDirDisplay(), "or current directory.")
@@ -46,12 +47,21 @@ func Handle(args []string) {
 		entries = append(entries, envEntries...)
 	}
 
+	fmt.Println()
+	if configPath != "" {
+		fmt.Printf("  Config source: %s\n\n", config.DescribeConfigSource(configPath))
+	}
+
 	if len(entries) == 0 {
 		fmt.Fprintln(os.Stderr, "  no DSNs found. Use -env, -dsn, or -config.")
+		if configPath != "" {
+			fmt.Fprintf(os.Stderr, "  Config file %s has no active DSN connections.\n", config.DescribeConfigSource(configPath))
+			fmt.Fprintf(os.Stderr, "  Edit this file to add your connections, or copy the template from\n")
+			fmt.Fprintf(os.Stderr, "  dbexplain-skill/.env.dbexplain.example\n")
+		}
 		os.Exit(1)
 	}
 
-	fmt.Println()
 	fmt.Println("  Available databases:")
 	fmt.Println()
 

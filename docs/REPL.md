@@ -37,9 +37,10 @@ dbexplain repl -env --limit 5000 --timeout 60
 
 | 命令 | 说明 |
 |------|------|
+| `.connect <dsn>` | 通过 DSN URL 连接新数据源（无需 `-env` 预加载），如 `.connect mysql://user:pass@host:3306/db?label=mydb` |
 | `.conn <label>` | 按 label 切换数据源（在 `-env` 加载的全部条目中按 label 精确查找） |
 | `.dsn <label>` | `.conn` 的别名，行为完全相同 |
-| `.list` / `.databases` | 列出所有已配置的数据源（序号、label、kind、当前连接标记） |
+| `.list` / `.databases` | 列出所有已配置的数据源（序号、label、DSN 密码脱敏、kind、当前连接标记） |
 | `.help` | 显示帮助信息、支持的数据源类型、不支持的功能 |
 | `.exit` / `.quit` | 退出 REPL |
 | `Ctrl+D` | 退出 REPL（发送 EOF） |
@@ -104,26 +105,22 @@ SELECT iplist.owner FROM iplist
 
 ## 已知限制
 
-### 1. REPL 不支持 DSL / 联邦查询
+### 1. Elasticsearch JSON _search 限制
 
-DSL `@label.table` 语法和跨源联邦 JOIN 仅在 `dbexplain execute -env --dsl` 命令行模式下可用。REPL 内请使用原生 SQL 或 NoSQL 命令。
+ES 原生 JSON 查询（`{"query":{"match_all":{}}}`）已在 REPL 中支持，通过 `IsSQL=false` 路径绕过 sqlguard 并路由到 `_search` REST 端点。响应结果从 `hits.hits[]._source` 提取动态列名和行数据。
 
-### 2. Elasticsearch 暂不支持 REPL
+**限制**：
+- _search 响应中的嵌套对象和数组会被 `%v` 格式化为字符串
+- 列名在每次查询时动态确定（来自所有 hit 的 _source key 并集），不同文档可能有不同列
+- ES SQL 查询（标准 SQL 语法）仍然通过 `_sql` 端点执行，支持完整的 sqlguard 安全校验
 
-ES 的 JSON 原生查询格式（如 `{"query":{"match_all":{}}}`）在 REPL 中无法正确路由。ES 驱动注册为 SQL 类型（CapSQL），JSON 查询会被送入 SQL 校验器（sqlguard），而 sqlguard 无法解析 JSON 语法结构，返回 `READ_ONLY_VIOLATION: unknown or unsupported SQL verb`。
-
-**绕过方案**：
-- 使用 `dbexplain execute -env --label <es-label> --human` 执行 ES 查询
-- ES 支持 SQL 语法（通过 `_sql` REST 端点），可在 `execute` 模式下使用标准 SQL 查询 ES 索引
-- 采集 Schema 使用 `dbexplain collect -env --label <es-label> --human`
-
-### 3. MySQL 单连接模式
+### 2. MySQL 单连接模式
 
 MySQL 驱动在 `SET max_execution_time` 后强制单连接（`SetMaxOpenConns(1)`），确保超时在当前连接生效。这意味着 REPL 下 MySQL 查询不具备并发性能。
 
-### 4. 仅首次连接可用
+### 3. 无配置启动
 
-REPL 默认使用配置中第一个 DSN 条目作为初始连接。如果没有配置项，启动时报错退出。`.conn` 切换必须依赖 `-env` 预加载的全部条目。
+REPL 在没有 DSN 配置时进入 `(disconnected)` 状态，通过 `.connect <dsn-url>` 命令动态连接数据源。`.connect` 添加的 DSN 也会被 `.list` 列出，并支持后续的 `.conn` 切换。也可以通过 `-env` 预加载配置后使用 `.conn` 切换。
 
 ---
 
@@ -147,8 +144,10 @@ REPL 默认使用配置中第一个 DSN 条目作为初始连接。如果没有�
 | Redis | `KEYS *` / `FLUSHALL` | ❌ 拒绝（安全策略） |
 | MongoDB | `{"find":"groups","filter":{},"limit":1}` | ✅ 通过 |
 | MongoDB | `{"insert":"test","documents":[{"x":1}]}` | ❌ 拒绝（只读） |
-| Elasticsearch | `{"query":{"match_all":{}}}` | ❌ 暂不支持（见限制 2） |
+| Elasticsearch | `{"query":{"match_all":{}}}` | ✅ 支持（_search 端点） |
 | Qdrant | `{"scroll":"collection_name"}` | ✅ 通过 |
+
+| Prometheus | `up == 1` / `count(up)` / PromQL 即时查询 | ✅ 通过（DSL 模式） |
 
 ### 文件数据源
 
@@ -162,7 +161,7 @@ REPL 默认使用配置中第一个 DSN 条目作为初始连接。如果没有�
 
 ## 完整输出示例
 
-见 [`CLI_EXAMPLES.md`](CLI_EXAMPLES.md) — REPL 章节，包含 15 个数据源的完整切换和查询记录。
+见 [`CLI_EXAMPLES.md`](CLI_EXAMPLES.md) — REPL 章节，包含 17+ DSN 条目的完整切换和查询记录。
 
 ---
 

@@ -48,9 +48,10 @@ const (
 
 // BoundSource holds the resolved information for a single @label.table reference.
 type BoundSource struct {
-	Ref    SourceRef // the original reference
-	DSN    *dsn.DSN  // parsed DSN matching the label
-	Kind   SourceKind // determined from connector capabilities
+	Ref    SourceRef  // the original reference
+	DSN    *dsn.DSN   // parsed DSN matching the label
+	Kind   SourceKind  // determined from connector capabilities
+	Vendor Vendor      // query language vendor (SQL, PromQL, file)
 }
 
 // BoundQuery is the result of binding a DSLQuery against available DSN entries.

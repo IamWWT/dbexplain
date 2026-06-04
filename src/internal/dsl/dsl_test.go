@@ -1,6 +1,7 @@
 package dsl
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -621,5 +622,283 @@ func TestPipeline_Determinism(t *testing.T) {
 		if results[i] != results[0] {
 			t.Errorf("run %d produced different result: %q vs %q", i, results[i], results[0])
 		}
+	}
+}
+
+// ── classifySource Prometheus ──
+
+func TestClassifySource_Prometheus(t *testing.T) {
+	if got := classifySource("prometheus"); got != SourceNative {
+		t.Errorf("classifySource(\"prometheus\") = %v, want SourceNative", got)
+	}
+}
+
+// ── classifyVendor tests ──
+
+func TestClassifyVendor(t *testing.T) {
+	tests := []struct {
+		kind string
+		want Vendor
+	}{
+		{"mysql", VendorSQL},
+		{"postgres", VendorSQL},
+		{"sqlite", VendorSQL},
+		{"clickhouse", VendorSQL},
+		{"gaussdb", VendorSQL},
+		{"duckdb", VendorSQL},
+		{"csv", VendorFile},
+		{"xlsx", VendorFile},
+		{"tsv", VendorFile},
+		{"prometheus", VendorPromQL},
+		{"redis", VendorSQL},
+		{"mongodb", VendorSQL},
+		{"qdrant", VendorSQL},
+		{"elasticsearch", VendorSQL},
+	}
+	for _, tt := range tests {
+		got := classifyVendor(tt.kind)
+		if got != tt.want {
+			t.Errorf("classifyVendor(%q) = %v, want %v", tt.kind, got, tt.want)
+		}
+	}
+}
+
+// ── SelectStmtToIR tests ──
+
+func TestSelectStmtToIR_AllColumns(t *testing.T) {
+	query, err := Parse("SELECT * FROM @prom.up")
+	if err != nil {
+		t.Fatalf("Parse() error: %v", err)
+	}
+	stmt, ok := query.Stmt.(*sqlast.SelectStmt)
+	if !ok {
+		t.Fatalf("expected *SelectStmt, got %T", query.Stmt)
+	}
+
+	ir, err := SelectStmtToIR(stmt)
+	if err != nil {
+		t.Fatalf("SelectStmtToIR() error: %v", err)
+	}
+
+	if !ir.AllColumns {
+		t.Error("expected AllColumns=true")
+	}
+	if ir.From != "__dsl_0__" {
+		t.Errorf("expected From=__dsl_0__, got %q", ir.From)
+	}
+}
+
+func TestSelectStmtToIR_Where(t *testing.T) {
+	query, err := Parse("SELECT * FROM @prom.up WHERE job = 'node' AND instance = 'local'")
+	if err != nil {
+		t.Fatalf("Parse() error: %v", err)
+	}
+	stmt, ok := query.Stmt.(*sqlast.SelectStmt)
+	if !ok {
+		t.Fatalf("expected *SelectStmt, got %T", query.Stmt)
+	}
+
+	ir, err := SelectStmtToIR(stmt)
+	if err != nil {
+		t.Fatalf("SelectStmtToIR() error: %v", err)
+	}
+
+	if len(ir.Where) != 2 {
+		t.Fatalf("expected 2 WHERE conditions, got %d", len(ir.Where))
+	}
+
+	if ir.Where[0].Column != "job" || ir.Where[0].Op != "=" || ir.Where[0].Value != "node" || !ir.Where[0].IsStr {
+		t.Errorf("unexpected Where[0]: %+v", ir.Where[0])
+	}
+	if ir.Where[1].Column != "instance" || ir.Where[1].Op != "=" || ir.Where[1].Value != "local" || !ir.Where[1].IsStr {
+		t.Errorf("unexpected Where[1]: %+v", ir.Where[1])
+	}
+}
+
+func TestSelectStmtToIR_RejectOR(t *testing.T) {
+	query, err := Parse("SELECT * FROM @prom.up WHERE job = 'x' OR job = 'y'")
+	if err != nil {
+		t.Fatalf("Parse() error: %v", err)
+	}
+	stmt, ok := query.Stmt.(*sqlast.SelectStmt)
+	if !ok {
+		t.Fatalf("expected *SelectStmt, got %T", query.Stmt)
+	}
+
+	_, err = SelectStmtToIR(stmt)
+	if err == nil || !strings.Contains(err.Error(), "OR") {
+		t.Errorf("expected OR rejection error, got %v", err)
+	}
+}
+
+func TestSelectStmtToIR_Joins(t *testing.T) {
+	query, err := Parse("SELECT * FROM @prom.up JOIN @prom.down ON up.id = down.id")
+	if err != nil {
+		t.Fatalf("Parse() error: %v", err)
+	}
+	stmt, ok := query.Stmt.(*sqlast.SelectStmt)
+	if !ok {
+		t.Fatalf("expected *SelectStmt, got %T", query.Stmt)
+	}
+
+	ir, err := SelectStmtToIR(stmt)
+	if err != nil {
+		t.Fatalf("SelectStmtToIR() error: %v", err)
+	}
+	if !ir.HasJoins {
+		t.Error("expected HasJoins=true")
+	}
+}
+
+// ── CompileToPromQL tests ──
+
+func parseAndBuildIR(dslInput string) (*QueryIR, error) {
+	query, err := Parse(dslInput)
+	if err != nil {
+		return nil, err
+	}
+	stmt, ok := query.Stmt.(*sqlast.SelectStmt)
+	if !ok {
+		return nil, fmt.Errorf("not a SELECT")
+	}
+	return SelectStmtToIR(stmt)
+}
+
+func TestCompileToPromQL_Basic(t *testing.T) {
+	ir, err := parseAndBuildIR("SELECT * FROM @prom.up")
+	if err != nil {
+		t.Fatalf("parse error: %v", err)
+	}
+	ir.From = "up" // resolve placeholder
+
+	promql, err := CompileToPromQL(ir)
+	if err != nil {
+		t.Fatalf("CompileToPromQL() error: %v", err)
+	}
+	if promql != "up" {
+		t.Errorf("expected %q, got %q", "up", promql)
+	}
+}
+
+func TestCompileToPromQL_Where(t *testing.T) {
+	ir, err := parseAndBuildIR("SELECT * FROM @prom.up WHERE job='node'")
+	if err != nil {
+		t.Fatalf("parse error: %v", err)
+	}
+	ir.From = "up"
+
+	promql, err := CompileToPromQL(ir)
+	if err != nil {
+		t.Fatalf("CompileToPromQL() error: %v", err)
+	}
+	expected := `up{job="node"}`
+	if promql != expected {
+		t.Errorf("expected %q, got %q", expected, promql)
+	}
+}
+
+func TestCompileToPromQL_WhereMulti(t *testing.T) {
+	ir, err := parseAndBuildIR("SELECT * FROM @prom.up WHERE job='node' AND instance='local'")
+	if err != nil {
+		t.Fatalf("parse error: %v", err)
+	}
+	ir.From = "up"
+
+	promql, err := CompileToPromQL(ir)
+	if err != nil {
+		t.Fatalf("CompileToPromQL() error: %v", err)
+	}
+	expected := `up{job="node",instance="local"}`
+	if promql != expected {
+		t.Errorf("expected %q, got %q", expected, promql)
+	}
+}
+
+func TestCompileToPromQL_WhereNotEq(t *testing.T) {
+	ir, err := parseAndBuildIR("SELECT * FROM @prom.up WHERE job!='node'")
+	if err != nil {
+		t.Fatalf("parse error: %v", err)
+	}
+	ir.From = "up"
+
+	promql, err := CompileToPromQL(ir)
+	if err != nil {
+		t.Fatalf("CompileToPromQL() error: %v", err)
+	}
+	expected := `up{job!="node"}`
+	if promql != expected {
+		t.Errorf("expected %q, got %q", expected, promql)
+	}
+}
+
+func TestCompileToPromQL_RejectCount(t *testing.T) {
+	ir, err := parseAndBuildIR("SELECT COUNT(*) FROM @prom.up")
+	if err != nil {
+		t.Fatalf("parse error: %v", err)
+	}
+	ir.From = "up"
+
+	_, err = CompileToPromQL(ir)
+	if err == nil || !strings.Contains(err.Error(), "COUNT") {
+		t.Errorf("expected COUNT rejection error, got %v", err)
+	}
+}
+
+func TestCompileToPromQL_RejectGroupBy(t *testing.T) {
+	ir, err := parseAndBuildIR("SELECT * FROM @prom.up GROUP BY job")
+	if err != nil {
+		t.Fatalf("parse error: %v", err)
+	}
+	ir.From = "up"
+
+	_, err = CompileToPromQL(ir)
+	if err == nil || !strings.Contains(err.Error(), "GROUP BY") {
+		t.Errorf("expected GROUP BY rejection error, got %v", err)
+	}
+}
+
+func TestCompileToPromQL_RejectJoin(t *testing.T) {
+	ir, err := parseAndBuildIR("SELECT * FROM @prom.up JOIN @prom.down ON up.id=down.id")
+	if err != nil {
+		t.Fatalf("parse error: %v", err)
+	}
+	ir.From = "up"
+
+	_, err = CompileToPromQL(ir)
+	if err == nil || !strings.Contains(err.Error(), "JOIN") {
+		t.Errorf("expected JOIN rejection error, got %v", err)
+	}
+}
+
+func TestCompileToPromQL_RejectOrderBy(t *testing.T) {
+	ir, err := parseAndBuildIR("SELECT * FROM @prom.up ORDER BY val")
+	if err != nil {
+		t.Fatalf("parse error: %v", err)
+	}
+	ir.From = "up"
+
+	_, err = CompileToPromQL(ir)
+	if err == nil || !strings.Contains(err.Error(), "ORDER BY") {
+		t.Errorf("expected ORDER BY rejection error, got %v", err)
+	}
+}
+
+func TestCompileToPromQL_RejectNumericWhere(t *testing.T) {
+	ir, err := parseAndBuildIR("SELECT * FROM @prom.up WHERE value > 0")
+	if err != nil {
+		t.Fatalf("parse error: %v", err)
+	}
+	ir.From = "up"
+
+	_, err = CompileToPromQL(ir)
+	if err == nil || !strings.Contains(err.Error(), "numeric WHERE") {
+		t.Errorf("expected numeric WHERE rejection error, got %v", err)
+	}
+}
+
+func TestCompileToPromQL_NilIR(t *testing.T) {
+	_, err := CompileToPromQL(nil)
+	if err == nil || !strings.Contains(err.Error(), "nil") {
+		t.Errorf("expected nil IR error, got %v", err)
 	}
 }

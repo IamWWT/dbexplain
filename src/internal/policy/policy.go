@@ -1,18 +1,19 @@
 // Package policy provides fine-grained access control for dbexplain execute.
 // It supports three levels of deny policies:
 //   - Statement-level: block queries matching specific patterns
-//   - Table-level: block queries referencing denied tables/collections
-//   - Column-level: block queries selecting denied columns (SQL only)
+//   - Table-level: block queries referencing denied tables/collections/metrics
+//   - Column-level: block queries selecting denied columns/metric labels
 //
 // Policies apply to ALL database types:
 //   - SQL databases (mysql, postgres, gaussdb, sqlite, clickhouse): all 3 levels
 //   - Elasticsearch: all 3 levels (ES uses _sql endpoint)
+//   - Prometheus: statement + table (metric) + column (label) levels via PromQL extraction
 //   - MongoDB/Qdrant: statement + table levels (extract collection from JSON)
 //   - Redis: statement + key levels (extract key from read commands)
 //
 // Configuration via .env file:
-//   Global:   DENY_TABLES=table1,table2
-//             DENY_COLUMNS=schema.table.column,table.column
+//   Global:   DENY_TABLES=table1,metric1
+//             DENY_COLUMNS=schema.table.column,table.column,label_name
 //             DENY_STATEMENTS=DROP TABLE,ALTER TABLE
 //             MASK_COLUMNS=password_hash=***,card_number=****
 //   Per-DSN:  DB1_DENY_TABLES=sensitive_table
@@ -125,7 +126,8 @@ func (c *Config) CheckSQL(sql string) error {
 
 // CheckNative validates a native (non-SQL) query against policies.
 // Supports statement-level (all native DBs) and table-level (MongoDB/Qdrant JSON + Redis keys).
-// Column-level is skipped for native queries.
+// Column-level is also checked when applicable — Prometheus label names are validated
+// against DenyColumns via PromQL label extraction.
 func (c *Config) CheckNative(query string, kind string) error {
 	if c == nil {
 		return nil
@@ -189,6 +191,30 @@ func (c *Config) CheckNative(query string, kind string) error {
 				}
 			}
 		}
+	case "prometheus":
+		// Extract metric name from compiled PromQL and check against DenyTables
+		if metricName := extractPromQLMetricName(query); metricName != "" {
+			for _, denied := range c.DenyTables {
+				if strings.EqualFold(metricName, denied) {
+					return &ErrDenied{Level: "table", Target: denied, SQL: query}
+				}
+			}
+		}
+		// Extract label names from PromQL and check against DenyColumns
+		if len(c.DenyColumns) > 0 {
+			for _, label := range extractPromQLLabels(query) {
+				for _, denied := range c.DenyColumns {
+					if strings.EqualFold(label, denied) {
+						return &ErrDenied{Level: "column", Target: denied, SQL: query}
+					}
+				}
+			}
+		}
+	case "elasticsearch":
+		// ES JSON native queries: index is specified via DSN URL path, not query body.
+		// Statement-level checks already applied above. Table-level DenyTables checks
+		// are not applicable to _search query bodies (no index name present).
+		// Column-level checks handled post-execution via ApplyMask.
 	}
 
 	return nil
@@ -759,6 +785,147 @@ func isSQLKeyword(s string) bool {
 		"TRUE", "FALSE", "NULL", "IS", "LIKE", "BETWEEN",
 		"COUNT", "SUM", "AVG", "MIN", "MAX",
 		"EXISTS", "ANY", "SOME", "CAST", "COALESCE", "NULLIF":
+		return true
+	}
+	return false
+}
+
+// ── PromQL helpers ──────────────────────────────────────────────────────────
+
+// extractPromQLMetricName extracts the metric name from a compiled PromQL query.
+// Handles formats:
+//
+//	metric                      →  metric
+//	metric{label="val"}         →  metric
+//	rate(metric[5m])            →  metric
+//	count(metric)               →  metric
+//	sum by(job) (metric)        →  metric
+//	metric > 0                  →  metric
+func extractPromQLMetricName(query string) string {
+	if query == "" {
+		return ""
+	}
+
+	// Remove whitespace for easier matching
+	normalized := strings.TrimSpace(query)
+
+	// Pattern: function_name(metric_name[...]) or function_name(metric_name{...})
+	// Walk backwards from the first '{' or end-of-string to find the metric name.
+	braceIdx := strings.Index(normalized, "{")
+	parenIdx := strings.Index(normalized, "(")
+
+	// No braces or parens — the entire query may be just the metric name,
+	// or a binary expression like "metric > 0"
+	if braceIdx < 0 && parenIdx < 0 {
+		// Take the first word
+		fields := strings.Fields(normalized)
+		if len(fields) > 0 {
+			name := fields[0]
+			if !isPromQLFunc(name) {
+				return name
+			}
+		}
+		return ""
+	}
+
+	// Has label matchers: find the identifier just before '{'
+	if braceIdx >= 0 {
+		preBrace := strings.TrimSpace(normalized[:braceIdx])
+		// Handle nested function: count(metric{...})
+		if lastParen := strings.LastIndex(preBrace, "("); lastParen >= 0 {
+			preBrace = strings.TrimSpace(preBrace[lastParen+1:])
+		}
+		fields := strings.Fields(preBrace)
+		if len(fields) > 0 {
+			name := fields[len(fields)-1]
+			if !isPromQLFunc(name) {
+				return name
+			}
+		}
+		return ""
+	}
+
+	// Has parentheses but no braces: function(metric) or function by(x) (metric)
+	// Check if the first word before '(' is a PromQL function
+	// (handles modifiers like by/without/on: "sum by(job) (up)")
+	preFields := strings.Fields(normalized[:parenIdx])
+	if len(preFields) > 0 && isPromQLFunc(preFields[0]) {
+		// Find the LAST '(' which contains the actual vector expression
+		// Handles: count(up), rate(up[5m]), sum by(job) (up)
+		lastParen := strings.LastIndex(normalized, "(")
+		if lastParen < 0 {
+			return ""
+		}
+		inner := normalized[lastParen+1:]
+		if closeIdx := strings.LastIndex(inner, ")"); closeIdx >= 0 {
+			inner = inner[:closeIdx]
+		}
+		// Remove range vector [5m] if present
+		if rangeIdx := strings.Index(inner, "["); rangeIdx >= 0 {
+			inner = strings.TrimSpace(inner[:rangeIdx])
+		}
+		inner = strings.TrimSpace(inner)
+		if !isPromQLFunc(inner) {
+			return inner
+		}
+	}
+
+	return ""
+}
+
+// extractPromQLLabels extracts label names from PromQL matcher {key="val"} blocks.
+func extractPromQLLabels(query string) []string {
+	braceIdx := strings.Index(query, "{")
+	closeBrace := strings.LastIndex(query, "}")
+	if braceIdx < 0 || closeBrace <= braceIdx {
+		return nil
+	}
+	inner := query[braceIdx+1 : closeBrace]
+	// Split by commas, but not inside quotes
+	var labels []string
+	seen := make(map[string]bool)
+	i := 0
+	for i < len(inner) {
+		// Skip whitespace
+		for i < len(inner) && inner[i] == ' ' {
+			i++
+		}
+		// Read label name (word characters before =, !=, =~, !~)
+		start := i
+		for i < len(inner) && inner[i] != '=' && inner[i] != '!' && inner[i] != '~' {
+			i++
+		}
+		name := strings.TrimSpace(inner[start:i])
+		if name != "" && name != "__name__" && !seen[name] {
+			seen[name] = true
+			labels = append(labels, name)
+		}
+		// Skip to comma or end
+		for i < len(inner) && inner[i] != ',' {
+			i++
+		}
+		i++ // skip comma
+	}
+	return labels
+}
+
+// isPromQLFunc returns true if name is a PromQL built-in function.
+func isPromQLFunc(name string) bool {
+	switch strings.ToUpper(name) {
+	case "ABS", "ABSENT", "AVG", "CEIL", "CHANGES",
+		"CLAMP", "CLAMP_MAX", "CLAMP_MIN", "COUNT", "COUNT_VALUES",
+		"DAYS_IN_MONTH", "DAY_OF_MONTH", "DAY_OF_WEEK", "DAY_OF_YEAR",
+		"DELTA", "DERIV", "DROP_COMMON_LABELS",
+		"EXP", "FLOOR", "HISTOGRAM_QUANTILE", "HOLT_WINTERS",
+		"HOUR", "IDELTA", "INCREASE", "IRATE", "LABEL_JOIN",
+		"LABEL_REPLACE", "LAST_OVER_TIME", "LN", "LOG10", "LOG2",
+		"MAX", "MIN", "MINUTE", "MONTH", "PREDICT_LINEAR",
+		"QUANTILE", "RATE", "RESETS", "ROUND", "SCALAR",
+		"SGN", "SIN", "SORT", "SORT_DESC", "SQRT", "SUM",
+		"TIME", "TIMESTAMP", "VECTOR", "YEAR",
+		"AVG_OVER_TIME", "COUNT_OVER_TIME", "MAX_OVER_TIME", "MIN_OVER_TIME",
+		"SUM_OVER_TIME", "STDDEV_OVER_TIME", "STDVAR_OVER_TIME",
+		"PRESENT_OVER_TIME", "QUANTILE_OVER_TIME":
 		return true
 	}
 	return false

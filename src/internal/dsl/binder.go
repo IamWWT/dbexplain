@@ -56,11 +56,13 @@ func Bind(query *DSLQuery, entries []config.DSNEntry) (*BoundQuery, error) {
 		}
 
 		kind := classifySource(resolved.Kind)
+		vendor := classifyVendor(resolved.Kind)
 
 		sources[placeholder] = BoundSource{
-			Ref:  ref,
-			DSN:  resolved,
-			Kind: kind,
+			Ref:    ref,
+			DSN:    resolved,
+			Kind:   kind,
+			Vendor: vendor,
 		}
 	}
 
@@ -80,6 +82,21 @@ func classifySource(kind string) SourceKind {
 	default:
 		// Redis, MongoDB, Qdrant, Elasticsearch → native
 		return SourceNative
+	}
+}
+
+// classifyVendor maps a connector kind string to a Vendor for compiler routing.
+func classifyVendor(kind string) Vendor {
+	switch kind {
+	case "csv", "xlsx", "tsv":
+		return VendorFile
+	case "mysql", "postgres", "sqlite", "clickhouse", "gaussdb", "duckdb":
+		return VendorSQL
+	case "prometheus":
+		return VendorPromQL
+	default:
+		// Redis, MongoDB, Qdrant, Elasticsearch → SQL vendor (native queries)
+		return VendorSQL
 	}
 }
 

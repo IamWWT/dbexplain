@@ -240,7 +240,7 @@ tags: [database, sql, csv]
 
 ## 1. 工具概述
 
-`dbexplain` 是 Go 二进制 CLI，已安装到系统 PATH。支持 11 种数据源。
+`dbexplain` 是 Go 二进制 CLI，已安装到系统 PATH。支持 14 种数据源。
 
 ## 2. 输入定义
 

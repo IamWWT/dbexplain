@@ -23,6 +23,7 @@ import (
 	"github.com/IamWWT/dbexplain/internal/encrypt"
 	"github.com/IamWWT/dbexplain/internal/list"
 	"github.com/IamWWT/dbexplain/internal/manual"
+	"github.com/IamWWT/dbexplain/internal/metrics"
 	"github.com/IamWWT/dbexplain/internal/output"
 	"github.com/IamWWT/dbexplain/internal/version"
 	"github.com/IamWWT/dbexplain/internal/render"
@@ -58,6 +59,7 @@ func main() {
 			"clickhouse", "ch", "sqlite", "sqlite3",
 			"redis", "mongodb", "elasticsearch", "es", "qdrant",
 			"csv", "tsv", "xlsx",
+			"prometheus", "prom",
 			"duckdb":
 			manual.PrintDBManual(os.Args[1], os.Args[2:])
 			return
@@ -117,6 +119,7 @@ func main() {
 	showManual := flag.Bool("manual", false, "print comprehensive manual and exit")
 	language := flag.String("language", userLang, "manual language: zh (Chinese) or en (English)")
 	filterFlag := flag.String("filter", "", "filter --manual output by keyword (case-insensitive)")
+	metricsFlag := flag.Bool("metrics", false, "output collection metrics in Prometheus text format (to stderr)")
 	flag.Parse()
 
 	// --label is an alias for -include (schema collection also supports label filtering)
@@ -142,15 +145,27 @@ func main() {
 	for _, raw := range dsnFlags {
 		entries = append(entries, config.DSNEntry{Raw: raw})
 	}
-	if *useEnv {
+
+	hasExplicitSource := len(dsnFlags) > 0 || *configFile != ""
+	shouldLoadEnv := *useEnv || !hasExplicitSource
+
+	if shouldLoadEnv {
 		configPath := config.FindConfigFile()
 		if configPath == "" {
-			log.Fatal("no config file found. Create .env.dbexplain (or .env.dbexplain.enc) in " + config.ConfigDirDisplay() + " or current directory.")
+			if *useEnv {
+				log.Fatal("no config file found. Create .env.dbexplain (or .env.dbexplain.enc) in " + config.ConfigDirDisplay() + " or current directory.")
+			}
+			config.PrintNoConfigFound()
+			os.Exit(1)
 		}
 		envEntries, err := config.LoadEnvFile(configPath)
 		if err != nil {
 			log.Printf("warning: load config %s: %v", configPath, config.SanitizeErr(err))
 		} else {
+			if len(envEntries) == 0 && !*useEnv {
+				config.PrintEmptyConfigFound(configPath)
+				os.Exit(1)
+			}
 			entries = append(entries, envEntries...)
 		}
 	}
@@ -204,6 +219,8 @@ func main() {
 	}
 	collectLogger := log.New(collectLogFile, "", log.LstdFlags)
 
+	metricsCollector := metrics.NewCollector()
+
 	// Semaphore to limit concurrent connections
 	sem := make(chan struct{}, *maxConcurrent)
 
@@ -248,15 +265,19 @@ func main() {
 			elapsed := time.Since(start)
 
 			if err != nil {
+				metricsCollector.Record(label, parsed.Kind, false, elapsed, 0, 0, err.Error())
 				logger.Printf("skip %s: %v", parsed.Redacted(), err)
 				return
 			}
+
+			nTables := totalTables(inst)
+			nDBs := len(inst.Databases)
+			metricsCollector.Record(label, parsed.Kind, true, elapsed, nDBs, nTables, "")
 
 			mu.Lock()
 			instances = append(instances, inst)
 			mu.Unlock()
 
-			nTables := totalTables(inst)
 			logger.Printf("[完成] %s (%d 表) 耗时 %v", label, nTables, elapsed)
 		}()
 	}
@@ -284,6 +305,7 @@ func main() {
 
 	universe := &schema.Universe{Instances: instances}
 	result := analyze.Analyze(universe, kindCaps)
+	result.Metrics = metricsCollector.Snapshots()
 
 	// Delta scan with fingerprint cache
 	if *cacheFile != "" {
@@ -353,12 +375,19 @@ func main() {
 			}
 		}
 		fmt.Fprintln(os.Stderr, "Report written to", *outputFile)
+		if *metricsFlag {
+			fmt.Fprint(os.Stderr, metricsCollector.PrometheusText())
+		}
 	} else if *jsonOut {
-		// Terminal JSON: direct output
 		render.PrintJSON(result)
+		if *metricsFlag {
+			fmt.Fprint(os.Stderr, metricsCollector.PrometheusText())
+		}
 	} else {
-		// Terminal text: direct render (with color highlights)
 		render.Print(result, *humanOut)
+		if *metricsFlag {
+			fmt.Fprint(os.Stderr, metricsCollector.PrometheusText())
+		}
 	}
 }
 
@@ -519,6 +548,7 @@ func handleCollect(args []string) {
 	logDirFlag := fs.String("log-dir", "/var/log/dbexplain", "directory for log files")
 	perDSNTimeout := fs.Duration("timeout", 20*time.Second, "per-DSN collect timeout")
 	maxConcurrent := fs.Int("conn", 10, "max concurrent connections for schema collection")
+	metricsFlag := fs.Bool("metrics", false, "output collection metrics in Prometheus text format (to stderr)")
 	fs.Parse(args)
 
 	// --label is an alias for -include
@@ -534,15 +564,27 @@ func handleCollect(args []string) {
 	for _, raw := range dsnFlags {
 		entries = append(entries, config.DSNEntry{Raw: raw})
 	}
-	if *useEnv {
+
+	hasExplicitSource := len(dsnFlags) > 0 || *configFile != ""
+	shouldLoadEnv := *useEnv || !hasExplicitSource
+
+	if shouldLoadEnv {
 		configPath := config.FindConfigFile()
 		if configPath == "" {
-			log.Fatal("no config file found. Create .env.dbexplain (or .env.dbexplain.enc) in " + config.ConfigDirDisplay() + " or current directory.")
+			if *useEnv {
+				log.Fatal("no config file found. Create .env.dbexplain (or .env.dbexplain.enc) in " + config.ConfigDirDisplay() + " or current directory.")
+			}
+			config.PrintNoConfigFound()
+			os.Exit(1)
 		}
 		envEntries, err := config.LoadEnvFile(configPath)
 		if err != nil {
 			log.Printf("warning: load config %s: %v", configPath, config.SanitizeErr(err))
 		} else {
+			if len(envEntries) == 0 && !*useEnv {
+				config.PrintEmptyConfigFound(configPath)
+				os.Exit(1)
+			}
 			entries = append(entries, envEntries...)
 		}
 	}
@@ -592,6 +634,8 @@ func handleCollect(args []string) {
 	}
 	collectLogger := log.New(collectLogFile, "", log.LstdFlags)
 
+	metricsCollector := metrics.NewCollector()
+
 	sem := make(chan struct{}, *maxConcurrent)
 
 	for i, rawDSN := range dsns {
@@ -635,15 +679,19 @@ func handleCollect(args []string) {
 			elapsed := time.Since(start)
 
 			if err != nil {
+				metricsCollector.Record(label, parsed.Kind, false, elapsed, 0, 0, err.Error())
 				logger.Printf("skip %s: %v", parsed.Redacted(), err)
 				return
 			}
+
+			nTables := totalTables(inst)
+			nDBs := len(inst.Databases)
+			metricsCollector.Record(label, parsed.Kind, true, elapsed, nDBs, nTables, "")
 
 			mu.Lock()
 			instances = append(instances, inst)
 			mu.Unlock()
 
-			nTables := totalTables(inst)
 			logger.Printf("[完成] %s (%d 表) 耗时 %v", label, nTables, elapsed)
 		}()
 	}
@@ -670,6 +718,7 @@ func handleCollect(args []string) {
 
 	universe := &schema.Universe{Instances: instances}
 	result := analyze.Analyze(universe, kindCaps)
+	result.Metrics = metricsCollector.Snapshots()
 
 	if *cacheFile != "" {
 		store, err := cache.LoadStore(*cacheFile)
@@ -737,10 +786,19 @@ func handleCollect(args []string) {
 			}
 		}
 		fmt.Fprintln(os.Stderr, "Report written to", *outputFile)
+		if *metricsFlag {
+			fmt.Fprint(os.Stderr, metricsCollector.PrometheusText())
+		}
 	} else if *jsonOut {
 		render.PrintJSON(result)
+		if *metricsFlag {
+			fmt.Fprint(os.Stderr, metricsCollector.PrometheusText())
+		}
 	} else {
 		render.Print(result, *humanOut)
+		if *metricsFlag {
+			fmt.Fprint(os.Stderr, metricsCollector.PrometheusText())
+		}
 	}
 }
 

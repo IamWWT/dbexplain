@@ -695,3 +695,57 @@ func TestLoadMask_PerDSN(t *testing.T) {
 func strPtr(s string) *string {
 	return &s
 }
+
+// ── PromQL extraction tests ──
+
+func TestExtractPromQLMetricName_Basic(t *testing.T) {
+	tests := []struct {
+		query string
+		want  string
+	}{
+		{"up", "up"},
+		{"up{job=\"node\"}", "up"},
+		{"node_cpu_seconds_total", "node_cpu_seconds_total"},
+		{"count(up)", "up"},
+		{"rate(node_cpu_seconds_total[5m])", "node_cpu_seconds_total"},
+		{"sum by(job) (up)", "up"},
+		{"up > 0", "up"},
+		{"", ""},
+	}
+	for _, tt := range tests {
+		got := extractPromQLMetricName(tt.query)
+		if got != tt.want {
+			t.Errorf("extractPromQLMetricName(%q) = %q, want %q", tt.query, got, tt.want)
+		}
+	}
+}
+
+func TestCheckNative_Prometheus_DenyTables(t *testing.T) {
+	cfg := &Config{
+		DenyTables: []string{"up", "sensitive_metric"},
+	}
+
+	// Denied
+	if err := cfg.CheckNative("up", "prometheus"); err == nil {
+		t.Error("expected error for denied metric 'up'")
+	}
+	if err := cfg.CheckNative("up{job=\"node\"}", "prometheus"); err == nil {
+		t.Error("expected error for denied metric 'up' with labels")
+	}
+
+	// Allowed
+	if err := cfg.CheckNative("node_cpu_seconds_total", "prometheus"); err != nil {
+		t.Errorf("unexpected error for allowed metric: %v", err)
+	}
+}
+
+func TestCheckNative_Prometheus_DenyStatements(t *testing.T) {
+	cfg := &Config{
+		DenyStatements: []string{"DROP"},
+	}
+
+	// Allowed (PromQL doesn't have DROP)
+	if err := cfg.CheckNative("up", "prometheus"); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+}

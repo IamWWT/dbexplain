@@ -6,6 +6,7 @@ import (
 
 	"github.com/IamWWT/dbexplain/internal/capabilities"
 	"github.com/IamWWT/dbexplain/internal/diagnostics"
+	"github.com/IamWWT/dbexplain/internal/metrics"
 	"github.com/IamWWT/dbexplain/internal/schema"
 )
 
@@ -15,6 +16,7 @@ type Result struct {
 	Groups   []TableGroup
 	Issues   []diagnostics.Issue
 	Ranks    []TableScore
+	Metrics  []metrics.Snapshot `json:"metrics,omitempty"`
 }
 
 type TableGroup struct {

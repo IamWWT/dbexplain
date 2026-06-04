@@ -17,10 +17,11 @@ import (
 	"github.com/IamWWT/dbexplain/internal/dsl"
 	"github.com/IamWWT/dbexplain/internal/dsnfilter"
 	"github.com/IamWWT/dbexplain/internal/executor"
+	"github.com/IamWWT/dbexplain/internal/policy"
 	"github.com/IamWWT/dbexplain/internal/query"
 	"github.com/IamWWT/dbexplain/internal/queryutil"
 	"github.com/IamWWT/dbexplain/internal/render"
-	"github.com/IamWWT/dbexplain/internal/policy"
+	"github.com/IamWWT/dbexplain/internal/sqlast"
 )
 
 var queryLock = query.NewQueryLock()
@@ -54,15 +55,26 @@ func handleExecute(args []string) {
 
 	// Resolve DSNs — gather ALL entries before label filter (needed for JOIN source resolution)
 	var allEntries []config.DSNEntry
-	if *envMode {
+	hasExplicitSource := *configFile != "" || *dsnFlag != ""
+	shouldLoadEnv := *envMode || !hasExplicitSource
+
+	if shouldLoadEnv {
 		configPath := config.FindConfigFile()
 		if configPath == "" {
-			fmt.Fprintln(os.Stderr, "ERROR: no config file found")
+			if *envMode {
+				fmt.Fprintln(os.Stderr, "ERROR: no config file found")
+				os.Exit(1)
+			}
+			config.PrintNoConfigFound()
 			os.Exit(1)
 		}
 		envEntries, err := config.LoadEnvFile(configPath)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "ERROR: load config %s: %v\n", configPath, config.SanitizeErr(err))
+			os.Exit(1)
+		}
+		if len(envEntries) == 0 && !*envMode {
+			config.PrintEmptyConfigFound(configPath)
 			os.Exit(1)
 		}
 		allEntries = append(allEntries, envEntries...)
@@ -182,13 +194,22 @@ func handleDSLExecute(dslQuery *dsl.DSLQuery, allEntries []config.DSNEntry, huma
 		return
 	}
 
-	switch kinds[0] {
-	case dsl.SourceSQL:
+	// Route by vendor
+	primary := bound.PrimarySource()
+	if primary == nil {
+		fmt.Fprintln(os.Stderr, "DSL error: no resolved source")
+		os.Exit(1)
+	}
+
+	switch primary.Vendor {
+	case dsl.VendorSQL:
 		dslExecSQL(dslQuery, bound, human, limit, explain, timeoutSec, allEntries)
-	case dsl.SourceFile:
+	case dsl.VendorFile:
 		dslExecFile(dslQuery, bound, human, limit, allEntries)
+	case dsl.VendorPromQL:
+		dslExecPromQL(dslQuery, bound, human, limit, timeoutSec, allEntries)
 	default:
-		fmt.Fprintf(os.Stderr, "DSL error: %s data sources not supported in DSL mode\n", kindName(kinds[0]))
+		fmt.Fprintf(os.Stderr, "DSL error: %s data sources not supported in DSL mode\n", primary.Vendor)
 		os.Exit(1)
 	}
 }
@@ -272,6 +293,89 @@ func dslExecFile(dslQuery *dsl.DSLQuery, bound *dsl.BoundQuery, human bool, limi
 
 	policies := policy.Load(envKeyForLabel(parsed.Label, allEntries))
 	queryutil.HandleFileExecute(parsed, dslQuery.SQL, human, limit, policies, allEntries)
+}
+
+// dslExecPromQL executes a DSL query against a Prometheus data source.
+// It converts the SQL AST to QueryIR, compiles to PromQL, and executes
+// through the non-SQL pipeline (IsSQL=false, bypassing sqlguard).
+func dslExecPromQL(dslQuery *dsl.DSLQuery, bound *dsl.BoundQuery, human bool, limit int, timeoutSec int, allEntries []config.DSNEntry) {
+	primary := bound.PrimarySource()
+	if primary == nil {
+		fmt.Fprintln(os.Stderr, "DSL error: no resolved source")
+		os.Exit(1)
+	}
+	parsed := primary.DSN
+	metricName := primary.Ref.Table
+
+	// Layer 1 security: validate metric name against DenyTables at DSL level
+	policies := policy.Load(envKeyForLabel(parsed.Label, allEntries))
+	if policies != nil {
+		for _, denied := range policies.DenyTables {
+			if strings.EqualFold(metricName, denied) {
+				fmt.Fprintf(os.Stderr, "ACCESS_DENIED: metric %q is not allowed for query\n", metricName)
+				os.Exit(1)
+			}
+		}
+	}
+
+	// Convert SQL AST → QueryIR
+	stmt, ok := dslQuery.Stmt.(*sqlast.SelectStmt)
+	if !ok {
+		fmt.Fprintln(os.Stderr, "DSL error: Prometheus DSL requires a SELECT statement")
+		os.Exit(1)
+	}
+	ir, irErr := dsl.SelectStmtToIR(stmt)
+	if irErr != nil {
+		fmt.Fprintf(os.Stderr, "DSL error: %v\n", irErr)
+		os.Exit(1)
+	}
+
+	// Override From with actual metric name from bound source
+	// (the AST uses placeholder __dsl_N from DSL preprocessing)
+	ir.From = metricName
+
+	// Compile QueryIR → PromQL
+	promQL, compErr := dsl.CompileToPromQL(ir)
+	if compErr != nil {
+		fmt.Fprintln(os.Stderr, compErr)
+		os.Exit(1)
+	}
+
+	// Get connector
+	c, err := connector.GetConnector(parsed.Kind)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Execute through non-SQL pipeline (IsSQL=false → bypasses sqlguard)
+	result, execErr := executor.ExecQuery(&executor.ExecOptions{
+		Conn:       c,
+		Parsed:     parsed,
+		SQL:        promQL,
+		Limit:      limit,
+		Explain:    false,
+		TimeoutSec: timeoutSec,
+		Policies:   policies,
+		Lock:       queryLock,
+		IsSQL:      false,
+	})
+	if execErr != nil {
+		fmt.Fprintln(os.Stderr, execErr)
+		os.Exit(1)
+	}
+
+	// Output
+	if human {
+		fmt.Print(render.FormatHuman(result))
+	} else {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		if err := enc.Encode(result); err != nil {
+			fmt.Fprintf(os.Stderr, "ERROR: json encode: %v\n", err)
+			os.Exit(1)
+		}
+	}
 }
 
 // dslExecFederated executes a DSL query that references multiple source kinds
@@ -378,8 +482,47 @@ func dslExecFederated(dslQuery *dsl.DSLQuery, bound *dsl.BoundQuery, allEntries 
 			})
 
 		case dsl.SourceNative:
-			fmt.Fprintf(os.Stderr, "DSL error: native sources not supported in federated queries: @%s.%s\n", bs.Ref.Label, bs.Ref.Table)
-			os.Exit(1)
+			if bs.Vendor == dsl.VendorPromQL {
+				// Materialize Prometheus data for federated query
+				promQL := bs.Ref.Table
+				c, err := connector.GetConnector(bs.DSN.Kind)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
+					os.Exit(1)
+				}
+				policies := policy.Load(envKeyForLabel(bs.DSN.Label, allEntries))
+				result, execErr := executor.ExecQuery(&executor.ExecOptions{
+					Conn: c, Parsed: bs.DSN, SQL: promQL,
+					Limit: limit, Explain: false, TimeoutSec: timeoutSec,
+					Policies: policies, Lock: queryLock, IsSQL: false,
+				})
+				if execErr != nil {
+					fmt.Fprintln(os.Stderr, execErr)
+					os.Exit(1)
+				}
+				rows := make([][]string, len(result.Rows))
+				for i, r := range result.Rows {
+					srow := make([]string, len(r))
+					for j, cell := range r {
+						if cell != nil {
+							srow[j] = *cell
+						}
+					}
+					rows[i] = srow
+				}
+				header := make([]string, len(result.Columns))
+				for i, col := range result.Columns {
+					header[i] = col.Name
+				}
+				allData = append(allData, materialized{
+					alias:  bs.Ref.Placeholder,
+					header: header,
+					rows:   rows,
+				})
+			} else {
+				fmt.Fprintf(os.Stderr, "DSL error: native sources not supported in federated queries: @%s.%s\n", bs.Ref.Label, bs.Ref.Table)
+				os.Exit(1)
+			}
 		}
 	}
 

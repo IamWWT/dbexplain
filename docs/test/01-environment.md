@@ -84,7 +84,7 @@ cd src && bash build.sh minimal mysql,postgres --upx && echo "upx-force: OK"  # 
 
 ```bash
 ../release/dbexplain-linux-amd64 --version
-# 预期: dbexplain v0.1.2
+# 预期: dbexplain v0.1.4
 ```
 
 ## 1.6 安全审计 — 敏感文件不被 Git 追踪
@@ -116,7 +116,7 @@ bash -n dbexplain-skill/scripts/uninstall-skill.sh && echo "uninstall-skill OK"
 
 ```bash
 ./dbexplain --version
-# 预期: dbexplain v0.1.2
+# 预期: dbexplain v0.1.4
 ```
 
 ## 1.9 构建模式因素影响分析
@@ -186,10 +186,12 @@ bash -n dbexplain-skill/scripts/uninstall-skill.sh && echo "uninstall-skill OK"
 | 符号表剥离 (`-s -w`) | 体积减小 ~30%，DWARF 调试信息移除，`strings` 分析难度略增 | ✓ | ✓ | ✓ | ✓ |
 | 编译路径移除 (`-trimpath`) | 不暴露本地文件系统路径，构建可复现 | ✓ | ✓ | ✓ | ✓ |
 | CGO_ENABLED=0 (静态链接) | 无动态库依赖，单文件可部署至任意同架构 Linux 环境 | ✓ | ✓ | ✓ | ✓ |
+| DuckDB CGO + 静态链接 | `duckdb` tag 启用 CGO=1 + `-extldflags=-static` (Linux) 或 `-static-libgcc -static-libstdc++` (macOS)，零运行时 ldd 依赖 | ✗ | ✗ | ✗ | minimal 含 duckdb 时 |
 | UPX 轻度混淆 | 体积再降 70-80%（实测全驱动 42 MB → 9.1 MB），检查/审计工具输出不可读；启动延迟 +3-5× | ✗ | ✗ | ✓ | ✓ |
 | Race detector | 运行时检测并发数据竞争；体积约 2×，运行性能下降 5-10× | ✗ | ✓ | ✗ | ✗ |
 
 **静态链接保障**: `CGO_ENABLED=0` 确保纯 Go 静态链接，二进制运行时无动态库依赖（除 Linux 内核系统调用接口外）。`ldd` 检查确认无 `=> /` 动态引用。
+**DuckDB 静态链接**: `duckdb` tag 使用 `CGO_ENABLED=1` + `-extldflags=-static`（Linux），`ldd` 显示 "not a dynamic executable"，零运行时依赖。macOS 使用 `-static-libgcc -static-libstdc++`，仅保留系统必有的 `/usr/lib/libSystem.B.dylib`。
 
 **prod 模式默认 `full` 标签的设计考量**:
 
@@ -241,15 +243,15 @@ upx -t ../release/dbexplain-linux-amd64
 # ── 运行时独立验证 ────────────────────────────────────────
 # 确认二进制不依赖任何外部文件
 ../release/dbexplain-linux-amd64 --version
-# 预期: "dbexplain v0.1.2"
+# 预期: "dbexplain v0.1.4"
 
 # 在隔离环境运行 (无 PATH 依赖)
 env -i HOME=/nonexistent PATH=/usr/bin:/bin \
   ../release/dbexplain-linux-amd64 --version
-# 预期: "dbexplain v0.1.2" (无额外依赖)
+# 预期: "dbexplain v0.1.4" (无额外依赖)
 ```
 
-**验证结果 (v0.1.2, Linux amd64)**:
+**验证结果 (v0.1.4, Linux amd64)**:
 
 | 检查项 | 命令 | 预期 | 结果 |
 |--------|------|------|------|
@@ -257,8 +259,8 @@ env -i HOME=/nonexistent PATH=/usr/bin:/bin \
 | 动态引用 | `ldd` | 无 `=> /` 动态加载 | PASS |
 | 动态符号 | `nm -D` | 空 (无动态符号) | PASS |
 | UPX 完整性 | `upx -t` | `Passed 1 format test` | PASS |
-| 版本输出 | `--version` | `v0.1.2` | PASS |
-| 隔离运行 | `env -i PATH=... --version` | `v0.1.2` | PASS |
+| 版本输出 | `--version` | `v0.1.4` | PASS |
+| 隔离运行 | `env -i PATH=... --version` | `v0.1.4` | PASS |
 
 **UPX 零运行时依赖确认**: UPX 在构建时将解压 stub 附加到二进制的末尾。运行时，stub 将原始程序解压到内存然后跳转到入口点。此过程完全在进程内完成，不调用外部程序或加载动态库。因此，UPX 压缩后的二进制是**完全自包含的**。
 
@@ -287,7 +289,7 @@ build.sh 支持通过命令行参数动态控制 UPX:
 
 **功能影响**: **无**。UPX 在 Go 运行时启动前完成内存解压，不影响任何运行时行为（goroutine/signal/文件操作/panic traceback）。仅增加一次性启动延迟约 30-70ms。
 
-**跨平台限制**: UPX 支持 Mach-O 格式，但 Go 交叉编译的 Mach-O 二进制（Linux 编译 darwin 目标）触发 UPX 5.0.0 的 `CantUnpackException`，无法压缩。二进制依然有效且功能完整。macOS 原生编译时 UPX 正常工作。
+**跨平台限制**: UPX 支持 Mach-O 格式，但 Go 交叉编译的 Mach-O 二进制（Linux 编译 darwin 目标）触发 UPX 5.0.0 的 `CantUnpackException`，无法压缩。二进制依然有效且功能完整。macOS 原生编译时 UPX 正常工作。`build.sh` 已显式检测并跳过 darwin/arm64（UPX 无支持）和 darwin/amd64 交叉编译两种场景，打印具体跳过原因。
 
 **UPX 不是加密**: 压缩 + 轻度混淆，不阻止逆向工程。若需防逆向应使用商业加壳工具，但会引入运行时依赖，违反"零依赖"原则。
 

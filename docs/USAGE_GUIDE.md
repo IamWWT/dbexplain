@@ -11,7 +11,7 @@
 1. **看数据库结构** —— 连上数据库，自动列出所有表、字段、索引、外键
 2. **查数据** —— 安全地执行查询（只能查，不能改）
 
-一个工具搞定 **12 种数据源**：MySQL / PostgreSQL / GaussDB / ClickHouse / SQLite / DuckDB / Redis / Elasticsearch / MongoDB / Qdrant / CSV / Excel。
+一个工具搞定 **14 种数据源**：MySQL / PostgreSQL / GaussDB / ClickHouse / SQLite / DuckDB / Redis / Elasticsearch / MongoDB / Qdrant / Prometheus / CSV / TSV / Excel。
 
 > 本文档覆盖全部数据源的全部使用场景。需要更详细的例子见 [`CLI_EXAMPLES.md`](CLI_EXAMPLES.md)。
 
@@ -23,19 +23,31 @@
 
 ### Linux
 
+> v0.1.4+ 以 tarball（`.tar.gz`）形式发布，每个 tarball 对应一个平台。
+
 ```bash
-wget https://github.com/IamWWT/dbexplain/releases/download/v0.1.2/dbexplain-linux-amd64 -O dbexplain
+# 下载对应平台的 tarball（linux amd64 标准版，UPX 压缩）
+wget https://github.com/IamWWT/dbexplain/releases/download/v0.1.4/dbexplain-v0.1.4-linux-amd64-std-upx.tar.gz
+
+# 解压出二进制
+tar -xzf dbexplain-v0.1.4-linux-amd64-std-upx.tar.gz
+cp dbexplain-v0.1.4-linux-amd64-std-upx/dbexplain-linux-amd64-std ./dbexplain
 chmod +x dbexplain
 ./dbexplain --version
 ```
 
-> 标准版命名格式为 `dbexplain-{平台}-{架构}-std`（如 `dbexplain-linux-amd64-std`），DuckDB 版为 `dbexplain-{平台}-{架构}-duckdb`。v0.1.3+ 下载时选择对应版本。
+> tarball 命名格式：`dbexplain-{版本}-{系统}-{架构}-{版型}.tar.gz`，解压后目录内即对应平台二进制。
 
 ### macOS
 
 ```bash
 # Intel 芯片用 darwin-amd64，M1/M2 芯片用 darwin-arm64
-wget https://github.com/IamWWT/dbexplain/releases/download/v0.1.2/dbexplain-darwin-arm64 -O dbexplain
+# macOS 交叉编译不支持 UPX，使用 -noupx 包
+wget https://github.com/IamWWT/dbexplain/releases/download/v0.1.4/dbexplain-v0.1.4-darwin-arm64-std-noupx.tar.gz
+
+# 解压
+tar -xzf dbexplain-v0.1.4-darwin-arm64-std-noupx.tar.gz
+cp dbexplain-v0.1.4-darwin-arm64-std-noupx/dbexplain-darwin-arm64-std ./dbexplain
 chmod +x dbexplain
 ./dbexplain --version
 ```
@@ -46,7 +58,11 @@ chmod +x dbexplain
 
 ```powershell
 # PowerShell
-Invoke-WebRequest https://github.com/IamWWT/dbexplain/releases/download/v0.1.2/dbexplain-windows-amd64.exe -OutFile dbexplain.exe
+Invoke-WebRequest https://github.com/IamWWT/dbexplain/releases/download/v0.1.4/dbexplain-v0.1.4-windows-amd64-std-upx.tar.gz -OutFile dbexplain-v0.1.4-windows-amd64-std-upx.tar.gz
+
+# 解压（Windows 10+ 内置 tar）
+tar -xzf dbexplain-v0.1.4-windows-amd64-std-upx.tar.gz
+copy dbexplain-v0.1.4-windows-amd64-std-upx\dbexplain-windows-amd64-std.exe dbexplain.exe
 .\dbexplain.exe --version
 ```
 
@@ -60,7 +76,7 @@ Invoke-WebRequest https://github.com/IamWWT/dbexplain/releases/download/v0.1.2/d
 
 **Windows：** 文件放在 `%USERPROFILE%\.config\dbexplain\.env.dbexplain`
 
-### 全部 12 种数据源的配置写法
+### 全部 14 种数据源的配置写法
 
 把下面"你的情况"对应的那行复制到配置文件里，改掉地址/密码即可：
 
@@ -72,11 +88,8 @@ Invoke-WebRequest https://github.com/IamWWT/dbexplain/releases/download/v0.1.2/d
 | **ClickHouse** | `DB4=clickhouse://用户:密码@127.0.0.1:8123/库名?label=my-ch` |
 | **SQLite** | `DB5=sqlite:////tmp/数据库文件.db?label=my-sqlite` |
 | **DuckDB** | `DB12=duckdb:///tmp/分析.db?label=my-duckdb`（可选，需 `-tags duckdb` 构建） |
-| **Redis** | `DB6=redis://:密码@127.0.0.1:6379/0?label=my-redis` |
-| **Elasticsearch** | `DB7=elasticsearch://用户:密码@127.0.0.1:9200?label=my-es` |
-| **MongoDB** | `DB8=mongodb://用户:密码@127.0.0.1:27017/库名?label=my-mongo` |
-| **Qdrant** | `DB9=qdrant://127.0.0.1:6334?label=my-qdrant` |
-| **CSV 文件** | `DB10=csv:///home/你的路径/数据文件.csv?label=my-csv` |
+| **Prometheus** | `DB13=prometheus://用户:密码@127.0.0.1:9090?label=my-prom` |
+| **TSV 文件** | `DB14=tsv:///home/你的路径/数据文件.tsv?label=my-tsv` |
 | **Excel 文件** | `DB11=xlsx:///home/你的路径/数据文件.xlsx?label=my-xlsx` |
 
 > **密码含特殊字符**（`@` `:` `#` 等）需要编码：`@` → `%40`，`:` → `%3A`，`#` → `%23`
@@ -155,10 +168,10 @@ dbexplain execute -env --db 1 --timeout 60 --limit 500 "SELECT * FROM logs" --hu
 ```
 
 > **REPL 模式说明：**
-> - 支持所有 12 种数据源：SQL（MySQL/PG/ClickHouse/SQLite/DuckDB 等）、NoSQL（Redis/ES/Mongo/Qdrant）、文件（CSV/Excel）
-> - **不支持 DSL 模式**（`@label.table` 语法）。REPL 每次只能查当前连接的一个数据源
+> - 支持所有 14 种数据源：SQL（MySQL/PG/ClickHouse/SQLite/DuckDB 等）、NoSQL（Redis/ES/Mongo/Qdrant）、时序（Prometheus）、文件（CSV/TSV/Excel）
+> - 支持 DSL 模式（`@label.table` 语法），包括单源查询和联邦跨源 JOIN
 > - 配合 `-env` 启动后，可用 `.conn <label>` 在已配置的多个数据源之间切换
-> - 跨源 JOIN/UNION（联邦查询）请走命令行的 `--dsl` 模式，REPL 内不支持
+> - 跨源 JOIN/UNION（联邦查询）直接在 REPL 内使用 DSL 语法
 ```
 
 ### 查 Redis
@@ -288,7 +301,7 @@ dbexplain diff --cache /tmp/schema.cache --since v1.0 --human
 | 你想干嘛 | 命令 |
 |---------|------|
 | 查看已配置的数据库列表 | `dbexplain list -env` |
-| 加密配置文件（防密码泄露） | `dbexplain encrypt` |
+| 加密配置文件（防密码泄露） | `dbexplain encrypt`（自动搜索 .env.dbexplain，输出 .enc） |
 | 查看帮助手册 | `dbexplain all` |
 | 只看某个数据库的帮助 | `dbexplain mysql` / `dbexplain redis` / ... |
 

@@ -1,7 +1,7 @@
 # docs/ 文件索引
 
 > 本文档索引 `docs/` 下所有文件，方便快速定位。
-> 更新时间：v0.1.3 (2026-06-03)
+> 更新时间：v0.1.4 (2026-06-04)
 
 ---
 
@@ -13,34 +13,35 @@
 | [`ALGORITHMS.md`](ALGORITHMS.md) | 核心算法说明：Schema 采集、外键发现、健康评分、增量检测、Schema Diff |
 | [`CODE_MAP.md`](CODE_MAP.md) | 文档-代码索引：模块↔文件映射、能力矩阵、文档↔源码交叉引用、CLI→处理器、测试覆盖图、常见问题 |
 | [`POLICY.md`](POLICY.md) | 策略引擎：DENY_TABLES/DENY_COLUMNS/MASK_COLUMNS 配置规则 |
-| [`CONFIG_SEARCH.md`](CONFIG_SEARCH.md) | 配置文件搜索路径与优先级：`findConfigFile()` 自动发现机制 |
+| [`CONFIG_SEARCH.md`](CONFIG_SEARCH.md) | 配置文件搜索路径与优先级：`findConfigFile()` 自动发现机制；`dbexplain encrypt` 加密保护凭证 |
 
 ## 二、部署与使用
 
 | 文件 | 说明 |
 |------|------|
-| [`USAGE_GUIDE.md`](USAGE_GUIDE.md) | 全场景傻瓜用法手册：12 种数据源从安装到查询 |
+| [`USAGE_GUIDE.md`](USAGE_GUIDE.md) | 全场景傻瓜用法手册：14 种数据源从安装到查询 |
 | [`CLI_EXAMPLES.md`](CLI_EXAMPLES.md) | CLI 使用示例集合 |
 | [`EXECUTE.md`](EXECUTE.md) | execute 子命令详解（只读查询） |
 | [`REPL.md`](REPL.md) | REPL 交互模式：启动方式、内命令、自动行为、已知限制（ES 暂不支持等） |
-| [`FILE_PROCESSING.md`](FILE_PROCESSING.md) | 文件查询引擎：CSV/XLSX 处理说明 |
+| [`file-sources/FILE_PROCESSING.md`](file-sources/FILE_PROCESSING.md) | 文件查询引擎：CSV/XLSX 处理说明 |
 | [`DEPLOY.md`](DEPLOY.md) | 部署说明：build.sh 编译模式、产物清单、平台支持 |
 
-## 三、数据源专属文档
+## 三、数据源专属文档（按类别分目录）
 
-| 文件 | 数据源 |
-|------|--------|
-| [`MYSQL.md`](MYSQL.md) | MySQL |
-| [`POSTGRESQL.md`](POSTGRESQL.md) | PostgreSQL |
-| [`SQLITE.md`](SQLITE.md) | SQLite |
-| [`DUCKDB.md`](DUCKDB.md) | DuckDB（可选构建，需 `-tags duckdb`） |
-| [`CLICKHOUSE.md`](CLICKHOUSE.md) | ClickHouse |
-| [`MONGO.md`](MONGO.md) | MongoDB |
-| [`REDIS.md`](REDIS.md) | Redis |
-| [`ELASTICSEARCH.md`](ELASTICSEARCH.md) | Elasticsearch |
-| [`QDRANT.md`](QDRANT.md) | Qdrant |
-| [`GAUSSDB.md`](GAUSSDB.md) | GaussDB |
-| [`COMPATIBILITY_GAUSSDB_TDSQL.md`](COMPATIBILITY_GAUSSDB_TDSQL.md) | GaussDB / TDSQL 兼容性说明 |
+| 类别 | 文件 | 数据源 |
+|------|------|--------|
+| **关系型** | [`databases/relational/MYSQL.md`](databases/relational/MYSQL.md) | MySQL |
+| | [`databases/relational/POSTGRESQL.md`](databases/relational/POSTGRESQL.md) | PostgreSQL |
+| | [`databases/relational/SQLITE.md`](databases/relational/SQLITE.md) | SQLite |
+| | [`databases/relational/DUCKDB.md`](databases/relational/DUCKDB.md) | DuckDB（可选构建，需 `-tags duckdb`） |
+| | [`databases/relational/GAUSSDB.md`](databases/relational/GAUSSDB.md) | GaussDB |
+| | [`databases/relational/COMPATIBILITY_GAUSSDB_TDSQL.md`](databases/relational/COMPATIBILITY_GAUSSDB_TDSQL.md) | GaussDB / TDSQL 兼容性说明 |
+| **分析型** | [`databases/analytical/CLICKHOUSE.md`](databases/analytical/CLICKHOUSE.md) | ClickHouse |
+| **键值型** | [`databases/nosql/REDIS.md`](databases/nosql/REDIS.md) | Redis |
+| **文档型** | [`databases/nosql/MONGO.md`](databases/nosql/MONGO.md) | MongoDB |
+| | [`databases/nosql/ELASTICSEARCH.md`](databases/nosql/ELASTICSEARCH.md) | Elasticsearch |
+| **向量型** | [`databases/nosql/QDRANT.md`](databases/nosql/QDRANT.md) | Qdrant |
+| **时序型** | [`databases/prometheus.md`](databases/prometheus.md) | Prometheus |
 
 ## 四、安全与检查
 
@@ -49,7 +50,13 @@
 | [`SECURITY_CHECKLIST.md`](SECURITY_CHECKLIST.md) | **安全检查手册**（发布前必读）：8 章覆盖凭证保护、文件编码、输入验证、安全传输、运行时安全、发布前快速检查（§6）、配置加密检查、新增安全问题流程 |
 | [`SKILL_AUTHORING.md`](SKILL_AUTHORING.md) | SKILL.md 编写规范：Karpathy 上下文工程理念、YAML frontmatter、内容结构、文件大小约束、eval-first 迭代流程 |
 
-## 五、测试文档
+## 五、运维
+
+| 文件 | 说明 |
+|------|------|
+| [`operations/metrics.md`](operations/metrics.md) | 采集指标收集与 Prometheus 文本格式输出（v0.1.4+） |
+
+## 六、测试文档
 
 | 文件 | 说明 |
 |------|------|
@@ -69,9 +76,11 @@
 | [`test/13-file-query-engine.md`](test/13-file-query-engine.md) | 文件查询引擎测试 |
 | [`test/14-schema-diff.md`](test/14-schema-diff.md) | Schema Diff 测试 |
 | [`test/15-window-functions.md`](test/15-window-functions.md) | 窗口函数测试 |
+| [`test/16-duckdb.md`](test/16-duckdb.md) | DuckDB 连接器测试 |
+| [`test/17-metrics.md`](test/17-metrics.md) | 采集指标收集与 Prometheus 输出测试 |
 | [`test/RESULTS.md`](test/RESULTS.md) | 全量测试结果汇总 |
 
-## 六、资产文件
+## 七、资产文件
 
 | 文件 | 说明 |
 |------|------|
@@ -82,7 +91,7 @@
 | [`assets/install-offline-*.png`](assets/install-offline-1.png) | 离线安装截图 |
 | [`assets/usages.png`](assets/usages.png) | 使用概览图 |
 
-## 七、其他
+## 八、其他
 
 | 文件 | 说明 |
 |------|------|
@@ -91,7 +100,7 @@
 
 ---
 
-## 八、CHANGELOG 编制规则
+## 九、CHANGELOG 编制规则
 
 ### 文件位置
 

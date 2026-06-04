@@ -66,6 +66,8 @@ func ParseDSN(raw string) (*DSN, error) {
 		d.Kind = "xlsx"
 	case "duckdb":
 		d.Kind = "duckdb"
+	case "prometheus":
+		d.Kind = "prometheus"
 	default:
 		return nil, fmt.Errorf("unsupported scheme %q", scheme)
 	}

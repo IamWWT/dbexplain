@@ -23,7 +23,7 @@ SKILL_MD_EN="${SKILL_DIR}/SKILL_EN.md"
 ENV_EXAMPLE="${SKILL_DIR}/.env.dbexplain.example"
 REF_DIR="${SKILL_DIR}/references"
 SKILL_NAME="dbexplain-skill"
-VERSION="v0.1.2"
+VERSION="v0.1.4"
 LANG="zh"        # default: Chinese
 LANG_VIA_CLI=""  # non-empty when --lang was passed on command line
 

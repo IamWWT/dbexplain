@@ -16,6 +16,7 @@ import (
 	"github.com/IamWWT/dbexplain/internal/config"
 	"github.com/IamWWT/dbexplain/internal/dsl"
 	"github.com/IamWWT/dbexplain/internal/executor"
+	"github.com/IamWWT/dbexplain/internal/sqlast"
 	"github.com/IamWWT/dbexplain/internal/query"
 	"github.com/IamWWT/dbexplain/internal/queryutil"
 	"github.com/IamWWT/dbexplain/internal/render"
@@ -33,15 +34,27 @@ func handleREPL(args []string) {
 
 	// Pre-load DSN entries
 	var allEntries []config.DSNEntry
-	if *envMode {
+
+	hasExplicitSource := *configFile != "" || *dsnFlag != ""
+	shouldLoadEnv := *envMode || !hasExplicitSource
+
+	if shouldLoadEnv {
 		configPath := config.FindConfigFile()
 		if configPath == "" {
-			fmt.Fprintln(os.Stderr, "ERROR: no config file found")
+			if *envMode {
+				fmt.Fprintln(os.Stderr, "ERROR: no config file found")
+				os.Exit(1)
+			}
+			config.PrintNoConfigFound()
 			os.Exit(1)
 		}
 		envEntries, err := config.LoadEnvFile(configPath)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
+			os.Exit(1)
+		}
+		if len(envEntries) == 0 && !*envMode {
+			config.PrintEmptyConfigFound(configPath)
 			os.Exit(1)
 		}
 		allEntries = append(allEntries, envEntries...)
@@ -56,8 +69,17 @@ func handleREPL(args []string) {
 	}
 
 	if len(allEntries) == 0 {
-		fmt.Fprintln(os.Stderr, "No DSN entries. Use --env, --config, or --dsn")
-		os.Exit(1)
+		// No DSN entries — start in disconnected state
+		currentEntry := config.DSNEntry{Raw: ""}
+		currentLabel := "(disconnected)"
+
+		fmt.Println("dbexplain REPL (no connections)")
+		fmt.Println("Type .help for commands, .connect <dsn> to connect, .exit to quit")
+
+		scanner := bufio.NewScanner(os.Stdin)
+		scanner.Buffer(make([]byte, 0, 1024*1024), 1024*1024)
+		replLoop(scanner, currentEntry, currentLabel, allEntries, *limit, *timeout)
+		return
 	}
 
 	// Use first entry as initial connection
@@ -76,6 +98,13 @@ func handleREPL(args []string) {
 
 	fmt.Printf("dbexplain REPL (connected: %s)\n", currentLabel)
 	fmt.Println("Type .help for commands, .exit to quit")
+
+	replLoop(scanner, currentEntry, currentLabel, allEntries, *limit, *timeout)
+}
+
+// replLoop is the main REPL input loop. Exits on .exit, EOF, or scanner error.
+func replLoop(scanner *bufio.Scanner, currentEntry config.DSNEntry, currentLabel string, allEntries []config.DSNEntry, limit int, timeoutSec int) {
+	disconnected := currentEntry.Raw == ""
 
 	for {
 		fmt.Printf("dbexplain[%s]> ", currentLabel)
@@ -99,18 +128,26 @@ func handleREPL(args []string) {
 			case line == ".help":
 				printREPLHelp()
 			case line == ".list" || line == ".databases":
+				if len(allEntries) == 0 {
+					fmt.Println("No connections.")
+					break
+				}
 				fmt.Println("Configured databases:")
-				// Find max label width for alignment
+				// Find max column widths for alignment
 				maxLabel := 8
-				entries := make([]struct {
+				maxDSN := 3
+				type entry struct {
 					label string
 					kind  string
-				}, len(allEntries))
+					dsn   string
+				}
+				entries := make([]entry, len(allEntries))
 				for i, entry := range allEntries {
 					d, err := dsn.ParseDSN(entry.Raw)
 					if err != nil {
 						entries[i].label = "(invalid)"
 						entries[i].kind = "?"
+						entries[i].dsn = entry.Raw
 						continue
 					}
 					lbl := d.Label
@@ -119,20 +156,24 @@ func handleREPL(args []string) {
 					}
 					entries[i].label = lbl
 					entries[i].kind = d.Kind
+					entries[i].dsn = d.Redacted()
 					if len(lbl) > maxLabel {
 						maxLabel = len(lbl)
 					}
+					if len(entries[i].dsn) > maxDSN {
+						maxDSN = len(entries[i].dsn)
+					}
 				}
 				// Header
-				fmt.Printf("  %-3s  %-*s  %-14s  Status\n", "#", maxLabel, "Label", "Kind")
-				fmt.Printf("  %-3s  %-*s  %-14s  %s\n", "---", maxLabel, "------", "----", "------")
+				fmt.Printf("  %-3s  %-*s  %-*s  %-14s  Status\n", "#", maxLabel, "Label", maxDSN, "DSN", "Kind")
+				fmt.Printf("  %-3s  %-*s  %-*s  %-14s  %s\n", "---", maxLabel, "------", maxDSN, "---", "----", "------")
 				// Rows
 				for i, e := range entries {
 					current := ""
 					if e.label == currentLabel {
 						current = "← current"
 					}
-					fmt.Printf("  %-3d  %-*s  %-14s  %s\n", i+1, maxLabel, e.label, e.kind, current)
+					fmt.Printf("  %-3d  %-*s  %-*s  %-14s  %s\n", i+1, maxLabel, e.label, maxDSN, e.dsn, e.kind, current)
 				}
 			case strings.HasPrefix(line, ".conn") || strings.HasPrefix(line, ".dsn"):
 				parts := strings.Fields(line)
@@ -148,6 +189,7 @@ func handleREPL(args []string) {
 						if currentLabel == "" {
 							currentLabel = d.Kind
 						}
+						disconnected = false
 						found = true
 						fmt.Printf("Switched to: %s\n", d.Label)
 						break
@@ -156,9 +198,41 @@ func handleREPL(args []string) {
 				if !found {
 					fmt.Printf("No DSN with label %q found\n", parts[1])
 				}
+			case strings.HasPrefix(line, ".connect"):
+				parts := strings.Fields(line)
+				if len(parts) < 2 {
+					fmt.Println("Usage: .connect <dsn-url>")
+					fmt.Println("  e.g. .connect mysql://user:pass@localhost:3306/mydb?label=mydb")
+					continue
+				}
+				raw := parts[1]
+				// Rejoin remaining parts (DSN may contain spaces in params)
+				for i := 2; i < len(parts); i++ {
+					raw += " " + parts[i]
+				}
+				d, err := dsn.ParseDSN(raw)
+				if err != nil {
+					fmt.Printf("Invalid DSN: %v\n", err)
+					continue
+				}
+				if d.Label == "" {
+					d.Label = d.Kind
+				}
+				entry := config.DSNEntry{Raw: raw}
+				allEntries = append(allEntries, entry)
+				currentEntry = entry
+				currentLabel = d.Label
+				disconnected = false
+				fmt.Printf("Connected to: %s\n", currentLabel)
 			default:
 				fmt.Printf("Unknown command: %s (try .help)\n", line)
 			}
+			continue
+		}
+
+		// Check disconnected state before query execution
+		if disconnected {
+			fmt.Println("Not connected. Use .connect <dsn-url> to connect, or use -env flag to pre-load connections.")
 			continue
 		}
 
@@ -166,9 +240,9 @@ func handleREPL(args []string) {
 		start := time.Now()
 		var err error
 		if strings.Contains(line, "@") {
-			err = replExecDSL(line, allEntries, *limit, *timeout)
+			err = replExecDSL(line, allEntries, limit, timeoutSec)
 		} else {
-			err = execQuery(currentEntry.Raw, line, *limit, *timeout, allEntries)
+			err = execQuery(currentEntry.Raw, line, limit, timeoutSec, allEntries)
 		}
 		elapsed := time.Since(start)
 		if err != nil {
@@ -197,12 +271,18 @@ func execQuery(dsnRaw string, sql string, limit int, timeout int, allEntries []c
 
 	policies := policy.Load("")
 
-	// Elasticsearch JSON native queries are not supported in REPL.
-	// Detect JSON input early to give a clear error instead of
-	// the cryptic "READ_ONLY_VIOLATION: unknown or unsupported SQL verb"
-	// from sqlguard.
+	// ES JSON native queries → non-SQL pipeline (bypasses sqlguard, uses _search endpoint)
 	if parsed.Kind == "elasticsearch" && isJSONLike(sql) {
-		return fmt.Errorf("ES JSON native queries not supported in REPL; use 'dbexplain execute -env --label %s --human SQL_QUERY' with SQL syntax, or 'dbexplain collect -env --label %s' to collect schemas", parsed.Label, parsed.Label)
+		result, execErr := executor.ExecQuery(&executor.ExecOptions{
+			Conn: c, Parsed: parsed, SQL: sql,
+			Limit: limit, Explain: false, TimeoutSec: timeout,
+			Policies: policies, Lock: query.NewQueryLock(), IsSQL: false,
+		})
+		if execErr != nil {
+			return execErr
+		}
+		fmt.Print(render.FormatHuman(result))
+		return nil
 	}
 
 	if isFile {
@@ -259,14 +339,20 @@ func replExecDSL(line string, allEntries []config.DSNEntry, limit int, timeoutSe
 		return replExecFederated(dslQuery, bound, allEntries, limit, timeoutSec)
 	}
 
-	// Single source
-	switch kinds[0] {
-	case dsl.SourceSQL:
+	// Single source — route by Vendor (same pattern as handleDSLExecute in execute.go)
+	primary := bound.PrimarySource()
+	if primary == nil {
+		return fmt.Errorf("DSL error: no resolved source")
+	}
+	switch primary.Vendor {
+	case dsl.VendorSQL:
 		return replExecSQL(dslQuery, bound, limit, timeoutSec, allEntries)
-	case dsl.SourceFile:
+	case dsl.VendorFile:
 		return replExecFile(dslQuery, bound, limit, allEntries)
+	case dsl.VendorPromQL:
+		return replExecPromQL(dslQuery, bound, limit, timeoutSec, allEntries)
 	default:
-		return fmt.Errorf("DSL error: %s data sources not supported in DSL mode", kindName(kinds[0]))
+		return fmt.Errorf("DSL error: vendor %d data sources not supported in DSL mode", primary.Vendor)
 	}
 }
 
@@ -312,6 +398,71 @@ func replExecFile(dslQuery *dsl.DSLQuery, bound *dsl.BoundQuery, limit int, allE
 	parsed := primary.DSN
 	policies := policy.Load(envKeyForLabel(parsed.Label, allEntries))
 	queryutil.HandleFileExecute(parsed, dslQuery.SQL, true, limit, policies, allEntries)
+	return nil
+}
+
+// replExecPromQL executes a DSL query against a Prometheus data source.
+// Converts SQL AST → QueryIR → PromQL, then executes via non-SQL pipeline.
+func replExecPromQL(dslQuery *dsl.DSLQuery, bound *dsl.BoundQuery, limit int, timeoutSec int, allEntries []config.DSNEntry) error {
+	primary := bound.PrimarySource()
+	if primary == nil {
+		return fmt.Errorf("DSL error: no resolved source")
+	}
+	parsed := primary.DSN
+	metricName := primary.Ref.Table
+
+	// Layer 1 security: validate metric name against DenyTables at DSL level
+	policies := policy.Load(envKeyForLabel(parsed.Label, allEntries))
+	if policies != nil {
+		for _, denied := range policies.DenyTables {
+			if strings.EqualFold(metricName, denied) {
+				return fmt.Errorf("ACCESS_DENIED: metric %q is not allowed for query", metricName)
+			}
+		}
+	}
+
+	// Convert SQL AST → QueryIR
+	stmt, ok := dslQuery.Stmt.(*sqlast.SelectStmt)
+	if !ok {
+		return fmt.Errorf("DSL error: Prometheus DSL requires a SELECT statement")
+	}
+	ir, irErr := dsl.SelectStmtToIR(stmt)
+	if irErr != nil {
+		return fmt.Errorf("DSL error: %v", irErr)
+	}
+
+	// Override From with actual metric name from bound source
+	ir.From = metricName
+
+	// Compile QueryIR → PromQL
+	promQL, compErr := dsl.CompileToPromQL(ir)
+	if compErr != nil {
+		return compErr
+	}
+
+	// Get connector
+	c, err := connector.GetConnector(parsed.Kind)
+	if err != nil {
+		return fmt.Errorf("ERROR: %v", err)
+	}
+
+	// Execute through non-SQL pipeline (IsSQL=false → bypasses sqlguard)
+	result, execErr := executor.ExecQuery(&executor.ExecOptions{
+		Conn:       c,
+		Parsed:     parsed,
+		SQL:        promQL,
+		Limit:      limit,
+		Explain:    false,
+		TimeoutSec: timeoutSec,
+		Policies:   policies,
+		Lock:       query.NewQueryLock(),
+		IsSQL:      false,
+	})
+	if execErr != nil {
+		return execErr
+	}
+
+	fmt.Print(render.FormatHuman(result))
 	return nil
 }
 
@@ -403,7 +554,44 @@ func replExecFederated(dslQuery *dsl.DSLQuery, bound *dsl.BoundQuery, allEntries
 			})
 
 		case dsl.SourceNative:
-			return fmt.Errorf("DSL error: native sources not supported in federated queries: @%s.%s", bs.Ref.Label, bs.Ref.Table)
+			if bs.Vendor == dsl.VendorPromQL {
+				// Materialize Prometheus data for federated query
+				promQL := bs.Ref.Table
+				c, err := connector.GetConnector(bs.DSN.Kind)
+				if err != nil {
+					return fmt.Errorf("connector error for @%s.%s: %v", bs.Ref.Label, bs.Ref.Table, err)
+				}
+				policies := policy.Load(envKeyForLabel(bs.DSN.Label, allEntries))
+				result, execErr := executor.ExecQuery(&executor.ExecOptions{
+					Conn: c, Parsed: bs.DSN, SQL: promQL,
+					Limit: limit, Explain: false, TimeoutSec: timeoutSec,
+					Policies: policies, Lock: query.NewQueryLock(), IsSQL: false,
+				})
+				if execErr != nil {
+					return fmt.Errorf("query error for @%s.%s: %v", bs.Ref.Label, bs.Ref.Table, execErr)
+				}
+				rows := make([][]string, len(result.Rows))
+				for i, r := range result.Rows {
+					srow := make([]string, len(r))
+					for j, cell := range r {
+						if cell != nil {
+							srow[j] = *cell
+						}
+					}
+					rows[i] = srow
+				}
+				header := make([]string, len(result.Columns))
+				for i, col := range result.Columns {
+					header[i] = col.Name
+				}
+				allData = append(allData, materialized{
+					alias:  bs.Ref.Placeholder,
+					header: header,
+					rows:   rows,
+				})
+			} else {
+				return fmt.Errorf("DSL error: native sources not supported in federated queries: @%s.%s", bs.Ref.Label, bs.Ref.Table)
+			}
 		}
 	}
 
@@ -439,11 +627,11 @@ func printREPLHelp() {
 	fmt.Print(`
 dbexplain REPL — Interactive query mode
 ========================================
-Supported: All 12 data sources (SQL / NoSQL / Files), DuckDB requires -tags duckdb build
+Supported: All 13 data sources (SQL / NoSQL / TSDB / Files), DuckDB requires -tags duckdb build
 DSL syntax: @label.table references supported (single-source & federated cross-source JOIN)
-Not supported: Elasticsearch native JSON queries
-
+  Prometheus PromQL via DSL: SELECT * FROM @label.metric [WHERE label="val"]
 Commands:
+  .connect <dsn>  Connect to a new data source by DSN URL
   .conn <label>   Switch to another data source by label (load with -env)
   .dsn <label>    Alias for .conn
   .list           List all configured databases
@@ -456,6 +644,7 @@ DSL Examples:
   @mydb.users u JOIN @analytics.orders o ON u.id = o.user_id
   SELECT * FROM @csv.report WHERE region = 'APAC'
   @pg.employees e LEFT JOIN @mysql.dept d ON e.dept_id = d.id
+  SELECT * FROM @prom.up WHERE job="node"          -- PromQL via DSL
 
 Examples:
   dbexplain repl --dsn "sqlite:////tmp/test.db"

@@ -816,3 +816,87 @@ func printManualDuckDB(p func(string, string) string) {
         "SELECT region, SUM(amount) FROM read_parquet('/data/sales.parquet') GROUP BY region"
 `))
 }
+
+func printManualPrometheus(p func(string, string) string) {
+	fmt.Print(p(`
+
+─── Prometheus ─────────────────────────────────────────────────
+
+    DSN 格式:
+      prometheus://主机:端口?label=别名
+
+    端口: 默认 9090
+
+    能力:
+      • Schema 采集 — 抓取 targets（按 job 分组为表）、标签列表、指标元数据
+      • 只读查询 — 通过 DSL 模式执行 PromQL（SQL 语法编译为 PromQL）
+      • 三层安全检查 — DSL 层指标名校验 + CheckNative 策略引擎 + 列掩码
+      • 能力标签: CapPromQL（不进 sqlguard，走独立安全路径）
+
+    DSL 查询（仅限 SELECT * + WHERE 标签过滤，Phase 1）:
+      # 查询即时向量
+      SELECT * FROM @prom.up
+      SELECT * FROM @prom.up WHERE job="prometheus"
+      SELECT * FROM @prom.up WHERE job!="prometheus"
+      SELECT * FROM @prom.node_cpu_seconds_total WHERE job="node"
+
+    Phase 1 限制（当前版本不支持）:
+      • COUNT / SUM / AVG 等聚合函数（PromQL 语义不兼容）
+      • GROUP BY / ORDER BY / LIMIT
+      • JOIN（Prometheus 单指标模型）
+      • 数值条件（WHERE value > 0）
+      • 范围向量（[5m]）
+
+    安全机制:
+      • Layer 1 — DSL 层: 编译前检查 metric name vs DENY_TABLES
+      • Layer 2 — CheckNative: 执行前再次校验 metric + label vs 策略
+      • Layer 3 — ApplyMask: 执行后列掩码
+      • 不走 SQL 安全网关（sqlguard）— PromQL 语义独立
+
+    示例:
+      dbexplain execute -dsn 'prometheus://192.168.0.1:9090?label=prom' \\
+        --dsl --human 'SELECT * FROM @prom.up'
+      dbexplain execute -env --label prom --dsl --human \\
+        'SELECT * FROM @prom.node_cpu_seconds_total WHERE job="node"'
+`, `
+
+─── PROMETHEUS ─────────────────────────────────────────────────
+
+    DSN format:
+      prometheus://host:port?label=name
+
+    Port: default 9090
+
+    Capabilities:
+      • Schema collection — scrape targets (grouped by job as tables), label list, metric metadata
+      • Read-only query — PromQL via DSL mode (SQL syntax compiled to PromQL)
+      • Three-layer security — DSL-level metric check + CheckNative policy engine + column masking
+      • Capability: CapPromQL (bypasses sqlguard, follows independent security path)
+
+    DSL queries (Phase 1: SELECT * + WHERE label filter only):
+      # Instant vector queries
+      SELECT * FROM @prom.up
+      SELECT * FROM @prom.up WHERE job="prometheus"
+      SELECT * FROM @prom.up WHERE job!="prometheus"
+      SELECT * FROM @prom.node_cpu_seconds_total WHERE job="node"
+
+    Phase 1 limitations (not supported in current version):
+      • Aggregation functions COUNT/SUM/AVG (incompatible PromQL semantics)
+      • GROUP BY / ORDER BY / LIMIT
+      • JOIN (Prometheus single-metric model)
+      • Numeric conditions (WHERE value > 0)
+      • Range vectors ([5m])
+
+    Security:
+      • Layer 1 — DSL level: metric name check against DENY_TABLES before compilation
+      • Layer 2 — CheckNative: re-validates metric + labels against policies before execution
+      • Layer 3 — ApplyMask: post-execution column masking
+      • Bypasses sqlguard — PromQL has independent semantics
+
+    Examples:
+      dbexplain execute -dsn 'prometheus://192.168.0.1:9090?label=prom' \\
+        --dsl --human 'SELECT * FROM @prom.up'
+      dbexplain execute -env --label prom --dsl --human \\
+        'SELECT * FROM @prom.node_cpu_seconds_total WHERE job="node"'
+`))
+}

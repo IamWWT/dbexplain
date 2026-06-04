@@ -2,14 +2,17 @@
 set -e
 
 # ============================================================
-# dbexplain v0.1.3 — One-click installer (Linux / macOS)
+# dbexplain v0.1.4 — One-click installer (Linux / macOS)
 # ============================================================
 # Installs the dbexplain binary system-wide and optionally
 # deploys the AI Agent skill to supported platforms.
 #
+# Distribution format: tarball (.tar.gz) from GitHub Releases.
+# The installer auto-detects platform → correct tarball → extract.
+#
 # Usage:
 #   bash install.sh                     Interactive install
-#   bash install.sh --offline [PATH]    Offline mode (manual binary, optional path)
+#   bash install.sh --offline [PATH]    Offline mode (binary or tarball)
 #   bash install.sh --no-skill          Skip skill installation
 #   bash install.sh --update            Overwrite existing installation
 #   bash install.sh --lang en           Install with English skill
@@ -18,7 +21,7 @@ set -e
 #   bash install.sh --help              Show this help
 # ============================================================
 
-VERSION="v0.1.3"
+VERSION="v0.1.4"
 REPO="IamWWT/dbexplain"
 TOOL_NAME="dbexplain"
 
@@ -33,7 +36,7 @@ SKILL_SRC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OFFLINE_MODE=false
 SKIP_SKILL=false
 UPDATE_MODE=false
-OFFLINE_PATH="" # optional pre-placed binary path for --offline
+OFFLINE_PATH="" # optional pre-placed binary/tarball path for --offline
 LANG_SKILL=""   # empty means interactive (ask user)
 INSTALL_DIR=""  # resolved later
 EDITION=""      # empty means interactive (ask user); std or duckdb
@@ -59,9 +62,9 @@ dbexplain ${VERSION} — One-Click Installer (Linux/macOS)
 Usage: bash install.sh [OPTIONS]
 
 Options:
-  --offline [PATH]   Offline mode. If PATH is given, install that specific binary
-                     file directly. If omitted, prompt the user to manually place
-                     the binary, then complete config and skill setup.
+  --offline [PATH]   Offline mode. If PATH is given, install that specific
+                     binary or .tar.gz file directly. Accepts both raw
+                     binaries and tarballs. If omitted, prompt user.
   --no-skill         Skip AI Agent skill installation (tool only).
   --update           Update mode: overwrite existing binary and skill files
                      without touching config.
@@ -76,7 +79,8 @@ Examples:
   bash install.sh --no-skill               # Tool only, no skill
   bash install.sh --edition duckdb         # Install DuckDB edition
   bash install.sh --offline                # Offline: you provide the binary
-  bash install.sh --offline ./dbexplain-linux-amd64-std  # Offline with path
+  bash install.sh --offline ./dbexplain-v0.1.4-linux-amd64-std-upx.tar.gz  # Tarball
+  bash install.sh --offline ./dbexplain-linux-amd64-std         # Raw binary
   bash install.sh --update                 # Update to latest version
 
 After install:
@@ -130,8 +134,11 @@ cleanup() {
     if [ -n "${TMP_BIN:-}" ] && [ -f "$TMP_BIN" ]; then
         rm -f "$TMP_BIN"
     fi
+    if [ -n "${TMP_DIR:-}" ] && [ -d "$TMP_DIR" ]; then
+        rm -rf "$TMP_DIR"
+    fi
 }
-trap cleanup EXIT INT
+trap cleanup EXIT INT TERM HUP
 
 # ── Platform detection ──
 detect_platform() {
@@ -159,6 +166,51 @@ detect_platform() {
     info "Detected platform: ${OS}/${ARCH}"
 }
 
+# ── Tarball name resolution ──
+# Per-platform tarball naming (UPX flag encoded in name):
+#   dbexplain-${VERSION}-${OS}-${ARCH}-${edition}-{upx,noupx}.tar.gz
+#   └─ dbexplain-${VERSION}-${OS}-${ARCH}-${edition}-{upx,noupx}/
+#        └─ dbexplain-${OS}-${ARCH}-${edition}[.exe]
+#
+# UPX mapping:
+#   linux/*  (std) → upx     (well supported)
+#   darwin/* (std) → noupx   (cross-compiled or no avail)
+#   windows  (std) → upx
+#   duckdb/linux-amd64 → upx   (native)
+#   duckdb/linux-arm64 → noupx (CGO cross-compiled)
+get_upx_flag() {
+    if [ "$BINARY_SUFFIX" = "duckdb" ] && [ "$ARCH" = "arm64" ]; then
+        echo "noupx"
+    elif [ "$OS" = "darwin" ]; then
+        echo "noupx"
+    else
+        echo "upx"
+    fi
+}
+
+get_tarball_name() {
+    local edition="$1"
+    local upx_flag
+    upx_flag="$(get_upx_flag)"
+    echo "dbexplain-${VERSION}-${OS}-${ARCH}-${edition}-${upx_flag}.tar.gz"
+}
+
+# Binary name inside tarball
+get_binary_name() {
+    local edition="$1"
+    local name="dbexplain-${OS}-${ARCH}-${edition}"
+    [ "$OS" = "windows" ] && name="${name}.exe"
+    echo "$name"
+}
+
+# Tarball internal directory prefix (same as tarball name minus .tar.gz)
+get_tarball_dirname() {
+    local edition="$1"
+    local upx_flag
+    upx_flag="$(get_upx_flag)"
+    echo "dbexplain-${VERSION}-${OS}-${ARCH}-${edition}-${upx_flag}"
+}
+
 # ── Edition selection ──
 select_edition() {
     if [ -n "$EDITION" ]; then
@@ -181,7 +233,9 @@ select_edition() {
         info "Selected edition: ${BINARY_SUFFIX}"
     fi
 
-    BINARY_DOWNLOAD="dbexplain-${OS}-${ARCH}-${BINARY_SUFFIX}"
+    BINARY_NAME="$(get_binary_name "$BINARY_SUFFIX")"
+    TARBALL_NAME="$(get_tarball_name "$BINARY_SUFFIX")"
+    TARBALL_DIR="$(get_tarball_dirname "$BINARY_SUFFIX")"
 }
 
 # ── Resolve install directory ──
@@ -212,71 +266,163 @@ resolve_install_dir() {
     DEST_BIN="${INSTALL_DIR}/${TOOL_NAME}"
 }
 
-# ── Online install: download from GitHub ──
+# ── Online install: download tarball from GitHub, extract binary ──
 install_online() {
-    DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${VERSION}/${BINARY_DOWNLOAD}"
-    TMP_BIN="$(mktemp)"
+    DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${VERSION}/${TARBALL_NAME}"
+    TMP_DIR="$(mktemp -d)"
+    local tarball_path="${TMP_DIR}/${TARBALL_NAME}"
 
-    step "Downloading ${BINARY_DOWNLOAD} ..."
+    step "Downloading ${TARBALL_NAME} ..."
     if command -v curl &>/dev/null; then
-        curl -L --progress-bar -o "$TMP_BIN" "$DOWNLOAD_URL"
+        curl -L --progress-bar -o "$tarball_path" "$DOWNLOAD_URL"
     elif command -v wget &>/dev/null; then
-        wget -q --show-progress -O "$TMP_BIN" "$DOWNLOAD_URL"
+        wget -q --show-progress -O "$tarball_path" "$DOWNLOAD_URL"
     else
         err "Neither curl nor wget found. Please install one of them."
         exit 1
     fi
 
-    chmod +x "$TMP_BIN"
-    move_binary "$TMP_BIN"
+    # Validate tarball integrity
+    if [ ! -s "$tarball_path" ]; then
+        err "Downloaded file is empty: ${tarball_path}"
+        exit 1
+    fi
+
+    step "Extracting ${BINARY_NAME} from tarball ..."
+    if ! tar -tzf "$tarball_path" &>/dev/null; then
+        err "Downloaded tarball is corrupt or invalid: ${TARBALL_NAME}"
+        exit 1
+    fi
+
+    if ! tar -xzf "$tarball_path" -C "$TMP_DIR" "${TARBALL_DIR}/${BINARY_NAME}"; then
+        err "Failed to extract ${BINARY_NAME} from tarball"
+        err "  Expected path inside tarball: ${TARBALL_DIR}/${BINARY_NAME}"
+        err "  Available files:"
+        tar -tzf "$tarball_path" | sed 's/^/    /'
+        exit 1
+    fi
+
+    local extracted="${TMP_DIR}/${TARBALL_DIR}/${BINARY_NAME}"
+    if [ ! -f "$extracted" ]; then
+        err "Extracted binary not found: ${extracted}"
+        exit 1
+    fi
+
+    chmod +x "$extracted"
+    info "Downloaded and extracted: ${BINARY_NAME}"
+    move_binary "$extracted"
 }
 
-# ── Offline install: use provided path or prompt user ──
+# ── Offline install: use provided path, tarball, or prompt user ──
+# Accepts both:
+#   - Raw binary:  dbexplain-linux-amd64-std
+#   - Tarball:     dbexplain-v0.1.4-std-upx.tar.gz (auto-detected by .tar.gz suffix)
 install_offline() {
     echo ""
 
-    # If a specific path was given, use it directly
+    # Internal helper: extract binary from a tarball
+    extract_from_tarball() {
+        local tarball_path="$1"
+        local tmp
+        tmp="$(mktemp -d)"
+
+        # Validate tarball integrity
+        if ! tar -tzf "$tarball_path" &>/dev/null; then
+            rm -rf "$tmp"
+            return 1
+        fi
+
+        # Try to extract the expected binary for this platform
+        if tar -xzf "$tarball_path" -C "$tmp" "${TARBALL_DIR}/${BINARY_NAME}" 2>/dev/null; then
+            local extracted="${tmp}/${TARBALL_DIR}/${BINARY_NAME}"
+            if [ -f "$extracted" ]; then
+                chmod +x "$extracted"
+                copy_binary "$extracted"
+                rm -rf "$tmp"
+                return 0
+            fi
+        fi
+
+        # Fallback: scan tarball for any dbexplain binary
+        info "Scanning tarball for dbexplain binary..."
+        local found
+        found="$(tar -tzf "$tarball_path" | grep -E 'dbexplain(-[^-]+){2,}(\.exe)?$' | grep -v '/$' | head -1)"
+        if [ -n "$found" ]; then
+            tar -xzf "$tarball_path" -C "$tmp" "$found"
+            local extracted="${tmp}/${found}"
+            chmod +x "$extracted"
+            info "Found binary in tarball: ${found}"
+            copy_binary "$extracted"
+            rm -rf "$tmp"
+            return 0
+        fi
+
+        rm -rf "$tmp"
+        return 1
+    }
+
+    # ── Specific path provided ──
     if [ -n "$OFFLINE_PATH" ]; then
         if [ ! -f "$OFFLINE_PATH" ]; then
-            err "Specified binary not found: ${OFFLINE_PATH}"
+            err "Specified file not found: ${OFFLINE_PATH}"
             exit 1
         fi
-        step "Offline mode: using specified binary ${OFFLINE_PATH}"
-        chmod +x "$OFFLINE_PATH"
-        copy_binary "$OFFLINE_PATH"
+
+        case "$OFFLINE_PATH" in
+            *.tar.gz|*.tgz)
+                step "Offline mode: installing from tarball ${OFFLINE_PATH}"
+                if extract_from_tarball "$OFFLINE_PATH"; then
+                    return
+                fi
+                err "Failed to extract binary from tarball: ${OFFLINE_PATH}"
+                exit 1
+                ;;
+            *)
+                step "Offline mode: using specified binary ${OFFLINE_PATH}"
+                chmod +x "$OFFLINE_PATH"
+                copy_binary "$OFFLINE_PATH"
+                return
+                ;;
+        esac
+    fi
+
+    # ── Interactive offline mode ──
+    TARBALL_URL="https://github.com/${REPO}/releases/download/${VERSION}/${TARBALL_NAME}"
+    step "Offline mode: please obtain the binary or tarball manually."
+    echo ""
+    echo "  Download URL (tarball):"
+    echo "    ${TARBALL_URL}"
+    echo ""
+    echo "  Then pass it to install.sh:"
+    echo "    bash install.sh --offline /path/to/${TARBALL_NAME}"
+    echo "    bash install.sh --offline /path/to/${BINARY_NAME}"
+    echo ""
+    echo "  Or place the tarball in the current directory and press Enter."
+    echo ""
+
+    read -r -p "  Press Enter once the file is in place... " _unused
+
+    # Check for tarball in current directory first
+    if [ -f "./${TARBALL_NAME}" ]; then
+        if extract_from_tarball "./${TARBALL_NAME}"; then
+            return
+        fi
+    fi
+
+    # Check for raw binary in current directory
+    if [ -f "./${BINARY_NAME}" ]; then
+        chmod +x "./${BINARY_NAME}"
+        copy_binary "./${BINARY_NAME}"
         return
     fi
 
-    # Interactive offline mode
-    DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${VERSION}/${BINARY_DOWNLOAD}"
-    step "Offline mode: please obtain the binary manually."
-    echo ""
-    echo "  Download URL:"
-    echo "    ${DOWNLOAD_URL}"
-    echo ""
-    echo "  Then place it at:"
-    echo "    ${INSTALL_DIR}/${TOOL_NAME}"
-    echo ""
-    echo "  Or place it in the current directory as:"
-    echo "    ${BINARY_DOWNLOAD}"
-    echo ""
-
-    read -r -p "  Press Enter once the binary is in place... " _unused
-
-    # Check destination first
-    if [ -f "${INSTALL_DIR}/${TOOL_NAME}" ]; then
-        info "Found binary at ${INSTALL_DIR}/${TOOL_NAME}"
+    # Check destination path
+    if [ -f "${DEST_BIN}" ]; then
+        info "Found binary at ${DEST_BIN}"
         return
     fi
 
-    # Check current dir with download name
-    if [ -f "./${BINARY_DOWNLOAD}" ]; then
-        chmod +x "./${BINARY_DOWNLOAD}"
-        copy_binary "./${BINARY_DOWNLOAD}"
-        return
-    fi
-
-    err "Binary not found at either location. Please re-run with --offline [PATH] specifying the binary location."
+    err "Binary/tarball not found. Please re-run with --offline [PATH]"
     exit 1
 }
 

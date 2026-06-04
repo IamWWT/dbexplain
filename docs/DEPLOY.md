@@ -48,12 +48,15 @@ cd src && bash build.sh            # 默认 prod 模式：5 平台全驱动编�
 | test | `bash build.sh test` | 当前 GOOS/GOARCH (如 linux/amd64) + 全驱动 + -race |
 | minimal | `bash build.sh minimal mysql,postgres` | 当前 GOOS/GOARCH (如 linux/amd64) + 按需驱动 |
 
-发布构建使用 `release.sh`，一次产出两套二进制：
+发布构建使用 `release.sh`（**零参数一键发布**，官方打包命令），一次性产出所有平台/版本/UPX 变体的二进制和 tarball：
 
-| 版本 | 命令 | 后缀 | 说明 |
-|------|------|------|------|
-| **标准版**（默认） | `bash release.sh` (Phase 1) | `-std` | 5 平台交叉编译，CGO=0，tags=full，UPX |
-| **DuckDB 版** | `bash release.sh` (Phase 2) | `-duckdb` | 当前平台原生编译，CGO=1，tags=全驱动+duckdb |
+| 阶段 | 产出 | 说明 |
+|------|------|------|
+| Phase 1 | 5 平台 -std 标准版 | CGO=0, tags=full, `--no-upx` 原始构建 |
+| Phase 2 | linux-amd64/arm64 -duckdb 版 | CGO=1, 全驱动+duckdb, 含 arm64 交叉编译 |
+| Phase 3 | 12 个 per-platform tarball | 每平台 × upx/noupx 变体, darwin 仅 noupx |
+
+> **`build.sh` vs `release.sh` 定位区别**：`build.sh` 面向开源社区开发者，提供 4 种模式（prod/dev/test/minimal）和按需驱动选择，适合开发调试和自定义编译。`release.sh` 是官方发布命令，零参数（无 `--no-upx` / `--skip-duckdb` 等选项），一次产出全量发布 artifacts。
 
 > 命名说明：标准版后缀 `-std` 表示纯 Go 全量（不含 DuckDB），DuckDB 版后缀 `-duckdb` 表示含 DuckDB 的全量驱动。文件名示例：`dbexplain-linux-amd64-std`、`dbexplain-linux-amd64-duckdb`。
 >
@@ -107,14 +110,19 @@ bash dbexplain-skill/scripts/install.sh --lang en  # English Skill
 ### Linux / macOS 离线安装
 
 ```bash
-# 在有网络的机器上下载
-wget https://github.com/IamWWT/dbexplain/releases/download/v0.1.3/dbexplain-linux-amd64-std
+# 在有网络的机器上下载 tarball（按平台选择）
+# Linux amd64 → dbexplain-v0.1.4-linux-amd64-std-upx.tar.gz
+# macOS arm64 → dbexplain-v0.1.4-darwin-arm64-std-noupx.tar.gz
+wget https://github.com/IamWWT/dbexplain/releases/download/v0.1.4/dbexplain-v0.1.4-linux-amd64-std-upx.tar.gz
 
-# 复制到离线环境后安装
+# 复制到离线环境后安装（脚本自动识别 .tar.gz 并解压）
+bash dbexplain-skill/scripts/install.sh --offline ./dbexplain-v0.1.4-linux-amd64-std-upx.tar.gz
+
+# 也支持直接传入原始二进制
 bash dbexplain-skill/scripts/install.sh --offline ./dbexplain-linux-amd64-std
 
 # 仅安装工具，不部署 Skill
-bash dbexplain-skill/scripts/install.sh --offline ./dbexplain-linux-amd64-std --no-skill
+bash dbexplain-skill/scripts/install.sh --offline ./dbexplain-v0.1.4-linux-amd64-std-upx.tar.gz --no-skill
 ```
 
 ### Windows 安装
@@ -256,7 +264,7 @@ bash dbexplain-skill/scripts/install-skill.sh --verify
 
 | 图 | 描述 |
 |------|------|
-| ![架构总览](assets/architecture.drawio.png) | 4 阶段流水线：INPUT（连接配置）→ COLLECT（9 种 DB 模式抽取）→ ANALYZE（FK 推断/排序/诊断/IR Graph）→ OUTPUT（Markdown/JSON/上下文文件） |
+| ![架构总览](assets/architecture.drawio.png) | 4 阶段流水线：INPUT（连接配置）→ COLLECT（14 种数据源抽取）→ ANALYZE（FK 推断/排序/诊断/IR Graph）→ OUTPUT（Markdown/JSON/上下文文件） |
 | ![部署拓扑](assets/deployment.drawio.png) | 三步安装：GitHub Releases → install.sh → 三个目标（二进制/usr/local/bin + 配置~/.config + Skill~/.agents） |
 | ![Skill 交互流程](assets/skill-interaction.drawio.png) | AI Agent 与 dbexplain 的边界：Agent 读取 SKILL_ZH.md/SKILL_EN.md → 调用 dbexplain 收集确定性事实 → Agent 解释结果给用户 |
 | ![NL2SQL 架构决策](assets/nl2sql_architecture_decision.svg) | NL2SQL 场景下的架构决策示意图 |

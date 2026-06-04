@@ -1,12 +1,15 @@
 # ============================================================
-# dbexplain v0.1.3 — One-click installer (Windows PowerShell)
+# dbexplain v0.1.4 — One-click installer (Windows PowerShell)
 # ============================================================
 # Installs the dbexplain binary and optionally deploys
 # the AI Agent skill.
 #
+# Distribution format: tarball (.tar.gz) from GitHub Releases.
+# The installer auto-detects platform → correct tarball → extract.
+#
 # Usage:
 #   .\install.ps1                   Interactive install
-#   .\install.ps1 -Offline          Offline mode (manual binary placement)
+#   .\install.ps1 -Offline [PATH]   Offline mode (binary or .tar.gz)
 #   .\install.ps1 -NoSkill          Skip skill installation
 #   .\install.ps1 -Update           Overwrite existing installation
 #   .\install.ps1 -Lang en           Install with English skill
@@ -15,7 +18,7 @@
 # ============================================================
 
 param(
-    [switch]$Offline,
+    [string]$Offline = "",      # Offline mode with optional path (binary or tarball)
     [switch]$NoSkill,
     [switch]$Update,
     [ValidateSet("zh", "en")]
@@ -25,11 +28,10 @@ param(
     [switch]$Help
 )
 
-$VERSION = "v0.1.3"
+$VERSION = "v0.1.4"
 $REPO = "IamWWT/dbexplain"
 $TOOL_NAME = "dbexplain"
 $EditionSuffix = if ($Edition) { $Edition } else { "" }  # resolved below
-$BINARY_DOWNLOAD = "dbexplain-windows-amd64-std.exe"
 $BINARY_DEST = "dbexplain.exe"
 
 $InstallDir = "$env:LOCALAPPDATA\dbexplain"
@@ -52,14 +54,14 @@ dbexplain $VERSION — One-Click Installer (Windows)
 Usage: .\install.ps1 [OPTIONS]
 
 Options:
-  -Offline    Offline mode: prompt user to manually place the binary,
-              then complete config and skill setup.
-  -NoSkill    Skip AI Agent skill installation (tool only).
-  -Update     Update mode: overwrite existing binary and skill files
-              without touching config.
-  -Lang zh|en Skill language: zh=中文 (default), en=English.
+  -Offline [PATH] Offline mode. If PATH is given, install that specific
+                  binary (.exe) or .tar.gz file. If omitted, prompt user.
+  -NoSkill        Skip AI Agent skill installation (tool only).
+  -Update         Update mode: overwrite existing binary and skill files
+                  without touching config.
+  -Lang zh|en     Skill language: zh=中文 (default), en=English.
   -Edition std|duckdb  Edition: std (pure Go, default) or duckdb (requires CGO).
-  -Help       Show this help message and exit.
+  -Help           Show this help message and exit.
 
 Examples:
   .\install.ps1                  # Full interactive install
@@ -67,6 +69,8 @@ Examples:
   .\install.ps1 -NoSkill          # Tool only, no skill
   .\install.ps1 -Edition duckdb   # Install DuckDB edition
   .\install.ps1 -Offline          # Offline: you provide the binary
+  .\install.ps1 -Offline "C:\downloads\dbexplain-v0.1.4-windows-amd64-std-upx.tar.gz"  # Tarball
+  .\install.ps1 -Offline "C:\downloads\dbexplain-windows-amd64-std.exe"   # Raw exe
   .\install.ps1 -Update           # Update to latest version
 
 After install:
@@ -116,8 +120,13 @@ if ($Edition -eq "") {
 } else {
     $EditionSuffix = $Edition
 }
-$BINARY_DOWNLOAD = "dbexplain-windows-amd64-$EditionSuffix.exe"
 Write-Info "Selected edition: $EditionSuffix"
+
+# ── Tarball name resolution ──
+# Per-platform tarball: dbexplain-${VERSION}-windows-amd64-${EditionSuffix}.tar.gz
+$TARBALL_NAME = "dbexplain-${VERSION}-windows-amd64-${EditionSuffix}-upx.tar.gz"
+$TARBALL_DIR = "dbexplain-${VERSION}-windows-amd64-${EditionSuffix}-upx"
+$BINARY_NAME = "dbexplain-windows-amd64-${EditionSuffix}.exe"
 
 # ── Resolve install directory ──
 $DestBin = Join-Path $InstallDir $BINARY_DEST
@@ -126,63 +135,162 @@ if ($Update) {
     Write-Info "Update mode: will overwrite existing installation."
 }
 
-# ── Install binary ──
-if (-not $Offline) {
-    # Online mode: download from GitHub
-    $DownloadUrl = "https://github.com/$REPO/releases/download/$VERSION/$BINARY_DOWNLOAD"
-    $TmpBin = Join-Path $env:TEMP $BINARY_DOWNLOAD
+# ── Check tar availability (required for tarball extraction) ──
+$TarAvailable = $null -ne (Get-Command tar -ErrorAction SilentlyContinue)
+if (-not $TarAvailable) {
+    Write-Warn "'tar' command not found. Windows 10+/Server 2016+ include tar built-in."
+    Write-Warn "Falling back to raw binary mode — you must provide the .exe directly."
+}
 
-    Write-Step "Downloading $BINARY_DOWNLOAD ..."
+# ── Helper: extract a single file from tarball ──
+function Extract-FromTarball {
+    param([string]$TarballPath, [string]$OutputDir)
+    if (-not $TarAvailable) { return $false }
+    $targetFile = "${TARBALL_DIR}/${BINARY_NAME}"
     try {
-        # Use BITS transfer if available (faster, resumable), fallback to Invoke-WebRequest
+        tar -xzf "$TarballPath" -C "$OutputDir" $targetFile 2>$null
+        $extracted = Join-Path $OutputDir $targetFile
+        return (Test-Path $extracted)
+    } catch {
+        return $false
+    }
+}
+
+# ── Install binary ──
+$IsOffline = $Offline -ne "" -or $PSBoundParameters.ContainsKey('Offline')
+
+if (-not $IsOffline) {
+    # Online mode: download tarball from GitHub, extract .exe
+    $DownloadUrl = "https://github.com/$REPO/releases/download/$VERSION/$TARBALL_NAME"
+    $TmpDir = Join-Path $env:TEMP "dbexplain-install"
+    $TarballPath = Join-Path $TmpDir $TARBALL_NAME
+    $null = New-Item -ItemType Directory -Path $TmpDir -Force
+
+    Write-Step "Downloading $TARBALL_NAME ..."
+    try {
         if (Get-Command Start-BitsTransfer -ErrorAction SilentlyContinue) {
-            Start-BitsTransfer -Source $DownloadUrl -Destination $TmpBin
+            Start-BitsTransfer -Source $DownloadUrl -Destination $TarballPath
         } else {
-            Invoke-WebRequest -Uri $DownloadUrl -OutFile $TmpBin
+            Invoke-WebRequest -Uri $DownloadUrl -OutFile $TarballPath
         }
-        Write-Info "Download complete."
+        Write-Info "Download complete ($((Get-Item $TarballPath).Length) bytes)."
     } catch {
         Write-Err "Download failed: $_"
-        Write-Warn "Try offline mode: .\install.ps1 -Offline"
         exit 1
     }
 
-    # Move to install dir
-    if (-not (Test-Path $InstallDir)) {
-        New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
-    }
-    Move-Item -Force $TmpBin $DestBin
-    Write-Info "Binary installed to $DestBin"
-} else {
-    # Offline mode
-    $DownloadUrl = "https://github.com/$REPO/releases/download/$VERSION/$BINARY_DOWNLOAD"
-    Write-Host ""
-    Write-Step "Offline mode: please obtain the binary manually."
-    Write-Host ""
-    Write-Host "  Download URL:"
-    Write-Host "    $DownloadUrl"
-    Write-Host ""
-    Write-Host "  Then place it at (rename to dbexplain.exe):"
-    Write-Host "    $DestBin"
-    Write-Host ""
-
-    $null = Read-Host "  Press Enter once the binary is in place"
-
-    if (-not (Test-Path $DestBin)) {
-        # Check current dir
-        $curBin = Join-Path (Get-Location) $BINARY_DOWNLOAD
-        if (Test-Path $curBin) {
-            if (-not (Test-Path $InstallDir)) {
-                New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
-            }
-            Copy-Item -Force $curBin $DestBin
-            Write-Info "Binary copied to $DestBin (original preserved at $curBin)"
+    # Extract binary from tarball
+    if ($TarAvailable) {
+        Write-Step "Extracting $BINARY_NAME from tarball ..."
+        if (Extract-FromTarball $TarballPath $TmpDir) {
+            $Extracted = Join-Path $TmpDir "${TARBALL_DIR}/${BINARY_NAME}"
         } else {
-            Write-Err "Binary not found at $DestBin or current directory."
+            Write-Err "Failed to extract $BINARY_NAME from tarball."
+            Write-Step "Contents of tarball:"
+            tar -tzf $TarballPath | ForEach-Object { Write-Host "    $_" }
             exit 1
         }
     } else {
-        Write-Info "Found binary at $DestBin"
+        Write-Err "Cannot extract tarball: 'tar' command not found."
+        Write-Warn "Install the binary manually:"
+        Write-Warn "  1. Download: $DownloadUrl"
+        Write-Warn "  2. Extract $BINARY_NAME using 7-Zip or another tool"
+        Write-Warn "  3. Place it at: $DestBin"
+        exit 1
+    }
+
+    # Move .exe to install dir
+    if (-not (Test-Path $InstallDir)) {
+        New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
+    }
+    Move-Item -Force $Extracted $DestBin
+    Write-Info "Binary installed to $DestBin"
+
+    # Cleanup temp
+    Remove-Item -Force -Recurse $TmpDir -ErrorAction SilentlyContinue
+
+} else {
+    # Offline mode
+    $OfflinePath = if ($Offline -ne "") { $Offline } else { $null }
+    $TarballUrl = "https://github.com/$REPO/releases/download/$VERSION/$TARBALL_NAME"
+
+    if ($OfflinePath) {
+        # Specific path provided
+        if (-not (Test-Path $OfflinePath)) {
+            Write-Err "File not found: $OfflinePath"
+            exit 1
+        }
+        if ($OfflinePath -like "*.tar.gz" -or $OfflinePath -like "*.tgz") {
+            # Tarball provided
+            Write-Step "Offline mode: installing from tarball $OfflinePath"
+            $OfflineTmp = Join-Path $env:TEMP "dbexplain-offline"
+            $null = New-Item -ItemType Directory -Path $OfflineTmp -Force
+            if (Extract-FromTarball $OfflinePath $OfflineTmp) {
+                $Extracted = Join-Path $OfflineTmp "${TARBALL_DIR}/${BINARY_NAME}"
+                if (-not (Test-Path $InstallDir)) {
+                    New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
+                }
+                Copy-Item -Force $Extracted $DestBin
+                Write-Info "Binary installed to $DestBin (from tarball)"
+                Remove-Item -Force -Recurse $OfflineTmp -ErrorAction SilentlyContinue
+            } else {
+                Write-Err "Failed to extract from tarball: $OfflinePath"
+                exit 1
+            }
+        } else {
+            # Raw .exe provided
+            Write-Step "Offline mode: using specified binary $OfflinePath"
+            if (-not (Test-Path $InstallDir)) {
+                New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
+            }
+            Copy-Item -Force $OfflinePath $DestBin
+            Write-Info "Binary installed to $DestBin"
+        }
+    } else {
+        # Interactive offline mode
+        Write-Host ""
+        Write-Step "Offline mode: please obtain the binary or tarball manually."
+        Write-Host ""
+        Write-Host "  Download URL (tarball):"
+        Write-Host "    $TarballUrl"
+        Write-Host ""
+        Write-Host "  Then run:"
+        Write-Host "    .\install.ps1 -Offline 'C:\path\to\$TARBALL_NAME'"
+        Write-Host "    .\install.ps1 -Offline 'C:\path\to\$BINARY_NAME'"
+        Write-Host ""
+
+        $null = Read-Host "  Press Enter once the file is in place"
+
+        if (-not (Test-Path $DestBin)) {
+            # Check current dir
+            $curTarball = Join-Path (Get-Location) $TARBALL_NAME
+            $curExe = Join-Path (Get-Location) $BINARY_NAME
+            if (Test-Path $curTarball) {
+                Write-Step "Found tarball, extracting..."
+                $OfflineTmp = Join-Path $env:TEMP "dbexplain-offline"
+                $null = New-Item -ItemType Directory -Path $OfflineTmp -Force
+                if (Extract-FromTarball $curTarball $OfflineTmp) {
+                    $Extracted = Join-Path $OfflineTmp "${TARBALL_DIR}/${BINARY_NAME}"
+                    if (-not (Test-Path $InstallDir)) {
+                        New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
+                    }
+                    Copy-Item -Force $Extracted $DestBin
+                    Remove-Item -Force -Recurse $OfflineTmp -ErrorAction SilentlyContinue
+                }
+            } elseif (Test-Path $curExe) {
+                if (-not (Test-Path $InstallDir)) {
+                    New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
+                }
+                Copy-Item -Force $curExe $DestBin
+                Write-Info "Binary copied to $DestBin (from current directory)"
+            } else {
+                Write-Err "Binary/tarball not found."
+                Write-Err "Re-run with -Offline 'C:\path\to\file'"
+                exit 1
+            }
+        } else {
+            Write-Info "Found binary at $DestBin"
+        }
     }
 }
 

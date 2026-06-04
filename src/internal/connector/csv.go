@@ -82,7 +82,11 @@ func (csvConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instance, 
 		}
 	}
 
-	inst := &schema.Instance{DSN: d.Redacted(), Kind: "csv", Label: d.Label}
+	instKind := "csv"
+	if strings.HasPrefix(d.Raw, "tsv://") {
+		instKind = "tsv"
+	}
+	inst := &schema.Instance{DSN: d.Redacted(), Kind: instKind, Label: d.Label}
 	db := &schema.Database{Name: d.Label}
 
 	for _, f := range files {

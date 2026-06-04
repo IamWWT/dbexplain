@@ -13,18 +13,19 @@
 | **DSN 解析** | `internal/dsn` | `src/internal/dsn/dsn.go`, `src/internal/dsn/dsn_test.go` | `docs/CONFIG_SEARCH.md` |
 | **Schema 数据模型** | `schema` | `src/internal/schema/types.go`, `src/internal/schema/errors.go`, `src/internal/schema/infer.go`, `src/internal/schema/infer_test.go` | — |
 | **Connector 接口** | `connector` | `src/internal/connector/connector.go` (接口), `src/internal/connector/registry.go` (注册表), `src/internal/connector/runner.go` (Panic保护), `src/internal/connector/query.go` (SQL执行共享实现) | — |
-| **DuckDB** | `connector` | `src/internal/connector/duckdb.go` | `docs/DUCKDB.md` |
-| **MySQL** | `connector` | `src/internal/connector/mysql.go` | `docs/MYSQL.md` |
-| **PostgreSQL** | `connector` | `src/internal/connector/postgres.go` | `docs/POSTGRESQL.md` |
-| **SQLite** | `connector` | `src/internal/connector/sqlite.go` | `docs/SQLITE.md` |
-| **ClickHouse** | `connector` | `src/internal/connector/clickhouse.go` | `docs/CLICKHOUSE.md` |
-| **Redis** | `connector` | `src/internal/connector/redis.go` | `docs/REDIS.md` |
-| **Elasticsearch** | `connector` | `src/internal/connector/elasticsearch.go` | `docs/ELASTICSEARCH.md` |
-| **MongoDB** | `connector` | `src/internal/connector/mongo.go` | `docs/MONGO.md` |
-| **Qdrant** | `connector` | `src/internal/connector/qdrant.go` | `docs/QDRANT.md` |
-| **CSV/TSV** | `connector` | `src/internal/connector/csv.go`, `src/internal/connector/csv_test.go` | `docs/FILE_PROCESSING.md` |
-| **XLSX** | `connector` | `src/internal/connector/xlsx.go` | `docs/FILE_PROCESSING.md` |
-| **类型推断** | `connector` | `src/internal/connector/infer.go` | `docs/FILE_PROCESSING.md` |
+| **DuckDB** | `connector` | `src/internal/connector/duckdb.go` | `docs/databases/relational/DUCKDB.md` |
+| **MySQL** | `connector` | `src/internal/connector/mysql.go` | `docs/databases/relational/MYSQL.md` |
+| **PostgreSQL** | `connector` | `src/internal/connector/postgres.go` | `docs/databases/relational/POSTGRESQL.md` |
+| **SQLite** | `connector` | `src/internal/connector/sqlite.go` | `docs/databases/relational/SQLITE.md` |
+| **ClickHouse** | `connector` | `src/internal/connector/clickhouse.go` | `docs/databases/analytical/CLICKHOUSE.md` |
+| **Redis** | `connector` | `src/internal/connector/redis.go` | `docs/databases/nosql/REDIS.md` |
+| **Elasticsearch** | `connector` | `src/internal/connector/elasticsearch.go` | `docs/databases/nosql/ELASTICSEARCH.md` |
+| **MongoDB** | `connector` | `src/internal/connector/mongo.go` | `docs/databases/nosql/MONGO.md` |
+| **Qdrant** | `connector` | `src/internal/connector/qdrant.go` | `docs/databases/nosql/QDRANT.md` |
+| **Prometheus** | `connector` | `src/internal/connector/prometheus.go` | `docs/databases/prometheus.md` |
+| **CSV/TSV** | `connector` | `src/internal/connector/csv.go`, `src/internal/connector/csv_test.go` | `docs/file-sources/FILE_PROCESSING.md` |
+| **XLSX** | `connector` | `src/internal/connector/xlsx.go` | `docs/file-sources/FILE_PROCESSING.md` |
+| **类型推断** | `connector` | `src/internal/connector/infer.go` | `docs/file-sources/FILE_PROCESSING.md` |
 | **能力声明** | `capabilities` | `src/internal/capabilities/capabilities.go` | `docs/ALGORITHMS.md` |
 | **策略引擎** | `policy` | `src/internal/policy/policy.go`, `src/internal/policy/policy_test.go` | `docs/POLICY.md` |
 | **SQL 只读校验** | `sqlguard` | `src/internal/sqlguard/sqlguard.go`, `src/internal/sqlguard/sqlguard_test.go` | `docs/EXECUTE.md` |
@@ -38,6 +39,7 @@
 | **字段级 Schema 对比** | `diff` | `src/internal/diff/diff.go`, `src/internal/diff/types.go`, `src/internal/diff/diff_test.go` | — |
 | **上下文压缩** | `context` | `src/internal/context/compress.go` | `docs/ALGORITHMS.md` |
 | **渲染输出** | `render` | `src/internal/render/render.go` | — |
+| **指标采集** | `metrics` | `src/internal/metrics/collect.go` | `docs/operations/metrics.md` |
 | **加密** | `crypto` | `src/internal/crypto/crypto.go`, `src/internal/crypto/fingerprint*.go` | `docs/CONFIG_SEARCH.md` |
 | **编码处理** | `main` | `src/cmd/dbexplain/encode.go`, `src/cmd/dbexplain/encode_windows.go` | — |
 | **构建** | — | `src/build.sh` | — |
@@ -46,21 +48,22 @@
 
 ## 2. Capability 矩阵（connector → 能力 → 源码）
 
-| Connector | CapSQL | CapFile | CapFK | CapIndex | CapRowCount | CapSampling | CapTTL | CapPartition | CapVector |
-|-----------|--------|---------|-------|----------|-------------|-------------|--------|--------------|-----------|
-| MySQL | ✓ | — | ✓ | ✓ | — | ✓ | — | — | — |
-| PostgreSQL | ✓ | — | ✓ | ✓ | ✓ | ✓ | — | — | — |
-| SQLite | ✓ | — | ✓ | — | — | ✓ | — | — | — |
-| DuckDB | ✓ | — | ✓ | ✓ | ✓ | ✓ | — | — | — |
-| ClickHouse | ✓ | — | — | — | ✓ | ✓ | — | ✓ | — |
-| Redis | — | — | — | — | — | ✓ | ✓ | — | — |
-| ES | ✓ | — | — | ✓ | — | — | — | — | — |
-| MongoDB | — | — | — | — | ✓ | — | — | — | — |
-| Qdrant | — | — | — | — | ✓ | — | — | — | ✓ |
-| CSV/TSV | — | ✓ | — | — | ✓ | — | — | — | — |
-| XLSX | — | ✓ | — | — | ✓ | — | — | — | — |
+| Connector | CapSQL | CapFile | CapFK | CapIndex | CapRowCount | CapSampling | CapTTL | CapPartition | CapVector | CapPromQL |
+|-----------|--------|---------|-------|----------|-------------|-------------|--------|--------------|-----------|-----------|
+| MySQL | ✓ | — | ✓ | ✓ | — | ✓ | — | — | — | — |
+| PostgreSQL | ✓ | — | ✓ | ✓ | ✓ | ✓ | — | — | — | — |
+| SQLite | ✓ | — | ✓ | — | — | ✓ | — | — | — | — |
+| DuckDB | ✓ | — | ✓ | ✓ | ✓ | ✓ | — | — | — | — |
+| ClickHouse | ✓ | — | — | — | ✓ | ✓ | — | ✓ | — | — |
+| Redis | — | — | — | — | — | ✓ | ✓ | — | — | — |
+| ES | ✓ | — | — | ✓ | — | — | — | — | — | — |
+| MongoDB | — | — | — | — | ✓ | — | — | — | — | — |
+| Qdrant | — | — | — | — | ✓ | — | — | — | ✓ | — |
+| CSV/TSV | — | ✓ | — | — | ✓ | — | — | — | — | — |
+| XLSX | — | ✓ | — | — | ✓ | — | — | — | — | — |
+| Prometheus | — | — | — | — | ✓ | — | — | — | — | ✓ |
 
-定义位置：`src/internal/capabilities/capabilities.go:17-48`
+定义位置：`src/internal/capabilities/capabilities.go:17-52`
 
 ---
 
@@ -88,6 +91,8 @@
 | `ELASTICSEARCH.md` | `connector/elasticsearch.go` | ES 专项采集手册 |
 | `MONGO.md` | `connector/mongo.go` | MongoDB 专项采集手册 |
 | `QDRANT.md` | `connector/qdrant.go` | Qdrant 专项采集手册 |
+| `prometheus.md` | `connector/prometheus.go` | Prometheus 时序数据库连接器：targets/labels/metrics 采集 + PromQL 查询 |
+| `metrics.md` | `metrics/collect.go` | 采集指标收集与 Prometheus 文本格式输出 |
 | `GAUSSDB.md` | `connector/postgres.go` | GaussDB（PG 协议兼容） |
 | `COMPATIBILITY_GAUSSDB_TDSQL.md` | 无代码变更 | 兼容性验证记录 |
 
@@ -140,7 +145,7 @@ INPUT ──→ COLLECT ──→ ANALYZE ──→ OUTPUT
 
 | 测试文档 | 覆盖内容 | 关联源码 |
 |---------|---------|---------|
-| `docs/test/RESULTS.md` | 测试结果报告 v0.1.2 | — |
+| `docs/test/RESULTS.md` | 测试结果报告 v0.1.4 | — |
 | `docs/test/01-environment.md` | 环境准备、DSN 模板 | `internal/dsn/dsn.go` |
 | `docs/test/02-schema-collection.md` | 全数据源 Schema 采集 | 所有 `connector/*.go` |
 | `docs/test/03-execute-sql.md` | SQL 查询执行 | `execute.go`, `sqlguard/` |
@@ -155,6 +160,9 @@ INPUT ──→ COLLECT ──→ ANALYZE ──→ OUTPUT
 | `docs/test/12-capability-routing.md` | CapSQL 路由、PostgreSQL 多 Schema | `capabilities/`, `connector/postgres.go` |
 | `docs/test/14-schema-diff.md` | Schema Diff 24 项 | `internal/diff/` |
 | `docs/test/15-window-functions.md` | 窗口函数 36 项 | `connector/filequery/` |
+| `docs/test/16-duckdb.md` | DuckDB 连接器 20 项 | `connector/duckdb.go` |
+| `docs/test/17-metrics.md` | 采集指标收集 5 项 | `metrics/collect.go` |
+| `docs/test/18-prometheus.md` | Prometheus 连接器 11 项 | `connector/prometheus.go`, `dsl/` |
 
 ---
 

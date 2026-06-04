@@ -189,19 +189,9 @@ func executeSelect(stmt *SelectStmt, header []string, rows [][]string, extras []
 	}
 }
 
-// Apply WHERE filter
+	// Apply WHERE filter with hash index optimization
 	if stmt.Where != nil {
-		var filtered []Row
-		for _, row := range currentData {
-			result, err := EvalWithSubqueries(stmt.Where, row, colMap, subqueryCache)
-			if err != nil {
-				continue
-			}
-			if result.Bool() {
-				filtered = append(filtered, row)
-			}
-		}
-		currentData = filtered
+		currentData = applyWhereFilter(stmt, currentData, colMap, subqueryCache)
 	}
 
 	// Window function evaluation (after WHERE, before ORDER BY/projection)
@@ -967,6 +957,109 @@ func applyHaving(result *query.QueryResult, having Expr) (*query.QueryResult, er
 	result.Rows = filtered
 	result.RowCount = len(filtered)
 	return result, nil
+}
+
+// ── Hash index WHERE optimization ──────────────────────────────────────────
+
+// applyWhereFilter filters rows using WHERE conditions with hash index optimization.
+// For simple ColumnRef = LiteralValue equality chains, builds a hash index to
+// avoid O(n) full scan. Falls back to full WHERE evaluation for complex expressions.
+func applyWhereFilter(stmt *SelectStmt, data []Row, colMap ColMap, subqueryCache SubqueryCache) []Row {
+	if stmt.Where == nil {
+		return data
+	}
+
+	// Try hash index optimization for simple ColumnRef = LiteralValue patterns
+	if colName, literalVal, ok := extractEqualityCondition(stmt.Where); ok {
+		if colIdx, found := colMap[colName]; found {
+			// Build hash index: value → row indices
+			hash := make(map[string][]int)
+			for i, row := range data {
+				if colIdx < len(row) {
+					key := string(row[colIdx])
+					hash[key] = append(hash[key], i)
+				}
+			}
+
+			// Probe with the literal value
+			var filtered []Row
+			if indices, hit := hash[literalVal]; hit {
+				for _, i := range indices {
+					filtered = append(filtered, data[i])
+				}
+			}
+
+			// If WHERE has additional AND conditions, apply full eval on the subset
+			if hasAdditionalConditions(stmt.Where) {
+				return filterRows(stmt.Where, filtered, colMap, subqueryCache)
+			}
+			return filtered
+		}
+	}
+
+	// Fallback: full scan
+	return filterRows(stmt.Where, data, colMap, subqueryCache)
+}
+
+// filterRows evaluates the WHERE expression against every row.
+func filterRows(where Expr, data []Row, colMap ColMap, cache SubqueryCache) []Row {
+	var filtered []Row
+	for _, row := range data {
+		result, err := EvalWithSubqueries(where, row, colMap, cache)
+		if err != nil {
+			continue
+		}
+		if result.Bool() {
+			filtered = append(filtered, row)
+		}
+	}
+	return filtered
+}
+
+// extractEqualityCondition walks the WHERE expression tree and extracts the
+// first simple ColumnRef = LiteralValue (or LiteralValue = ColumnRef) pattern.
+// For AND-chained conditions, finds the first equality for hash index probing.
+// Returns ("", "", false) for complex expressions (OR, LIKE, BETWEEN, etc.).
+func extractEqualityCondition(expr Expr) (colName string, literalValue string, ok bool) {
+	be, ok := expr.(*BinaryExpr)
+	if !ok {
+		return "", "", false
+	}
+	if strings.EqualFold(be.Op, "AND") {
+		// Walk AND chain, return first equality found
+		if cn, lv, found := extractEqualityCondition(be.Left); found {
+			return cn, lv, true
+		}
+		return extractEqualityCondition(be.Right)
+	}
+	if be.Op == "=" {
+		// col = literal
+		if cr, isCol := be.Left.(*ColumnRef); isCol {
+			if lit, isLit := be.Right.(*StringLit); isLit {
+				return cr.Col, lit.Value, true
+			}
+			if lit, isLit := be.Right.(*NumberLit); isLit {
+				return cr.Col, lit.Value, true
+			}
+		}
+		// literal = col (symmetric)
+		if cr, isCol := be.Right.(*ColumnRef); isCol {
+			if lit, isLit := be.Left.(*StringLit); isLit {
+				return cr.Col, lit.Value, true
+			}
+			if lit, isLit := be.Left.(*NumberLit); isLit {
+				return cr.Col, lit.Value, true
+			}
+		}
+	}
+	return "", "", false
+}
+
+// hasAdditionalConditions returns true if the WHERE root is an AND chain,
+// meaning the extracted equality is a pre-filter and full WHERE re-evaluation is needed.
+func hasAdditionalConditions(expr Expr) bool {
+	be, ok := expr.(*BinaryExpr)
+	return ok && strings.EqualFold(be.Op, "AND")
 }
 
 // EnsureRows converts a 2D string slice to a Row slice.
