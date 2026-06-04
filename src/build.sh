@@ -17,6 +17,12 @@ set -e
 #    --no-upx   Skip UPX compression even if upx is installed
 #    --upx      Force UPX compression (exit with error if not found)
 #
+#  Musl mode:
+#    --musl     Use musl cross-compiler for linux/arm64 DuckDB builds
+#               (produces zero-dependency static binary via cross-compilation)
+#               Requires: aarch64-linux-musl-gcc in PATH
+#               Download from: https://musl.cc/aarch64-linux-musl-cross.tgz
+#
 #  Examples:
 #    bash build.sh                                    # prod (linux/darwin/windows × amd64/arm64, full)
 #    bash build.sh dev                                # current GOOS/GOARCH only, fast
@@ -64,13 +70,15 @@ set -e
 RELEASE_DIR="../release"
 mkdir -p "$RELEASE_DIR"
 
-# ── Parse UPX flags (before mode, from anywhere in args) ──────
+# ── Parse global flags (before mode, from anywhere in args) ──
 UPX_MODE="auto"  # auto | force | skip
+MUSL_MODE=false   # use musl cross-compiler for static cross-builds
 FILTERED_ARGS=()
 for arg in "$@"; do
   case "$arg" in
     --no-upx) UPX_MODE="skip" ;;
     --upx)    UPX_MODE="force" ;;
+    --musl)   MUSL_MODE=true ;;
     *)        FILTERED_ARGS+=("$arg") ;;
   esac
 done
@@ -156,8 +164,12 @@ if [[ ",$TAGS," == *",duckdb,"* ]]; then
   IS_DUCKDB=true
   CGO_ENABLED=1
   echo "[build] duckdb tag detected: CGO_ENABLED=1 (requires C toolchain)"
-  echo "[build] DuckDB linux builds: -extldflags=-static (zero ldd dependencies)"
-  echo "[build] DuckDB darwin builds: -static-libgcc -static-libstdc++ (system libs only)"
+  if $MUSL_MODE; then
+    echo "[build] --musl mode: using musl cross-compiler for ARM64 (zero ldd deps)"
+  else
+    echo "[build] DuckDB linux builds: -extldflags=-static (zero ldd dependencies)"
+    echo "[build] DuckDB darwin builds: -static-libgcc -static-libstdc++ (system libs only)"
+  fi
   echo "[build] WARNING: cross-compilation with CGO may fail; use native GOOS/GOARCH"
 fi
 
@@ -184,8 +196,11 @@ for platform in "${PLATFORMS[@]}"; do
         DUCKDB_EXTLDFLAGS="-extldflags=-static"
         ;;
       linux/arm64)
-        if [ "$GOOS/$GOARCH" = "$HOST_GOOS/$HOST_GOARCH" ]; then
+        if [ "$GOOS/$GOARCH" = "$HOST_GOOS/$HOST_GOARCH" ] && ! $MUSL_MODE; then
           # Native ARM64 build: use native gcc, full -static works
+          DUCKDB_EXTLDFLAGS="-extldflags=-static"
+        elif $MUSL_MODE; then
+          # Musl cross-compiler: no GOT overflow, full -static works
           DUCKDB_EXTLDFLAGS="-extldflags=-static"
         else
           # Cross-compilation from another arch (e.g. x86_64):
@@ -216,9 +231,12 @@ for platform in "${PLATFORMS[@]}"; do
   if $IS_DUCKDB; then
     case "$GOOS/$GOARCH" in
       linux/arm64)
-        if [ "$GOOS/$GOARCH" = "$HOST_GOOS/$HOST_GOARCH" ]; then
+        if [ "$GOOS/$GOARCH" = "$HOST_GOOS/$HOST_GOARCH" ] && ! $MUSL_MODE; then
           # Native ARM64 build: use native gcc
           CC="gcc"
+        elif $MUSL_MODE; then
+          # Musl cross-compiler (no GOT overflow, full static)
+          CC="aarch64-linux-musl-gcc"
         else
           # Cross-compilation from another arch (e.g. x86_64 → ARM64)
           CC="aarch64-linux-gnu-gcc"
