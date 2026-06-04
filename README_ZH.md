@@ -56,10 +56,6 @@
 | **连接器层** | 13 种数据源统一接口 | `connector/` — 每数据源独立文件，`init()` 自注册到全局 registry |
 | **Schema/IR 层** | 采集 → 内部表示 → 输出渲染 | `schema/`、`ir/`、`render/`、`output/`、`graph/`、`diff/` |
 
----
-
-## 架构图
-
 ![dbexplain Architecture](docs/assets/DBEXPLAIN-ARCH.png)
 
 > 完整模块映射见 [`docs/CODE_MAP.md`](docs/CODE_MAP.md)。

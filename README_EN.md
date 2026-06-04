@@ -56,13 +56,11 @@ Core philosophy: **deterministic facts only — LLMs consume structured IR exter
 | **Connector Layer** | Unified interface for 13 data sources | `connector/` — one file per source, `init()` auto-registers to global registry |
 | **Schema/IR Layer** | Collect → Internal Representation → Output Rendering | `schema/`, `ir/`, `render/`, `output/`, `graph/`, `diff/` |
 
----
-
-## Architecture Diagram
-
 ![dbexplain Architecture](docs/assets/DBEXPLAIN-ARCH.png)
 
 > Full module mapping at [`docs/CODE_MAP.md`](docs/CODE_MAP.md).
+
+---
 
 ---
 
