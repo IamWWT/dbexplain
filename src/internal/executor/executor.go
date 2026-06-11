@@ -87,8 +87,9 @@ func ExecQuery(opts *ExecOptions) (*query.QueryResult, error) {
 		return nil, fmt.Errorf("QUERY_ERROR: %w", err)
 	}
 
-	// Apply post-execution column masking
+	// Apply post-execution column masking and stripping
 	opts.Policies.ApplyMask(result)
+	opts.Policies.StripDeniedColumns(result)
 
 	return result, nil
 }
@@ -105,6 +106,10 @@ func wrapExplain(sql string, kind string) string {
 	case "clickhouse":
 		return "EXPLAIN PLAN " + sql
 	case "duckdb":
+		return "EXPLAIN " + sql
+	case "oracle":
+		return "EXPLAIN PLAN FOR " + sql
+	case "hive":
 		return "EXPLAIN " + sql
 	default:
 		return "EXPLAIN " + sql

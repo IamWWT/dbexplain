@@ -1,7 +1,7 @@
 # docs/ 文件索引
 
 > 本文档索引 `docs/` 下所有文件，方便快速定位。
-> 更新时间：v0.1.4 (2026-06-04)
+> 更新时间：v0.1.5 (2026-06-11)
 
 ---
 
@@ -36,7 +36,9 @@
 | | [`databases/relational/DUCKDB.md`](databases/relational/DUCKDB.md) | DuckDB（可选构建，需 `-tags duckdb`） |
 | | [`databases/relational/GAUSSDB.md`](databases/relational/GAUSSDB.md) | GaussDB |
 | | [`databases/relational/COMPATIBILITY_GAUSSDB_TDSQL.md`](databases/relational/COMPATIBILITY_GAUSSDB_TDSQL.md) | GaussDB / TDSQL 兼容性说明 |
+| | [`databases/relational/ORACLE.md`](databases/relational/ORACLE.md) | Oracle（12c+ 需 FETCH FIRST 支持） |
 | **分析型** | [`databases/analytical/CLICKHOUSE.md`](databases/analytical/CLICKHOUSE.md) | ClickHouse |
+| | [`databases/analytical/HIVE.md`](databases/analytical/HIVE.md) | Hive（通过 HiveServer2 SQL, 端口 10000） |
 | **键值型** | [`databases/nosql/REDIS.md`](databases/nosql/REDIS.md) | Redis |
 | **文档型** | [`databases/nosql/MONGO.md`](databases/nosql/MONGO.md) | MongoDB |
 | | [`databases/nosql/ELASTICSEARCH.md`](databases/nosql/ELASTICSEARCH.md) | Elasticsearch |
@@ -96,7 +98,7 @@
 | 文件 | 说明 |
 |------|------|
 | [`RELEASE_WECHAT_v0.1.2.md`](RELEASE_WECHAT_v0.1.2.md) | v0.1.2 公众号发布文案 |
-| [`RELEASE_WECHAT_v0.1.4.md`](RELEASE_WECHAT_v0.1.4.md) | v0.1.4 公众号发布文案（新增 Prometheus + 采集指标 + 9.2MB 极致压缩） |
+| [`RELEASE_WECHAT_v0.1.5.md`](RELEASE_WECHAT_v0.1.5.md) | v0.1.5 公众号发布文案（新增 Oracle + Hive 连接器，15 种数据源，六层安全防护） |
 | [`dbexplain_wechat_article.html`](dbexplain_wechat_article.html) | 微信公众号文章 HTML |
 
 ---

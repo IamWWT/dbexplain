@@ -1,5 +1,33 @@
 # 变更日志
 
+## v0.1.5 (2026-06-11) — Oracle + Hive 连接器 + Policy 列剥离
+
+### ✨ 新功能
+
+- **Oracle 数据库连接器** (第 14 种数据源): 新增 `oracle://` / `oracles://` DSN 方案。支持 Schema 采集（all_tables/all_tab_columns/all_constraints/all_ind_columns）、外键 4 表 JOIN 位置对齐、EXPLAIN 两步法（db.Conn() session 固定）、AutoLimit 适配（LIMIT → FETCH FIRST）。使用 go-ora 纯 Go 驱动，无 CGO 依赖。能力标签：CapSQL/CapForeignKey/CapRowCount/CapSampling/CapIndex。
+
+- **Hive 数据库连接器** (第 15 种数据源): 新增 `hive://` / `hives://` DSN 方案。使用 HiveServer2 SQL（端口 10000），DESCRIBE FORMATTED 采集列信息，行数固定 -1（避免触发 MR/Tez），采样用 LIMIT 1。支持 NOSASL/NONE/LDAP/KERBEROS 四种认证方式，Kerberos 使用纯 Go 实现（beltran/gosasl，无 CGO）。能力标签：CapSQL/CapRowCount/CapSampling。
+
+- **DENY_COLUMNS + SELECT * 自动列剥离**: 当查询使用 `SELECT *` 且配置了 `DENY_COLUMNS` 时，不再拦截报错。改为查询正常执行，在结果输出前自动移除被禁止的列（`StripDeniedColumns`）。所有 15 种数据源统一生效（SQL/CSV/XLSX/NoSQL/时序库等）。
+
+### 📚 文档
+
+- **CHANGELOG.md / CHANGELOG_EN.md**: 更新至 v0.1.5
+
+### 🔧 内部重构
+
+- **`policy.go`**: 移除 `CheckSQL` 中 `SELECT *` + `DENY_COLUMNS` 的拦截逻辑（原第 107-121 行）；新增 `StripDeniedColumns(result)` 后置列剥离函数，与 `ApplyMask` 同级
+- **`executor.go`**: `ExecQuery` 在 `ApplyMask` 之后调用 `StripDeniedColumns`
+- **`file_exec.go`**: `HandleFileExecute` 在 `ApplyMask` 之后调用 `StripDeniedColumns`
+
+### 📚 文档
+
+- **新增** `docs/databases/relational/ORACLE.md`（Oracle 数据源使用手册）
+- **新增** `docs/databases/analytical/HIVE.md`（Hive 数据源使用手册）
+- **README 中英同步**：数据源计数 13 → 15，连接器层新增 Oracle(关系型)/Hive(分析型)
+- **`docs/CODE_MAP.md`**: 新增 Oracle/Hive 模块映射 [+2 行]
+- **`docs/file_index.md`**: 新增 ORACLE.md / HIVE.md
+
 ## v0.1.4 (2026-06-04) — Prometheus 时序数据库连接器 + 采集指标收集
 
 ### ✨ 新功能

@@ -370,7 +370,24 @@ echo -e "SELECT * FROM @prom.up WHERE job=\"prometheus\"\n.exit" | ./release/dbe
 
 ---
 
-*测试基准: v0.1.0 (91/91) → v0.1.1 (91/91) → v0.1.2 (108/108) → v0.1.3 (130/130) → v0.1.4 (4 variants × 65-67 tests each, all PASS). 历史版本报告已归档.*
+*测试基准: v0.1.0 (91/91) → v0.1.1 (91/91) → v0.1.2 (108/108) → v0.1.3 (130/130) → v0.1.4 (4 variants × 65-67 tests each, all PASS) → v0.1.5 (166+ items, all PASS). 历史版本报告已归档.*
+
+## v0.1.5 新增验证项
+
+| 特性 | 状态 | 验证方式 |
+|------|------|---------|
+| Oracle 连接器编译 | ✅ | `go build -tags "oracle,hive"` + `full` 标签 |
+| Hive 连接器编译 | ✅ | `go build -tags "oracle,hive"` + `full` 标签 |
+| Oracle DSN 解析 | ✅ | `oracle://` → kind=oracle, `oracles://` + TLS |
+| Hive DSN 解析 | ✅ | `hive://` → kind=hive, `hives://` + TLS |
+| CLI oracle/hive 子命令 | ✅ | `dbexplain oracle` / `dbexplain hive` 显示对应手册 |
+| `dbexplain all` 含 Oracle/Hive | ✅ | 全量手册包含 15 种数据源 |
+| Oracle 单元测试 (go-sqlmock) | ✅ | 6 测试覆盖采集/FK/系统Schema过滤/错误处理 |
+| Hive 单元测试 (go-sqlmock) | ✅ | 9 测试覆盖采集/DESCRIBE格式化/系统DB过滤/TLS配置 |
+| Oracle 采集逻辑 | ✅ | mock 验证: owners→tables→columns→constraints→indexes→FKs |
+| Hive 采集逻辑 | ✅ | mock 验证: SHOW DATABASES→SHOW TABLES→DESCRIBE FORMATTED |
+| 文档完整性 | ✅ | README_ZH/EN capability matrix、CODE_MAP、file_index |
+| 向后兼容 | ✅ | `full` 标签编译通过，已有测试无回归 |
 
 ## 闭环验证测试脚本
 

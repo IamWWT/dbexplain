@@ -1,5 +1,33 @@
 # Changelog
 
+## v0.1.5 (2026-06-11) — Oracle + Hive Connectors + Policy Column Stripping
+
+### ✨ New Features
+
+- **Oracle Database Connector** (14th data source): New `oracle://` / `oracles://` DSN schemes. Supports schema collection (all_tables/all_tab_columns/all_constraints/all_ind_columns), FK resolution with 4-table JOIN position alignment, EXPLAIN two-step (db.Conn() session pinning), AutoLimit adaptation (LIMIT → FETCH FIRST). Powered by go-ora pure Go driver, no CGO. Capabilities: CapSQL/CapForeignKey/CapRowCount/CapSampling/CapIndex.
+
+- **Hive Database Connector** (15th data source): New `hive://` / `hives://` DSN schemes. Uses HiveServer2 SQL (port 10000), DESCRIBE FORMATTED for column collection, row count fixed at -1 (avoids triggering MR/Tez), LIMIT 1 for sampling. Supports NOSASL/NONE/LDAP/KERBEROS authentication. Kerberos uses pure Go implementation (beltran/gosasl, no CGO). Capabilities: CapSQL/CapRowCount/CapSampling.
+
+- **DENY_COLUMNS + SELECT * automatic column stripping**: When a query uses `SELECT *` and `DENY_COLUMNS` is configured, instead of blocking with an error, the query proceeds normally and denied columns are automatically removed from the result before output (`StripDeniedColumns`). Applies uniformly across all 15 data sources (SQL/CSV/XLSX/NoSQL/time-series/etc.).
+
+### 📚 Documentation
+
+- **CHANGELOG.md / CHANGELOG_EN.md**: Updated to v0.1.5
+
+### 🔧 Internal Refactoring
+
+- **`policy.go`**: Removed `SELECT *` + `DENY_COLUMNS` blocking from `CheckSQL` (former lines 107-121); added `StripDeniedColumns(result)` post-execution function at the same level as `ApplyMask`
+- **`executor.go`**: `ExecQuery` calls `StripDeniedColumns` after `ApplyMask`
+- **`file_exec.go`**: `HandleFileExecute` calls `StripDeniedColumns` after `ApplyMask`
+
+### 📚 Documentation
+
+- **Added** `docs/databases/relational/ORACLE.md` (Oracle data source usage guide)
+- **Added** `docs/databases/analytical/HIVE.md` (Hive data source usage guide)
+- **README bilingual sync**: data source count 13 → 15, connector layer gains Oracle (relational) / Hive (analytical)
+- **`docs/CODE_MAP.md`**: Added Oracle/Hive module mapping [+2 rows]
+- **`docs/file_index.md`**: Added ORACLE.md / HIVE.md entries
+
 ## v0.1.4 (2026-06-04) — Prometheus Time Series DB Connector + Collection Metrics
 
 ### ✨ New Features

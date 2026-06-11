@@ -84,12 +84,14 @@ func PrintHelp() {
 	fmt.Fprint(out, p(
 		"Supported databases:\n"+
 			"  SQL:   mysql, postgres/pg, gaussdb, clickhouse/ch, sqlite/sqlite3,\n"+
+			"         oracle, hive\n"+
 			"       "+duckdbHelp+
 			"  NoSQL: redis, mongodb, elasticsearch/es, qdrant\n"+
 			"  TSDB:  prometheus\n"+
 			"  File:  csv, tsv, xlsx\n\n",
 		"Supported databases:\n"+
 			"  SQL:   mysql, postgres/pg, gaussdb, clickhouse/ch, sqlite/sqlite3,\n"+
+			"         oracle, hive\n"+
 			"       "+duckdbHelp+
 			"  NoSQL: redis, mongodb, elasticsearch/es, qdrant\n"+
 			"  TSDB:  prometheus\n"+
@@ -276,6 +278,8 @@ var DBSubcommands = map[string]func(func(string, string) string){
 	"prometheus":    printManualPrometheus,
 	"prom":          printManualPrometheus,
 	"duckdb":        printManualDuckDB,
+	"oracle":        printManualOracle,
+	"hive":          printManualHive,
 }
 
 // PrintDBManual prints the database-specific manual section for the given subcommand.
@@ -307,6 +311,10 @@ func PrintDBManual(sub string, _ []string) {
 		displayName = "sqlite"
 	} else if displayName == "postgresql" {
 		displayName = "postgres"
+	} else if displayName == "oracles" {
+		displayName = "oracle"
+	} else if displayName == "hives" {
+		displayName = "hive"
 	}
 
 	fmt.Fprint(os.Stdout, p(
@@ -515,6 +523,8 @@ DESCRIPTION
 	printManualQdrant(p)
 	printManualPrometheus(p)
 	printManualDuckDB(p)
+	printManualOracle(p)
+	printManualHive(p)
 
 	fmt.Print(p(`
 
@@ -733,7 +743,7 @@ DESCRIPTION
       dbexplain repl [flags]
 
     交互式只读查询终端，支持 SQL / PromQL / 原生 / DSL 查询。
-    支持 14 种数据源，DSL 模式下 Prometheus 的 PromQL 可通过 SQL
+    支持 15 种数据源，DSL 模式下 Prometheus 的 PromQL 可通过 SQL
     语法编译生成（SELECT * FROM @label.metric [WHERE label="val"]）。
 
     参数:
@@ -760,7 +770,7 @@ DESCRIPTION
       dbexplain repl [flags]
 
     Interactive read-only query terminal supporting SQL / PromQL / native / DSL queries.
-    Supports 14 data sources. In DSL mode, Prometheus PromQL is compiled from SQL syntax
+    Supports 15 data sources. In DSL mode, Prometheus PromQL is compiled from SQL syntax
     (SELECT * FROM @label.metric [WHERE label="val"]).
 
     Flags:
@@ -800,7 +810,7 @@ DESCRIPTION
       --explain                 包裹 EXPLAIN 返回查询计划
       --dsl                     使用 DSL 模式（支持 @label.table 语法，SQL/PromQL/文件统一入口）
 
-    SQL 查询 (MySQL/PG/GaussDB/SQLite/ClickHouse/ES):
+    SQL 查询 (MySQL/PG/GaussDB/SQLite/ClickHouse/ES/Oracle/Hive):
       dbexplain execute -env --label shop-db 'SELECT COUNT(*) FROM orders'
       dbexplain execute -env --db 1 --explain 'SELECT * FROM users WHERE id=1'
       dbexplain execute -env --label es 'SHOW TABLES'
@@ -889,7 +899,7 @@ DESCRIPTION
       dbexplain repl [flags]
 
     Interactive read-only query terminal supporting SQL / PromQL / native / DSL queries.
-    Supports 14 data sources. In DSL mode, Prometheus PromQL is compiled from SQL syntax
+    Supports 15 data sources. In DSL mode, Prometheus PromQL is compiled from SQL syntax
     (SELECT * FROM @label.metric [WHERE label="val"]).
 
     Flags:
@@ -929,7 +939,7 @@ DESCRIPTION
       --explain                 Wrap with EXPLAIN for query plan
       --dsl                     Enable DSL mode (supports @label.table syntax, unified SQL/PromQL/file entry)
 
-    SQL queries (MySQL/PG/GaussDB/SQLite/ClickHouse/ES):
+    SQL queries (MySQL/PG/GaussDB/SQLite/ClickHouse/ES/Oracle/Hive):
       dbexplain execute -env --label shop-db 'SELECT COUNT(*) FROM orders'
       dbexplain execute -env --db 1 --explain 'SELECT * FROM users WHERE id=1'
       dbexplain execute -env --label es 'SHOW TABLES'

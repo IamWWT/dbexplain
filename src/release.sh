@@ -120,22 +120,8 @@ pack_tar() {
 echo "━━━ Phase 1/3: Standard edition (5-platform, CGO=0, tags=full, --no-upx) ━━━"
 bash build.sh prod --no-upx
 
-# Rename to -std suffix
 echo ""
-echo "  Adding -std suffix to standard binaries..."
-for f in "$RELEASE_DIR"/dbexplain-*; do
-  base=$(basename "$f")
-  case "$base" in
-    *-std*|*-duckdb*|*.bak) continue ;;
-  esac
-  dir=$(dirname "$f")
-  name="${base%.exe}"
-  ext=""
-  [ "$base" != "$name" ] && ext=".exe"
-  mv "$f" "$dir/${name}-std${ext}"
-  echo "    $base → ${name}-std${ext}"
-done
-
+echo "  Standard binaries built with -std suffix ✅"
 echo ""
 echo "━━━ Phase 1 complete ─────────────────────────────────────"
 echo ""
@@ -143,46 +129,26 @@ echo ""
 # ──────────────────────────────────────────────────────────────
 #  Phase 2: DuckDB edition (CGO=1, --no-upx)
 #  Build native + arm64 cross, both without UPX
+#  Note: build.sh now auto-applies -duckdb suffix when duckdb tag is present.
 # ──────────────────────────────────────────────────────────────
 echo "━━━ Phase 2/3: DuckDB edition (CGO=1, --no-upx) ━━━"
-DUCKDB_TAGS="duckdb,mysql,postgres,sqlite,clickhouse,redis,mongodb,elasticsearch,qdrant,csv,xlsx,prometheus"
+DUCKDB_TAGS="duckdb,mysql,postgres,sqlite,clickhouse,redis,mongodb,elasticsearch,qdrant,csv,xlsx,prometheus,oracle,hive"
 
 if command -v gcc &>/dev/null || command -v clang &>/dev/null; then
-  # Native platform DuckDB
-  GOOS="${GOOS:-$(go env GOOS)}"
-  GOARCH="${GOARCH:-$(go env GOARCH)}"
-  base_std="dbexplain-${GOOS}-${GOARCH}-std"
-  [ "$GOOS" = "windows" ] && base_std="${base_std}.exe"
-  std_bin="$RELEASE_DIR/$base_std"
-
-  # Back up std binary
-  if [ -f "$std_bin" ]; then
-    cp "$std_bin" "${std_bin}.bak"
-  fi
-
+  # Native platform DuckDB (outputs e.g. dbexplain-linux-amd64-duckdb automatically)
   bash build.sh minimal "$DUCKDB_TAGS" --no-upx
-
-  # Move duckdb binary, restore std
-  base_nosuffix="dbexplain-${GOOS}-${GOARCH}"
-  [ "$GOOS" = "windows" ] && base_nosuffix="${base_nosuffix}.exe"
-  src="$RELEASE_DIR/$base_nosuffix"
-  duckdb_out="$RELEASE_DIR/dbexplain-${GOOS}-${GOARCH}-duckdb"
-  if [ -f "$src" ]; then
-    mv "$src" "$duckdb_out"
-    echo "  DuckDB native: $(basename "$duckdb_out")"
-  fi
-  if [ -f "${std_bin}.bak" ]; then
-    mv "${std_bin}.bak" "$std_bin"
-  fi
+  echo "  DuckDB native: dbexplain-$(go env GOOS)-$(go env GOARCH)-duckdb"
 
   # Cross-compile DuckDB for linux/arm64
   if command -v aarch64-linux-gnu-gcc &>/dev/null; then
     echo ""
     echo "  Cross-compiling DuckDB for linux/arm64..."
-    GOOS=linux GOARCH=arm64 bash build.sh minimal "$DUCKDB_TAGS" --no-upx
+    GOOS=linux GOARCH=arm64 bash build.sh minimal "$DUCKDB_TAGS" --no-upx || {
+      echo "  WARNING: linux/arm64 DuckDB cross-compile failed (CGO toolchain issue)"
+      echo "  The linux/arm64 DuckDB binary will not be available."
+    }
 
-    if [ -f "$RELEASE_DIR/dbexplain-linux-arm64" ]; then
-      mv "$RELEASE_DIR/dbexplain-linux-arm64" "$RELEASE_DIR/dbexplain-linux-arm64-duckdb"
+    if [ -f "$RELEASE_DIR/dbexplain-linux-arm64-duckdb" ]; then
       echo "    → dbexplain-linux-arm64-duckdb"
     fi
   else

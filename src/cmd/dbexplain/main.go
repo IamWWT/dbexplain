@@ -60,7 +60,8 @@ func main() {
 			"redis", "mongodb", "elasticsearch", "es", "qdrant",
 			"csv", "tsv", "xlsx",
 			"prometheus", "prom",
-			"duckdb":
+			"duckdb",
+			"oracle", "hive":
 			manual.PrintDBManual(os.Args[1], os.Args[2:])
 			return
 		case "all":

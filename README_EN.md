@@ -4,7 +4,7 @@
 
 > **Database Context Compiler** — Deterministic ground truth for AI agents and engineering teams.
 
-`dbexplain` is a **single-binary, zero-runtime-dependency** CLI tool that compiles database metadata and executes read-only queries across **13 heterogeneous data sources** (including optional DuckDB) — all under a unified, auditable security sandbox.
+`dbexplain` is a **single-binary, zero-runtime-dependency** CLI tool that compiles database metadata and executes read-only queries across **15 heterogeneous data sources** (including optional DuckDB) — all under a unified, auditable security sandbox.
 
 Core philosophy: **deterministic facts only — LLMs consume structured IR externally.**
 
@@ -32,9 +32,9 @@ Core philosophy: **deterministic facts only — LLMs consume structured IR exter
 │  │ read-only │    │ full-table │    │ MASK_COLUMNS/DENY_SQL │    │
 │  └──────────┘    └────────────┘    └────────────────────────┘    │
 ├──────────────────────────────────────────────────────────────────┤
-│                 Connector Layer (13 Data Sources)                  │
-│  Relational: MySQL PG GaussDB SQLite DuckDB                      │
-│  Analytical: ClickHouse                                           │
+│                 Connector Layer (15 Data Sources)                  │
+│  Relational: MySQL PG GaussDB SQLite DuckDB Oracle               │
+│  Analytical: ClickHouse Hive                                      │
 │  Key-Value:  Redis                                                │
 │  Document:   MongoDB Elasticsearch                                │
 │  Vector:     Qdrant                                               │
@@ -53,7 +53,7 @@ Core philosophy: **deterministic facts only — LLMs consume structured IR exter
 | **CLI Command Layer** | User interaction, subcommand dispatch | `cmd/dbexplain/` — `main.go`, `execute.go`, `repl.go`, `collect.go`, `diff.go` |
 | **Query Execution Layer** | Three-path: Direct / DSL / Federated | `executor/`, `dsl/` (DSL compiler), `connector/filequery/` (file SQL engine) |
 | **Security Layer** | AST read-only validation + LIMIT injection + policy deny | `sqlguard/`, `policy/`, `query/` (concurrency lock) |
-| **Connector Layer** | Unified interface for 13 data sources | `connector/` — one file per source, `init()` auto-registers to global registry |
+| **Connector Layer** | Unified interface for 15 data sources | `connector/` — one file per source, `init()` auto-registers to global registry |
 | **Schema/IR Layer** | Collect → Internal Representation → Output Rendering | `schema/`, `ir/`, `render/`, `output/`, `graph/`, `diff/` |
 
 ![dbexplain Architecture](docs/assets/DBEXPLAIN-ARCH.png)
@@ -74,7 +74,9 @@ Core philosophy: **deterministic facts only — LLMs consume structured IR exter
 | | PostgreSQL | `postgres://` | ✅ | ✅ SQL | ✅ | ✅ | Multi-schema, row counts, SSL configurable |
 | | GaussDB | `gaussdb://` | ✅ | ✅ SQL | ✅ | ✅ | PostgreSQL-protocol compatible |
 | | SQLite | `sqlite://` | ✅ | ✅ SQL | ✅ | ✅ | Pure Go driver, no CGO |
+| | Oracle | `oracle://` | ✅ | ✅ SQL | ✅ | ✅ | FK/indexes/PK, 12c+ FETCH FIRST required |
 | **Analytical** | ClickHouse | `clickhouse://` | ✅ | ✅ SQL | ✅ | ✅ | Sort / partition / primary keys |
+| | Hive | `hive://` | ✅ | ✅ SQL | ✅ | ✅ | DESCRIBE FORMATTED, Kerberos, no row count stats |
 | | DuckDB ¹ | `duckdb://` | ✅ | ✅ SQL | ✅ | ✅ | Embedded analytical engine, requires `-tags duckdb` |
 | **Key-Value** | Redis | `redis://` | ✅ | — | ✅ | — | Key pattern inference, cluster, TTL risk |
 | **Document** | MongoDB | `mongodb://` | ✅ | — | ✅ | — | Estimated document counts |
@@ -161,13 +163,56 @@ Field-level change tracking: detects column (add/remove/type/nullable/default/co
 dbexplain diff --cache schema.json --since v1.0 --human
 ```
 
-### Three-Layer Security
+### Security Architecture: Six-Layer Pipeline
 
-| Layer | Component | Intercepts |
-|-------|-----------|------------|
-| L1 | **sqlguard** — AST-level read-only | 8 read verbs allowed, 11 write verbs rejected, multi-statement detection, CTE write detection |
-| L2 | **AutoLimit** | Unbounded queries auto-inject LIMIT 1000 |
-| L3 | **Policy Engine** | `DENY_TABLES` / `DENY_COLUMNS` / `DENY_STATEMENTS` / `MASK_COLUMNS` |
+All queries execute through a unified security pipeline, automatically routing to the appropriate validation path per database type.
+
+```
+                    ┌─ SQL Path ───────────────────────────────┐
+                    │  sqlguard(AST read-only) → AutoLimit(1K) │
+                    │  → Policy Engine CheckSQL(DENY/table/col)│
+                    ├─ Native Path ────────────────────────────┤
+                    │  Policy Engine CheckNative(cmd allowlist) │
+                    ├─ File Path ──────────────────────────────┤
+                    │  Policy Engine DenyTables(filename check) │
+                    └──────────────────────────────────────────┘
+                               ↓
+                    Concurrent Lock → Exec → ApplyMask / StripDeniedColumns
+```
+
+| Layer | Component | SQL Path | Native Path | File Path |
+|:-----:|-----------|:--------:|:-----------:|:---------:|
+| L1 | **sqlguard** — AST read-only (8 read / 17 write verbs) | ✅ | — | — |
+| L2 | **AutoLimit** — auto-inject LIMIT 1000 | ✅ | — | — |
+| L3 | **Policy Engine** — DENY_TABLES/COLUMNS/STATEMENTS | ✅ CheckSQL | ✅ CheckNative | ✅ DenyTables |
+| L4 | **Concurrent Lock** — per-label QueryLock | ✅ | ✅ | ✅ |
+| L5 | **ApplyMask** — column value masking (post-exec) | ✅ | ✅ | ✅ |
+| L6 | **StripDeniedColumns** — column stripping (post-exec) | ✅ | ✅ | ✅ |
+
+#### Per-Database-Type Security Coverage
+
+| Category | Source | Query Path | L1 sqlguard | L2 AutoLimit | L3 Policy | L4 Lock | L5 Mask | L6 Strip | Extra Protection |
+|----------|--------|------------|:-----------:|:------------:|:---------:|:-------:|:-------:|:--------:|-----------------|
+| **Relational** | MySQL | executor.IsSQL=true | ✅ | ✅ | ✅ SQL | ✅ | ✅ | ✅ | sqlguard |
+| | PostgreSQL | executor.IsSQL=true | ✅ | ✅ | ✅ SQL | ✅ | ✅ | ✅ | sqlguard |
+| | GaussDB | executor.IsSQL=true | ✅ | ✅ | ✅ SQL | ✅ | ✅ | ✅ | sqlguard |
+| | SQLite | executor.IsSQL=true | ✅ | ✅ | ✅ SQL | ✅ | ✅ | ✅ | sqlguard |
+| | Oracle | executor.IsSQL=true | ✅ | ✅ ¹ | ✅ SQL | ✅ | ✅ | ✅ | sqlguard |
+| **Analytical** | ClickHouse | executor.IsSQL=true | ✅ | ✅ | ✅ SQL | ✅ | ✅ | ✅ | sqlguard |
+| | Hive | executor.IsSQL=true | ✅ | ✅ | ✅ SQL | ✅ | ✅ | ✅ | sqlguard |
+| | DuckDB ² | executor.IsSQL=true | ✅ | ✅ | ✅ SQL | ✅ | ✅ | ✅ | sqlguard + file access validation |
+| **Key-Value** | Redis | executor.IsSQL=false | — | — | ✅ Native | ✅ | ✅ | ✅ | 42-command allowlist |
+| **Document** | MongoDB | executor.IsSQL=false | — | — | ✅ Native | ✅ | ✅ | ✅ | find/aggregate allowlist |
+| | Elasticsearch | executor.IsSQL ³ | ⚠️ SQL only | ⚠️ | ✅ | ✅ | ✅ | ✅ | _search endpoint |
+| **Vector** | Qdrant | executor.IsSQL=false | — | — | ✅ Native | ✅ | ✅ | ✅ | scroll/count allowlist |
+| **Time Series** | Prometheus | executor.IsSQL=false | — | — | ✅ Native | ✅ | ✅ | ✅ | PromQL read-only API |
+| **File** | CSV / TSV | HandleFileExecute ⁴ | — | — | ✅ DenyTables | — | ✅ | ✅ | File read-only |
+| | Excel | HandleFileExecute ⁴ | — | — | ✅ DenyTables | — | ✅ | ✅ | File read-only |
+
+> ¹ Oracle AutoLimit: `LIMIT N` auto-converted to `FETCH FIRST N ROWS ONLY` (Oracle 12c+).
+> ² DuckDB extra file access validation: `read_parquet`/`read_csv`/`read_json` restricted by `allowed_path` param.
+> ³ ES dual-mode: SQL queries use IsSQL=true (full pipeline), JSON native queries use IsSQL=false (no sqlguard).
+> ⁴ File path handled by `queryutil.HandleFileExecute`, bypasses executor but retains policy engine protection.
 
 Non-SQL databases have their own command allow-lists or native query validators. Passwords are redacted from all output and logs.
 
@@ -177,8 +222,8 @@ Non-SQL databases have their own command allow-lists or native query validators.
 
 | Variant | Build Command | CGO | Raw Size | After UPX |
 |---------|--------------|:---:|:--------:|:---------:|
-| **Standard (-std)** | `bash build.sh prod` (default) | ❌ Off | 42 MB | 9.2 MB (78%) |
-| **DuckDB Edition (-duckdb)** | `bash build.sh minimal duckdb,...`¹ | ✅ On | 91 MB | 22 MB (75%) |
+| **Standard (-std)** | `bash build.sh prod` (default) | ❌ Off | 58 MB | 11 MB (81%) |
+| **DuckDB Edition (-duckdb)** | `bash build.sh minimal duckdb,...`¹ | ✅ On | 141 MB | 53 MB (62%) |
 
 > ¹ Full DuckDB tag list: `duckdb,mysql,postgres,sqlite,clickhouse,redis,mongodb,elasticsearch,qdrant,csv,xlsx,prometheus`.
 >
@@ -201,7 +246,7 @@ Non-SQL databases have their own command allow-lists or native query validators.
 | List DSNs | `dbexplain list` (auto-loads -env) |
 | Collection metrics | `dbexplain -env --metrics` (Prometheus format to stderr) |
 | Encrypt config | `dbexplain encrypt` (auto-finds .env.dbexplain, outputs .enc) |
-| Reference manual | `dbexplain mysql` / `dbexplain csv` / `dbexplain all` |
+| Reference manual | `dbexplain mysql` / `dbexplain oracle` / `dbexplain hive` / `dbexplain all` |
 
 ---
 
@@ -241,7 +286,7 @@ EOF
 | SQL syntax reference (file query engine) | [`dbexplain-skill/references/sql-syntax.md`](dbexplain-skill/references/sql-syntax.md) |
 | Code module mapping | [`docs/CODE_MAP.md`](docs/CODE_MAP.md) |
 | Database usage manuals (one per source) | [`docs/databases/`](docs/databases/) |
-| Test reports (153+ items) | [`docs/test/`](docs/test/) |
+| Test reports (166+ items) | [`docs/test/`](docs/test/) |
 
 ---
 

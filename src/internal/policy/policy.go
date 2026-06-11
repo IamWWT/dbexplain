@@ -93,29 +93,16 @@ func (c *Config) CheckSQL(sql string) error {
 		}
 	}
 
-	// 3. Column-level
+	// 3. Column-level — explicit column references only.
+	// SELECT * + DENY_COLUMNS is handled post-execution via StripDeniedColumns
+	// (see below), allowing the query to proceed while removing denied columns
+	// from the result before output.
 	if len(c.DenyColumns) > 0 {
 		refs := extractColumnRefs(sql)
 		for _, ref := range refs {
 			for _, denied := range c.DenyColumns {
 				if strings.EqualFold(ref, denied) {
 					return &ErrDenied{Level: "column", Target: denied, SQL: sql}
-				}
-			}
-		}
-
-		// SELECT * 没有显式列引用，但可能选择了被禁止的列
-		// 如果 DENY_COLUMNS=table.column，且查询是 SELECT * FROM table，则拦截
-		normalized := normalizeWhitespace(sql)
-		if matchStarSelect(normalized) {
-			tables := extractTableNames(sql)
-			for _, denied := range c.DenyColumns {
-				if deniedTable, _, ok := strings.Cut(denied, "."); ok {
-					for _, t := range tables {
-						if strings.EqualFold(t, deniedTable) {
-							return &ErrDenied{Level: "column", Target: denied, SQL: sql}
-						}
-					}
 				}
 			}
 		}
@@ -329,6 +316,77 @@ func (c *Config) ApplyMask(result *query.QueryResult) {
 			}
 		}
 	}
+}
+
+// StripDeniedColumns removes denied columns from the query result.
+// This is a post-execution transformation on QueryResult — it runs after the
+// query has executed but before output formatting.
+//
+// Unlike CheckSQL which blocks at the column-reference level (for explicit
+// SELECT col queries), StripDeniedColumns handles the SELECT * case where
+// denied columns are selected implicitly. It strips entire columns from the
+// result so the user never sees the data, without blocking the query.
+//
+// Stripped column names are recorded in result.StrippedColumns for JSON
+// output visibility, and a warning is printed to stderr.
+//
+// Works for ALL data sources (SQL, file, NoSQL) since all produce *QueryResult.
+func (c *Config) StripDeniedColumns(result *query.QueryResult) {
+	if c == nil || len(c.DenyColumns) == 0 || result == nil || len(result.Columns) == 0 {
+		return
+	}
+	// Find column indices to strip
+	type stripCol struct {
+		idx  int
+		name string
+	}
+	var toStrip []stripCol
+	for i, col := range result.Columns {
+		for _, denied := range c.DenyColumns {
+			if matchColumn(col.Name, denied) {
+				toStrip = append(toStrip, stripCol{idx: i, name: col.Name})
+				break
+			}
+		}
+	}
+	if len(toStrip) == 0 {
+		return
+	}
+
+	// Build set of indices for O(1) lookup
+	stripIdx := make(map[int]bool)
+	strippedNames := make([]string, 0, len(toStrip))
+	for _, s := range toStrip {
+		stripIdx[s.idx] = true
+		strippedNames = append(strippedNames, s.name)
+	}
+
+	// Record stripped columns in result
+	result.StrippedColumns = strippedNames
+
+	// Print warning to stderr
+	fmt.Fprintf(os.Stderr, "WARNING: columns %v are denied by policy and have been stripped from the result\n", strippedNames)
+
+	// Filter columns
+	newCols := make([]query.ColumnInfo, 0, len(result.Columns)-len(stripIdx))
+	for i, col := range result.Columns {
+		if !stripIdx[i] {
+			newCols = append(newCols, col)
+		}
+	}
+
+	// Filter each row's values
+	for ri, row := range result.Rows {
+		newRow := make([]*string, 0, len(row)-len(stripIdx))
+		for ci, val := range row {
+			if !stripIdx[ci] {
+				newRow = append(newRow, val)
+			}
+		}
+		result.Rows[ri] = newRow
+	}
+
+	result.Columns = newCols
 }
 
 // extractTableNames finds table names in SQL.
@@ -762,13 +820,6 @@ func normalizeIdentifiers(sql string) string {
 		}
 	}
 	return result.String()
-}
-
-// matchStarSelect checks if a normalized SQL query uses SELECT * (no explicit column list).
-// This is used to detect queries that may select denied columns without naming them.
-func matchStarSelect(normalizedSQL string) bool {
-	re := regexp.MustCompile(`(?i)\bSELECT\s+\*\s+FROM\b`)
-	return re.MatchString(normalizedSQL)
 }
 
 // isSQLKeyword returns true for common SQL keywords to filter false positives.

@@ -25,7 +25,7 @@ cd /tmp/build-prev/src && go build -ldflags="-s -w" -o /tmp/dbexplain-prev .
 cd -
 
 # 构建当前版本
-cd src && go build -ldflags="-s -w -X main.version=v0.1.4" -o /tmp/dbexplain-curr .
+cd src && go build -ldflags="-s -w -X github.com/IamWWT/dbexplain/internal/version.Version=v0.1.5" -o /tmp/dbexplain-curr .
 
 # 对比
 /tmp/dbexplain-prev -env -timeout 30s --json > /tmp/prev.json 2>/dev/null

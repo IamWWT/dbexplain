@@ -817,6 +817,209 @@ func printManualDuckDB(p func(string, string) string) {
 `))
 }
 
+func printManualOracle(p func(string, string) string) {
+	fmt.Print(p(`
+
+─── Oracle ─────────────────────────────────────────────────────
+
+    DSN 格式:
+      oracle://用户:密码@主机:端口/服务名?label=别名
+      oracles://用户:密码@主机:端口/服务名?label=别名  (TLS)
+
+    端口: 默认 1521
+    别名: oracle, oracles (oracles 自动启用 TLS)
+
+    采集机制:
+      • 用户(Schema) — all_tables 按 owner 分组，跳过系统 Schema
+      • 表元数据   — all_tables: 表名、num_rows 估算、注释
+      • 列信息     — all_tab_columns + all_col_comments: 名称、类型、可空、
+        默认值、注释；对无注释字段取首行数据通过规则引擎推断语义
+      • 约束       — all_constraints + all_cons_columns: 主键(P)、唯一(U)
+      • 索引       — all_ind_columns + all_indexes: 名称、唯一性、列列表
+      • 外键       — all_constraints (R) + all_cons_columns:
+        4 表 JOIN 位置对齐，支持复合外键，解析引用表/列/删除规则
+      • 采样       — FETCH FIRST 1 ROWS ONLY (12c+)，规则引擎推断注释
+
+    能力标签: CapSQL, CapForeignKey, CapRowCount, CapSampling, CapIndex
+
+    安全机制:
+      • 跳过 20+ Oracle 系统 Schema (SYS/SYSTEM/XDB 等)
+      • 参数化查询 (:1, :2 占位符)，标识符严格转义
+      • 密码在日志和输出中脱敏
+
+    已知局限:
+      • num_rows 来自 all_tables 统计信息，需 ANALYZE TABLE 采集后方准确
+      • 不采集 dba_segments 数据 (需要 DBA 权限)
+      • 不采集存储过程/函数/触发器等 PL/SQL 对象
+      • 不支持 TNS (DESCRIPTION=...) 连接串格式
+      • EXPLAIN 使用两步法 (EXPLAIN PLAN FOR + DBMS_XPLAN.DISPLAY())，
+        需要 PLAN_TABLE 存在 (Oracle 自动创建)
+      • FETCH FIRST N ROWS ONLY 需要 Oracle 12c+
+      • LIMIT → FETCH FIRST 自动适配 (正则替换)
+
+    示例:
+      dbexplain -dsn 'oracle://user:pwd@host:1521/XE?label=my-oracle'
+      dbexplain -dsn 'oracles://user:pwd@host:1521/XEPDB1?label=my-tls-oracle'
+`,
+		`
+
+─── Oracle ─────────────────────────────────────────────────────
+
+    DSN format:
+      oracle://user:password@host:port/service?label=alias
+      oracles://user:password@host:port/service?label=alias  (TLS)
+
+    Port: default 1521
+    Aliases: oracle, oracles (oracles auto-enables TLS)
+
+    Collection mechanism:
+      • Schema (Owner) — grouped by owner from all_tables, skips system schemas
+      • Table metadata  — all_tables: name, num_rows estimate, comment
+      • Column info     — all_tab_columns + all_col_comments: name, type, nullable,
+        default, comment; uncommented columns get semantic inference from sample row
+      • Constraints     — all_constraints + all_cons_columns: primary key (P), unique (U)
+      • Indexes         — all_ind_columns + all_indexes: name, uniqueness, column list
+      • Foreign keys    — all_constraints (R) + all_cons_columns:
+        4-table JOIN with position alignment, supports composite FKs,
+        resolves ref table/columns/delete rule
+      • Sampling        — FETCH FIRST 1 ROWS ONLY (12c+), rule engine comment inference
+
+    Capabilities: CapSQL, CapForeignKey, CapRowCount, CapSampling, CapIndex
+
+    Safety:
+      • Skips 20+ Oracle system schemas (SYS/SYSTEM/XDB etc.)
+      • Parameterized queries (:1, :2 placeholders), strict identifier escaping
+      • Passwords redacted in logs and output
+
+    Known limitations:
+      • num_rows sourced from all_tables stats — accurate only after ANALYZE TABLE
+      • dba_segments not collected (requires DBA privilege)
+      • PL/SQL objects (procedures/functions/triggers) not collected
+      • TNS (DESCRIPTION=...) connection format not supported
+      • EXPLAIN uses two-step method (EXPLAIN PLAN FOR + DBMS_XPLAN.DISPLAY()),
+        requires PLAN_TABLE (Oracle creates it automatically)
+      • FETCH FIRST N ROWS ONLY requires Oracle 12c+
+      • LIMIT → FETCH FIRST auto-adaptation (regex replacement)
+
+    Examples:
+      dbexplain -dsn 'oracle://user:pwd@host:1521/XE?label=my-oracle'
+      dbexplain -dsn 'oracles://user:pwd@host:1521/XEPDB1?label=my-tls-oracle'
+`))
+}
+
+func printManualHive(p func(string, string) string) {
+	fmt.Print(p(`
+
+─── Hive ───────────────────────────────────────────────────────
+
+    DSN 格式:
+      hive://用户:密码@主机:端口/库名?label=别名[&auth=NOSASL]
+      hives://用户:密码@主机:端口/库名?label=别名  (TLS)
+
+    端口: 默认 10000 (HiveServer2)
+    别名: hive, hives (hives 自动启用 TLS)
+
+    认证方式 (通过 ?auth= 参数指定):
+      NOSASL   — 无认证 (默认，无需用户密码)
+      NONE     — SASL PLAIN 用户名密码认证 (有用户时默认)
+      LDAP     — LDAP 认证
+      KERBEROS — Kerberos 认证 (纯 Go，无需 CGO/libkrb5)
+
+    采集机制:
+      • 库列表   — SHOW DATABASES (跳过 information_schema, sys, default)
+      • 表列表   — SHOW TABLES IN dbname
+      • 列信息   — DESCRIBE FORMATTED db.table: 名称、类型、注释
+        自动跳过 # 分隔行，停止于 # Detailed Table Information
+      • 行数     — 固定返回 -1 (unknown)，避免触发 MapReduce/Tez 作业
+      • 采样     — SELECT * FROM db.table LIMIT 1，规则引擎推断注释
+
+    能力标签: CapSQL, CapRowCount, CapSampling
+
+    特有参数:
+      transport=<mode>  传输模式: binary (默认) 或 http
+      http_path=<path>  HTTP 传输模式的路径
+      service=<name>    Kerberos 服务名 (默认 hive)
+      sslcert=<file>    SSL 客户端证书路径
+      sslkey=<file>     SSL 客户端密钥路径
+      sslca=<file>      SSL CA 证书路径
+
+    安全机制:
+      • DSN 参数完全控制 (无外部配置文件)
+      • 密码在日志和输出中脱敏
+      • 纯 Go Kerberos (beltran/gosasl)，无 CGO 依赖
+
+    已知局限:
+      • 使用 HiveServer2 SQL (端口 10000)，非 Metastore Thrift API (端口 9083)
+      • 行数固定返回 -1 (SELECT COUNT(*) 会触发 MR/Tez 作业，不予执行)
+      • 不支持索引和主键/外键约束采集 (Hive 无传统约束)
+      • DESCRIBE FORMATTED 依赖于 HiveServer2 实现
+      • TLS 连接需提供 sslcert + sslkey 文件路径
+
+    示例:
+      # NOSASL 无认证
+      dbexplain -dsn 'hive://host:10000/default?label=my-hive'
+      # LDAP 认证
+      dbexplain -dsn 'hive://user:pwd@host:10000/default?auth=LDAP&label=my-hive'
+      # Kerberos
+      dbexplain -dsn 'hive://host:10000/default?auth=KERBEROS&label=my-hive'
+`,
+		`
+
+─── Hive ───────────────────────────────────────────────────────
+
+    DSN format:
+      hive://user:password@host:port/dbname?label=alias[&auth=NOSASL]
+      hives://user:password@host:port/dbname?label=alias  (TLS)
+
+    Port: default 10000 (HiveServer2)
+    Aliases: hive, hives (hives auto-enables TLS)
+
+    Authentication (?auth= parameter):
+      NOSASL   — No authentication (default, no user/password needed)
+      NONE     — SASL PLAIN username/password auth (default when user provided)
+      LDAP     — LDAP authentication
+      KERBEROS — Kerberos authentication (pure Go, no CGO/libkrb5 needed)
+
+    Collection mechanism:
+      • DB list    — SHOW DATABASES (skips information_schema, sys, default)
+      • Table list — SHOW TABLES IN dbname
+      • Column info— DESCRIBE FORMATTED db.table: name, type, comment
+        auto-skips # separator lines, stops at # Detailed Table Information
+      • Row count  — Fixed -1 (unknown), avoids triggering MapReduce/Tez jobs
+      • Sampling   — SELECT * FROM db.table LIMIT 1, rule engine comment inference
+
+    Capabilities: CapSQL, CapRowCount, CapSampling
+
+    DSN parameters:
+      transport=<mode>  Transport mode: binary (default) or http
+      http_path=<path>  HTTP transport path
+      service=<name>    Kerberos service name (default hive)
+      sslcert=<file>    SSL client certificate file path
+      sslkey=<file>     SSL client key file path
+      sslca=<file>      SSL CA certificate file path
+
+    Safety:
+      • DSN parameters for full configuration (no external config files)
+      • Passwords redacted in logs and output
+      • Pure Go Kerberos (beltran/gosasl), no CGO dependency
+
+    Known limitations:
+      • Uses HiveServer2 SQL (port 10000), not Metastore Thrift API (port 9083)
+      • Row count fixed at -1 (SELECT COUNT(*) triggers MR/Tez, not executed)
+      • Indexes and PK/FK constraints not collected (Hive has no traditional constraints)
+      • DESCRIBE FORMATTED depends on HiveServer2 implementation
+      • TLS requires sslcert + sslkey file paths
+
+    Examples:
+      # NOSASL no auth
+      dbexplain -dsn 'hive://host:10000/default?label=my-hive'
+      # LDAP auth
+      dbexplain -dsn 'hive://user:pwd@host:10000/default?auth=LDAP&label=my-hive'
+      # Kerberos
+      dbexplain -dsn 'hive://host:10000/default?auth=KERBEROS&label=my-hive'
+`))
+}
+
 func printManualPrometheus(p func(string, string) string) {
 	fmt.Print(p(`
 

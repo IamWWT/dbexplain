@@ -15,21 +15,21 @@ BIN="../release/dbexplain"
 
 ```bash
 $BIN --version
-# 预期: dbexplain v0.1.4
+# 预期: dbexplain v0.1.5
 ```
 
 ## 9.2 简短帮助
 
 ```bash
 $BIN -h 2>&1 | head -20
-# 预期: 包含 version v0.1.4、Usage、Database types（含 csv/tsv/xlsx）
+# 预期: 包含 version v0.1.5、Usage、Database types（含 csv/tsv/xlsx）
 ```
 
 ## 9.3 完整手册 (中文)
 
 ```bash
 $BIN all 2>&1 | head -20
-# 预期: 手册版本 v0.1.4
+# 预期: 手册版本 v0.1.5
 ```
 
 ## 9.4 完整手册 (英文)
@@ -48,21 +48,21 @@ $BIN all --filter redis 2>&1 | head -10
 ## 9.6 全部数据库子命令
 
 ```bash
-for db in mysql postgres gaussdb clickhouse sqlite redis mongodb elasticsearch qdrant csv tsv xlsx; do
+for db in mysql postgres gaussdb clickhouse sqlite redis mongodb elasticsearch qdrant csv tsv xlsx oracle hive; do
   echo "=== $db ==="
-  $BIN "$db" 2>&1 | grep -m1 "v0.1.4"
+  $BIN "$db" 2>&1 | grep -m1 "v0.1.5"
 done
-# 预期: 12/12 全部包含 v0.1.4
+# 预期: 14/14 全部包含 v0.1.5
 ```
 
 ## 9.7 别名子命令
 
 ```bash
-for alias in pg postgresql ch sqlite3 es; do
+for alias in pg postgresql ch sqlite3 es oracles hives; do
   echo "=== $alias ==="
-  $BIN "$alias" 2>&1 | grep -m1 "v0.1.4"
+  $BIN "$alias" 2>&1 | grep -m1 "v0.1.5"
 done
-# 预期: 5/5 全部包含 v0.1.4
+# 预期: 7/7 全部包含 v0.1.5
 ```
 
 ## 9.8 execute -h

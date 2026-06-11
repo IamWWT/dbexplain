@@ -749,3 +749,169 @@ func TestCheckNative_Prometheus_DenyStatements(t *testing.T) {
 		t.Errorf("unexpected error: %v", err)
 	}
 }
+
+// ── StripDeniedColumns tests ──
+
+func TestStripDeniedColumns_Basic(t *testing.T) {
+	cfg := &Config{DenyColumns: []string{"password", "ssn"}}
+	result := &query.QueryResult{
+		Columns: []query.ColumnInfo{
+			{Name: "id", Type: "INTEGER"},
+			{Name: "password", Type: "TEXT"},
+			{Name: "name", Type: "TEXT"},
+			{Name: "ssn", Type: "TEXT"},
+		},
+		Rows: [][]*string{
+			{strPtr("1"), strPtr("secret123"), strPtr("Alice"), strPtr("123-45-6789")},
+			{strPtr("2"), strPtr("pass456"), strPtr("Bob"), strPtr("987-65-4321")},
+		},
+		RowCount: 2,
+	}
+
+	cfg.StripDeniedColumns(result)
+
+	if len(result.Columns) != 2 {
+		t.Fatalf("expected 2 columns after strip, got %d", len(result.Columns))
+	}
+	if result.Columns[0].Name != "id" {
+		t.Errorf("expected first column 'id', got %q", result.Columns[0].Name)
+	}
+	if result.Columns[1].Name != "name" {
+		t.Errorf("expected second column 'name', got %q", result.Columns[1].Name)
+	}
+	if len(result.Rows[0]) != 2 {
+		t.Fatalf("expected 2 values per row after strip, got %d", len(result.Rows[0]))
+	}
+	if *result.Rows[0][0] != "1" {
+		t.Errorf("expected row[0][0]='1', got %q", *result.Rows[0][0])
+	}
+	if *result.Rows[1][1] != "Bob" {
+		t.Errorf("expected row[1][1]='Bob', got %q", *result.Rows[1][1])
+	}
+}
+
+func TestStripDeniedColumns_TablePrefixed(t *testing.T) {
+	// DENY_COLUMNS=users.password should match bare column "password"
+	cfg := &Config{DenyColumns: []string{"users.password"}}
+	result := &query.QueryResult{
+		Columns: []query.ColumnInfo{
+			{Name: "id", Type: "INTEGER"},
+			{Name: "password", Type: "TEXT"},
+			{Name: "name", Type: "TEXT"},
+		},
+		Rows: [][]*string{
+			{strPtr("1"), strPtr("secret"), strPtr("Alice")},
+		},
+	}
+
+	cfg.StripDeniedColumns(result)
+
+	if len(result.Columns) != 2 {
+		t.Fatalf("expected 2 columns, got %d", len(result.Columns))
+	}
+	if result.Columns[0].Name != "id" {
+		t.Errorf("expected 'id', got %q", result.Columns[0].Name)
+	}
+	if result.Columns[1].Name != "name" {
+		t.Errorf("expected 'name', got %q", result.Columns[1].Name)
+	}
+}
+
+func TestStripDeniedColumns_NoMatch(t *testing.T) {
+	cfg := &Config{DenyColumns: []string{"other_col"}}
+	result := &query.QueryResult{
+		Columns: []query.ColumnInfo{
+			{Name: "id", Type: "INTEGER"},
+			{Name: "name", Type: "TEXT"},
+		},
+		Rows: [][]*string{
+			{strPtr("1"), strPtr("Alice")},
+		},
+		RowCount: 1,
+	}
+
+	cfg.StripDeniedColumns(result)
+
+	if len(result.Columns) != 2 {
+		t.Fatalf("expected 2 columns unchanged, got %d", len(result.Columns))
+	}
+	if *result.Rows[0][0] != "1" {
+		t.Errorf("expected row[0][0]='1', got %q", *result.Rows[0][0])
+	}
+}
+
+func TestStripDeniedColumns_NilConfig(t *testing.T) {
+	var cfg *Config
+	result := &query.QueryResult{
+		Columns: []query.ColumnInfo{{Name: "c", Type: "T"}},
+		Rows:    [][]*string{{strPtr("val")}},
+	}
+	cfg.StripDeniedColumns(result) // should not panic
+	if *result.Rows[0][0] != "val" {
+		t.Error("nil config should not change result")
+	}
+}
+
+func TestStripDeniedColumns_EmptyDenyColumns(t *testing.T) {
+	cfg := &Config{}
+	result := &query.QueryResult{
+		Columns: []query.ColumnInfo{{Name: "c", Type: "T"}},
+		Rows:    [][]*string{{strPtr("val")}},
+	}
+	cfg.StripDeniedColumns(result)
+	if *result.Rows[0][0] != "val" {
+		t.Error("empty deny columns should not change result")
+	}
+}
+
+func TestStripDeniedColumns_NullPreserved(t *testing.T) {
+	cfg := &Config{DenyColumns: []string{"secret"}}
+	result := &query.QueryResult{
+		Columns: []query.ColumnInfo{
+			{Name: "id", Type: "INTEGER"},
+			{Name: "secret", Type: "TEXT"},
+			{Name: "name", Type: "TEXT"},
+		},
+		Rows: [][]*string{
+			{strPtr("1"), nil, strPtr("Alice")},
+		},
+	}
+	cfg.StripDeniedColumns(result)
+	if len(result.Columns) != 2 {
+		t.Fatalf("expected 2 columns, got %d", len(result.Columns))
+	}
+	if result.Columns[0].Name != "id" {
+		t.Errorf("expected 'id', got %q", result.Columns[0].Name)
+	}
+	if result.Columns[1].Name != "name" {
+		t.Errorf("expected 'name', got %q", result.Columns[1].Name)
+	}
+	if *result.Rows[0][1] != "Alice" {
+		t.Errorf("expected row[0][1]='Alice', got %q", *result.Rows[0][1])
+	}
+}
+
+func TestStripDeniedColumns_NativeQueryResult(t *testing.T) {
+	// Simulate MongoDB result with sensitive field
+	cfg := &Config{DenyColumns: []string{"ssn"}}
+	result := &query.QueryResult{
+		Columns: []query.ColumnInfo{
+			{Name: "_id", Type: "string"},
+			{Name: "ssn", Type: "string"},
+			{Name: "name", Type: "string"},
+		},
+		Rows: [][]*string{
+			{strPtr("abc123"), strPtr("123-45-6789"), strPtr("Alice")},
+		},
+	}
+	cfg.StripDeniedColumns(result)
+	if len(result.Columns) != 2 {
+		t.Fatalf("expected 2 columns, got %d", len(result.Columns))
+	}
+	if result.Columns[0].Name != "_id" {
+		t.Errorf("expected '_id', got %q", result.Columns[0].Name)
+	}
+	if result.Columns[1].Name != "name" {
+		t.Errorf("expected 'name', got %q", result.Columns[1].Name)
+	}
+}

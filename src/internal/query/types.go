@@ -34,6 +34,10 @@ type QueryResult struct {
 	RowCount      int          `json:"row_count"`
 	Truncated     bool         `json:"truncated"`
 	ExecutionTime string       `json:"execution_time"`
+	// StrippedColumns lists column names that were removed from the result
+	// by policy enforcement (DENY_COLUMNS + SELECT *), so consumers of the
+	// JSON output are aware that data was filtered.
+	StrippedColumns []string `json:"stripped_columns,omitempty"`
 }
 
 // ExecuteOpts bundles all parameters for query execution.

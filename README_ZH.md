@@ -4,7 +4,7 @@
 
 > **数据库上下文编译器** — 为 AI Agent 与工程团队提供确定性、可证实的数据结构信息。
 
-`dbexplain` 是一个**单二进制、零运行时依赖**的命令行工具，支持 **13 种异构数据源**（含可选 DuckDB）的 Schema 采集与只读查询执行，所有操作在统一的安全沙箱下审计可追溯。
+`dbexplain` 是一个**单二进制、零运行时依赖**的命令行工具，支持 **15 种异构数据源**（含可选 DuckDB）的 Schema 采集与只读查询执行，所有操作在统一的安全沙箱下审计可追溯。
 
 核心理念：**只输出可证实的事实，LLM 在外部消费结构化输出来做推理。**
 
@@ -32,9 +32,9 @@
 │  │ 只读保障  │    │ 防全表导出  │    │ MASK_COLUMNS/DENY_SQL │    │
 │  └──────────┘    └────────────┘    └────────────────────────┘    │
 ├──────────────────────────────────────────────────────────────────┤
-│                  连接器层 (13 种数据源)                            │
-│  关系型: MySQL PG GaussDB SQLite DuckDB                          │
-│  分析型: ClickHouse                                               │
+│                  连接器层 (15 种数据源)                            │
+│  关系型: MySQL PG GaussDB SQLite DuckDB Oracle                 │
+│  分析型: ClickHouse Hive                                        │
 │  键值型: Redis                                                    │
 │  文档型: MongoDB Elasticsearch                                    │
 │  向量型: Qdrant                                                   │
@@ -53,7 +53,7 @@
 | **CLI 命令层** | 用户交互入口，子命令分发 | `cmd/dbexplain/` — `main.go`、`execute.go`、`repl.go`、`collect.go`、`diff.go` |
 | **查询执行层** | 三路径查询：直接/DSL/联邦 | `executor/`、`dsl/`（DSL 编译器）、`connector/filequery/`（文件 SQL 引擎） |
 | **安全防护层** | AST 只读校验 + LIMIT 注入 + 策略拒绝 | `sqlguard/`、`policy/`、`query/`（并发锁） |
-| **连接器层** | 13 种数据源统一接口 | `connector/` — 每数据源独立文件，`init()` 自注册到全局 registry |
+| **连接器层** | 15 种数据源统一接口 | `connector/` — 每数据源独立文件，`init()` 自注册到全局 registry |
 | **Schema/IR 层** | 采集 → 内部表示 → 输出渲染 | `schema/`、`ir/`、`render/`、`output/`、`graph/`、`diff/` |
 
 ![dbexplain Architecture](docs/assets/DBEXPLAIN-ARCH.png)
@@ -72,7 +72,9 @@
 | | PostgreSQL | `postgres://` | ✅ | ✅ SQL | ✅ | ✅ | 多 Schema、行数统计、SSL 可配 |
 | | GaussDB | `gaussdb://` | ✅ | ✅ SQL | ✅ | ✅ | PostgreSQL 协议兼容 |
 | | SQLite | `sqlite://` | ✅ | ✅ SQL | ✅ | ✅ | 纯 Go 驱动，无 CGO |
+| | Oracle | `oracle://` | ✅ | ✅ SQL | ✅ | ✅ | 外键/索引/主键、12c+ 需 FETCH FIRST |
 | **分析型** | ClickHouse | `clickhouse://` | ✅ | ✅ SQL | ✅ | ✅ | 排序键 / 分区键 / 主键 |
+| | Hive | `hive://` | ✅ | ✅ SQL | ✅ | ✅ | DESCRIBE FORMATTED、Kerberos、无行数统计 |
 | | DuckDB ¹ | `duckdb://` | ✅ | ✅ SQL | ✅ | ✅ | 嵌入式分析引擎，需 `-tags duckdb` 构建 |
 | **键值型** | Redis | `redis://` | ✅ | — | ✅ | — | 键模式推断、集群、TTL 风险 |
 | **文档型** | MongoDB | `mongodb://` | ✅ | — | ✅ | — | 近似文档数 |
@@ -156,13 +158,56 @@ CSV / TSV / XLSX 由**内置纯 Go SQL 引擎**驱动，无需外部数据库：
 dbexplain diff --cache schema.json --since v1.0 --human
 ```
 
-### 安全三层防护
+### 安全体系：六层防护管道
 
-| 层级 | 组件 | 拦截内容 |
-|------|------|---------|
-| L1 | **sqlguard** — AST 级只读校验 | 8 读动词放行，11 写动词拒绝，多语句检测，CTE 写检测 |
-| L2 | **AutoLimit** | 无 LIMIT 查询自动注入 1000 |
-| L3 | **策略引擎** | `DENY_TABLES` / `DENY_COLUMNS` / `DENY_STATEMENTS` / `MASK_COLUMNS` |
+所有查询通过统一安全管道执行，按数据库类型自动路由到合适的校验路径。
+
+```
+                    ┌─ SQL 路径 ─────────────────────────────┐
+                    │  sqlguard(AST 只读) → AutoLimit(1000)  │
+                    │  → 策略引擎 CheckSQL(DENY/表/列)       │
+                    ├─ Native 路径 ──────────────────────────┤
+                    │  策略引擎 CheckNative(命令白名单)       │
+                    ├─ 文件路径 ─────────────────────────────┤
+                    │  策略引擎 DenyTables(文件名校验)        │
+                    └────────────────────────────────────────┘
+                               ↓
+                    并发锁(每标签) → 执行 → ApplyMask / StripDeniedColumns
+```
+
+| 层级 | 组件 | SQL 路径 | Native 路径 | 文件路径 |
+|:----:|------|:--------:|:-----------:|:--------:|
+| L1 | **sqlguard** — AST 只读校验（8 读/17 写动词） | ✅ | — | — |
+| L2 | **AutoLimit** — 自动注入 LIMIT 1000 | ✅ | — | — |
+| L3 | **策略引擎** — DENY_TABLES/COLUMNS/STATEMENTS | ✅ CheckSQL | ✅ CheckNative | ✅ DenyTables |
+| L4 | **并发锁** — 每标签 QueryLock | ✅ | ✅ | ✅ |
+| L5 | **ApplyMask** — 列值掩码（后执行） | ✅ | ✅ | ✅ |
+| L6 | **StripDeniedColumns** — 列剥离（后执行） | ✅ | ✅ | ✅ |
+
+#### 每数据库类型安全覆盖
+
+| 类别 | 数据源 | 查询路径 | L1 sqlguard | L2 AutoLimit | L3 策略 | L4 Lock | L5 Mask | L6 Strip | 额外防护 |
+|------|--------|---------|:-----------:|:------------:|:-------:|:-------:|:-------:|:--------:|----------|
+| **关系型** | MySQL | executor.IsSQL=true | ✅ | ✅ | ✅ SQL | ✅ | ✅ | ✅ | sqlguard |
+| | PostgreSQL | executor.IsSQL=true | ✅ | ✅ | ✅ SQL | ✅ | ✅ | ✅ | sqlguard |
+| | GaussDB | executor.IsSQL=true | ✅ | ✅ | ✅ SQL | ✅ | ✅ | ✅ | sqlguard |
+| | SQLite | executor.IsSQL=true | ✅ | ✅ | ✅ SQL | ✅ | ✅ | ✅ | sqlguard |
+| | Oracle | executor.IsSQL=true | ✅ | ✅ ¹ | ✅ SQL | ✅ | ✅ | ✅ | sqlguard |
+| **分析型** | ClickHouse | executor.IsSQL=true | ✅ | ✅ | ✅ SQL | ✅ | ✅ | ✅ | sqlguard |
+| | Hive | executor.IsSQL=true | ✅ | ✅ | ✅ SQL | ✅ | ✅ | ✅ | sqlguard |
+| | DuckDB ² | executor.IsSQL=true | ✅ | ✅ | ✅ SQL | ✅ | ✅ | ✅ | sqlguard + 文件访问校验 |
+| **键值型** | Redis | executor.IsSQL=false | — | — | ✅ Native | ✅ | ✅ | ✅ | 42 命令白名单 |
+| **文档型** | MongoDB | executor.IsSQL=false | — | — | ✅ Native | ✅ | ✅ | ✅ | find/aggregate 白名单 |
+| | Elasticsearch | executor.IsSQL ³ | ⚠️ SQL 查询 | ⚠️ | ✅ | ✅ | ✅ | ✅ | _search 端点 |
+| **向量型** | Qdrant | executor.IsSQL=false | — | — | ✅ Native | ✅ | ✅ | ✅ | scroll/count 白名单 |
+| **时序型** | Prometheus | executor.IsSQL=false | — | — | ✅ Native | ✅ | ✅ | ✅ | PromQL 只读 API |
+| **文件型** | CSV / TSV | HandleFileExecute ⁴ | — | — | ✅ DenyTables | — | ✅ | ✅ | 文件只读 |
+| | Excel | HandleFileExecute ⁴ | — | — | ✅ DenyTables | — | ✅ | ✅ | 文件只读 |
+
+> ¹ Oracle AutoLimit: `LIMIT N` 自动转换为 `FETCH FIRST N ROWS ONLY`（Oracle 12c+）。
+> ² DuckDB 额外文件访问校验：`read_parquet`/`read_csv`/`read_json` 函数受 `allowed_path` 参数限制。
+> ³ ES 双模式：SQL 查询走 IsSQL=true（完整管道），JSON 原生查询走 IsSQL=false（无 sqlguard）。
+> ⁴ 文件路径由 `queryutil.HandleFileExecute` 处理，绕过 executor 但保留策略引擎防护。
 
 非 SQL 数据库拥有各自的命令白名单或原生查询校验器。密码在所有输出和日志中自动脱敏。
 
@@ -172,8 +217,8 @@ dbexplain diff --cache schema.json --since v1.0 --human
 
 | 变体 | 构建命令 | CGO | 原始体积 | UPX 后 |
 |------|---------|:---:|:--------:|:------:|
-| **标准版 (-std)** | `bash build.sh prod`（默认） | ❌ 关闭 | 42 MB | 9.2 MB (78%) |
-| **DuckDB 版 (-duckdb)** | `bash build.sh minimal duckdb,...`¹ | ✅ 开启 | 91 MB | 22 MB (75%) |
+| **标准版 (-std)** | `bash build.sh prod`（默认） | ❌ 关闭 | 58 MB | 11 MB (81%) |
+| **DuckDB 版 (-duckdb)** | `bash build.sh minimal duckdb,...`¹ | ✅ 开启 | 141 MB | 53 MB (62%) |
 
 > ¹ DuckDB 版完整标签：`duckdb,mysql,postgres,sqlite,clickhouse,redis,mongodb,elasticsearch,qdrant,csv,xlsx,prometheus`。
 >
@@ -195,7 +240,7 @@ dbexplain diff --cache schema.json --since v1.0 --human
 | 查看 DSN | `dbexplain list`（自动加载 -env） |
 | 采集指标 | `dbexplain -env --metrics`（Prometheus 格式到 stderr） |
 | 加密配置 | `dbexplain encrypt`（自动搜索 .env.dbexplain，输出 .enc） |
-| 参考手册 | `dbexplain mysql` / `dbexplain csv` / `dbexplain all` |
+| 参考手册 | `dbexplain mysql` / `dbexplain oracle` / `dbexplain hive` / `dbexplain all` |
 
 ---
 
@@ -235,7 +280,7 @@ EOF
 | SQL 语法参考（文件查询引擎） | [`dbexplain-skill/references/sql-syntax.md`](dbexplain-skill/references/sql-syntax.md) |
 | 代码模块映射 | [`docs/CODE_MAP.md`](docs/CODE_MAP.md) |
 | 数据库使用手册（每数据源独立文档） | [`docs/databases/`](docs/databases/) |
-| 测试报告（153+ 项） | [`docs/test/`](docs/test/) |
+| 测试报告（166+ 项） | [`docs/test/`](docs/test/) |
 
 ---
 

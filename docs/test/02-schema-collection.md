@@ -33,7 +33,7 @@ for d in instances:
             tables.append(t.get('name', '?'))
     print(f'  [{kind:15s}] {label:25s} databases={db_count} tables={tables}')
 "
-# 预期: 全部 17 个 DSN 采集成功
+# 预期: 全部 19 个 DSN 采集成功
 ```
 
 ## 2.2 全量 Schema 采集 (Human)

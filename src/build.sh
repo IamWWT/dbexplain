@@ -30,6 +30,7 @@ set -e
 #  Tag reference — each db type can be included individually:
 #    mysql postgres sqlite clickhouse redis mongodb
 #    elasticsearch qdrant csv xlsx duckdb prometheus
+#    oracle hive
 #    full   — all drivers except duckdb (duckdb requires CGO)
 #
 #  Note: duckdb tag is NOT included in "full". To build with DuckDB,
@@ -51,6 +52,8 @@ set -e
 #    elasticsearch → elasticsearch → elasticsearch://, es://, elasticsearchs://
 #    qdrant      → qdrant          → qdrant://
 #    prometheus  → prometheus      → prometheus://
+#    oracle      → oracle          → oracle://, oracles://
+#    hive        → hive            → hive://, hives://
 #    csv         → csv,tsv         → csv://, tsv://
 #    xlsx        → xlsx            → xlsx://
 #
@@ -114,7 +117,7 @@ if [ "$MODE" = "prod" ]; then
 fi
 
 # ── Common ldflags ────────────────────────────────────────────
-LDFLAGS="-s -w -X github.com/IamWWT/dbexplain/internal/version.Version=v0.1.4"
+LDFLAGS="-s -w -X github.com/IamWWT/dbexplain/internal/version.Version=v0.1.5"
 EXTRALDFLAGS=""
 
 # ── Mode-specific flags ───────────────────────────────────────
@@ -165,10 +168,21 @@ fi
 # ── Build loop ────────────────────────────────────────────────
 HOST_GOOS="$(go env GOOS)"
 HOST_GOARCH="$(go env GOARCH)"
+# ── Edition suffix ────────────────────────────────────────────
+# Standard build (tags=full) gets -std suffix.
+# DuckDB build gets -duckdb suffix.
+# Custom/minimal builds get no suffix (user chose specific drivers).
+EDITION_SUFFIX=""
+if [ "$TAGS" = "full" ]; then
+  EDITION_SUFFIX="-std"
+elif $IS_DUCKDB; then
+  EDITION_SUFFIX="-duckdb"
+fi
+
 for platform in "${PLATFORMS[@]}"; do
   GOOS="${platform%/*}"
   GOARCH="${platform#*/}"
-  base="dbexplain-${GOOS}-${GOARCH}"
+  base="dbexplain-${GOOS}-${GOARCH}${EDITION_SUFFIX}"
   out="$RELEASE_DIR/$base"
   [ "$GOOS" = "windows" ] && out+=".exe"
 

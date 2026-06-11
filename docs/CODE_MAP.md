@@ -22,6 +22,8 @@
 | **Elasticsearch** | `connector` | `src/internal/connector/elasticsearch.go` | `docs/databases/nosql/ELASTICSEARCH.md` |
 | **MongoDB** | `connector` | `src/internal/connector/mongo.go` | `docs/databases/nosql/MONGO.md` |
 | **Qdrant** | `connector` | `src/internal/connector/qdrant.go` | `docs/databases/nosql/QDRANT.md` |
+| **Oracle** | `connector` | `src/internal/connector/oracle.go` | `docs/databases/relational/ORACLE.md` |
+| **Hive** | `connector` | `src/internal/connector/hive.go` | `docs/databases/analytical/HIVE.md` |
 | **Prometheus** | `connector` | `src/internal/connector/prometheus.go` | `docs/databases/prometheus.md` |
 | **CSV/TSV** | `connector` | `src/internal/connector/csv.go`, `src/internal/connector/csv_test.go` | `docs/file-sources/FILE_PROCESSING.md` |
 | **XLSX** | `connector` | `src/internal/connector/xlsx.go` | `docs/file-sources/FILE_PROCESSING.md` |
@@ -145,7 +147,7 @@ INPUT ──→ COLLECT ──→ ANALYZE ──→ OUTPUT
 
 | 测试文档 | 覆盖内容 | 关联源码 |
 |---------|---------|---------|
-| `docs/test/RESULTS.md` | 测试结果报告 v0.1.4 | — |
+| `docs/test/RESULTS.md` | 测试结果报告 v0.1.5 | — |
 | `docs/test/01-environment.md` | 环境准备、DSN 模板 | `internal/dsn/dsn.go` |
 | `docs/test/02-schema-collection.md` | 全数据源 Schema 采集 | 所有 `connector/*.go` |
 | `docs/test/03-execute-sql.md` | SQL 查询执行 | `execute.go`, `sqlguard/` |

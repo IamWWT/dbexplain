@@ -417,6 +417,7 @@ MASK_COLUMNS=password_hash=***,card_number=****-****-****-****,email=REDACTED
 
 | 版本 | 变更 |
 |------|------|
+| v0.1.5 | DENY_COLUMNS + SELECT * 后置列剥离（StripDeniedColumns），不再拦截报错 |
 | v0.1.4 | Prometheus DenyTables/DenyColumns 支持（CheckNative PromQL 解析）；DSL IR 三层安全（Layer 1 预编译检查） |
 | v0.1.0 | MongoDB/Qdrant 列级检测支持（`CheckNative` + `DENY_COLUMNS=collection.field`）；`matchStarSelect()` 全线检测（`\A` → `\b` 防 CTE 绕过）；`extractTableNames()` schema 前缀捕获修复；配置不再泄漏到 `os.Environ`（`LoadFromMap`）；文档对齐 12 种数据源 |
 | v0.0.9 | CSV/XLSX 文件数据源：受策略引擎约束（DENY_TABLES + MASK_COLUMNS），绕过 sqlguard |

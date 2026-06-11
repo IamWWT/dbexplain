@@ -68,6 +68,16 @@ func ParseDSN(raw string) (*DSN, error) {
 		d.Kind = "duckdb"
 	case "prometheus":
 		d.Kind = "prometheus"
+	case "oracle", "oracles":
+		if scheme == "oracles" {
+			d.TLS = true
+		}
+		d.Kind = "oracle"
+	case "hive", "hives":
+		if scheme == "hives" {
+			d.TLS = true
+		}
+		d.Kind = "hive"
 	default:
 		return nil, fmt.Errorf("unsupported scheme %q", scheme)
 	}

@@ -18,7 +18,7 @@ import (
 )
 
 // HandleFileExecute handles execute for csv/xlsx — skips sqlguard (SELECT * only),
-// but enforces policy engine rules for compliance scenarios.
+// but enforces policy engine rules for compliance scenarios via ApplyMask + StripDeniedColumns.
 // allEntries provides all env DSN entries for JOIN source resolution.
 func HandleFileExecute(parsed *dsn.DSN, sqlArg string, human bool, limit int, policies *policy.Config, allEntries []config.DSNEntry) {
 	// DENY_TABLES check: derive table name from DSN path (filename without extension)
@@ -66,9 +66,10 @@ func HandleFileExecute(parsed *dsn.DSN, sqlArg string, human bool, limit int, po
 		os.Exit(1)
 	}
 
-	// Apply post-execution column masking (replaces sensitive values)
+	// Apply post-execution column masking and stripping
 	if policies != nil {
 		policies.ApplyMask(result)
+		policies.StripDeniedColumns(result)
 	}
 
 	if human {

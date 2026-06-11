@@ -3,6 +3,8 @@ module github.com/IamWWT/dbexplain
 go 1.26
 
 require (
+	github.com/DATA-DOG/go-sqlmock v1.5.2
+	github.com/beltran/gohive/v2 v2.1.0
 	github.com/duckdb/duckdb-go/v2 v2.10503.1
 	github.com/elastic/go-elasticsearch/v8 v8.17.0
 	github.com/glebarez/go-sqlite v1.22.0
@@ -11,6 +13,7 @@ require (
 	github.com/lib/pq v1.12.3
 	github.com/qdrant/go-client v1.18.1
 	github.com/redis/go-redis/v9 v9.19.0
+	github.com/sijms/go-ora/v2 v2.9.0
 	go.mongodb.org/mongo-driver v1.17.3
 	golang.org/x/crypto v0.50.0
 	golang.org/x/sys v0.43.0
@@ -30,6 +33,9 @@ require (
 require (
 	filippo.io/edwards25519 v1.2.0 // indirect
 	github.com/apache/arrow-go/v18 v18.5.1 // indirect
+	github.com/apache/thrift v0.22.0 // indirect
+	github.com/beltran/gosasl v1.0.0 // indirect
+	github.com/beltran/gssapi v0.0.0-20200324152954-d86554db4bab // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/duckdb/duckdb-go-bindings v0.10503.0 // indirect
 	github.com/duckdb/duckdb-go-bindings/lib/darwin-amd64 v0.10503.0 // indirect
@@ -52,6 +58,7 @@ require (
 	github.com/montanaflynn/stats v0.7.1 // indirect
 	github.com/ncruces/go-strftime v0.1.9 // indirect
 	github.com/pierrec/lz4/v4 v4.1.25 // indirect
+	github.com/pkg/errors v0.9.1 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/xdg-go/pbkdf2 v1.0.0 // indirect
 	github.com/xdg-go/scram v1.1.2 // indirect
