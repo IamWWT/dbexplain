@@ -6,6 +6,8 @@ package executor
 import (
 	"context"
 	"fmt"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/IamWWT/dbexplain/internal/connector"
@@ -48,7 +50,11 @@ func ExecQuery(opts *ExecOptions) (*query.QueryResult, error) {
 			return nil, err
 		}
 		if opts.Explain {
-			sqlArg = wrapExplain(sqlArg, opts.Parsed.Kind)
+			if hasExplainPrefix(sqlArg) {
+				fmt.Fprintf(os.Stderr, "WARNING: SQL already starts with EXPLAIN — --explain flag is redundant, skipping double-wrap\n")
+			} else {
+				sqlArg = wrapExplain(sqlArg, opts.Parsed.Kind)
+			}
 		} else {
 			sqlArg = sqlguard.AutoLimit(sqlArg, opts.Limit)
 		}
@@ -120,4 +126,13 @@ func wrapExplain(sql string, kind string) string {
 	default:
 		return "EXPLAIN " + sql
 	}
+}
+
+// hasExplainPrefix reports whether sql starts with the EXPLAIN keyword (case-insensitive),
+// ignoring leading whitespace. Used to prevent double-wrapping when --explain flag is used
+// on a query that already includes EXPLAIN.
+func hasExplainPrefix(sql string) bool {
+	trimmed := strings.TrimSpace(sql)
+	upper := strings.ToUpper(trimmed)
+	return strings.HasPrefix(upper, "EXPLAIN")
 }

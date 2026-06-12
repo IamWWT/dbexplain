@@ -98,7 +98,7 @@
 | 文件 | 说明 |
 |------|------|
 | [`RELEASE_WECHAT_v0.1.2.md`](RELEASE_WECHAT_v0.1.2.md) | v0.1.2 公众号发布文案 |
-| [`RELEASE_WECHAT_v0.1.5.md`](RELEASE_WECHAT_v0.1.5.md) | v0.1.5 公众号发布文案（新增 Oracle + Hive 连接器，15 种数据源，六层安全防护） |
+| [`RELEASE_WECHAT_v0.1.6.md`](RELEASE_WECHAT_v0.1.6.md) | v0.1.6 公众号发布文案（Bug Bash：全局代码审计修复 + 密码泄露修复） |
 | [`RELEASE_WECHAT_v0.1.6.md`](RELEASE_WECHAT_v0.1.6.md) | v0.1.6 公众号发布文案（Bug Bash：全局代码审计修复） |
 | [`dbexplain_wechat_article.html`](dbexplain_wechat_article.html) | 微信公众号文章 HTML |
 

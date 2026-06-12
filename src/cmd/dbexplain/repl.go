@@ -147,7 +147,7 @@ func replLoop(scanner *bufio.Scanner, currentEntry config.DSNEntry, currentLabel
 					if err != nil {
 						entries[i].label = "(invalid)"
 						entries[i].kind = "?"
-						entries[i].dsn = entry.Raw
+						entries[i].dsn = config.SanitizeErr(err).Error()
 						continue
 					}
 					lbl := d.Label
@@ -212,7 +212,7 @@ func replLoop(scanner *bufio.Scanner, currentEntry config.DSNEntry, currentLabel
 				}
 				d, err := dsn.ParseDSN(raw)
 				if err != nil {
-					fmt.Printf("Invalid DSN: %v\n", err)
+					fmt.Printf("Invalid DSN: %v\n", config.SanitizeErr(err))
 					continue
 				}
 				if d.Label == "" {

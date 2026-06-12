@@ -12,12 +12,23 @@
 
 - **CHANGELOG.md / CHANGELOG_EN.md**: 更新至 v0.1.6
 - **MEMORY.md**: 架构路线图 + 版本号更新
-- **issues.json**: ISSUE-084 closed, ISSUE-085(v0.1.6) 录入
+- **issues.json**: ISSUE-084 closed, ISSUE-085(v0.1.6) 录入, ISSUE-086(v0.1.6) 录入
 
 ### 🔧 内部重构
 
 - **21 项修复，20 个源文件修改**。所有修复均为防御性增强，不改变架构和功能。
 - **闭环验证**: go build + go vet + go test + selective compile 全部通过
+
+### 🔒 安全修复
+
+- **DSN 密码泄露修复（4 处 + 框架层）**: execute.go 多 DSN 匹配时使用 d.Redacted() 替代 d.FilePath()；main.go x2 panic recover 使用 parsed.Redacted() 替代 rawDSN；repl.go 无效 DSN 输出使用 SanitizeErr 脱敏；repl.go .connect 错误使用 SanitizeErr 脱敏。框架层新增 dsn.DSN.String() → Redacted()，fmt.Sprintf("%s", d) 自动脱敏。
+- **issues.json 新增 ISSUE-086 记录**
+
+### ⚡ 体验优化
+
+- **execute 参数位置无关**: --label/--explain/--human/--limit/--timeout/--dsn/--config 等所有 flag 支持 SQL 前后任意位置，不再因 flag 在 SQL 之后被忽略
+- **EXPLAIN 双重包裹防护**: SQL 已含 EXPLAIN 时 --explain 标志自动跳过，输出明确警告提示
+- **空 SQL 错误提示优化**: 从模糊的 "READ_ONLY_VIOLATION" 改为明确的使用说明
 
 ## v0.1.5 (2026-06-11) — Oracle + Hive 连接器 + Policy 列剥离
 

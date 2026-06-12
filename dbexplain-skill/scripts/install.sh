@@ -79,7 +79,7 @@ Examples:
   bash install.sh --no-skill               # Tool only, no skill
   bash install.sh --edition duckdb         # Install DuckDB edition
   bash install.sh --offline                # Offline: you provide the binary
-  bash install.sh --offline ./dbexplain-v0.1.5-linux-amd64-std-upx.tar.gz  # Tarball
+  bash install.sh --offline ./dbexplain-v0.1.6-linux-amd64-std-upx.tar.gz  # Tarball
   bash install.sh --offline ./dbexplain-linux-amd64-std         # Raw binary
   bash install.sh --update                 # Update to latest version
 

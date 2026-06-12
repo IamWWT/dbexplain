@@ -12,12 +12,23 @@
 
 - **CHANGELOG.md / CHANGELOG_EN.md**: Updated to v0.1.6
 - **MEMORY.md**: Architecture roadmap + version updated
-- **issues.json**: ISSUE-084 closed, ISSUE-085(v0.1.6) recorded
+- **issues.json**: ISSUE-084 closed, ISSUE-085(v0.1.6) recorded, ISSUE-086(v0.1.6) recorded
 
 ### 🔧 Internal Refactoring
 
 - **21 fixes across 20 source files**. All fixes are defensive-only, no architecture or functionality changes.
 - **Closed-loop verification**: go build + go vet + go test + selective compile all pass
+
+### 🔒 Security Fixes
+
+- **DSN credential leak fix (4 sites + framework layer)**: execute.go multi-DSN match uses d.Redacted() instead of d.FilePath(); main.go x2 panic recovery uses parsed.Redacted() instead of rawDSN; repl.go invalid DSN output uses SanitizeErr; repl.go .connect error uses SanitizeErr. Framework: dsn.DSN.String() → Redacted() added, so all future fmt.Sprintf("%s", d) is automatically safe.
+- **issues.json ISSUE-086 added**
+
+### ⚡ UX Improvements
+
+- **execute flags position-independent**: --label/--explain/--human/--limit/--timeout/--dsn/--config all accept any position relative to SQL query
+- **EXPLAIN double-wrap guard**: --explain flag auto-skips when SQL already starts with EXPLAIN, with a clear warning
+- **Empty SQL error improved**: from vague "READ_ONLY_VIOLATION" to actionable usage hint
 
 ## v0.1.5 (2026-06-11) — Oracle + Hive Connectors + Policy Column Stripping
 

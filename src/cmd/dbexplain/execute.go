@@ -40,16 +40,75 @@ func handleExecute(args []string) {
 	human := fs.Bool("human", false, "Human-readable table output (default: JSON)")
 	fs.Parse(args)
 
-	// Allow --human after the query for convenience.
-	for _, a := range fs.Args() {
-		if a == "--human" {
+	// Allow flags after the SQL query for convenience.
+	// Go's flag.FlagSet stops parsing at the first non-flag argument,
+	// so we re-scan remaining args for any flags placed after the query.
+	// Only boolean and named-value flags are supported here (not positional).
+	extraArgs := fs.Args()
+	for i := 0; i < len(extraArgs); i++ {
+		a := extraArgs[i]
+		if !strings.HasPrefix(a, "--") {
+			continue
+		}
+		name, val, hasEq := strings.Cut(a, "=")
+		switch name {
+		case "--human":
 			*human = true
+		case "--explain":
+			*explain = true
+		case "--env":
+			*envMode = true
+		case "--dsl":
+			*dslMode = true
+		case "--label":
+			if hasEq && val != "" {
+				*label = val
+			} else if i+1 < len(extraArgs) && !strings.HasPrefix(extraArgs[i+1], "--") {
+				i++
+				*label = extraArgs[i]
+			}
+		case "--db":
+			if hasEq && val != "" {
+				fmt.Sscanf(val, "%d", dbIndex)
+			} else if i+1 < len(extraArgs) && !strings.HasPrefix(extraArgs[i+1], "--") {
+				i++
+				fmt.Sscanf(extraArgs[i], "%d", dbIndex)
+			}
+		case "--limit":
+			if hasEq && val != "" {
+				fmt.Sscanf(val, "%d", limit)
+			} else if i+1 < len(extraArgs) && !strings.HasPrefix(extraArgs[i+1], "--") {
+				i++
+				fmt.Sscanf(extraArgs[i], "%d", limit)
+			}
+		case "--timeout":
+			if hasEq && val != "" {
+				fmt.Sscanf(val, "%d", timeout)
+			} else if i+1 < len(extraArgs) && !strings.HasPrefix(extraArgs[i+1], "--") {
+				i++
+				fmt.Sscanf(extraArgs[i], "%d", timeout)
+			}
+		case "--dsn":
+			if hasEq && val != "" {
+				*dsnFlag = val
+			} else if i+1 < len(extraArgs) && !strings.HasPrefix(extraArgs[i+1], "--") {
+				i++
+				*dsnFlag = extraArgs[i]
+			}
+		case "--config":
+			if hasEq && val != "" {
+				*configFile = val
+			} else if i+1 < len(extraArgs) && !strings.HasPrefix(extraArgs[i+1], "--") {
+				i++
+				*configFile = extraArgs[i]
+			}
 		}
 	}
 
 	sqlArg := fs.Arg(0)
 	if sqlArg == "" {
-		fmt.Fprintln(os.Stderr, "READ_ONLY_VIOLATION: empty query")
+		fmt.Fprintln(os.Stderr, "ERROR: missing SQL query — usage: dbexplain execute [flags] <SQL>")
+		fmt.Fprintln(os.Stderr, "  Flags (any position): --label, --db, --explain, --human, --env, --dsl, --limit, --timeout, --dsn, --config")
 		os.Exit(1)
 	}
 
@@ -112,7 +171,7 @@ func handleExecute(args []string) {
 		for _, e := range entries {
 			d, err := dsn.ParseDSN(e.Raw)
 			if err == nil {
-				msg += fmt.Sprintf("  --label %s (%s)\n", d.Label, d.FilePath())
+				msg += fmt.Sprintf("  --label %s (%s)\n", d.Label, d.Redacted())
 			}
 		}
 		fmt.Fprint(os.Stderr, msg)

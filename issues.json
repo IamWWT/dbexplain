@@ -926,15 +926,15 @@
       "created": "2026-06-12"
     },
     {
-      "id": "ISSUE-085",
-      "title": "[v0.1.6] Bug Bash — 全局代码审计修复：nil panic、静默吞错、错误消息质量、防御编码",
+      "id": "ISSUE-086",
+      "title": "[v0.1.6] 密码泄露修复 — DSN 输出全链路脱敏 + 框架层 String() 安全网",
       "status": "open",
-      "priority": "high",
-      "category": "bug",
-      "description": "系统性 Go 代码审计，覆盖全部 ~50 个 Go 源文件。修复 21 个问题，分三级：\n\nP0（潜在 panic，4 项）：\n- executor.go:58 — nil Lock/Parsed 解引用\n- explain.go:118,124 — unsafe type assertion\n- filequery/executor.go:859-860 — ORDER BY NULL 指针解引用\n- diff.go:75,86-94,97-109 — map 中 nil table 指针\n\nP1（静默吞错，9 项）：\n- main.go:319-335 — 5 处 json.MarshalIndent/WriteFile 错误忽略\n- sqlite.go:109 + duckdb.go:165-168 — RowCount Scan 错误丢弃\n- clickhouse.go:285-288 + elasticsearch.go:76-79,189-192,263-266 — 读错误后继续用部分数据\n- 所有 connector — rows.Next() 循环后 rows.Err() 未检查\n- query.go:58-60 — Scan 错误静默跳过\n- xlsx.go:298 — ErrNotSupported 掩盖实际错误\n\nP2（错误质量 & 防御编码，8 项）：\n- repl.go:261,266 — %v→%w 错误链\n- config.go:284-302 — include/exclude 过滤短路\n- registry.go:35 — constructor 在锁内调用\n- infer.go:42 — 字节级切片破坏 UTF-8\n- dsn.go:166,187 — PathUnescape 错误忽略\n- mongo.go:188-190 — bson marshal 错误丢弃\n- compress.go:424 — 循环变量地址\n- output.go:76-84,104-112 — render panic 导致 goroutine 泄漏\n\n详见 src/ 下各文件行号和修复。不改动架构和功能。",
-      "file": "src/",
+      "priority": "critical",
+      "category": "security",
+      "description": "4 处 DSN 密码泄露到终端输出：(1) execute.go:115 多 DSN 匹配时使用 d.FilePath() 暴露 user:pass@host；(2) main.go:238,668 panic recover 直接输出 rawDSN 明文；(3) repl.go:150 无效 DSN 输出 entry.Raw 明文；(4) repl.go:215 未使用 SanitizeErr 脱敏。\n\n框架层修复：dsn.DSN 实现 fmt.Stringer (String() → Redacted())，确保 future fmt.Sprintf(\"%s\", d) 自动脱敏。\n\n修复后效果：所有终端输出中的 DSN 密码均替换为 {dbpassword} 占位符。",
+      "file": "src/internal/dsn/dsn.go, src/cmd/dbexplain/execute.go, src/cmd/dbexplain/main.go, src/cmd/dbexplain/repl.go",
       "created": "2026-06-12",
-      "labels": ["v0.1.6", "bug", "security"]
+      "labels": ["v0.1.6", "security", "critical"]
     }
   ]
 }

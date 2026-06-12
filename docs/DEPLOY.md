@@ -113,18 +113,18 @@ bash dbexplain-skill/scripts/install.sh --lang en  # English Skill
 
 ```bash
 # 在有网络的机器上下载 tarball（按平台选择）
-# Linux amd64 → dbexplain-v0.1.4-linux-amd64-std-upx.tar.gz
-# macOS arm64 → dbexplain-v0.1.4-darwin-arm64-std-noupx.tar.gz
-wget https://github.com/IamWWT/dbexplain/releases/download/v0.1.4/dbexplain-v0.1.4-linux-amd64-std-upx.tar.gz
+# Linux amd64 → dbexplain-v0.1.6-linux-amd64-std-upx.tar.gz
+# macOS arm64 → dbexplain-v0.1.6-darwin-arm64-std-noupx.tar.gz
+wget https://github.com/IamWWT/dbexplain/releases/download/v0.1.6/dbexplain-v0.1.6-linux-amd64-std-upx.tar.gz
 
 # 复制到离线环境后安装（脚本自动识别 .tar.gz 并解压）
-bash dbexplain-skill/scripts/install.sh --offline ./dbexplain-v0.1.4-linux-amd64-std-upx.tar.gz
+bash dbexplain-skill/scripts/install.sh --offline ./dbexplain-v0.1.6-linux-amd64-std-upx.tar.gz
 
 # 也支持直接传入原始二进制
 bash dbexplain-skill/scripts/install.sh --offline ./dbexplain-linux-amd64-std
 
 # 仅安装工具，不部署 Skill
-bash dbexplain-skill/scripts/install.sh --offline ./dbexplain-v0.1.4-linux-amd64-std-upx.tar.gz --no-skill
+bash dbexplain-skill/scripts/install.sh --offline ./dbexplain-v0.1.6-linux-amd64-std-upx.tar.gz --no-skill
 ```
 
 ### Windows 安装

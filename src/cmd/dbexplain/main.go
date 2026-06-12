@@ -233,16 +233,16 @@ func main() {
 		go func() {
 			defer wg.Done()
 			defer func() { <-sem }() // release
-			defer func() {
-				if r := recover(); r != nil {
-					log.Printf("PANIC: collect %s: %v", rawDSN, r)
-				}
-			}()
 			parsed, err := dsn.ParseDSN(rawDSN)
 			if err != nil {
 				log.Printf("invalid DSN: %v", config.SanitizeErr(err))
 				return
 			}
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("PANIC: collect %s: %v", parsed.Redacted(), r)
+				}
+			}()
 			label := parsed.Label
 			if label == "" {
 				label = fmt.Sprintf("db_%d", i)
@@ -663,16 +663,16 @@ func handleCollect(args []string) {
 		go func() {
 			defer wg.Done()
 			defer func() { <-sem }()
-			defer func() {
-				if r := recover(); r != nil {
-					log.Printf("PANIC: collect %s: %v", rawDSN, r)
-				}
-			}()
 			parsed, err := dsn.ParseDSN(rawDSN)
 			if err != nil {
 				log.Printf("invalid DSN: %v", config.SanitizeErr(err))
 				return
 			}
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("PANIC: collect %s: %v", parsed.Redacted(), r)
+				}
+			}()
 			label := parsed.Label
 			if label == "" {
 				label = fmt.Sprintf("db_%d", i)

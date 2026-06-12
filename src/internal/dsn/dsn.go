@@ -125,6 +125,11 @@ func labelFrom(d *DSN) string {
 	return host
 }
 
+// String implements fmt.Stringer — always returns redacted form.
+// This is a safety net: any future fmt.Sprintf("%s", d) will automatically
+// mask credentials, preventing accidental password leaks in terminal output.
+func (d *DSN) String() string { return d.Redacted() }
+
 func (d *DSN) Redacted() string {
 	if d.Password == "" {
 		return d.Raw
