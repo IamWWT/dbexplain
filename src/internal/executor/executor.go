@@ -35,6 +35,10 @@ type ExecOptions struct {
 func ExecQuery(opts *ExecOptions) (*query.QueryResult, error) {
 	sqlArg := opts.SQL
 
+	if opts.Parsed == nil {
+		return nil, fmt.Errorf("ExecOptions.Parsed is nil")
+	}
+
 	// SQL-specific validation and transformation
 	if opts.IsSQL {
 		if err := sqlguard.Validate(sqlArg); err != nil {
@@ -54,11 +58,13 @@ func ExecQuery(opts *ExecOptions) (*query.QueryResult, error) {
 		}
 	}
 
-	// Concurrent control by label
-	if !opts.Lock.Lock(opts.Parsed.Label) {
-		return nil, fmt.Errorf("CONCURRENT_LIMIT: a query is already running for label %q", opts.Parsed.Label)
+	// Concurrent control by label (skip if Lock not set)
+	if opts.Lock != nil {
+		if !opts.Lock.Lock(opts.Parsed.Label) {
+			return nil, fmt.Errorf("CONCURRENT_LIMIT: a query is already running for label %q", opts.Parsed.Label)
+		}
+		defer opts.Lock.Unlock(opts.Parsed.Label)
 	}
-	defer opts.Lock.Unlock(opts.Parsed.Label)
 
 	// Check if connector supports Queryable
 	q, ok := opts.Conn.(query.Queryable)

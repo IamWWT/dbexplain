@@ -1,5 +1,24 @@
 # 变更日志
 
+## v0.1.6 (2026-06-12) — Bug Bash：全局代码审计修复
+
+### 🐛 错误修复
+
+- **P0 潜在 Panic（4 项）**: executor.go nil Lock/Parsed 解引用修复；explain.go unsafe 类型断言守卫；filequery ORDER BY NULL 指针解引用修复；diff.go map 中 nil table 指针守卫
+- **P1 静默吞错（9 项）**: main.go 5 处 json.MarshalIndent/WriteFile 错误检查；sqlite/duckdb RowCount Scan 错误 log；clickhouse/elasticsearch 读错误后不再使用部分数据；所有 connector 增加 rows.Err() 检查；query.go Scan 错误 log；xlsx.go ErrNotSupported 改为真实错误
+- **P2 防御编码（8 项）**: repl.go error wrapping %v→%w；config.go include/exclude 过滤顺序修正；registry.go constructor 移出锁范围；infer.go UTF-8 rune-safe 切片；dsn.go PathUnescape 错误处理；mongo.go bson marshal 错误检查；compress.go 循环变量地址修复；output.go goroutine 泄漏修复
+
+### 📚 文档
+
+- **CHANGELOG.md / CHANGELOG_EN.md**: 更新至 v0.1.6
+- **MEMORY.md**: 架构路线图 + 版本号更新
+- **issues.json**: ISSUE-084 closed, ISSUE-085(v0.1.6) 录入
+
+### 🔧 内部重构
+
+- **21 项修复，20 个源文件修改**。所有修复均为防御性增强，不改变架构和功能。
+- **闭环验证**: go build + go vet + go test + selective compile 全部通过
+
 ## v0.1.5 (2026-06-11) — Oracle + Hive 连接器 + Policy 列剥离
 
 ### ✨ 新功能

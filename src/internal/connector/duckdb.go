@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log"
 	"net/url"
 	"path/filepath"
 	"runtime"
@@ -105,6 +106,9 @@ func (duckdbConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instanc
 		}
 	}
 	rows.Close()
+	if err := rows.Err(); err != nil {
+		log.Printf("[duckdb] rows iteration: %v", err)
+	}
 
 	total := len(tableNames)
 	for i, tn := range tableNames {
@@ -156,16 +160,21 @@ func collectDuckDBTable(ctx context.Context, db *sql.DB, tableName, redactedDSN 
 		}
 	}
 	colRows.Close()
+	if err := colRows.Err(); err != nil {
+		log.Printf("[duckdb] rows iteration: %v", err)
+	}
 
 	if len(t.Columns) == 0 {
 		return nil, fmt.Errorf("no columns found for %s", tableName)
 	}
 
 	// Step 2: Row count
-	_ = db.QueryRowContext(ctx, fmt.Sprintf(
+	if err := db.QueryRowContext(ctx, fmt.Sprintf(
 		`SELECT COUNT(*) FROM "%s"`,
 		strings.ReplaceAll(tableName, `"`, `""`)),
-	).Scan(&t.RowCount)
+	).Scan(&t.RowCount); err != nil {
+		log.Printf("[duckdb] row count for %s: %v", tableName, err)
+	}
 
 	// Step 3: Sample row for comment inference
 	if len(colsWithoutComment) > 0 && t.RowCount > 0 {
@@ -220,6 +229,9 @@ func collectDuckDBTable(ctx context.Context, db *sql.DB, tableName, redactedDSN 
 					RefTable: refPart,
 				})
 			}
+		}
+		if err := constraintRows.Err(); err != nil {
+			log.Printf("[duckdb] rows iteration: %v", err)
 		}
 	} else {
 		logf(ctx, "[duckdb] constraints query failed for %s: %v", tableName, err)

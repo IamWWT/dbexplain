@@ -319,22 +319,29 @@ func main() {
 			data, err := json.MarshalIndent(delta, "", "  ")
 			if err != nil {
 				log.Printf("[delta] marshal: %v", err)
-			}
-			fmt.Fprintf(os.Stderr, "[delta] %d added, %d removed, %d changed\n",
-				len(delta.Added), len(delta.Removed), len(delta.Changed))
-			deltaFile := strings.TrimSuffix(*cacheFile, ".json") + "_delta.json"
-			if err := os.WriteFile(deltaFile, data, 0644); err != nil {
-				log.Printf("[delta] write %s: %v", deltaFile, err)
+			} else {
+				fmt.Fprintf(os.Stderr, "[delta] %d added, %d removed, %d changed\n",
+					len(delta.Added), len(delta.Removed), len(delta.Changed))
+				deltaFile := strings.TrimSuffix(*cacheFile, ".json") + "_delta.json"
+				if err := os.WriteFile(deltaFile, data, 0644); err != nil {
+					log.Printf("[delta] write %s: %v", deltaFile, err)
+				}
 			}
 
 			// Output field-level detailed diff
 			detail := store.DiffDetailed(universe)
 			if len(detail.Tables) > 0 {
-				detailData, _ := json.MarshalIndent(detail, "", "  ")
-				diffFile := strings.TrimSuffix(*cacheFile, ".json") + "_diff.json"
-				os.WriteFile(diffFile, detailData, 0644)
-				fmt.Fprintf(os.Stderr, "[diff] %d tables with field-level changes → %s\n",
-					len(detail.Tables), diffFile)
+				detailData, err := json.MarshalIndent(detail, "", "  ")
+				if err != nil {
+					log.Printf("[diff] marshal: %v", err)
+				} else {
+					diffFile := strings.TrimSuffix(*cacheFile, ".json") + "_diff.json"
+					if err := os.WriteFile(diffFile, detailData, 0644); err != nil {
+						log.Printf("[diff] write %s: %v", diffFile, err)
+					}
+					fmt.Fprintf(os.Stderr, "[diff] %d tables with field-level changes → %s\n",
+						len(detail.Tables), diffFile)
+				}
 			}
 		}
 		if err := store.Update(universe); err != nil {
@@ -461,7 +468,10 @@ func handleDiff(args []string) {
 		if *humanOut {
 			renderDiffHuman(detail)
 		} else {
-			data, _ := json.MarshalIndent(detail, "", "  ")
+			data, err := json.MarshalIndent(detail, "", "  ")
+			if err != nil {
+				log.Fatalf("marshal diff detail: %v", err)
+			}
 			fmt.Println(string(data))
 		}
 		return
@@ -482,7 +492,10 @@ func handleDiff(args []string) {
 		if *humanOut {
 			renderDiffHuman(detail)
 		} else {
-			data, _ := json.MarshalIndent(detail, "", "  ")
+			data, err := json.MarshalIndent(detail, "", "  ")
+			if err != nil {
+				log.Fatalf("marshal diff since: %v", err)
+			}
 			fmt.Println(string(data))
 		}
 		return
@@ -518,7 +531,10 @@ func handleDiff(args []string) {
 		if *humanOut {
 			renderDiffHuman(detail)
 		} else {
-			data, _ := json.MarshalIndent(detail, "", "  ")
+			data, err := json.MarshalIndent(detail, "", "  ")
+			if err != nil {
+				log.Fatalf("marshal diff before/after: %v", err)
+			}
 			fmt.Println(string(data))
 		}
 		return

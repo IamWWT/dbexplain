@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -65,6 +66,9 @@ func (mysqlConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instance
 				}
 			}
 		}
+		if err := rows.Err(); err != nil {
+			log.Printf("[mysql] rows iteration: %v", err)
+		}
 	}
 
 	for _, dbName := range dbNames {
@@ -101,6 +105,9 @@ func collectMySQLDB(ctx context.Context, db *sql.DB, dbName, redactedDSN string)
 		tables = append(tables, t)
 	}
 	rows.Close()
+	if err := rows.Err(); err != nil {
+		log.Printf("[mysql] rows iteration: %v", err)
+	}
 
 	total := len(tables)
 	for i, t := range tables {
@@ -142,6 +149,9 @@ func fillMySQLTable(ctx context.Context, db *sql.DB, dbName string, t *schema.Ta
 		}
 	}
 	colRows.Close()
+	if err := colRows.Err(); err != nil {
+		log.Printf("[mysql] rows iteration: %v", err)
+	}
 
 	// 对无注释的列，取首行数据推断
 	if len(colsWithoutComment) > 0 && t.RowCount > 0 {
@@ -180,6 +190,9 @@ func fillMySQLTable(ctx context.Context, db *sql.DB, dbName string, t *schema.Ta
 				}
 			}
 		}
+		if err := idxRows.Err(); err != nil {
+			log.Printf("[mysql] rows iteration: %v", err)
+		}
 		for _, idx := range idxMap {
 			t.Indexes = append(t.Indexes, idx)
 		}
@@ -215,6 +228,9 @@ func fillMySQLTable(ctx context.Context, db *sql.DB, dbName string, t *schema.Ta
 			fk.Columns = append(fk.Columns, col)
 			fk.RefColumns = append(fk.RefColumns, refCol)
 		}
+		if err := fkRows.Err(); err != nil {
+			log.Printf("[mysql] rows iteration: %v", err)
+		}
 	} else {
 		logf(ctx, "[mysql] FK query failed for %s: %v", t.Name, err)
 	}
@@ -238,6 +254,9 @@ func fillMySQLTable(ctx context.Context, db *sql.DB, dbName string, t *schema.Ta
 						fk.OnUpdate = updRule
 					}
 				}
+			}
+			if err := ruleRows.Err(); err != nil {
+				log.Printf("[mysql] rows iteration: %v", err)
 			}
 		}
 	}

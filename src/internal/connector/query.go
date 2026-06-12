@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/IamWWT/dbexplain/internal/query"
@@ -56,6 +57,7 @@ func executeSQLQuery(ctx context.Context, db *sql.DB, sqlStr string, maxRows int
 		}
 
 		if err := rows.Scan(scanArgs...); err != nil {
+			log.Printf("[query] scan row: %v", err)
 			continue
 		}
 

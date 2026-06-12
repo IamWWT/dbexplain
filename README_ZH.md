@@ -26,11 +26,11 @@
 │  └────────────────┘  └────────────────┘  └───────────────────┘   │
 ├──────────────────────────────────────────────────────────────────┤
 │                    安全防护层                                      │
-│  ┌──────────┐    ┌────────────┐    ┌────────────────────────┐    │
-│  │ sqlguard │ →  │ AutoLimit  │ →  │ 策略引擎               │    │
-│  │ AST校验   │    │ LIMIT 1000 │    │ DENY_TABLES/COLUMNS   │    │
-│  │ 只读保障  │    │ 防全表导出  │    │ MASK_COLUMNS/DENY_SQL │    │
-│  └──────────┘    └────────────┘    └────────────────────────┘    │
+│  ┌──────────┐    ┌────────────────────────┐    ┌────────────┐    │
+│  │ sqlguard │ →  │ 策略引擎               │ →  │ AutoLimit  │    │
+│  │ AST校验   │    │ DENY_TABLES/COLUMNS   │    │ LIMIT 1000 │    │
+│  │ 只读保障  │    │ MASK_COLUMNS/DENY_SQL │    │ 防全表导出  │    │
+│  └──────────┘    └────────────────────────┘    └────────────┘    │
 ├──────────────────────────────────────────────────────────────────┤
 │                  连接器层 (15 种数据源)                            │
 │  关系型: MySQL PG GaussDB SQLite DuckDB Oracle                 │
@@ -72,21 +72,22 @@
 | | PostgreSQL | `postgres://` | ✅ | ✅ SQL | ✅ | ✅ | 多 Schema、行数统计、SSL 可配 |
 | | GaussDB | `gaussdb://` | ✅ | ✅ SQL | ✅ | ✅ | PostgreSQL 协议兼容 |
 | | SQLite | `sqlite://` | ✅ | ✅ SQL | ✅ | ✅ | 纯 Go 驱动，无 CGO |
-| | Oracle | `oracle://` | ✅ | ✅ SQL | ✅ | ✅ | 外键/索引/主键、12c+ 需 FETCH FIRST |
+| | Oracle | `oracle://` `oracles://` | ✅ | ✅ SQL | ✅ | ✅ | 外键/索引/主键、TLS、12c+ 需 FETCH FIRST |
 | **分析型** | ClickHouse | `clickhouse://` | ✅ | ✅ SQL | ✅ | ✅ | 排序键 / 分区键 / 主键 |
-| | Hive | `hive://` | ✅ | ✅ SQL | ✅ | ✅ | DESCRIBE FORMATTED、Kerberos、无行数统计 |
+| | Hive | `hive://` `hives://` | ✅ | ✅ SQL | ✅ | ✅ | DESCRIBE FORMATTED、Kerberos、TLS、无行数统计 |
 | | DuckDB ¹ | `duckdb://` | ✅ | ✅ SQL | ✅ | ✅ | 嵌入式分析引擎，需 `-tags duckdb` 构建 |
-| **键值型** | Redis | `redis://` | ✅ | — | ✅ | — | 键模式推断、集群、TTL 风险 |
+| **键值型** | Redis | `redis://` `rediss://` | ✅ | — | ✅ | — | 键模式推断、集群、TTL 风险 |
 | **文档型** | MongoDB | `mongodb://` | ✅ | — | ✅ | — | 近似文档数 |
-| | Elasticsearch | `elasticsearch://` | ✅ | ⚠️ SQL+JSON | ✅ | — | 索引映射、HTTPS、原生 JSON _search |
+| | Elasticsearch | `elasticsearch://` `elasticsearchs://` | ✅ | ⚠️ SQL+JSON | ✅ | — | 索引映射、TLS、原生 JSON _search |
 | **向量型** | Qdrant | `qdrant://` | ✅ | — | ✅ | — | 向量集合元数据 |
 | **时序型** | Prometheus ² | `prometheus://` | ✅ | ✅ PromQL | ✅ | ✅ | targets/labels/metrics 元数据 |
-| **文件型** | CSV / TSV | `csv://` `tsv://` | ✅ | — | ✅ | ✅ | 内置纯 Go SQL 引擎 ³ |
-| | Excel | `xlsx://` | ✅ | — | ✅ | ✅ | 内置纯 Go SQL 引擎 ³ |
+| **文件型** | CSV / TSV | `csv://` `tsv://` | ✅ | ✅ SQL ⁵ | ✅ | ✅ | 内置纯 Go SQL 引擎 ³ |
+| | Excel | `xlsx://` | ✅ | ✅ SQL ⁵ | ✅ | ✅ | 内置纯 Go SQL 引擎 ³ |
 
 > ¹ DuckDB 为可选构建：标准版(-std)不含 DuckDB，DuckDB 版(-duckdb)全驱动 + DuckDB 需 CGO 环境。<br>
 > ² Prometheus 单源 DSL 和跨源联邦均支持：`SELECT * FROM @prom.up WHERE job="prometheus"`。<br>
 > ³ CSV/TSV/XLSX 支持完整 SQL 子集（WHERE/GROUP BY/JOIN/窗口函数/UNION）和哈希索引优化。
+> ⁵ 文件型数据源通过内置 SQL 引擎执行查询，不走 executor 路径。
 
 ---
 
@@ -114,7 +115,7 @@
 三条路径共享同一安全管道：
 
 ```
-sqlguard(AST 只读校验) → AutoLimit(LIMIT 1000) → 策略引擎(DENY/MASK)
+sqlguard(AST 只读校验) → 策略引擎(DENY/MASK) → AutoLimit(LIMIT 1000)
 ```
 
 ```bash
@@ -164,8 +165,8 @@ dbexplain diff --cache schema.json --since v1.0 --human
 
 ```
                     ┌─ SQL 路径 ─────────────────────────────┐
-                    │  sqlguard(AST 只读) → AutoLimit(1000)  │
-                    │  → 策略引擎 CheckSQL(DENY/表/列)       │
+                    │  sqlguard(AST 只读) → 策略引擎 CheckSQL │
+                    │  → AutoLimit(1000)                     │
                     ├─ Native 路径 ──────────────────────────┤
                     │  策略引擎 CheckNative(命令白名单)       │
                     ├─ 文件路径 ─────────────────────────────┤
@@ -180,7 +181,7 @@ dbexplain diff --cache schema.json --since v1.0 --human
 | L1 | **sqlguard** — AST 只读校验（8 读/17 写动词） | ✅ | — | — |
 | L2 | **AutoLimit** — 自动注入 LIMIT 1000 | ✅ | — | — |
 | L3 | **策略引擎** — DENY_TABLES/COLUMNS/STATEMENTS | ✅ CheckSQL | ✅ CheckNative | ✅ DenyTables |
-| L4 | **并发锁** — 每标签 QueryLock | ✅ | ✅ | ✅ |
+| L4 | **并发锁** — 每标签 QueryLock | ✅ | ✅ | — ⁴ |
 | L5 | **ApplyMask** — 列值掩码（后执行） | ✅ | ✅ | ✅ |
 | L6 | **StripDeniedColumns** — 列剥离（后执行） | ✅ | ✅ | ✅ |
 
@@ -207,7 +208,7 @@ dbexplain diff --cache schema.json --since v1.0 --human
 > ¹ Oracle AutoLimit: `LIMIT N` 自动转换为 `FETCH FIRST N ROWS ONLY`（Oracle 12c+）。
 > ² DuckDB 额外文件访问校验：`read_parquet`/`read_csv`/`read_json` 函数受 `allowed_path` 参数限制。
 > ³ ES 双模式：SQL 查询走 IsSQL=true（完整管道），JSON 原生查询走 IsSQL=false（无 sqlguard）。
-> ⁴ 文件路径由 `queryutil.HandleFileExecute` 处理，绕过 executor 但保留策略引擎防护。
+> ⁴ 文件路径由 `queryutil.HandleFileExecute` 处理，绕过 executor 但保留策略引擎防护。L4 并发锁在文件路径中不适用（文件查询是单线程全内存操作）。
 
 非 SQL 数据库拥有各自的命令白名单或原生查询校验器。密码在所有输出和日志中自动脱敏。
 

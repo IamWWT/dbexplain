@@ -420,11 +420,11 @@ func formatBytes(b int64) string {
 // RenderChunksMarkdown renders all chunks as a single Markdown document.
 func RenderChunksMarkdown(chunks []TableChunk) string {
 	var b strings.Builder
-	for i, chunk := range chunks {
+	for i := range chunks {
 		if i > 0 {
 			b.WriteString("\n---\n\n")
 		}
-		b.WriteString(RenderChunkMarkdown(&chunk))
+		b.WriteString(RenderChunkMarkdown(&chunks[i]))
 	}
 	return b.String()
 }

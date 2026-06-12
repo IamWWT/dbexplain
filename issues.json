@@ -917,12 +917,24 @@
     {
       "id": "ISSUE-084",
       "title": "[v0.1.5] nil map assignment in policy.Load() — per-DSN MASK_COLUMNS panic when global MASK_COLUMNS is unset",
-      "status": "open",
+      "status": "closed",
+      "closed": "2026-06-12",
       "priority": "high",
       "category": "bug",
       "description": "policy.Load() line 62 中 `cfg.MaskColumns[k] = v` 在仅配置了 per-DSN 的 MASK_COLUMNS（如 WWTAIOPS_MASK_COLUMNS）但未设置全局 MASK_COLUMNS 时 panic。根因：loadMask() 在 env var 为空时返回 nil（line 250: `return nil`），导致 cfg.MaskColumns 为 nil，随后 per-DSN 循环中赋值触发 panic。\n\n复现条件：\n- 加密配置含 label-specific 的 MASK_COLUMNS 规则\n- 全局 MASK_COLUMNS 未设置\n- 通过 DBPROBE_ENV_FILE 加载配置且使用 -label 参数触发 per-DSN 分支\n- 终端直接执行（不走 -label 分支）不受影响\n\n修复：per-DSN 循环前检查 cfg.MaskColumns 是否为 nil 并初始化。\n\nStack trace:\n```\npanic: assignment to entry in nil map\ngithub.com/IamWWT/dbexplain/internal/policy.Load({0xfba02c58b79, 0x3})\n    internal/policy/policy.go:62 +0x5ad\nmain.handleExecute({0xfba0289e100, 0x5, 0x5})\n    cmd/dbexplain/execute.go:137 +0xddc\nmain.main()\n    cmd/dbexplain/main.go:71 +0x359\n```",
       "file": "src/internal/policy/policy.go",
       "created": "2026-06-12"
+    },
+    {
+      "id": "ISSUE-085",
+      "title": "[v0.1.6] Bug Bash — 全局代码审计修复：nil panic、静默吞错、错误消息质量、防御编码",
+      "status": "open",
+      "priority": "high",
+      "category": "bug",
+      "description": "系统性 Go 代码审计，覆盖全部 ~50 个 Go 源文件。修复 21 个问题，分三级：\n\nP0（潜在 panic，4 项）：\n- executor.go:58 — nil Lock/Parsed 解引用\n- explain.go:118,124 — unsafe type assertion\n- filequery/executor.go:859-860 — ORDER BY NULL 指针解引用\n- diff.go:75,86-94,97-109 — map 中 nil table 指针\n\nP1（静默吞错，9 项）：\n- main.go:319-335 — 5 处 json.MarshalIndent/WriteFile 错误忽略\n- sqlite.go:109 + duckdb.go:165-168 — RowCount Scan 错误丢弃\n- clickhouse.go:285-288 + elasticsearch.go:76-79,189-192,263-266 — 读错误后继续用部分数据\n- 所有 connector — rows.Next() 循环后 rows.Err() 未检查\n- query.go:58-60 — Scan 错误静默跳过\n- xlsx.go:298 — ErrNotSupported 掩盖实际错误\n\nP2（错误质量 & 防御编码，8 项）：\n- repl.go:261,266 — %v→%w 错误链\n- config.go:284-302 — include/exclude 过滤短路\n- registry.go:35 — constructor 在锁内调用\n- infer.go:42 — 字节级切片破坏 UTF-8\n- dsn.go:166,187 — PathUnescape 错误忽略\n- mongo.go:188-190 — bson marshal 错误丢弃\n- compress.go:424 — 循环变量地址\n- output.go:76-84,104-112 — render panic 导致 goroutine 泄漏\n\n详见 src/ 下各文件行号和修复。不改动架构和功能。",
+      "file": "src/",
+      "created": "2026-06-12",
+      "labels": ["v0.1.6", "bug", "security"]
     }
   ]
 }

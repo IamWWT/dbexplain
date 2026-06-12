@@ -2,6 +2,7 @@ package dsn
 
 import (
 	"fmt"
+	"log"
 	"net/url"
 	"path/filepath"
 	"runtime"
@@ -163,7 +164,12 @@ func (d *DSN) SQLitePath() string {
 	if i := strings.Index(after, "?"); i >= 0 {
 		after = after[:i]
 	}
-	after, _ = url.PathUnescape(after)
+	unescaped, unescapeErr := url.PathUnescape(after)
+	if unescapeErr != nil {
+		log.Printf("[dsn] SQLitePath unescape %q: %v (using original)", after, unescapeErr)
+	} else {
+		after = unescaped
+	}
 	// Windows: sqlite:///C:/path → /C:/path → C:/path
 	if runtime.GOOS == "windows" && len(after) >= 3 &&
 		after[0] == '/' && after[2] == ':' {
@@ -184,7 +190,12 @@ func (d *DSN) FilePath() string {
 	if i := strings.Index(after, "?"); i >= 0 {
 		after = after[:i]
 	}
-	after, _ = url.PathUnescape(after)
+	unescaped, unescapeErr := url.PathUnescape(after)
+	if unescapeErr != nil {
+		log.Printf("[dsn] FilePath unescape %q: %v (using original)", after, unescapeErr)
+	} else {
+		after = unescaped
+	}
 	// Windows: csv:///C:/path → /C:/path → C:/path
 	if runtime.GOOS == "windows" && len(after) >= 3 &&
 		after[0] == '/' && after[2] == ':' {

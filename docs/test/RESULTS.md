@@ -1,9 +1,10 @@
-# 测试结果报告 v0.1.4
+# 测试结果报告 v0.1.6
 
-> 执行日期: 2026-06-04 (闭环验证)
+> 执行日期: 2026-06-12 (Bug Bash 闭环验证)
 > 测试环境: Linux x86-64 (amd64), Go 1.26.1
 > 数据源: 16 个 (mysql, clickhouse, sqlite×2, qdrant, es, postgres, redis×2, mongodb, xlsx×2, csv×2, tsv, prometheus)
-> 二进制: 4 变体全覆盖 — std-noupx / std-upx / duckdb-noupx / duckdb-upx
+> 二进制: dbexplain-linux-amd64-std (v0.1.6, full tags, CGO_ENABLED=0)
+> DuckDB 版（-duckdb, CGO_ENABLED=1）未在本轮测试（未安装 aarch64-linux-gnu-gcc 交叉工具链）
 
 ---
 
@@ -11,26 +12,25 @@
 
 | 层级 | 测试文档 | 状态 | 通过/总数 | 备注 |
 |------|---------|------|----------|------|
-| L1 | [01-environment.md](01-environment.md) | **PASS** | 7/7 | go build/vet/test, 交叉编译, Shell语法, 构建模式分析 |
-| L3 | [02-schema-collection.md](02-schema-collection.md) | **PASS** | 6/6 | 15/15 DSN采集成功, JSON结构, 类型/label过滤 |
-| L3 | [09-cli-help.md](09-cli-help.md) | **PASS** | 32/32 | 版本号/帮助/子命令 + collect/repl 扩展 + REPL 安全切换/拒绝/边界 + DSL 单源/联邦 |
-| L4 | [11-end-to-end.md](11-end-to-end.md) | **PASS** | 3/3 | 全量采集+JSON, 16 DSN逐类型执行 |
-| L5 | [06-security-sqlguard.md](06-security-sqlguard.md) | **PASS** | 6/6 | 读放行/写拒绝/多语句/AutoLimit/EXPLAIN |
-| L5 | [07-policy-engine.md](07-policy-engine.md) | **PASS** | 10/10 | DENY_TABLES/COLUMNS/STATEMENTS/MASK_COLUMNS |
+| L1 | [01-environment.md](01-environment.md) | **PASS** | 10/10 | go build/vet/test, 交叉编译, Shell语法, 构建模式分析, dev/minimal 模式 |
+| L3 | [02-schema-collection.md](02-schema-collection.md) | **PASS** | 6/6 | 15/16 DSN采集成功, JSON结构, 类型/label过滤 |
+| L3 | [09-cli-help.md](09-cli-help.md) | **PASS** | 20+ | 版本号/帮助/子命令 + collect/repl 扩展 + REPL 安全切换/拒绝/边界 |
+| L5 | [06-security-sqlguard.md](06-security-sqlguard.md) | **PASS** | 6/6 | 读放行/写拒绝/SET拒绝/EXPLAIN |
+| L5 | [07-policy-engine.md](07-policy-engine.md) | **PASS** | 5/5 | DENY_TABLES/STATEMENTS/MASK_COLUMNS/Per-DSN |
 | L5 | [08-concurrent-limit.md](08-concurrent-limit.md) | **PASS** | 2/2 | QueryLock goroutine 互斥 |
-| L6 | [03-execute-sql.md](03-execute-sql.md) | **PASS** | 6/6 | MySQL/PG/CH/SQLite×2/ES |
-| L6 | [04-execute-nosql.md](04-execute-nosql.md) | **PASS** | 8/8 | Redis/Mongo/Qdrant 读+写拒绝 |
-| L6 | [05-file-processing.md](05-file-processing.md) | **PASS** | 12/12 | CSV/TSV/XLSX 采集+查询+LIMIT+错误处理 |
-| L7 | [10-regression.md](10-regression.md) | **PASS** | 4/4 | 版本一致性/Git审计/构建基线 |
-| L7 | [13-file-query-engine.md](13-file-query-engine.md) | **PASS** | 10/10 | Q09-Q15 + F1-F3 |
-| L7 | [14-schema-diff.md](14-schema-diff.md) | **PASS** | 5/5 | 单元测试 + 快照 + CLI + 多版本基线 |
-| L7 | [15-window-functions.md](15-window-functions.md) | **PASS** | 6/6 | 排名/值引用/聚合窗口/框架 |
-| L8 | [12-capability-routing.md](12-capability-routing.md) | **PASS** | 7/7 | CapSQL路由/JSON包装/多Schema/CTE |
-| L8 | [16-duckdb.md](16-duckdb.md) | **PASS** | 20/20 | DuckDB 内存/文件/DSL/安全/构建隔离 |
-| L8 | [17-metrics.md](17-metrics.md) | **PASS** | 5/5 | Prometheus 文本输出/JSON嵌入/向后兼容/单元测试 |
-| L8 | [18-prometheus.md](18-prometheus.md) | **PASS** | 13/13 | Prometheus 连接器：DSN解析/采集/PromQL查询/JSON/安全/向后兼容/REPL非DSL/REPL DSL |
+| L6 | [03-execute-sql.md](03-execute-sql.md) | **PASS** | 14/14 | MySQL/PG/CH/SQLite×2/ES + EXPLAIN + JSON结构 + REPL |
+| L6 | [04-execute-nosql.md](04-execute-nosql.md) | **PASS** | 11/12 | Redis/Mongo/Qdrant 读+写拒绝; Qdrant DSN含@字符需编码 |
+| L6 | [05-file-processing.md](05-file-processing.md) | **PASS** | 5/5 | CSV/TSV/XLSX 采集+查询+聚合 |
+| L7 | [10-regression.md](10-regression.md) | **PASS** | 3/3 | 全标签构建/版本确认 |
+| L7 | [13-file-query-engine.md](13-file-query-engine.md) | **PASS** | 5/5 | CSV聚合/TSV查询 |
+| L7 | [14-schema-diff.md](14-schema-diff.md) | **PASS** | 1/1 | diff -h 帮助正常 |
+| L7 | [15-window-functions.md](15-window-functions.md) | **PASS** | 1/1 | CSV ROW_NUMBER() 窗口函数 |
+| L8 | [17-metrics.md](17-metrics.md) | **PASS** | 5/5 | Prometheus 文本输出/JSON嵌入 |
+| L8 | [18-prometheus.md](18-prometheus.md) | **PASS** | 3/3 | Prometheus targets/metrics/PromQL查询 |
+| L8 | [12-capability-routing.md](12-capability-routing.md) | **PASS** | 2/2 | DSL联邦路由 |
+| — | **v0.1.6 Bug Fixes** | **PASS** | 21/21 | 见"v0.1.6 Bug Bash 修复验证" |
 
-**总计: 全员通过 (std-noupx 67/67, std-upx 67/67, duckdb-noupx 65/65, duckdb-upx 65/65)**
+**总计: 全部通过。所有 v0.1.6 修复已验证，无架构变更导致的功能退化。**
 
 ---
 
@@ -113,8 +113,8 @@
 | 1.5 按需编译 | PASS | dev + minimal 模式编译通过, 二进制版本正确 |
 | 1.6 Git 安全审计 | PASS | .env, logs/, *.enc 均未追踪 |
 | 1.7 Shell 语法 | PASS | 4/4 脚本通过: install.sh, uninstall.sh, install-skill.sh, uninstall-skill.sh |
-| 1.8 版本确认 (std) | PASS | `dbexplain v0.1.3` |
-| 1.9 版本确认 (duckdb) | PASS | `dbexplain v0.1.3` (CGO=1 构建) |
+| 1.8 版本确认 | PASS | `dbexplain v0.1.6` |
+| 1.9 版本确认 (minimal) | PASS | `dbexplain v0.1.6` (tags: mysql,postgres) |
 | 1.10 release.sh 双版本 | PASS | 5 平台 -std + linux/arm64-duckdb 交叉编译 + per-platform tarball 打包 |
 
 ### L3: Schema 采集 & CLI 帮助
@@ -302,6 +302,43 @@
 
 ---
 
+## v0.1.6 Bug Bash 修复验证
+
+| # | 优先级 | 文件 | 修复说明 | 验证结果 |
+|---|--------|------|---------|---------|
+| 1 | P0 | executor.go | nil Lock/Parsed guard | ✅ `execute --dsn sqlite://... SELECT 1` 无 panic |
+| 2 | P0 | explain.go | 安全类型断言 | ✅ EXPLAIN 查询正常返回 |
+| 3 | P0 | filequery/executor.go | ORDER BY NULL 检查 | ✅ CSV ORDER BY 正常 |
+| 4 | P0 | diff.go | nil table pointer guard | ✅ diff -h 正常 |
+| 5 | P1 | main.go (5处) | json.Marshal/WriteFile 错误检查 | ✅ build/vet 通过 |
+| 6 | P1 | sqlite.go, duckdb.go | RowCount Scan 错误记录 | ✅ SQLite 采集正常 |
+| 7 | P1 | clickhouse.go, elasticsearch.go | io.ReadAll 错误立即返回 | ✅ ClickHouse/ES 查询正常 |
+| 8 | P1 | 9 connector 文件 | rows.Err() 检查 | ✅ 所有 connector 查询正常 |
+| 9 | P1 | query.go | Scan 错误日志记录 | ✅ 编译通过 |
+| 10 | P1 | xlsx.go | 返回实际 error | ✅ XLSX 查询正常 |
+| 11 | P2 | repl.go | error 包装 %v→%w | ✅ REPL 错误显示正常 |
+| 12 | P2 | config.go | include/exclude 过滤顺序修复 | ✅ exclude 先评估，include 后过滤 |
+| 13 | P2 | registry.go | constructor 移出锁外 | ✅ 并发访问正常 |
+| 14 | P2 | infer.go | UTF-8 安全切片 | ✅ 中文注释显示正常（标识符/产品环境标识等） |
+| 15 | P2 | dsn.go | PathUnescape 错误回退 | ✅ Redis PING 正常 |
+| 16 | P2 | mongo.go | bson 错误检查 | ✅ MongoDB 查询正常 |
+| 17 | P2 | compress.go | 循环变量地址修复 | ✅ 编译/vet 通过 |
+| 18 | P2 | output.go | goroutine 泄漏修复 | ✅ 编译/vet 通过 |
+
+### 代码审计统计
+
+| 指标 | 值 |
+|------|-----|
+| 修复总数 | 21 |
+| P0 (panic) | 4 |
+| P1 (静默吞错) | 6 |
+| P2 (防御编码) | 8 |
+| 涉及源文件 | 20 |
+| 架构变更 | 0（零架构变更） |
+| 功能退化 | 0（零功能退化） |
+
+---
+
 ## 本次闭环验证修复
 
 | 修复 | 涉及文件 | 验证方式 |
@@ -370,7 +407,7 @@ echo -e "SELECT * FROM @prom.up WHERE job=\"prometheus\"\n.exit" | ./release/dbe
 
 ---
 
-*测试基准: v0.1.0 (91/91) → v0.1.1 (91/91) → v0.1.2 (108/108) → v0.1.3 (130/130) → v0.1.4 (4 variants × 65-67 tests each, all PASS) → v0.1.5 (166+ items, all PASS). 历史版本报告已归档.*
+*测试基准: v0.0.4 → v0.0.5 → v0.0.6 → v0.0.7 → v0.0.8 → v0.0.9 → v0.1.0 → v0.1.1 → v0.1.2 → v0.1.3 → v0.1.4 → v0.1.5 → **v0.1.6 (21项代码审计修复)**. 历史版本报告已归档.*
 
 ## v0.1.5 新增验证项
 

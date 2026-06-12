@@ -74,6 +74,7 @@ func CaptureText(result *analyze.Result, human bool) string {
 	var buf bytes.Buffer
 	done := make(chan struct{})
 	go func() {
+		defer r.Close()
 		defer func() {
 			if r := recover(); r != nil {
 				log.Printf("[PANIC] CaptureText: %v", r)
@@ -102,6 +103,7 @@ func CaptureJSON(result *analyze.Result) string {
 	var buf bytes.Buffer
 	done := make(chan struct{})
 	go func() {
+		defer r.Close()
 		defer func() {
 			if r := recover(); r != nil {
 				log.Printf("[PANIC] CaptureJSON: %v", r)

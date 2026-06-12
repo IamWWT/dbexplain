@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log"
 	"net/url"
 	"regexp"
 	"strings"
@@ -73,6 +74,9 @@ func collectOracleSchema(ctx context.Context, db *sql.DB, d *dsn.DSN) (*schema.I
 				}
 			}
 		}
+		if err := rows.Err(); err != nil {
+			log.Printf("[oracle] rows iteration: %v", err)
+		}
 	}
 
 	for _, owner := range owners {
@@ -109,6 +113,9 @@ func collectOracleDB(ctx context.Context, db *sql.DB, owner, redactedDSN string)
 		tables = append(tables, t)
 	}
 	rows.Close()
+	if err := rows.Err(); err != nil {
+		log.Printf("[oracle] rows iteration: %v", err)
+	}
 
 	total := len(tables)
 	for i, t := range tables {
@@ -152,6 +159,9 @@ func fillOracleTable(ctx context.Context, db *sql.DB, owner string, t *schema.Ta
 		}
 	}
 	colRows.Close()
+	if err := colRows.Err(); err != nil {
+		log.Printf("[oracle] rows iteration: %v", err)
+	}
 
 	// constraints (PK/UK) — set IsPrimary and IsUnique
 	cRows, err := db.QueryContext(ctx, `
@@ -176,6 +186,9 @@ func fillOracleTable(ctx context.Context, db *sql.DB, owner string, t *schema.Ta
 			}
 		}
 		cRows.Close()
+		if err := cRows.Err(); err != nil {
+			log.Printf("[oracle] rows iteration: %v", err)
+		}
 		for _, col := range t.Columns {
 			if pkCols[col.Name] {
 				col.IsPrimary = true
@@ -213,6 +226,9 @@ func fillOracleTable(ctx context.Context, db *sql.DB, owner string, t *schema.Ta
 					Unique:  uniqueness == "UNIQUE",
 				}
 			}
+		}
+		if err := idxRows.Err(); err != nil {
+			log.Printf("[oracle] rows iteration: %v", err)
 		}
 		for _, idx := range idxMap {
 			t.Indexes = append(t.Indexes, idx)
@@ -255,6 +271,9 @@ func fillOracleTable(ctx context.Context, db *sql.DB, owner string, t *schema.Ta
 			fkRefs[name].positions = append(fkRefs[name].positions, pos)
 		}
 		fkRows.Close()
+		if err := fkRows.Err(); err != nil {
+			log.Printf("[oracle] rows iteration: %v", err)
+		}
 
 		// resolve referenced table and columns for each FK
 		for name, fk := range fkMap {
@@ -291,6 +310,9 @@ func fillOracleTable(ctx context.Context, db *sql.DB, owner string, t *schema.Ta
 				fk.RefColumns = append(fk.RefColumns, refCol)
 			}
 			refColRows.Close()
+			if err := refColRows.Err(); err != nil {
+				log.Printf("[oracle] rows iteration: %v", err)
+			}
 		}
 	} else {
 		logf(ctx, "[oracle] FK query failed for %s: %v", t.Name, err)
@@ -505,6 +527,9 @@ func oracleExplain(ctx context.Context, db *sql.DB, explainSQL string) (*query.Q
 			}
 		}
 		result.Rows = append(result.Rows, row)
+	}
+	if err := planRows.Err(); err != nil {
+		log.Printf("[oracle] rows iteration: %v", err)
 	}
 
 	result.RowCount = len(result.Rows)

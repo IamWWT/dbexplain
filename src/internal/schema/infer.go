@@ -38,8 +38,9 @@ func InferComment(colName, colType, sampleValue string) string {
 		return "JSON 数据"
 	}
 	if sampleValue != "" {
-		if len(sampleValue) > 20 {
-			return "示例: " + sampleValue[:20] + "..."
+		runes := []rune(sampleValue)
+		if len(runes) > 20 {
+			return "示例: " + string(runes[:20]) + "..."
 		}
 		return "示例: " + sampleValue
 	}

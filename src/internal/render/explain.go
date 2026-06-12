@@ -115,15 +115,19 @@ func renderExplainNode(out *strings.Builder, node map[string]interface{}, depth 
 	// Nested: union_result
 	if union, ok := node["union_result"].(map[string]interface{}); ok {
 		out.WriteString(fmt.Sprintf("%s   union_result:\n", indent))
-		for _, tbl := range union["table_name"].([]interface{}) {
-			if t, ok := tbl.(string); ok {
-				out.WriteString(fmt.Sprintf("%s   - table: %s\n", indent, t))
+		if tbls, ok := union["table_name"].([]interface{}); ok {
+			for _, tbl := range tbls {
+				if t, ok := tbl.(string); ok {
+					out.WriteString(fmt.Sprintf("%s   - table: %s\n", indent, t))
+				}
 			}
 		}
 		// Recurse into tables
-		for _, table := range union["tables"].([]interface{}) {
-			if t, ok := table.(map[string]interface{}); ok {
-				renderExplainNode(out, t, depth+2)
+		if tbls, ok := union["tables"].([]interface{}); ok {
+			for _, table := range tbls {
+				if t, ok := table.(map[string]interface{}); ok {
+					renderExplainNode(out, t, depth+2)
+				}
 			}
 		}
 	}

@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -63,6 +64,9 @@ func (sqliteConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instanc
 		}
 	}
 	rows.Close()
+	if err := rows.Err(); err != nil {
+		log.Printf("[sqlite] rows iteration: %v", err)
+	}
 
 	total := len(tableNames)
 	for i, tn := range tableNames {
@@ -104,9 +108,14 @@ func fillSQLiteTable(ctx context.Context, db *sql.DB, t *schema.Table, redactedD
 		}
 	}
 	colRows.Close()
+	if err := colRows.Err(); err != nil {
+		log.Printf("[sqlite] rows iteration: %v", err)
+	}
 
 	// row count
-	db.QueryRowContext(ctx, fmt.Sprintf(`SELECT COUNT(*) FROM "%s"`, strings.ReplaceAll(t.Name, `"`, `""`))).Scan(&t.RowCount)
+	if err := db.QueryRowContext(ctx, fmt.Sprintf(`SELECT COUNT(*) FROM "%s"`, strings.ReplaceAll(t.Name, `"`, `""`))).Scan(&t.RowCount); err != nil {
+		log.Printf("[sqlite] row count for %s: %v", t.Name, err)
+	}
 
 	// 推断注释
 	if len(colsWithoutComment) > 0 && t.RowCount > 0 {
@@ -143,8 +152,14 @@ func fillSQLiteTable(ctx context.Context, db *sql.DB, t *schema.Table, redactedD
 					}
 				}
 				icols.Close()
+				if err := icols.Err(); err != nil {
+					log.Printf("[sqlite] rows iteration: %v", err)
+				}
 			}
 			t.Indexes = append(t.Indexes, idx)
+		}
+		if err := idxRows.Err(); err != nil {
+			log.Printf("[sqlite] rows iteration: %v", err)
 		}
 	}
 
@@ -172,6 +187,9 @@ func fillSQLiteTable(ctx context.Context, db *sql.DB, t *schema.Table, redactedD
 			}
 			fk.Columns = append(fk.Columns, from)
 			fk.RefColumns = append(fk.RefColumns, to)
+		}
+		if err := fkRows.Err(); err != nil {
+			log.Printf("[sqlite] rows iteration: %v", err)
 		}
 	}
 }

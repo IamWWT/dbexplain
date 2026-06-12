@@ -1,5 +1,24 @@
 # Changelog
 
+## v0.1.6 (2026-06-12) — Bug Bash: Global Code Audit Fixes
+
+### 🐛 Bug Fixes
+
+- **P0 Potential Panics (4 items)**: executor.go nil Lock/Parsed dereference fix; explain.go unsafe type assertion guards; filequery ORDER BY NULL pointer dereference fix; diff.go nil table pointer guard in map lookups
+- **P1 Silent Error Drops (9 items)**: main.go 5 unchecked json.MarshalIndent/WriteFile errors; sqlite/duckdb RowCount Scan error logging; clickhouse/elasticsearch return on read error instead of using partial data; rows.Err() check added to all connectors; query.go Scan error logging; xlsx.go ErrNotSupported replaced with actual error
+- **P2 Defensive Coding (8 items)**: repl.go error wrapping %v→%w; config.go include/exclude filter order fix; registry.go constructor moved outside lock; infer.go UTF-8 rune-safe slicing; dsn.go PathUnescape error handling; mongo.go bson marshal error checks; compress.go loop variable address fix; output.go goroutine leak fix
+
+### 📚 Documentation
+
+- **CHANGELOG.md / CHANGELOG_EN.md**: Updated to v0.1.6
+- **MEMORY.md**: Architecture roadmap + version updated
+- **issues.json**: ISSUE-084 closed, ISSUE-085(v0.1.6) recorded
+
+### 🔧 Internal Refactoring
+
+- **21 fixes across 20 source files**. All fixes are defensive-only, no architecture or functionality changes.
+- **Closed-loop verification**: go build + go vet + go test + selective compile all pass
+
 ## v0.1.5 (2026-06-11) — Oracle + Hive Connectors + Policy Column Stripping
 
 ### ✨ New Features

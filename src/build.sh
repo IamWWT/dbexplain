@@ -117,7 +117,7 @@ if [ "$MODE" = "prod" ]; then
 fi
 
 # ── Common ldflags ────────────────────────────────────────────
-LDFLAGS="-s -w -X github.com/IamWWT/dbexplain/internal/version.Version=v0.1.5"
+LDFLAGS="-s -w -X github.com/IamWWT/dbexplain/internal/version.Version=v0.1.6"
 EXTRALDFLAGS=""
 
 # ── Mode-specific flags ───────────────────────────────────────

@@ -74,21 +74,22 @@ Core philosophy: **deterministic facts only — LLMs consume structured IR exter
 | | PostgreSQL | `postgres://` | ✅ | ✅ SQL | ✅ | ✅ | Multi-schema, row counts, SSL configurable |
 | | GaussDB | `gaussdb://` | ✅ | ✅ SQL | ✅ | ✅ | PostgreSQL-protocol compatible |
 | | SQLite | `sqlite://` | ✅ | ✅ SQL | ✅ | ✅ | Pure Go driver, no CGO |
-| | Oracle | `oracle://` | ✅ | ✅ SQL | ✅ | ✅ | FK/indexes/PK, 12c+ FETCH FIRST required |
+| | Oracle | `oracle://` `oracles://` | ✅ | ✅ SQL | ✅ | ✅ | FK/indexes/PK, TLS, 12c+ FETCH FIRST required |
 | **Analytical** | ClickHouse | `clickhouse://` | ✅ | ✅ SQL | ✅ | ✅ | Sort / partition / primary keys |
-| | Hive | `hive://` | ✅ | ✅ SQL | ✅ | ✅ | DESCRIBE FORMATTED, Kerberos, no row count stats |
+| | Hive | `hive://` `hives://` | ✅ | ✅ SQL | ✅ | ✅ | DESCRIBE FORMATTED, Kerberos, TLS, no row count stats |
 | | DuckDB ¹ | `duckdb://` | ✅ | ✅ SQL | ✅ | ✅ | Embedded analytical engine, requires `-tags duckdb` |
-| **Key-Value** | Redis | `redis://` | ✅ | — | ✅ | — | Key pattern inference, cluster, TTL risk |
+| **Key-Value** | Redis | `redis://` `rediss://` | ✅ | — | ✅ | — | Key pattern inference, cluster, TTL risk |
 | **Document** | MongoDB | `mongodb://` | ✅ | — | ✅ | — | Estimated document counts |
-| | Elasticsearch | `elasticsearch://` | ✅ | ⚠️ SQL+JSON | ✅ | — | Index mapping, HTTPS, native JSON _search |
+| | Elasticsearch | `elasticsearch://` `elasticsearchs://` | ✅ | ⚠️ SQL+JSON | ✅ | — | Index mapping, TLS, native JSON _search |
 | **Vector** | Qdrant | `qdrant://` | ✅ | — | ✅ | — | Vector collection metadata |
 | **Time Series** | Prometheus ² | `prometheus://` | ✅ | ✅ PromQL | ✅ | ✅ | Targets/labels/metrics metadata |
-| **File** | CSV / TSV | `csv://` `tsv://` | ✅ | — | ✅ | ✅ | Built-in pure-Go SQL engine ³ |
-| | Excel | `xlsx://` | ✅ | — | ✅ | ✅ | Built-in pure-Go SQL engine ³ |
+| **File** | CSV / TSV | `csv://` `tsv://` | ✅ | ✅ SQL ⁵ | ✅ | ✅ | Built-in pure-Go SQL engine ³ |
+| | Excel | `xlsx://` | ✅ | ✅ SQL ⁵ | ✅ | ✅ | Built-in pure-Go SQL engine ³ |
 
 > ¹ DuckDB is an optional build: Standard edition (-std) excludes DuckDB; DuckDB edition (-duckdb) includes all drivers + DuckDB, requires CGO environment.<br>
 > ² Prometheus supports both single-source DSL and cross-source federation: `SELECT * FROM @prom.up WHERE job="prometheus"`.<br>
 > ³ CSV/TSV/XLSX support a full SQL subset (WHERE/GROUP BY/JOIN/window functions/UNION) with hash index optimization.
+> ⁵ File-source queries execute through the built-in SQL engine, bypassing the executor path.
 
 ---
 
@@ -117,7 +118,7 @@ Extract table structures, columns, indexes, foreign keys, row counts, partition 
 All three paths share the same security pipeline:
 
 ```
-sqlguard(AST read-only) → AutoLimit(LIMIT 1000) → Policy Engine(DENY/MASK)
+sqlguard(AST read-only) → Policy Engine(DENY/MASK) → AutoLimit(LIMIT 1000)
 ```
 
 ```bash
@@ -169,8 +170,8 @@ All queries execute through a unified security pipeline, automatically routing t
 
 ```
                     ┌─ SQL Path ───────────────────────────────┐
-                    │  sqlguard(AST read-only) → AutoLimit(1K) │
-                    │  → Policy Engine CheckSQL(DENY/table/col)│
+                    │  sqlguard(AST read-only) → Policy Engine  │
+                    │  CheckSQL → AutoLimit(1K)                 │
                     ├─ Native Path ────────────────────────────┤
                     │  Policy Engine CheckNative(cmd allowlist) │
                     ├─ File Path ──────────────────────────────┤
@@ -185,7 +186,7 @@ All queries execute through a unified security pipeline, automatically routing t
 | L1 | **sqlguard** — AST read-only (8 read / 17 write verbs) | ✅ | — | — |
 | L2 | **AutoLimit** — auto-inject LIMIT 1000 | ✅ | — | — |
 | L3 | **Policy Engine** — DENY_TABLES/COLUMNS/STATEMENTS | ✅ CheckSQL | ✅ CheckNative | ✅ DenyTables |
-| L4 | **Concurrent Lock** — per-label QueryLock | ✅ | ✅ | ✅ |
+| L4 | **Concurrent Lock** — per-label QueryLock | ✅ | ✅ | — ⁴ |
 | L5 | **ApplyMask** — column value masking (post-exec) | ✅ | ✅ | ✅ |
 | L6 | **StripDeniedColumns** — column stripping (post-exec) | ✅ | ✅ | ✅ |
 
@@ -212,7 +213,7 @@ All queries execute through a unified security pipeline, automatically routing t
 > ¹ Oracle AutoLimit: `LIMIT N` auto-converted to `FETCH FIRST N ROWS ONLY` (Oracle 12c+).
 > ² DuckDB extra file access validation: `read_parquet`/`read_csv`/`read_json` restricted by `allowed_path` param.
 > ³ ES dual-mode: SQL queries use IsSQL=true (full pipeline), JSON native queries use IsSQL=false (no sqlguard).
-> ⁴ File path handled by `queryutil.HandleFileExecute`, bypasses executor but retains policy engine protection.
+> ⁴ File path handled by `queryutil.HandleFileExecute`, bypasses executor but retains policy engine protection. L4 concurrent lock does not apply to file queries (single-threaded in-memory operation).
 
 Non-SQL databases have their own command allow-lists or native query validators. Passwords are redacted from all output and logs.
 

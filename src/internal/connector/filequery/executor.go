@@ -856,6 +856,16 @@ func sortAggResults(result *query.QueryResult, orderBy []OrderExpr) {
 			if idx >= len(result.Rows[i]) || idx >= len(result.Rows[j]) {
 				continue
 			}
+			// Skip nil rows (can occur when HAVING preserved rows with NULL in ORDER BY column)
+			if result.Rows[i][idx] == nil && result.Rows[j][idx] == nil {
+				continue
+			}
+			if result.Rows[i][idx] == nil {
+				return ob.NullsDir == "FIRST" || (ob.NullsDir == "" && ob.Dir == "DESC")
+			}
+			if result.Rows[j][idx] == nil {
+				return ob.NullsDir == "LAST" || (ob.NullsDir == "" && ob.Dir == "ASC")
+			}
 			vi := *result.Rows[i][idx]
 			vj := *result.Rows[j][idx]
 

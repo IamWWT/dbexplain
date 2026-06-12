@@ -258,12 +258,12 @@ func replLoop(scanner *bufio.Scanner, currentEntry config.DSNEntry, currentLabel
 func execQuery(dsnRaw string, sql string, limit int, timeout int, allEntries []config.DSNEntry) error {
 	parsed, err := dsn.ParseDSN(dsnRaw)
 	if err != nil {
-		return fmt.Errorf("invalid DSN: %v", config.SanitizeErr(err))
+		return fmt.Errorf("invalid DSN: %w", config.SanitizeErr(err))
 	}
 
 	c, err := connector.GetConnector(parsed.Kind)
 	if err != nil {
-		return fmt.Errorf("%v", err)
+		return fmt.Errorf("get connector: %w", err)
 	}
 	caps := capabilities.FromProvider(c)
 	isSQL := caps.Has(capabilities.CapSQL)

@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"sort"
 	"strings"
@@ -74,7 +73,7 @@ func (esConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instance, e
 	if res.IsError() {
 		body, readErr := io.ReadAll(res.Body)
 		if readErr != nil {
-			log.Printf("[elasticsearch] read error response body: %v", readErr)
+			return nil, schema.NewDBError(d.Redacted(), "", "", "read error response", readErr)
 		}
 		return nil, schema.NewDBError(d.Redacted(), "", "", "unhealthy", fmt.Errorf("%s", string(body)))
 	}
@@ -188,7 +187,7 @@ func (esConnector) ExecQuery(ctx context.Context, opts query.ExecuteOpts) (*quer
 	defer resp.Body.Close()
 	rbody, readErr := io.ReadAll(resp.Body)
 	if readErr != nil {
-		log.Printf("[elasticsearch] read sql response body: %v", readErr)
+		return nil, fmt.Errorf("es sql read response body: %w", readErr)
 	}
 
 	if resp.StatusCode != 200 {
@@ -262,7 +261,7 @@ func esSearchQuery(ctx context.Context, host, port, scheme string, opts query.Ex
 	defer resp.Body.Close()
 	rbody, readErr := io.ReadAll(resp.Body)
 	if readErr != nil {
-		log.Printf("[elasticsearch] read search response body: %v", readErr)
+		return nil, fmt.Errorf("es search read response body: %w", readErr)
 	}
 
 	if resp.StatusCode != 200 {

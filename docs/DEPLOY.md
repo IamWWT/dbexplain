@@ -53,7 +53,7 @@ cd src && bash build.sh            # 默认 prod 模式：5 平台全驱动编�
 | 阶段 | 产出 | 说明 |
 |------|------|------|
 | Phase 1 | 5 平台 -std 标准版 | CGO=0, tags=full, `--no-upx` 原始构建 |
-| Phase 2 | linux-amd64/arm64 -duckdb 版 | CGO=1, 全驱动+duckdb, 含 arm64 交叉编译 |
+| Phase 2 | linux-amd64 -duckdb 版 | CGO=1, 全驱动+duckdb, 当前平台原生构建。ARM64 DuckDB 需在 ARM64 机器上原生构建 |
 | Phase 3 | 12 个 per-platform tarball | 每平台 × upx/noupx 变体, darwin 仅 noupx |
 
 > **`build.sh` vs `release.sh` 定位区别**：`build.sh` 面向开源社区开发者，提供 4 种模式（prod/dev/test/minimal）和按需驱动选择，适合开发调试和自定义编译。`release.sh` 是官方发布命令，零参数（无 `--no-upx` / `--skip-duckdb` 等选项），一次产出全量发布 artifacts。
@@ -70,7 +70,7 @@ cd src && bash build.sh            # 默认 prod 模式：5 平台全驱动编�
 
 > **DuckDB 特殊说明**：`duckdb` 标签 **不在 "full" 中**，需要显式指定。DuckDB 构建需要 CGO 和 C 工具链（gcc/clang/mingw），不能交叉编译。使用 `bash build.sh minimal duckdb,mysql,postgres` 时为当前平台原生构建。
 >
-> **ARM64 静态链接说明**：原生 ARM64 构建使用 `-static` 可达到零动态依赖。但从 x86_64 交叉编译 ARM64 时，Ubuntu 22.04 交叉工具链的静态 glibc 有 `R_AARCH64_LD64_GOTPAGE_LO15` GOT overflow，只能使用 `-static-libgcc -static-libstdc++`（glibc 动态链接）。musl 交叉编译器不兼容 DuckDB（依赖 glibc-only 函数 `backtrace` / `__res_init`），不要尝试。详见 `docs/databases/relational/DUCKDB_IMPL.md §2.5` 和 ISSUE-083。
+> **ARM64 静态链接说明**：原生 ARM64 构建使用 `-static` 可达到零动态依赖。ARM64 DuckDB 需在原生 ARM64 机器上构建（release.sh 跳过 ARM64 DuckDB 交叉编译，因 CGO 交叉编译不稳定）。musl 交叉编译器不兼容 DuckDB（依赖 glibc-only 函数 `backtrace` / `__res_init`），不要尝试。详见 `docs/databases/relational/DUCKDB_IMPL.md §2.5` 和 ISSUE-083。
 
 编译产物在 `release/` 目录，覆盖 5 个平台：
 

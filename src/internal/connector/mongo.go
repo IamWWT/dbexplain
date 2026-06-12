@@ -185,9 +185,14 @@ func (mongoConnector) ExecQuery(ctx context.Context, opts query.ExecuteOpts) (*q
 		}
 		aggPipeline := make(mongo.Pipeline, 0, len(pipeline))
 		for _, stage := range pipeline {
-			raw, _ := bson.Marshal(stage)
+			raw, err := bson.Marshal(stage)
+			if err != nil {
+				return nil, fmt.Errorf("mongo marshal stage: %w", err)
+			}
 			var doc bson.D
-			bson.Unmarshal(raw, &doc)
+			if err := bson.Unmarshal(raw, &doc); err != nil {
+				return nil, fmt.Errorf("mongo unmarshal stage: %w", err)
+			}
 			aggPipeline = append(aggPipeline, doc)
 		}
 		cursor, err := db.Collection(spec.Aggregate).Aggregate(ctx, aggPipeline)

@@ -139,22 +139,13 @@ if command -v gcc &>/dev/null || command -v clang &>/dev/null; then
   bash build.sh minimal "$DUCKDB_TAGS" --no-upx
   echo "  DuckDB native: dbexplain-$(go env GOOS)-$(go env GOARCH)-duckdb"
 
-  # Cross-compile DuckDB for linux/arm64
-  if command -v aarch64-linux-gnu-gcc &>/dev/null; then
-    echo ""
-    echo "  Cross-compiling DuckDB for linux/arm64..."
-    GOOS=linux GOARCH=arm64 bash build.sh minimal "$DUCKDB_TAGS" --no-upx || {
-      echo "  WARNING: linux/arm64 DuckDB cross-compile failed (CGO toolchain issue)"
-      echo "  The linux/arm64 DuckDB binary will not be available."
-    }
-
-    if [ -f "$RELEASE_DIR/dbexplain-linux-arm64-duckdb" ]; then
-      echo "    → dbexplain-linux-arm64-duckdb"
-    fi
-  else
-    echo ""
-    echo "  WARNING: aarch64-linux-gnu-gcc not found — skipping linux/arm64 DuckDB"
-  fi
+  # Cross-compile DuckDB for linux/arm64 — skipped by default.
+  # ARM64 DuckDB requires native ARM64 build environment (CGO cross-compilation unreliable).
+  # Users on ARM64: run `bash build.sh minimal duckdb,mysql,postgres,sqlite,clickhouse,redis,\
+  # mongodb,elasticsearch,qdrant,csv,xlsx,prometheus,oracle,hive` natively.
+  echo ""
+  echo "  linux/arm64 DuckDB: skipped (cross-compile unreliable, build natively on ARM64)"
+  echo "  → Native ARM64: bash build.sh minimal duckdb,..."
 else
   echo "  WARNING: No C compiler found — skipping DuckDB build entirely"
   echo "  Install gcc/clang and re-run for DuckDB support."
@@ -223,9 +214,15 @@ echo "Binaries:"
 total_bin=0
 for f in "$RELEASE_DIR"/dbexplain-*; do
   case "$f" in *.bak|*.tar.gz|*.upxtmp|*.noupxbak) continue ;; esac
+  # Skip ambiguous names without -std or -duckdb suffix (leftover from dev/minimal builds)
+  bname="$(basename "$f")"
+  case "$bname" in
+    *-std|*-std.exe|*-duckdb) ;;  # keep
+    *) continue ;;                  # skip leftovers like dbexplain-linux-amd64
+  esac
   size=$(stat -c%s "$f" 2>/dev/null || stat -f%z "$f" 2>/dev/null)
   total_bin=$((total_bin + size))
-  echo "  $(basename "$f")  ($(numfmt --to=iec-i --suffix=B "$size" 2>/dev/null || echo "$size bytes"))"
+  echo "  $bname  ($(numfmt --to=iec-i --suffix=B "$size" 2>/dev/null || echo "$size bytes"))"
 done
 echo "  Total: $(numfmt --to=iec-i --suffix=B "$total_bin" 2>/dev/null || echo "$total_bin bytes")"
 echo ""

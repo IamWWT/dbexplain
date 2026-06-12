@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -68,6 +69,9 @@ func (postgresConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Insta
 				dbNames = append(dbNames, n)
 			}
 		}
+		if err := rows.Err(); err != nil {
+			log.Printf("[postgres] rows iteration: %v", err)
+		}
 	}
 
 	for _, dbName := range dbNames {
@@ -103,6 +107,9 @@ func collectPGDB(ctx context.Context, db *sql.DB, dbName, redactedDSN string) (*
 		}
 	}
 	schemaRows.Close()
+	if err := schemaRows.Err(); err != nil {
+		log.Printf("[postgres] rows iteration: %v", err)
+	}
 	if len(schemas) == 0 {
 		schemas = []string{"public"}
 	}
@@ -149,6 +156,9 @@ func collectPGDB(ctx context.Context, db *sql.DB, dbName, redactedDSN string) (*
 			tables = append(tables, t)
 		}
 		tRows.Close()
+		if err := tRows.Err(); err != nil {
+			log.Printf("[postgres] rows iteration: %v", err)
+		}
 	}
 
 	total := len(tables)
@@ -210,6 +220,9 @@ func fillPGTable(ctx context.Context, db *sql.DB, schemaName, baseName string, t
 		}
 	}
 	colRows.Close()
+	if err := colRows.Err(); err != nil {
+		log.Printf("[postgres] rows iteration: %v", err)
+	}
 
 	// 无注释推断
 	if len(colsWithoutComment) > 0 && t.RowCount > 0 {
@@ -240,6 +253,9 @@ func fillPGTable(ctx context.Context, db *sql.DB, schemaName, baseName string, t
 			idx.Unique = strings.Contains(strings.ToUpper(def), "UNIQUE")
 			idx.Columns = extractIndexColumns(def)
 			t.Indexes = append(t.Indexes, idx)
+		}
+		if err := idxRows.Err(); err != nil {
+			log.Printf("[postgres] rows iteration: %v", err)
 		}
 	} else {
 		logf(ctx, "[postgres] index query failed for %s: %v", t.Name, err)
@@ -279,6 +295,9 @@ func fillPGTable(ctx context.Context, db *sql.DB, schemaName, baseName string, t
 			}
 			fk.Columns = append(fk.Columns, col)
 			fk.RefColumns = append(fk.RefColumns, refCol)
+		}
+		if err := fkRows.Err(); err != nil {
+			log.Printf("[postgres] rows iteration: %v", err)
 		}
 	} else {
 		logf(ctx, "[postgres] FK query failed for %s: %v", t.Name, err)

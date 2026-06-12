@@ -1,7 +1,7 @@
 # docs/ 文件索引
 
 > 本文档索引 `docs/` 下所有文件，方便快速定位。
-> 更新时间：v0.1.5 (2026-06-11)
+> 更新时间：v0.1.6 (2026-06-12)
 
 ---
 
@@ -99,6 +99,7 @@
 |------|------|
 | [`RELEASE_WECHAT_v0.1.2.md`](RELEASE_WECHAT_v0.1.2.md) | v0.1.2 公众号发布文案 |
 | [`RELEASE_WECHAT_v0.1.5.md`](RELEASE_WECHAT_v0.1.5.md) | v0.1.5 公众号发布文案（新增 Oracle + Hive 连接器，15 种数据源，六层安全防护） |
+| [`RELEASE_WECHAT_v0.1.6.md`](RELEASE_WECHAT_v0.1.6.md) | v0.1.6 公众号发布文案（Bug Bash：全局代码审计修复） |
 | [`dbexplain_wechat_article.html`](dbexplain_wechat_article.html) | 微信公众号文章 HTML |
 
 ---

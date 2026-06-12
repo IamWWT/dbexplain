@@ -25,14 +25,13 @@ func Register(kind string, constructor func() Connector) {
 func GetConnector(kind string) (Connector, error) {
     registryMu.Lock()
     constructor, ok := registry[kind]
+    registryMu.Unlock()
     if !ok {
-        registryMu.Unlock()
         if kind == "duckdb" {
             return nil, fmt.Errorf("duckdb connector not available in this build; rebuild from source with -tags duckdb (requires CGO)")
         }
         return nil, fmt.Errorf("no connector for %q", kind)
     }
     c := constructor()
-    registryMu.Unlock()
     return c, nil
 }

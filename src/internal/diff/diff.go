@@ -71,7 +71,7 @@ func DiffUniverse(
 		if inOld && !inNew {
 			td.Status = "removed"
 			// Include old columns/indexes/FKs for reference
-			if oldT, ok := oldSnapshots[key]; ok {
+			if oldT, ok := oldSnapshots[key]; ok && oldT != nil {
 				for _, c := range oldT.Columns {
 					td.Columns = append(td.Columns, ColumnChange{
 						Name:  c.Name,
@@ -83,7 +83,7 @@ func DiffUniverse(
 			}
 		} else if !inOld && inNew {
 			td.Status = "added"
-			if newT, ok := newSnapshots[key]; ok {
+			if newT, ok := newSnapshots[key]; ok && newT != nil {
 				for _, c := range newT.Columns {
 					td.Columns = append(td.Columns, ColumnChange{
 						Name:  c.Name,

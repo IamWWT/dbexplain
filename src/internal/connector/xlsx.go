@@ -296,7 +296,7 @@ func (xlsxConnector) ExecQuery(ctx context.Context, opts query.ExecuteOpts) (*qu
 	result, err := filequery.Execute(opts.SQL, columns, allData, extras, opts.MaxRows)
 	if err != nil {
 		log.Printf("[xlsx] filequery error: %v", err)
-		return nil, &query.ErrNotSupported{Kind: "xlsx"}
+		return nil, fmt.Errorf("xlsx filequery: %w", err)
 	}
 	return result, nil
 }

@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -284,7 +283,7 @@ func (c *chHTTP) query(ctx context.Context, sql string) ([]byte, error) {
 	defer resp.Body.Close()
 	body, readErr := io.ReadAll(resp.Body)
 	if readErr != nil {
-		log.Printf("[clickhouse] read response body: %v", readErr)
+		return nil, fmt.Errorf("clickhouse read response body: %w", readErr)
 	}
 	if resp.StatusCode != 200 {
 		return nil, fmt.Errorf("clickhouse HTTP %d: %s", resp.StatusCode, string(body))

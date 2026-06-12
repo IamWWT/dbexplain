@@ -7,6 +7,7 @@ import (
 	"crypto/tls"
 	"database/sql"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -70,6 +71,9 @@ func collectHiveSchema(ctx context.Context, db *sql.DB, inst *schema.Instance) (
 		}
 	}
 	dbRows.Close()
+	if err := dbRows.Err(); err != nil {
+		log.Printf("[hive] rows iteration: %v", err)
+	}
 
 	for _, dbName := range dbNames {
 		logf(ctx, "[hive] collecting database %s", dbName)
@@ -101,6 +105,9 @@ func collectHiveDB(ctx context.Context, db *sql.DB, dbName, redactedDSN string) 
 		}
 	}
 	rows.Close()
+	if err := rows.Err(); err != nil {
+		log.Printf("[hive] rows iteration: %v", err)
+	}
 
 	total := len(tableNames)
 	for i, tName := range tableNames {
@@ -156,6 +163,9 @@ func fillHiveTable(ctx context.Context, db *sql.DB, dbName string, t *schema.Tab
 		}
 	}
 	descRows.Close()
+	if err := descRows.Err(); err != nil {
+		log.Printf("[hive] rows iteration: %v", err)
+	}
 
 	// Sampling for comment inference
 	if len(colsWithoutComment) > 0 {

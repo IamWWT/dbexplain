@@ -281,18 +281,19 @@ func FilterDSNs(entries []DSNEntry, include, exclude string, logDir string) []DS
 			continue
 		}
 
-		if len(includeSet) > 0 && matchesDSNFilter(parsed, e.EnvKey, includeSet) {
-			filtered = append(filtered, e)
-			continue
-		}
-
-		if len(includeSet) > 0 {
-			filterLogger.Printf("skipping %s (did not match include filter)", parsed.Redacted())
-			continue
-		}
-
+		// Apply exclude filter first
 		if len(excludeSet) > 0 && matchesDSNFilter(parsed, e.EnvKey, excludeSet) {
 			filterLogger.Printf("excluding %s (matched exclude filter)", parsed.Redacted())
+			continue
+		}
+
+		// Apply include filter (if set, only include matching entries)
+		if len(includeSet) > 0 {
+			if matchesDSNFilter(parsed, e.EnvKey, includeSet) {
+				filtered = append(filtered, e)
+			} else {
+				filterLogger.Printf("skipping %s (did not match include filter)", parsed.Redacted())
+			}
 			continue
 		}
 
