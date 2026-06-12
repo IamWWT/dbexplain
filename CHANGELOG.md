@@ -1,34 +1,25 @@
 # 变更日志
 
-## v0.1.6 (2026-06-12) — Bug Bash：全局代码审计修复
+## v0.1.6 (2026-06-12) — Bug Bash + Prometheus DSL 内核升级
 
-### 🐛 错误修复
+### ✨ Prometheus DSL 内核升级
 
-- **P0 潜在 Panic（4 项）**: executor.go nil Lock/Parsed 解引用修复；explain.go unsafe 类型断言守卫；filequery ORDER BY NULL 指针解引用修复；diff.go map 中 nil table 指针守卫
-- **P1 静默吞错（9 项）**: main.go 5 处 json.MarshalIndent/WriteFile 错误检查；sqlite/duckdb RowCount Scan 错误 log；clickhouse/elasticsearch 读错误后不再使用部分数据；所有 connector 增加 rows.Err() 检查；query.go Scan 错误 log；xlsx.go ErrNotSupported 改为真实错误
-- **P2 防御编码（8 项）**: repl.go error wrapping %v→%w；config.go include/exclude 过滤顺序修正；registry.go constructor 移出锁范围；infer.go UTF-8 rune-safe 切片；dsn.go PathUnescape 错误处理；mongo.go bson marshal 错误检查；compress.go 循环变量地址修复；output.go goroutine 泄漏修复
+- **promql() 原始表达式透传**: `FROM @label.promql(任意 PromQL 表达式)` — 支持多指标二元运算（`rate(a[5m]) / rate(b[5m])`）、PromQL 函数（topk / histogram_quantile 等）、联邦 JOIN。WHERE/GROUP BY 需在表达式内联。**优势**：DSL 编译器无法覆盖全部 PromQL 语法（PromQL 持续演进），透传模式让用户永远不受 DSL 编译能力限制，享受 PromQL 全部表达能力。
+- **ORDER BY / LIMIT / OFFSET**: Go 层后处理，数值列/标签列/NULL 分层排序。**优势**：首次支持 Prometheus 查询结果排序分页，之前结果顺序不固定且无法截断；可精确获取 Top-N 或分页浏览。
+- **SELECT 列投影 + GROUP BY 聚合**: SELECT 列名/别名、COUNT/AVG/SUM 等编译为 PromQL by()。**优势**：之前仅 `SELECT *`，大量标签列噪音大；列投影精简输出，聚合函数让用户用 SQL 语法做 PromQL `by()` 分组，降低学习成本。
+- **Collect 移除 job 表** (ISSUE-088): `@my-prom.xxx` 引用的是 metric 名，非 job 名。**优势**：Collect 输出与 DSL 查询模型对齐，避免用户混淆。
 
-### 📚 文档
+> **统一查询体验**：团队只需掌握一套 SQL 语法即可操作关系库（MySQL/PG/Oracle）和时序库（Prometheus），`promql()` 透传 + 跨源联邦 JOIN 实现异构数据统一分析。
 
-- **CHANGELOG.md / CHANGELOG_EN.md**: 更新至 v0.1.6
-- **MEMORY.md**: 架构路线图 + 版本号更新
-- **issues.json**: ISSUE-084 closed, ISSUE-085(v0.1.6) 录入, ISSUE-086(v0.1.6) 录入
+### 🐛 Bug Bash（21 项修复）
 
-### 🔧 内部重构
-
-- **21 项修复，20 个源文件修改**。所有修复均为防御性增强，不改变架构和功能。
+- P0/P1/P2 防御性增强 — nil 解引用、错误吞没、goroutine 泄漏、DSN 密码泄露共 17 项
+- DSL 联邦 JOIN 修复 (ISSUE-087): 物化别名使用占位符导致 JOIN 解析失败
 - **闭环验证**: go build + go vet + go test + selective compile 全部通过
-
-### 🔒 安全修复
-
-- **DSN 密码泄露修复（4 处 + 框架层）**: execute.go 多 DSN 匹配时使用 d.Redacted() 替代 d.FilePath()；main.go x2 panic recover 使用 parsed.Redacted() 替代 rawDSN；repl.go 无效 DSN 输出使用 SanitizeErr 脱敏；repl.go .connect 错误使用 SanitizeErr 脱敏。框架层新增 dsn.DSN.String() → Redacted()，fmt.Sprintf("%s", d) 自动脱敏。
-- **issues.json 新增 ISSUE-086 记录**
 
 ### ⚡ 体验优化
 
-- **execute 参数位置无关**: --label/--explain/--human/--limit/--timeout/--dsn/--config 等所有 flag 支持 SQL 前后任意位置，不再因 flag 在 SQL 之后被忽略
-- **EXPLAIN 双重包裹防护**: SQL 已含 EXPLAIN 时 --explain 标志自动跳过，输出明确警告提示
-- **空 SQL 错误提示优化**: 从模糊的 "READ_ONLY_VIOLATION" 改为明确的使用说明
+- execute 参数位置无关，EXPLAIN 双重包裹防护，空 SQL 错误提示优化
 
 ## v0.1.5 (2026-06-11) — Oracle + Hive 连接器 + Policy 列剥离
 

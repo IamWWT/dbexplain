@@ -211,6 +211,45 @@ dbexplain execute -env --label my-qdrant '{"scroll":"runbooks","limit":20}' --hu
 dbexplain execute -env --label my-qdrant '{"count":"runbooks"}' --human
 ```
 
+### 查 Prometheus（时序数据库）
+
+Prometheus 使用 PromQL（不是 SQL），直接写 PromQL 语句：
+
+```bash
+# 所有 up == 1 的目标
+dbexplain execute "up == 1" --label my-prom --human
+
+# 聚合查询
+dbexplain execute "count by (job) (up)" --label my-prom --human
+
+# 范围查询（过去5分钟平均负载）
+dbexplain execute "avg(node_load1[5m])" --label my-prom --human
+
+# 标签过滤
+dbexplain execute "up{job='node'}" --label my-prom --human
+```
+
+**DSL 模式**（用 SQL 语法查 Prometheus）：
+
+```bash
+# DSL 编译为 PromQL
+dbexplain execute --dsl "SELECT * FROM @my-prom.up WHERE job='node'" --label my-prom --human
+```
+
+**联邦查询**（Prometheus + MySQL 跨源 JOIN）：
+
+```bash
+# Prometheus 指标关联 MySQL 表
+dbexplain execute -env --dsl "SELECT p.instance, p.hostip, p.job, p.value, i.product, i.subproduct
+  FROM @my-prom.up p JOIN @aiops-mysql.iplist i ON p.hostip = i.hostip" --human
+
+# 或 + 文件数据
+dbexplain execute -env --dsl "SELECT p.*, c.region
+  FROM @my-prom.up p JOIN @my-csv.nodes c ON p.hostip = c.ip" --human
+```
+
+> 联邦查询会将 Prometheus 指标全量物化到内存后再执行 JOIN，大指标注意内存。
+
 ### 用 DSL 模式查（统一写法）
 
 DSL 模式让你用 `@标签名.表名` 统一引用任意数据源，不用记 `--db` 编号：
@@ -220,7 +259,7 @@ dbexplain execute -env --dsl "SELECT * FROM @my-mysql.users LIMIT 10" --human
 dbexplain execute -env --dsl "SELECT * FROM @my-pg.orders WHERE status = 'active'" --human
 ```
 
-> v0.1.2 起 DSL 模式支持跨源 JOIN/UNION（联邦查询），可用 `@label1.t1 JOIN @label2.t2` 关联不同数据库。暂不支持 Redis / Mongo / Qdrant / ES 原生数据源，这些用前面的原生命令方式查。
+> v0.1.2 起 DSL 模式支持跨源 JOIN/UNION（联邦查询），可用 `@label1.t1 JOIN @label2.t2` 关联不同数据库。支持的联邦数据源：SQL 数据库 + Prometheus（PromQL 物化）+ 文件（CSV/XLSX）。暂不支持 Redis / Mongo / Qdrant / ES 原生数据源，这些用前面的原生命令方式查。
 
 ---
 

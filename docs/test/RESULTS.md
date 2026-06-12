@@ -26,7 +26,7 @@
 | L7 | [14-schema-diff.md](14-schema-diff.md) | **PASS** | 1/1 | diff -h 帮助正常 |
 | L7 | [15-window-functions.md](15-window-functions.md) | **PASS** | 1/1 | CSV ROW_NUMBER() 窗口函数 |
 | L8 | [17-metrics.md](17-metrics.md) | **PASS** | 5/5 | Prometheus 文本输出/JSON嵌入 |
-| L8 | [18-prometheus.md](18-prometheus.md) | **PASS** | 3/3 | Prometheus targets/metrics/PromQL查询 |
+| L8 | [18-prometheus.md](18-prometheus.md) | **PASS** | 18/18 | Prometheus Collect/PromQL/DSL ORDER BY/DSL 联邦 |
 | L8 | [12-capability-routing.md](12-capability-routing.md) | **PASS** | 2/2 | DSL联邦路由 |
 | — | **v0.1.6 Bug Fixes** | **PASS** | 21/21 | 见"v0.1.6 Bug Bash 修复验证" |
 
@@ -336,6 +336,23 @@
 | 涉及源文件 | 20 |
 | 架构变更 | 0（零架构变更） |
 | 功能退化 | 0（零功能退化） |
+
+---
+
+## v0.1.6 Prometheus Schema + DSL 增强验证
+
+| # | 测试项 | 命令 | 验证结果 |
+|---|--------|------|---------|
+| 1 | Collect — 仅 2 个 meta 表 | `dbexplain -dsn 'prometheus://...' --json` | ✅ 仅有 _labels / _metrics（engine=prometheus_meta，无 job 表） |
+| 2 | ~~_metric_labels 存在~~ | — | ❌ 已移除 — metric→label 通过 PromQL 自身发现，无需 Collect 层预采集 |
+| 3 | DSL ORDER BY | `execute --dsl "SELECT ... FROM @my-prom.node_cpu_seconds_total WHERE mode=\"system\" ORDER BY value"` | ✅ 数值升序排列（108 → 1448） |
+| 4 | DSL ORDER BY DESC + LIMIT | `execute --dsl "... ORDER BY value DESC LIMIT 5"` | ✅ 降序，精确 5 行 |
+| 5 | DSL ORDER BY + LIMIT + OFFSET | `execute --dsl "... ORDER BY value DESC LIMIT 10 OFFSET 3"` | ✅ 跳过前 3 行，内容不同 |
+| 6 | DSL 联邦 Prometheus + MySQL JOIN | `execute -env --dsl "SELECT p.instance, p.hostip, p.job, p.value, i.product, i.subproduct FROM @my-prom.up p JOIN @aiops-mysql.iplist i ON p.hostip = i.hostip"` | ✅ 16 行，product/subproduct 来自 MySQL |
+| 7 | DSL 联邦 ORDER BY + LIMIT | `execute -env --dsl "... ORDER BY p.value DESC LIMIT 10"` | ✅ value 降序，10 行 |
+| 8 | Collect -env --include | `dbexplain -env --include my-prom --human` | ✅ 2 个 meta 表，无 job 表 |
+
+**Prometheus v0.1.6 全部 7 项验证通过。**
 
 ---
 

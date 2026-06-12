@@ -25,6 +25,7 @@ type SourceRef struct {
 	Label       string // DSN label (e.g., "mydb" in @mydb.users)
 	Table       string // table name (e.g., "users" in @mydb.users)
 	Placeholder string // replacement token in the preprocessed SQL (e.g., "__dsl_0__")
+	IsRawPromQL bool   // true = Table is a raw PromQL expression (from promql(...) syntax)
 }
 
 // DSLQuery is the result of parsing DSL input.

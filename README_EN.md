@@ -87,9 +87,12 @@ Core philosophy: **deterministic facts only — LLMs consume structured IR exter
 | | Excel | `xlsx://` | ✅ | ✅ SQL ⁵ | ✅ | ✅ | Built-in pure-Go SQL engine ³ |
 
 > ¹ DuckDB is an optional build: Standard edition (-std) excludes DuckDB; DuckDB edition (-duckdb) includes all drivers + DuckDB, requires CGO environment.<br>
-> ² Prometheus supports both single-source DSL and cross-source federation: `SELECT * FROM @prom.up WHERE job="prometheus"`.<br>
+> ² Prometheus supports both single-source DSL and cross-source federation: `SELECT * FROM @prom.up WHERE job="prometheus"`. Also supports `promql()` syntax for embedding arbitrary PromQL expressions: `FROM @prom.promql(rate(cpu[5m]) / rate(mem[5m]) * 100)`.<br>
 > ³ CSV/TSV/XLSX support a full SQL subset (WHERE/GROUP BY/JOIN/window functions/UNION) with hash index optimization.
 > ⁵ File-source queries execute through the built-in SQL engine, bypassing the executor path.
+
+![Prometheus DSL vs MySQL query mapping comparison](docs/assets/promtheus-mysql-dsl-1.png)
+![Prometheus DSL query examples](docs/assets/promtheus-mysql-dsl-2.png)
 
 ---
 

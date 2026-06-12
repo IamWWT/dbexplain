@@ -35,16 +35,17 @@ func (v Vendor) String() string {
 // to this IR. Compilers (CompileToSQL, CompileToPromQL, etc.) translate the
 // IR to the target query language.
 type QueryIR struct {
-	AllColumns bool        // true = SELECT *
-	Columns    []ColumnIR  // explicit column list (ignored if AllColumns)
-	From       string      // primary table or metric name
-	Alias      string      // table alias (empty if none)
-	Where      []WhereIR   // WHERE conditions (AND flattened, OR rejected)
-	GroupBy    []GroupByIR // GROUP BY columns
-	OrderBy    []OrderByIR // ORDER BY entries
-	Limit      int         // LIMIT (0 = no limit)
-	Offset     int         // OFFSET (0 = no offset)
-	HasJoins   bool        // true if query has JOIN clauses (not supported for PromQL)
+	AllColumns  bool        // true = SELECT *
+	Columns     []ColumnIR  // explicit column list (ignored if AllColumns)
+	From        string      // primary table or metric name
+	Alias       string      // table alias (empty if none)
+	Where       []WhereIR   // WHERE conditions (AND flattened, OR rejected)
+	GroupBy     []GroupByIR // GROUP BY columns
+	OrderBy     []OrderByIR // ORDER BY entries
+	Limit       int         // LIMIT (0 = no limit)
+	Offset      int         // OFFSET (0 = no offset)
+	HasJoins    bool        // true if query has JOIN clauses (not supported for PromQL)
+	IsRawPromQL bool        // true = From is raw PromQL, skip compilation
 }
 
 // ColumnIR represents a selected expression, optionally with aggregation.

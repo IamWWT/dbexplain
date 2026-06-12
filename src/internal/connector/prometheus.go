@@ -21,8 +21,6 @@ import (
 	"github.com/IamWWT/dbexplain/internal/schema"
 )
 
-const maxTargetTables = 50 // 超过此数目标记 truncated
-
 func init() {
 	Register("prometheus", func() Connector { return promConnector{} })
 }
@@ -98,17 +96,12 @@ func (promConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instance,
 	inst := &schema.Instance{DSN: d.Redacted(), Kind: "prometheus", Label: d.Label}
 	db := &schema.Database{Name: "prometheus"}
 
-	// 1. Targets
-	if err := collectTargets(ctx, baseURL, d, timeout, db); err != nil {
-		logf(ctx, "[prometheus] targets collect warning: %v", err)
-	}
-
-	// 2. Labels
+	// 1. Labels
 	if err := collectLabels(ctx, baseURL, d, timeout, db); err != nil {
 		logf(ctx, "[prometheus] labels collect warning: %v", err)
 	}
 
-	// 3. Metrics metadata
+	// 2. Metrics metadata
 	if err := collectMetricsMeta(ctx, baseURL, d, timeout, db); err != nil {
 		logf(ctx, "[prometheus] metadata collect warning: %v", err)
 	}
@@ -124,91 +117,6 @@ func promTimeout(d *dsn.DSN) int {
 		}
 	}
 	return 10 // default 10s
-}
-
-// collectTargets 采集 scrape targets，按 job 分组为表
-func collectTargets(ctx context.Context, baseURL string, d *dsn.DSN, timeout int, db *schema.Database) error {
-	body, err := doPromRequest(ctx, baseURL, "/api/v1/targets", d, timeout)
-	if err != nil {
-		return err
-	}
-	var resp struct {
-		Status string `json:"status"`
-		Data   struct {
-			ActiveTargets []struct {
-				ScrapePool string `json:"scrapePool"`
-				ScrapeURL  string `json:"scrapeUrl"`
-				Labels     struct {
-					Instance string `json:"instance"`
-					Job      string `json:"job"`
-				} `json:"labels"`
-				Health              string  `json:"health"`
-				LastScrapeDuration  float64 `json:"lastScrapeDuration"`
-				LastError           string  `json:"lastError"`
-			} `json:"activeTargets"`
-		} `json:"data"`
-	}
-	if err := json.Unmarshal(body, &resp); err != nil {
-		return fmt.Errorf("parse targets: %w", err)
-	}
-	if resp.Status != "success" {
-		return fmt.Errorf("targets API status: %s", resp.Status)
-	}
-
-	// 按 scrapePool 分组
-	type targetInfo struct {
-		Instance    string
-		Health      string
-		DurationMs  float64
-		LastError   string
-	}
-	pools := make(map[string][]targetInfo)
-	for _, t := range resp.Data.ActiveTargets {
-		pool := t.ScrapePool
-		if pool == "" {
-			pool = t.Labels.Job
-		}
-		pools[pool] = append(pools[pool], targetInfo{
-			Instance:   t.Labels.Instance,
-			Health:     t.Health,
-			DurationMs: t.LastScrapeDuration,
-			LastError:  t.LastError,
-		})
-	}
-
-	// 排序 pool 名
-	poolNames := make([]string, 0, len(pools))
-	for n := range pools {
-		poolNames = append(poolNames, n)
-	}
-	sort.Strings(poolNames)
-
-	truncated := false
-	if len(poolNames) > maxTargetTables {
-		poolNames = poolNames[:maxTargetTables]
-		truncated = true
-	}
-
-	for _, pool := range poolNames {
-		targets := pools[pool]
-		table := &schema.Table{
-			Name:     pool,
-			Engine:   "prometheus_target",
-			RowCount: int64(len(targets)),
-			Columns: []*schema.Column{
-				{Name: "instance", Type: "string", Comment: "target address"},
-				{Name: "health", Type: "string", Comment: "up / down / unknown"},
-				{Name: "last_scrape_duration_ms", Type: "float"},
-				{Name: "last_error", Type: "string"},
-			},
-		}
-		db.Tables = append(db.Tables, table)
-	}
-
-	if truncated {
-		logf(ctx, "[prometheus] targets truncated to %d jobs (total %d)", maxTargetTables, len(pools))
-	}
-	return nil
 }
 
 // collectLabels 采集所有 label 名 → _labels 表（仅结构描述，实际值通过 PromQL 查询）

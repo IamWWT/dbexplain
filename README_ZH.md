@@ -85,9 +85,12 @@
 | | Excel | `xlsx://` | ✅ | ✅ SQL ⁵ | ✅ | ✅ | 内置纯 Go SQL 引擎 ³ |
 
 > ¹ DuckDB 为可选构建：标准版(-std)不含 DuckDB，DuckDB 版(-duckdb)全驱动 + DuckDB 需 CGO 环境。<br>
-> ² Prometheus 单源 DSL 和跨源联邦均支持：`SELECT * FROM @prom.up WHERE job="prometheus"`。<br>
+> ² Prometheus 单源 DSL 和跨源联邦均支持：`SELECT * FROM @prom.up WHERE job="prometheus"`。支持 `promql()` 语法嵌入任意 PromQL 表达式：`FROM @prom.promql(rate(cpu[5m]) / rate(mem[5m]) * 100)`。<br>
 > ³ CSV/TSV/XLSX 支持完整 SQL 子集（WHERE/GROUP BY/JOIN/窗口函数/UNION）和哈希索引优化。
 > ⁵ 文件型数据源通过内置 SQL 引擎执行查询，不走 executor 路径。
+
+![Prometheus DSL vs MySQL 查询映射对照](docs/assets/promtheus-mysql-dsl-1.png)
+![Prometheus DSL 查询案例](docs/assets/promtheus-mysql-dsl-2.png)
 
 ---
 

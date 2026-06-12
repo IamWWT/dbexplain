@@ -844,7 +844,7 @@ func TestCompileToPromQL_RejectCount(t *testing.T) {
 	}
 }
 
-func TestCompileToPromQL_RejectGroupBy(t *testing.T) {
+func TestCompileToPromQL_RejectGroupByNoAgg(t *testing.T) {
 	ir, err := parseAndBuildIR("SELECT * FROM @prom.up GROUP BY job")
 	if err != nil {
 		t.Fatalf("parse error: %v", err)
@@ -853,7 +853,24 @@ func TestCompileToPromQL_RejectGroupBy(t *testing.T) {
 
 	_, err = CompileToPromQL(ir)
 	if err == nil || !strings.Contains(err.Error(), "GROUP BY") {
-		t.Errorf("expected GROUP BY rejection error, got %v", err)
+		t.Errorf("expected GROUP BY rejection error (no aggregation), got %v", err)
+	}
+}
+
+func TestCompileToPromQL_GroupByAgg(t *testing.T) {
+	ir, err := parseAndBuildIR("SELECT job, count(value) FROM @prom.up GROUP BY job")
+	if err != nil {
+		t.Fatalf("parse error: %v", err)
+	}
+	ir.From = "up"
+
+	promQL, err := CompileToPromQL(ir)
+	if err != nil {
+		t.Fatalf("unexpected error for GROUP BY + COUNT: %v", err)
+	}
+	expected := "count by (job) (up)"
+	if promQL != expected {
+		t.Errorf("expected %q, got %q", expected, promQL)
 	}
 }
 
@@ -870,16 +887,20 @@ func TestCompileToPromQL_RejectJoin(t *testing.T) {
 	}
 }
 
-func TestCompileToPromQL_RejectOrderBy(t *testing.T) {
+func TestCompileToPromQL_AcceptsOrderBy(t *testing.T) {
 	ir, err := parseAndBuildIR("SELECT * FROM @prom.up ORDER BY val")
 	if err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
 	ir.From = "up"
 
-	_, err = CompileToPromQL(ir)
-	if err == nil || !strings.Contains(err.Error(), "ORDER BY") {
-		t.Errorf("expected ORDER BY rejection error, got %v", err)
+	// ORDER BY is now accepted; post-processing handled by dslExecPromQL
+	promQL, err := CompileToPromQL(ir)
+	if err != nil {
+		t.Fatalf("unexpected error for ORDER BY: %v", err)
+	}
+	if promQL != "up" {
+		t.Errorf("expected PromQL 'up', got %q", promQL)
 	}
 }
 

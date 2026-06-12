@@ -1,34 +1,25 @@
 # Changelog
 
-## v0.1.6 (2026-06-12) — Bug Bash: Global Code Audit Fixes
+## v0.1.6 (2026-06-12) — Bug Bash + Prometheus DSL Core Upgrade
 
-### 🐛 Bug Fixes
+### ✨ Prometheus DSL Core Upgrade
 
-- **P0 Potential Panics (4 items)**: executor.go nil Lock/Parsed dereference fix; explain.go unsafe type assertion guards; filequery ORDER BY NULL pointer dereference fix; diff.go nil table pointer guard in map lookups
-- **P1 Silent Error Drops (9 items)**: main.go 5 unchecked json.MarshalIndent/WriteFile errors; sqlite/duckdb RowCount Scan error logging; clickhouse/elasticsearch return on read error instead of using partial data; rows.Err() check added to all connectors; query.go Scan error logging; xlsx.go ErrNotSupported replaced with actual error
-- **P2 Defensive Coding (8 items)**: repl.go error wrapping %v→%w; config.go include/exclude filter order fix; registry.go constructor moved outside lock; infer.go UTF-8 rune-safe slicing; dsn.go PathUnescape error handling; mongo.go bson marshal error checks; compress.go loop variable address fix; output.go goroutine leak fix
+- **promql() raw expression passthrough**: `FROM @label.promql(any PromQL expression)` — multi-metric binary ops (`rate(a[5m]) / rate(b[5m])`), PromQL functions (topk / histogram_quantile, etc.), federated JOIN. WHERE/GROUP BY must be inlined. **Advantage**: DSL compiler can't cover all PromQL syntax (PromQL evolves continuously); passthrough mode ensures users are never limited by compilation capabilities.
+- **ORDER BY / LIMIT / OFFSET**: Go-layer post-processing with numeric/lexicographic/NULL-aware sorting. **Advantage**: First-ever sort and pagination support for Prometheus results; previously unordered and uncapped. Now supports precise Top-N and page browsing.
+- **SELECT column projection + GROUP BY aggregation**: Column list/aliases, COUNT/AVG/SUM compiled to PromQL by(). **Advantage**: Previously `SELECT *` only, noisy with many label columns; projection reduces noise, aggregation functions let users group via SQL syntax, reducing the learning curve.
+- **Collect job table removal** (ISSUE-088): `@my-prom.xxx` references metric names, not job names. **Advantage**: Collect output aligns with the DSL query model, avoiding user confusion.
 
-### 📚 Documentation
+> **Unified query experience**: One SQL syntax for both relational (MySQL/PG/Oracle) and time-series (Prometheus) databases. `promql()` passthrough + cross-source federated JOIN enables unified analysis across heterogenous data sources.
 
-- **CHANGELOG.md / CHANGELOG_EN.md**: Updated to v0.1.6
-- **MEMORY.md**: Architecture roadmap + version updated
-- **issues.json**: ISSUE-084 closed, ISSUE-085(v0.1.6) recorded, ISSUE-086(v0.1.6) recorded
+### 🐛 Bug Bash (21 fixes)
 
-### 🔧 Internal Refactoring
-
-- **21 fixes across 20 source files**. All fixes are defensive-only, no architecture or functionality changes.
-- **Closed-loop verification**: go build + go vet + go test + selective compile all pass
-
-### 🔒 Security Fixes
-
-- **DSN credential leak fix (4 sites + framework layer)**: execute.go multi-DSN match uses d.Redacted() instead of d.FilePath(); main.go x2 panic recovery uses parsed.Redacted() instead of rawDSN; repl.go invalid DSN output uses SanitizeErr; repl.go .connect error uses SanitizeErr. Framework: dsn.DSN.String() → Redacted() added, so all future fmt.Sprintf("%s", d) is automatically safe.
-- **issues.json ISSUE-086 added**
+- P0/P1/P2 defensive hardening — nil dereference, swallowed errors, goroutine leak, DSN credential leak (17 items)
+- DSL federated JOIN fix (ISSUE-087): placeholder alias caused JOIN resolution failure
+- **Closed-loop**: go build + go vet + go test + selective compile all pass
 
 ### ⚡ UX Improvements
 
-- **execute flags position-independent**: --label/--explain/--human/--limit/--timeout/--dsn/--config all accept any position relative to SQL query
-- **EXPLAIN double-wrap guard**: --explain flag auto-skips when SQL already starts with EXPLAIN, with a clear warning
-- **Empty SQL error improved**: from vague "READ_ONLY_VIOLATION" to actionable usage hint
+- execute flags position-independent, EXPLAIN double-wrap guard, improved empty SQL error message
 
 ## v0.1.5 (2026-06-11) — Oracle + Hive Connectors + Policy Column Stripping
 

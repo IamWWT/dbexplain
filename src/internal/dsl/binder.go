@@ -109,5 +109,13 @@ func (bs BoundSource) String() string {
 	case SourceNative:
 		kindName = "native"
 	}
-	return fmt.Sprintf("@%s.%s → %s (%s)", bs.Ref.Label, bs.Ref.Table, bs.DSN.Redacted(), kindName)
+	table := bs.Ref.Table
+	if bs.Ref.IsRawPromQL {
+		// Truncate long PromQL expressions for display
+		if len(table) > 50 {
+			table = table[:47] + "..."
+		}
+		table = "promql(" + table + ")"
+	}
+	return fmt.Sprintf("@%s.%s → %s (%s)", bs.Ref.Label, table, bs.DSN.Redacted(), kindName)
 }

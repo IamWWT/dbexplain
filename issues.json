@@ -935,6 +935,41 @@
       "file": "src/internal/dsn/dsn.go, src/cmd/dbexplain/execute.go, src/cmd/dbexplain/main.go, src/cmd/dbexplain/repl.go",
       "created": "2026-06-12",
       "labels": ["v0.1.6", "security", "critical"]
+    },
+    {
+      "id": "ISSUE-087",
+      "title": "[v0.1.6] 联邦查询 JOIN 无法解析 — 物化别名用占位符导致表名不匹配",
+      "status": "closed",
+      "closed": "2026-06-12",
+      "priority": "high",
+      "category": "bug",
+      "description": "dslExecFederated() 中物化数据的 alias 使用 bs.Ref.Placeholder (如 __dsl_0__)，但 SQL 被重写为实际表名 (bs.Ref.Table)。file query engine 的 JOIN 查找 sources[join.Table] 时找不到匹配，导致所有跨源 JOIN 失败。\n\n修复：(1) alias 改为 bs.Ref.Table；(2) 添加 allData 重排逻辑确保 FROM 子句对应表的数据在第一个位置，避免 map 迭代顺序导致的错位。\n\n影响范围：所有 DSL 联邦查询的 JOIN 功能（SQL+SQL、SQL+File、Prometheus+SQL），无论源类型组合均受影响。",
+      "file": "src/cmd/dbexplain/execute.go",
+      "created": "2026-06-12",
+      "labels": ["v0.1.6", "bug", "federated-query"]
+    },
+    {
+      "id": "ISSUE-088",
+      "title": "Prometheus job table removal + _metric_labels removed (replaced by promql())",
+      "status": "closed",
+      "closed": "2026-06-12",
+      "priority": "medium",
+      "category": "feature",
+      "description": "Prometheus Collect job tables removed (DSL mismatch). _metric_labels removed (unnecessary, discoverability via PromQL itself). Collect now emits only _labels and _metrics (2 meta tables, 2 API calls).",
+      "file": "src/internal/connector/prometheus.go",
+      "created": "2026-06-12",
+      "labels": ["v0.1.6", "feature", "prometheus"]
+    },
+    {
+      "id": "ISSUE-089",
+      "title": "DSL promql() raw expression passthrough — 任意 PromQL 表达式嵌入 FROM 子句",
+      "status": "open",
+      "priority": "medium",
+      "category": "feature",
+      "description": "FROM @label.promql(任意 PromQL 表达式) 语法支持。预处理层检测 promql() 模式，提取表达式透传编译绕过正常 DSL→PromQL 路径。支持多指标二元运算、PromQL 函数、联邦 JOIN。\n\npreprocess.go: 递归括号匹配提取 promql() 内容；ast.go/ir.go: IsRawPromQL 标记；promql.go: 原始表达式直接返回；execute.go: 单源/联邦双路径适配。拒绝 WHERE/GROUP BY 与 promql() 混用。",
+      "file": "src/internal/dsl/preprocess.go, promql.go, ir.go, ast.go, src/cmd/dbexplain/execute.go",
+      "created": "2026-06-12",
+      "labels": ["v0.1.6", "feature", "prometheus", "dsl"]
     }
   ]
 }

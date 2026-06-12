@@ -6,7 +6,10 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"math"
 	"os"
+	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/IamWWT/dbexplain/internal/capabilities"
@@ -365,10 +368,13 @@ func dslExecPromQL(dslQuery *dsl.DSLQuery, bound *dsl.BoundQuery, human bool, li
 	}
 	parsed := primary.DSN
 	metricName := primary.Ref.Table
+	isRawPromQL := primary.Ref.IsRawPromQL
 
-	// Layer 1 security: validate metric name against DenyTables at DSL level
 	policies := policy.Load(envKeyForLabel(parsed.Label, allEntries))
-	if policies != nil {
+
+	// Layer 1 security: validate metric name against DenyTables at DSL level.
+	// Skip for raw PromQL expressions (no single metric name to validate).
+	if !isRawPromQL && policies != nil {
 		for _, denied := range policies.DenyTables {
 			if strings.EqualFold(metricName, denied) {
 				fmt.Fprintf(os.Stderr, "ACCESS_DENIED: metric %q is not allowed for query\n", metricName)
@@ -392,6 +398,7 @@ func dslExecPromQL(dslQuery *dsl.DSLQuery, bound *dsl.BoundQuery, human bool, li
 	// Override From with actual metric name from bound source
 	// (the AST uses placeholder __dsl_N from DSL preprocessing)
 	ir.From = metricName
+	ir.IsRawPromQL = isRawPromQL
 
 	// Compile QueryIR → PromQL
 	promQL, compErr := dsl.CompileToPromQL(ir)
@@ -407,12 +414,20 @@ func dslExecPromQL(dslQuery *dsl.DSLQuery, bound *dsl.BoundQuery, human bool, li
 		os.Exit(1)
 	}
 
+	// Determine effective limit for execution.
+	// When ORDER BY is present, bypass connector truncation by passing a
+	// large limit — sorting must see all rows before user LIMIT is applied.
+	execLimit := limit
+	if len(ir.OrderBy) > 0 {
+		execLimit = math.MaxInt32
+	}
+
 	// Execute through non-SQL pipeline (IsSQL=false → bypasses sqlguard)
 	result, execErr := executor.ExecQuery(&executor.ExecOptions{
 		Conn:       c,
 		Parsed:     parsed,
 		SQL:        promQL,
-		Limit:      limit,
+		Limit:      execLimit,
 		Explain:    false,
 		TimeoutSec: timeoutSec,
 		Policies:   policies,
@@ -422,6 +437,119 @@ func dslExecPromQL(dslQuery *dsl.DSLQuery, bound *dsl.BoundQuery, human bool, li
 	if execErr != nil {
 		fmt.Fprintln(os.Stderr, execErr)
 		os.Exit(1)
+	}
+
+	// ── ORDER BY / LIMIT / OFFSET post-processing (single-source Prometheus) ──
+	hasOrderBy := len(ir.OrderBy) > 0
+	hasLimit := ir.Limit > 0
+	hasOffset := ir.Offset > 0
+
+	if hasOrderBy || hasLimit || hasOffset {
+		colIndex := make(map[string]int, len(result.Columns))
+		for i, c := range result.Columns {
+			colIndex[c.Name] = i
+		}
+
+		if hasOrderBy {
+			sort.SliceStable(result.Rows, func(i, j int) bool {
+				for _, ob := range ir.OrderBy {
+					idx, ok := colIndex[ob.Column]
+					if !ok {
+						continue
+					}
+					a, b := result.Rows[i][idx], result.Rows[j][idx]
+					cmp := compareStringValues(a, b, result.Columns[idx].Type)
+					if cmp != 0 {
+						if ob.Desc {
+							return cmp > 0
+						}
+						return cmp < 0
+					}
+				}
+				return false
+			})
+		}
+
+		// Apply LIMIT: prefer SQL-level LIMIT, fall back to CLI --limit
+		applyLimit := ir.Limit
+		if !hasLimit && hasOrderBy && limit > 0 && len(result.Rows) > limit {
+			applyLimit = limit
+		}
+		if applyLimit > 0 && len(result.Rows) > applyLimit {
+			result.Rows = result.Rows[:applyLimit]
+			result.Truncated = true
+		}
+
+		// Apply OFFSET
+		if ir.Offset > 0 && ir.Offset < len(result.Rows) {
+			result.Rows = result.Rows[ir.Offset:]
+		} else if ir.Offset > 0 {
+			result.Rows = result.Rows[:0]
+		}
+
+		result.RowCount = len(result.Rows)
+	}
+
+	// ── SELECT column projection (non-AllColumns) ──
+	if !ir.AllColumns && len(ir.Columns) > 0 {
+		selectCols := make([]struct {
+			name  string
+			index int
+		}, 0, len(ir.Columns))
+		for _, col := range ir.Columns {
+			// Determine display name and search name
+			displayName := col.Name
+			searchName := col.Name
+			if col.Func != "" {
+				// Aggregation function: e.g. COUNT(value) → display as "count(value)"
+				aggDisplay := col.Func
+				if col.Alias != "" {
+					aggDisplay = col.Alias
+				} else if len(col.Args) > 0 {
+					aggDisplay = fmt.Sprintf("%s(%s)", strings.ToLower(col.Func), col.Args[0].Name)
+				}
+				displayName = aggDisplay
+				// Match by the first argument's name (e.g. "value")
+				if len(col.Args) > 0 {
+					searchName = col.Args[0].Name
+				}
+			} else if col.Alias != "" {
+				displayName = col.Alias
+			}
+			idx := -1
+			for i, rc := range result.Columns {
+				if strings.EqualFold(rc.Name, searchName) {
+					idx = i
+					break
+				}
+			}
+			if idx >= 0 {
+				selectCols = append(selectCols, struct {
+					name  string
+					index int
+				}{displayName, idx})
+			}
+		}
+		if len(selectCols) > 0 && len(selectCols) < len(result.Columns) {
+			newCols := make([]query.ColumnInfo, len(selectCols))
+			for i, sc := range selectCols {
+				newCols[i] = result.Columns[sc.index]
+				newCols[i].Name = sc.name
+			}
+			newRows := make([][]*string, len(result.Rows))
+			for i, row := range result.Rows {
+				nr := make([]*string, len(selectCols))
+				for j, sc := range selectCols {
+					if sc.index < len(row) {
+						nr[j] = row[sc.index]
+					}
+				}
+				newRows[i] = nr
+			}
+			result.Columns = newCols
+			result.Rows = newRows
+			result.RowCount = len(newRows)
+		}
 	}
 
 	// Output
@@ -490,8 +618,9 @@ func dslExecFederated(dslQuery *dsl.DSLQuery, bound *dsl.BoundQuery, allEntries 
 			for i, col := range result.Columns {
 				header[i] = col.Name
 			}
+			rows = truncateFederatedRows(bs.Ref.Label, bs.Ref.Table, bs.DSN.Kind, rows, limit)
 			allData = append(allData, materialized{
-				alias:  bs.Ref.Placeholder,
+				alias:  bs.Ref.Table,
 				header: header,
 				rows:   rows,
 			})
@@ -534,8 +663,9 @@ func dslExecFederated(dslQuery *dsl.DSLQuery, bound *dsl.BoundQuery, allEntries 
 			for i, col := range result.Columns {
 				header[i] = col.Name
 			}
+			rows = truncateFederatedRows(bs.Ref.Label, bs.Ref.Table, bs.DSN.Kind, rows, limit)
 			allData = append(allData, materialized{
-				alias:  bs.Ref.Placeholder,
+				alias:  bs.Ref.Table,
 				header: header,
 				rows:   rows,
 			})
@@ -573,8 +703,14 @@ func dslExecFederated(dslQuery *dsl.DSLQuery, bound *dsl.BoundQuery, allEntries 
 				for i, col := range result.Columns {
 					header[i] = col.Name
 				}
+				// For raw PromQL expressions, use the placeholder as alias
+				// (the expression is not a valid SQL identifier for the file engine)
+				alias := bs.Ref.Table
+				if bs.Ref.IsRawPromQL {
+					alias = bs.Ref.Placeholder
+				}
 				allData = append(allData, materialized{
-					alias:  bs.Ref.Placeholder,
+					alias:  alias,
 					header: header,
 					rows:   rows,
 				})
@@ -590,10 +726,39 @@ func dslExecFederated(dslQuery *dsl.DSLQuery, bound *dsl.BoundQuery, allEntries 
 		os.Exit(1)
 	}
 
-	// Build filequery-compatible SQL by replacing placeholders with table names
+	// Reorder allData so the FROM table's data is primary (first).
+	// Without this, map iteration order determines allData order, which may
+	// mismatch the SQL FROM clause after placeholder→table replacement.
 	fileSQL := dslQuery.SQL
 	for _, bs := range bound.Sources {
+		if bs.Ref.IsRawPromQL {
+			continue // placeholder stays as table name (alias) in file SQL
+		}
 		fileSQL = strings.ReplaceAll(fileSQL, bs.Ref.Placeholder, bs.Ref.Table)
+	}
+
+	// Determine primary table: the first placeholder in the original SQL
+	firstPos := len(dslQuery.SQL)
+	firstPlaceholder := ""
+	for placeholder := range bound.Sources {
+		pos := strings.Index(dslQuery.SQL, placeholder)
+		if pos >= 0 && pos < firstPos {
+			firstPos = pos
+			firstPlaceholder = placeholder
+		}
+	}
+	if firstPlaceholder != "" {
+		primaryTable := bound.Sources[firstPlaceholder].Ref.Table
+		// For raw PromQL, the materialized alias is the placeholder, not the expression
+		if bound.Sources[firstPlaceholder].Ref.IsRawPromQL {
+			primaryTable = firstPlaceholder
+		}
+		for i, d := range allData {
+			if d.alias == primaryTable && i > 0 {
+				allData[0], allData[i] = allData[i], allData[0]
+				break
+			}
+		}
 	}
 
 	// Primary source as main table, rest as extras
@@ -635,4 +800,58 @@ func envKeyForLabel(label string, allEntries []config.DSNEntry) string {
 		}
 	}
 	return ""
+}
+
+// truncateFederatedRows limits materialized rows to `limit` with a warning.
+// This is the federated-query counterpart of sqlguard.AutoLimit, which cannot
+// be used for native sources (PromQL) that lack SQL LIMIT semantics. It also
+// serves as defense-in-depth for SQL/file sources in the federated path.
+func truncateFederatedRows(label, table, kind string, rows [][]string, limit int) [][]string {
+	if limit > 0 && len(rows) > limit {
+		fmt.Fprintf(os.Stderr, "WARNING: @%s.%s (%s) returned %d rows, truncated to %d (use --limit to adjust)\n",
+			label, table, kind, len(rows), limit)
+		return rows[:limit]
+	}
+	return rows
+}
+
+// compareStringValues compares two *string values for sorting.
+// It handles nil pointers (NULLS LAST: nil > non-nil) and parses float
+// columns numerically so that "100" > "9" for value/timestamp columns.
+// Returns -1 if a < b, 0 if equal, 1 if a > b.
+func compareStringValues(a, b *string, colType string) int {
+	if a == nil && b == nil {
+		return 0
+	}
+	if a == nil {
+		return 1 // NULLS LAST
+	}
+	if b == nil {
+		return -1 // NULLS LAST
+	}
+
+	// Numeric comparison for float columns (value, timestamp)
+	if colType == "float" {
+		fa, erra := strconv.ParseFloat(*a, 64)
+		fb, errb := strconv.ParseFloat(*b, 64)
+		if erra == nil && errb == nil {
+			if fa < fb {
+				return -1
+			}
+			if fa > fb {
+				return 1
+			}
+			return 0
+		}
+		// Fall through to string comparison if parse fails
+	}
+
+	// Default: lexicographic string comparison
+	if *a < *b {
+		return -1
+	}
+	if *a > *b {
+		return 1
+	}
+	return 0
 }

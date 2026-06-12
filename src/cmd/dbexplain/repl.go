@@ -508,8 +508,9 @@ func replExecFederated(dslQuery *dsl.DSLQuery, bound *dsl.BoundQuery, allEntries
 			for i, col := range result.Columns {
 				header[i] = col.Name
 			}
+			rows = truncateFederatedRows(bs.Ref.Label, bs.Ref.Table, bs.DSN.Kind, rows, limit)
 			allData = append(allData, materialized{
-				alias:  bs.Ref.Placeholder,
+				alias:  bs.Ref.Table,
 				header: header,
 				rows:   rows,
 			})
@@ -547,8 +548,9 @@ func replExecFederated(dslQuery *dsl.DSLQuery, bound *dsl.BoundQuery, allEntries
 			for i, col := range result.Columns {
 				header[i] = col.Name
 			}
+			rows = truncateFederatedRows(bs.Ref.Label, bs.Ref.Table, bs.DSN.Kind, rows, limit)
 			allData = append(allData, materialized{
-				alias:  bs.Ref.Placeholder,
+				alias:  bs.Ref.Table,
 				header: header,
 				rows:   rows,
 			})
@@ -585,7 +587,7 @@ func replExecFederated(dslQuery *dsl.DSLQuery, bound *dsl.BoundQuery, allEntries
 					header[i] = col.Name
 				}
 				allData = append(allData, materialized{
-					alias:  bs.Ref.Placeholder,
+					alias:  bs.Ref.Table,
 					header: header,
 					rows:   rows,
 				})
@@ -603,6 +605,26 @@ func replExecFederated(dslQuery *dsl.DSLQuery, bound *dsl.BoundQuery, allEntries
 	fileSQL := dslQuery.SQL
 	for _, bs := range bound.Sources {
 		fileSQL = strings.ReplaceAll(fileSQL, bs.Ref.Placeholder, bs.Ref.Table)
+	}
+
+	// Determine primary table: the first placeholder in the original SQL
+	firstPos := len(dslQuery.SQL)
+	firstPlaceholder := ""
+	for placeholder := range bound.Sources {
+		pos := strings.Index(dslQuery.SQL, placeholder)
+		if pos >= 0 && pos < firstPos {
+			firstPos = pos
+			firstPlaceholder = placeholder
+		}
+	}
+	if firstPlaceholder != "" {
+		primaryTable := bound.Sources[firstPlaceholder].Ref.Table
+		for i, d := range allData {
+			if d.alias == primaryTable && i > 0 {
+				allData[0], allData[i] = allData[i], allData[0]
+				break
+			}
+		}
 	}
 
 	// Primary source as main table, rest as extras
