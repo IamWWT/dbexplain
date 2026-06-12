@@ -913,6 +913,16 @@
       "description": "尝试通过 musl 交叉编译器（aarch64-linux-musl-gcc）从 x86_64 构建全静态 ARM64 DuckDB 版二进制失败。DuckDB 的 C++ 引擎依赖 glibc-only 函数：backtrace、backtrace_symbols（glibc execinfo.h）、__res_init（glibc resolv.h）。musl libc 未实现这些函数，链接时报 undefined reference。使用 musl 不会影响功能（编译期的限制，非运行时）：musl 本身实现了完整的 POSIX API，但 backtrace/__res_init 是 glibc 扩展，musl 不提供。结论：ARM64 全静态 DuckDB 只能在原生 ARM64 机器上用原生 gcc + -static 构建。交叉编译只能做到 -static-libgcc -static-libstdc++（glibc 动态链接）。",
       "file": "src/build.sh",
       "created": "2026-06-04"
+    },
+    {
+      "id": "ISSUE-084",
+      "title": "[v0.1.5] nil map assignment in policy.Load() — per-DSN MASK_COLUMNS panic when global MASK_COLUMNS is unset",
+      "status": "open",
+      "priority": "high",
+      "category": "bug",
+      "description": "policy.Load() line 62 中 `cfg.MaskColumns[k] = v` 在仅配置了 per-DSN 的 MASK_COLUMNS（如 WWTAIOPS_MASK_COLUMNS）但未设置全局 MASK_COLUMNS 时 panic。根因：loadMask() 在 env var 为空时返回 nil（line 250: `return nil`），导致 cfg.MaskColumns 为 nil，随后 per-DSN 循环中赋值触发 panic。\n\n复现条件：\n- 加密配置含 label-specific 的 MASK_COLUMNS 规则\n- 全局 MASK_COLUMNS 未设置\n- 通过 DBPROBE_ENV_FILE 加载配置且使用 -label 参数触发 per-DSN 分支\n- 终端直接执行（不走 -label 分支）不受影响\n\n修复：per-DSN 循环前检查 cfg.MaskColumns 是否为 nil 并初始化。\n\nStack trace:\n```\npanic: assignment to entry in nil map\ngithub.com/IamWWT/dbexplain/internal/policy.Load({0xfba02c58b79, 0x3})\n    internal/policy/policy.go:62 +0x5ad\nmain.handleExecute({0xfba0289e100, 0x5, 0x5})\n    cmd/dbexplain/execute.go:137 +0xddc\nmain.main()\n    cmd/dbexplain/main.go:71 +0x359\n```",
+      "file": "src/internal/policy/policy.go",
+      "created": "2026-06-12"
     }
   ]
 }

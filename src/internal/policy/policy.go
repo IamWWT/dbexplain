@@ -58,8 +58,13 @@ func Load(envKey string) *Config {
 		cfg.DenyTables = append(cfg.DenyTables, loadCSV(prefix+"DENY_TABLES")...)
 		cfg.DenyColumns = append(cfg.DenyColumns, loadCSV(prefix+"DENY_COLUMNS")...)
 		cfg.DenyStatements = append(cfg.DenyStatements, loadCSV(prefix+"DENY_STATEMENTS")...)
-		for k, v := range loadMask(prefix + "MASK_COLUMNS") {
-			cfg.MaskColumns[k] = v
+		if perDSNMask := loadMask(prefix + "MASK_COLUMNS"); len(perDSNMask) > 0 {
+			if cfg.MaskColumns == nil {
+				cfg.MaskColumns = make(map[string]string, len(perDSNMask))
+			}
+			for k, v := range perDSNMask {
+				cfg.MaskColumns[k] = v
+			}
 		}
 	}
 
