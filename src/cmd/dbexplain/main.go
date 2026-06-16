@@ -316,7 +316,7 @@ func main() {
 				elapsed = time.Since(start)
 			case <-collectCtx.Done():
 				elapsed = time.Since(start)
-				logger.Printf("[超时] %s (超过 %v) — 连接无响应，跳过", label, *perDSNTimeout)
+				logger.Printf("[采集超时] %s (超过 %v) — 连接/认证/查询任一阶段卡住，已跳过，不影响其他 label", label, *perDSNTimeout)
 				metricsCollector.Record(label, parsed.Kind, false, elapsed, 0, 0, "timeout: collect hung")
 				return
 			}
@@ -779,7 +779,7 @@ func handleCollect(args []string) {
 				elapsed = time.Since(start)
 			case <-collectCtx.Done():
 				elapsed = time.Since(start)
-				logger.Printf("[超时] %s (超过 %v) — 连接无响应，跳过", label, *perDSNTimeout)
+				logger.Printf("[采集超时] %s (超过 %v) — 连接/认证/查询任一阶段卡住，已跳过，不影响其他 label", label, *perDSNTimeout)
 				metricsCollector.Record(label, parsed.Kind, false, elapsed, 0, 0, "timeout: collect hung")
 				return
 			}
