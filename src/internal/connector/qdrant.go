@@ -31,6 +31,9 @@ func (qdrantConnector) Capabilities() []capabilities.Capability {
 }
 
 func (qdrantConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instance, error) {
+	if names := GetTableFilter(ctx); len(names) > 0 {
+		return nil, fmt.Errorf("--table not supported for qdrant data source")
+	}
 	host := d.Host
 	if host == "" {
 		host = "localhost"

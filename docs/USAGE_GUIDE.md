@@ -133,6 +133,8 @@ dbexplain -env --json              # JSON 格式（给程序/AI 用）
 dbexplain -env --json -o 文件.json # 保存到文件
 dbexplain -env --include my-mysql  # 只看某个数据库
 dbexplain -env --context ./ctx     # 导出 AI 可直接用的上下文文件
+dbexplain -env --tables            # 精简表格列表模式（仅 SQL 数据源，只显示名称/引擎/行数/大小/注释）
+dbexplain -env --table users       # 只采集指定表的 schema（仅 SQL 数据源，connector 级 SQL 过滤）
 ```
 
 ---

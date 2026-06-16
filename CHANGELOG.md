@@ -47,17 +47,60 @@
 ### ⚡ Schema 采集性能优化
 
 - **PG/MySQL 批量查询替代 N+1**: PostgreSQL 和 MySQL schema 采集改为 per-schema 批量查询，替代原来的 per-table N+1 模式。100 表的场景从 400-600 次数据库往返降至 ~7 次。重构 `fillPGTable`/`fillMySQLTable`，批量查询 columns/indexes/FK 后 Go 侧 map 分组。（P1）
-- **`--no-sample` 跳过样本行**: 新增全局 flag，跳过 `SELECT * ... LIMIT 1` 样本行采集。100 表省 100 次查询。纯结构分析场景 CPU 时间减半。（P2）
+- **`--sample` 可选样本行（默认关闭）**: 新增全局 flag，启用 `SELECT * ... LIMIT 1` 样本行采集用于注释推断。默认**不采集**，需显式 `--sample` 开启。465 表场景节省 ~14 秒采集时间。（P2）
 - **`--skip-opstats` 跳过 MySQL op_stats**: 新增 flag，跳过 MySQL `performance_schema.table_io_waits_summary_by_table` 采集。100 表省 100 次查询。（P3）
 - **CSV/XLSX 流式读取**: CSV `SELECT * LIMIT N` 改用 `csvReader.Read()` 逐行读取（`readCSVDataStreaming`），XLSX 改用 `excelize.Rows` 迭代器。大文件 LIMIT 查询从 O(N) 内存降到 O(limit)。（P5）
 
-### 🔧 分析引擎优化
+### ✨ `--table` / `--tables` Schema 采集参数
+
+- **`--table NAME`（connector 级 SQL 过滤）**: collect 子命令新增参数，在 **connector 层**做 table 级 schema 采集。MySQL/PostgreSQL/SQLite/ClickHouse/DuckDB/Oracle 在 table list 查询注入 `AND table_name IN (...)` 参数化过滤，columns/indexes/FKs 查询同步过滤。非 SQL 数据源（Redis/Mongo/ES/Qdrant/Prometheus/CSV/XLSX/Hive）返回 `--table not supported` 并跳过。（P1）
+- **`--tables`（精简列表模式）**: render 层输出 compact 表格列表（name/engine/rows/size/comment），不输出 columns/indexes/FKs/relationships/clusters/issues。全部采集后渲染精简输出。（P3）
+- **`--table` AI Context chunks 过滤**: `output.WriteContext()` + `GenerateChunks()` 新增 `tableName` 参数，指定 `--table NAME` 时 chunks/ 目录只输出该表的 .md。summary/topology/diagnostics 保持全局概览。（P4）
+- **`--table` / `--tables` 互斥校验**: 同时指定时 `log.Fatal` 退出。（P5）
+- **实现机制**: 新增 `connector.WithTableFilter(ctx, names)` / `GetTableFilter(ctx)` context 传参模式（复用 `WithSample` pattern），`Connector` 接口不变。各 SQL 连接器分别处理 dialect 占位符（`?`/`$N`/`:N`/单引号转义）。
+- **变更文件**: `connector.go`（context 方法）、7 个 SQL connector（注入过滤）、8 个非 SQL connector（跳过+提示）、`main.go`（flag 定义+注入）、`render.go`（tablesOnly 模式）、`output.go`+`context/compress.go`（chunks 过滤）。（15 文件）
+
+### ⚡ Schema 采集降级优化（PG/GaussDB/MySQL）
+
+- **PG/GaussDB 三级降级链**: 当前 4 表 JOIN（pg_tables + pg_class + pg_namespace + pg_stat_user_tables LEFT JOIN）作为 Level 1（最快最全）。pg_class/pg_namespace 权限不足时自动降级到 Level 2（pg_stat_user_tables 单表，无 size/comment），仍不可用时降级到 Level 3（pg_tables 仅表名）。`isPermissionErr()` 检测 `permission denied`，安全不影响正常路径。（P1）
+- **MySQL 二级降级链**: information_schema.TABLES（Level 1，最快）权限不足时自动降级到 SHOW TABLE STATUS（Level 2），Go 侧应用 table filter 兜底。（P1）
+- **SQL 日志改进**: PG/GaussDB 表采集循环：SQL template 在循环前统一打印一次（`[Level 1] table query: ...`），循环内只打 `schema=xxx → N tables`，不再 per-schema 重复打印查询全文。schema 名以 `schema=` 前缀显式标记，替代裸 `$1`。（P3）
+- **`isPermissionErr()` 共享**: 提取到 `connector.go` 包级函数，PG 和 MySQL 共用，避免重复定义。（P3）
+- **安全**: Level 2/3 查询均使用参数化 `$1` + 可选 `$2, $3, ...`，防 SQL 注入。脱敏错误信息不暴露密码/路径。
+
+### 🐛 `--timeout` 超时不生效修复
+
+- **`statement_timeout` 加 cap（30s）**: `collectPGDB()` 中 `statement_timeout` 原来设为剩余时间（如 18s），但 PostgreSQL 的 `statement_timeout` 是 per-statement 的，10 个查询各得 18s 可累计 180s，远超 `--timeout`。修复：上限 30s 防止单个 statement 占满整个 timeout 预算。新增 `setPGStatementTimeout()` 共享 helper。（P0）
+- **外层 DB 列表查询补齐 `statement_timeout`**: `postgresConnector.Collect()` 和 `gaussdbConnector.Collect()` 中的 `pg_database` 列表查询原来裸奔，没有服务端超时保护。现也在外层调用 `setPGStatementTimeout()`。（P1）
+- **MySQL 采集路径补齐 `max_execution_time`**: `collectMySQLDB()` 入口新增 `SET SESSION max_execution_time` 作为服务端超时，上限 30000ms（30s）。原来 MySQL 采集路径完全没有服务端超时，全靠 Go context 取消（`lib/pq` 类驱动取消不可靠）。（P1）
+
+### 📋 日志统一合并
+
+- **单文件 `dbexplain.log`**: 移除 collect.log 和 per-label `<label>.log` 文件，所有 goroutine 日志统一写入 `dbexplain.log`。每行 `[label=X] [kind=Y] ` 前缀区分实例。（P2）
+- **实现**: goroutine 内 logger 使用 `log.Writer()`（指向 `dbexplain.log`）+ `fmt.Sprintf()` 构建带前缀的 `log.New()`，`Logf()` 调用无需改动。（P2）
+- **collect 摘要日志**: `collectLogger` 改为 `log.Printf("[collect-summary] ...")`，同样写入 `dbexplain.log`。（P4）
 
 - **`inferRefs()` name index**: 外键推断增加 `map[name][]tableEntry` 倒排索引，复杂度从 O(N_cols × N_tables) 降至 O(N_cols)（map lookup O(1)）。1000 表从千万级比较降至万级。（P4）
 
 ### 🛠 `dbexplain check` 默认加载 .env
 
 - **`--env` 默认值改为 `true`**: `dbexplain check` 不带参数时自动加载 `.env.dbexplain`，无需显式传 `--env`。（6）
+
+### 🐛 GaussDB 超时 & 密码修复
+
+- **`statement_timeout` 服务端超时兜底**: `collectPGDB()` 启动时从 context deadline 提取剩余时间，执行 `SET statement_timeout = 'Ns'`。解决 GaussDB Oracle 模式下 `lib/pq` 的 Go context 取消不传播的问题，确保服务端主动取消长时间运行查询。
+- **`SetMaxOpenConns(1)`**: GaussDB/PostgreSQL 的 Collect 函数设置单连接，确保 `statement_timeout` 对本 session 全部查询生效。
+- **DSN 密码 `#@!` 兼容**: `escapeUserinfoHash()` 处理 `#` 后 DSN 中 `@!` 等字符的正确传递。
+
+### 🔧 `dbexplain check --label` 支持
+
+- **`--label` 过滤**: `dbexplain check` 新增 `--label` 参数，支持按 label 过滤待检查的 DSN。
+
+### 🔧 Hint SQL `/*+ */` 透传测试验证
+
+- **`sqlguard` hint SQL 测试**: Validate/AutoLimit/firstWord 新增 GaussDB/MySQL/Oracle/PG 风格 `/*+ */` hint 测试用例，验证 hint 注释不干扰只读校验和 LIMIT 注入。（6 项）
+- **`executor` wrapExplain hint SQL 测试**: 新建 `executor_test.go`，验证 7 种 SQL 数据库（gaussdb/mysql/postgres/oracle/hive/sqlite/clickhouse）的 EXPLAIN 包装与 hint 透传正确性。（7 项）
+- **回退路径确认**: `/*+ */` 注释导致 AST 解析失败时，Validate/AutoLimit 自动回退到字符串首词检测，hint 作为 SQL 正文透传到数据库。所有原生支持 hint 的数据库（GaussDB/MySQL/Oracle/Hive + PostgreSQL via pg_hint_plan）均可正常使用。
 
 ## v0.1.6 (2026-06-12) — Bug Bash + Prometheus DSL 内核升级
 

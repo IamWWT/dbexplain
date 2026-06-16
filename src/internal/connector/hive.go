@@ -34,6 +34,9 @@ func (hiveConnector) Capabilities() []capabilities.Capability {
 }
 
 func (hiveConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instance, error) {
+	if names := GetTableFilter(ctx); len(names) > 0 {
+		return nil, fmt.Errorf("--table not supported for hive data source")
+	}
 	cfg := buildHiveConfig(d)
 	db := sql.OpenDB(gohive.NewConnector(cfg))
 	defer db.Close()

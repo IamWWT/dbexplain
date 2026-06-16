@@ -83,10 +83,21 @@ func (clickhouseConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Ins
 
 func collectCHDB(ctx context.Context, cli *chHTTP, dbName, redactedDSN string) (*schema.Database, error) {
 	database := &schema.Database{Name: dbName}
-	Logf(ctx, "[clickhouse] [collect] %s", "SELECT name, engine, toUInt64(total_rows), toUInt64(total_bytes), comment FROM system.tables WHERE database='%s' AND engine NOT LIKE '%%View%%' ORDER BY name")
+
+	// Build table filter clause
+	tfClause := ""
+	if names := GetTableFilter(ctx); len(names) > 0 {
+		escaped := make([]string, len(names))
+		for i, n := range names {
+			escaped[i] = "'" + escCH(n) + "'"
+		}
+		tfClause = " AND name IN (" + strings.Join(escaped, ",") + ")"
+	}
+
+	Logf(ctx, "[clickhouse] [collect] %s", "SELECT name, engine, toUInt64(total_rows), toUInt64(total_bytes), comment FROM system.tables WHERE database='%s' AND engine NOT LIKE '%%View%%'"+tfClause+" ORDER BY name")
 	rows, err := cli.queryRows(ctx, fmt.Sprintf(`
 		SELECT name, engine, toUInt64(total_rows), toUInt64(total_bytes), comment
-		FROM system.tables WHERE database='%s' AND engine NOT LIKE '%%View%%'
+		FROM system.tables WHERE database='%s' AND engine NOT LIKE '%%View%%'`+tfClause+`
 		ORDER BY name`, escCH(dbName)))
 	if err != nil {
 		return nil, schema.NewDBError(redactedDSN, dbName, "", "query tables", err)

@@ -32,6 +32,9 @@ func (esConnector) Capabilities() []capabilities.Capability {
 }
 
 func (esConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instance, error) {
+	if names := GetTableFilter(ctx); len(names) > 0 {
+		return nil, fmt.Errorf("--table not supported for elasticsearch data source")
+	}
 	host := d.Host
 	if host == "" {
 		host = "127.0.0.1"

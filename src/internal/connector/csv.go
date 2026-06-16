@@ -36,6 +36,9 @@ func (csvConnector) Capabilities() []capabilities.Capability {
 
 // Collect reads CSV/TSV files and returns schema metadata.
 func (csvConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instance, error) {
+	if names := GetTableFilter(ctx); len(names) > 0 {
+		return nil, fmt.Errorf("--table not supported for csv data source")
+	}
 	path := d.FilePath()
 	delimiter := getDelimiter(d)
 	encoding := d.DSNParam("encoding")

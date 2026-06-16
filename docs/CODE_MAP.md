@@ -32,7 +32,7 @@
 | **策略引擎** | `policy` | `src/internal/policy/policy.go`, `src/internal/policy/policy_test.go` | `docs/POLICY.md` |
 | **SQL 只读校验** | `sqlguard` | `src/internal/sqlguard/sqlguard.go`, `src/internal/sqlguard/sqlguard_test.go` | `docs/EXECUTE.md` |
 | **查询类型** | `internal/query` | `src/internal/query/types.go`, `src/internal/query/query_test.go` | `docs/EXECUTE.md` |
-| **执行引擎** | `internal/executor` | `src/internal/executor/executor.go` | `docs/EXECUTE.md` |
+| **执行引擎** | `internal/executor` | `src/internal/executor/executor.go`, `src/internal/executor/executor_test.go` | `docs/EXECUTE.md` |
 | **SQL AST** | `sqlast` | `src/internal/sqlast/types.go`, `lexer.go`, `parser.go` | — |
 | **DSL 查询** | `dsl` | `src/internal/dsl/ast.go`, `preprocess.go`, `parser.go`, `binder.go`, `compiler.go` | `docs/EXECUTE.md` |
 | **关系分析/图** | `analyze` | `src/internal/analyze/analyze.go`, `src/internal/analyze/ranking.go` | `docs/ALGORITHMS.md` |

@@ -1,6 +1,9 @@
 package connector
 
-import "testing"
+import (
+	"context"
+	"testing"
+)
 
 func TestTruncateDefault(t *testing.T) {
 	if MaxSQLLogLen != 5000 {
@@ -27,6 +30,28 @@ func TestTruncateSQL(t *testing.T) {
 	}
 	if got[5000:] != "...(truncated)" {
 		t.Errorf("missing truncation suffix: got %q", got[5000:])
+	}
+}
+
+func TestWithSample(t *testing.T) {
+	ctx := context.Background()
+	if IsSample(ctx) {
+		t.Error("IsSample should be false by default")
+	}
+	ctx = WithSample(ctx)
+	if !IsSample(ctx) {
+		t.Error("IsSample should be true after WithSample")
+	}
+}
+
+func TestWithSkipOpstats(t *testing.T) {
+	ctx := context.Background()
+	if IsSkipOpstats(ctx) {
+		t.Error("IsSkipOpstats should be false by default")
+	}
+	ctx = WithSkipOpstats(ctx)
+	if !IsSkipOpstats(ctx) {
+		t.Error("IsSkipOpstats should be true after WithSkipOpstats")
 	}
 }
 

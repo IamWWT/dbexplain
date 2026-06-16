@@ -110,7 +110,7 @@ func PrintHelp() {
 			"  --conn N                     Max concurrent connections (default 10)\n"+
 			"  --language zh|en, --version   Language / version\n"+
 			"  --sql-log-max-len N           Max SQL log length in chars (default 5000)\n"+
-			"  --no-sample                   Skip sample row fetching during schema collection\n"+
+			"  --sample                     Fetch sample rows for comment inference (default: off)\n"+
 			"  --skip-opstats                Skip MySQL performance_schema op stats\n\n",
 		"Flags (dbexplain [flags]):\n"+
 			"  -dsn, -env, -config                 Input sources\n"+
@@ -121,7 +121,7 @@ func PrintHelp() {
 			"  --conn N                     Max concurrent connections (default 10)\n"+
 			"  --language zh|en, --version   Language / version\n"+
 			"  --sql-log-max-len N           Max SQL log length in chars (default 5000)\n"+
-			"  --no-sample                   Skip sample row fetching during schema collection\n"+
+			"  --sample                     Fetch sample rows for comment inference (default: off)\n"+
 			"  --skip-opstats                Skip MySQL performance_schema op stats\n\n",
 	))
 
@@ -448,6 +448,8 @@ DESCRIPTION
     -context <dir>        写入 AI 上下文文件到目录 (summary.json/topology.json/diagnostics.json/chunks/)
     -cache <file>         Schema 指纹缓存文件，用于增量变更检测 (.json)
     -timeout <duration>   每 DSN 采集超时 (默认 20s, 如 30s/1m)
+    --sample                  启用样本行采集用于注释推断（默认关闭，大批量表时建议保持关闭）
+    --skip-opstats        跳过 MySQL performance_schema op stats 采集
     --version             输出版本号并退出
     --manual              打印此完整手册并退出
     --language <zh|en>    手册语言 (默认 zh)
@@ -470,6 +472,8 @@ DESCRIPTION
     -context <dir>        Write AI context files to directory (summary.json/topology.json/diagnostics.json/chunks/)
     -cache <file>         Schema fingerprint cache file for incremental delta detection (.json)
     -timeout <duration>   Per-DSN collect timeout (default 20s, e.g. 30s/1m)
+    --sample              Enable sample row fetching for comment inference (default: off)
+    --skip-opstats        Skip MySQL performance_schema op stats collection
     --version             Print version and exit
     --manual              Print this comprehensive manual and exit
     --language <zh|en>    Manual language (default zh)

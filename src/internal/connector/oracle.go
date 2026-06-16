@@ -94,13 +94,26 @@ func collectOracleSchema(ctx context.Context, db *sql.DB, d *dsn.DSN) (*schema.I
 
 func collectOracleDB(ctx context.Context, db *sql.DB, owner, redactedDSN string) (*schema.Database, error) {
 	database := &schema.Database{Name: owner}
-	Logf(ctx, "[oracle] [collect] %s", "SELECT t.table_name, COALESCE(t.num_rows, 0), COALESCE(c.comments, '') FROM all_tables t LEFT JOIN all_tab_comments c ON c.owner = t.owner AND c.table_name = t.table_name AND c.table_type = 'TABLE' WHERE t.owner = :1 ORDER BY t.table_name")
+
+	// Build table filter clause (:2, :3, ... since :1 is owner)
+	tfClause := ""
+	var tfArgs []any
+	if names := GetTableFilter(ctx); len(names) > 0 {
+		phs := make([]string, len(names))
+		for i, n := range names {
+			phs[i] = fmt.Sprintf(":%d", i+2)
+			tfArgs = append(tfArgs, n)
+		}
+		tfClause = " AND t.table_name IN (" + strings.Join(phs, ",") + ")"
+	}
+
+	Logf(ctx, "[oracle] [collect] %s", "SELECT t.table_name, COALESCE(t.num_rows, 0), COALESCE(c.comments, '') FROM all_tables t LEFT JOIN all_tab_comments c ON c.owner = t.owner AND c.table_name = t.table_name AND c.table_type = 'TABLE' WHERE t.owner = :1"+tfClause+" ORDER BY t.table_name")
 	rows, err := db.QueryContext(ctx, `
 		SELECT t.table_name, COALESCE(t.num_rows, 0), COALESCE(c.comments, '')
 		FROM all_tables t
 		LEFT JOIN all_tab_comments c ON c.owner = t.owner AND c.table_name = t.table_name AND c.table_type = 'TABLE'
-		WHERE t.owner = :1
-		ORDER BY t.table_name`, owner)
+		WHERE t.owner = :1`+tfClause+`
+		ORDER BY t.table_name`, append([]any{owner}, tfArgs...)...)
 	if err != nil {
 		return nil, schema.NewDBError(redactedDSN, owner, "", "query tables", err)
 	}

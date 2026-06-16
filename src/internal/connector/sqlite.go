@@ -50,8 +50,19 @@ func (sqliteConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instanc
 	inst := &schema.Instance{DSN: d.Redacted(), Kind: "sqlite", Label: d.Label}
 	database := &schema.Database{Name: path}
 
-	Logf(ctx, "[sqlite] [collect] %s", `SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name`)
-	rows, err := db.QueryContext(ctx, `SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name`)
+	// Build table filter clause
+	tfClause := ""
+	var tfArgs []any
+	if names := GetTableFilter(ctx); len(names) > 0 {
+		phs := make([]string, len(names))
+		for i, n := range names {
+			phs[i] = "?"
+			tfArgs = append(tfArgs, n)
+		}
+		tfClause = " AND name IN (" + strings.Join(phs, ",") + ")"
+	}
+	Logf(ctx, "[sqlite] [collect] %s", `SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'`+tfClause+` ORDER BY name`)
+	rows, err := db.QueryContext(ctx, `SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'`+tfClause+` ORDER BY name`, tfArgs...)
 	if err != nil {
 		return nil, schema.NewDBError(d.Redacted(), "", "", "list tables", err)
 	}

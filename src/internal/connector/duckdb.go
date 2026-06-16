@@ -85,14 +85,26 @@ func (duckdbConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instanc
 	inst := &schema.Instance{DSN: d.Redacted(), Kind: "duckdb", Label: d.Label}
 	database := &schema.Database{Name: "main"}
 
+	// Build table filter clause
+	tfClause := ""
+	var tfArgs []any
+	if names := GetTableFilter(ctx); len(names) > 0 {
+		phs := make([]string, len(names))
+		for i, n := range names {
+			phs[i] = "?"
+			tfArgs = append(tfArgs, n)
+		}
+		tfClause = " AND table_name IN (" + strings.Join(phs, ",") + ")"
+	}
+
 	// Enumerate all user tables/views via information_schema
 	// DuckDB has no multi-database concept, single "main" schema
-	Logf(ctx, "[duckdb] [collect] %s", "SELECT table_name, table_type FROM information_schema.tables WHERE table_schema NOT IN ('information_schema', 'pg_catalog', 'temp') ORDER BY table_name")
+	Logf(ctx, "[duckdb] [collect] %s", "SELECT table_name, table_type FROM information_schema.tables WHERE table_schema NOT IN ('information_schema', 'pg_catalog', 'temp')"+tfClause+" ORDER BY table_name")
 	rows, err := db.QueryContext(ctx, `
 		SELECT table_name, table_type
 		FROM information_schema.tables
-		WHERE table_schema NOT IN ('information_schema', 'pg_catalog', 'temp')
-		ORDER BY table_name`)
+		WHERE table_schema NOT IN ('information_schema', 'pg_catalog', 'temp')`+tfClause+`
+		ORDER BY table_name`, tfArgs...)
 	if err != nil {
 		return nil, schema.NewDBError(d.Redacted(), "main", "", "list tables", err)
 	}

@@ -86,34 +86,123 @@ func (mysqlConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instance
 
 func collectMySQLDB(ctx context.Context, db *sql.DB, dbName, redactedDSN string) (*schema.Database, error) {
 	database := &schema.Database{Name: dbName}
-	Logf(ctx, "[mysql] [collect] %s", `
+
+	// Build table filter clause
+	tfClause := ""
+	fkTfClause := ""
+	opTfClause := ""
+	var tfArgs []any
+	if names := GetTableFilter(ctx); len(names) > 0 {
+		phs := make([]string, len(names))
+		for i, n := range names {
+			phs[i] = "?"
+			tfArgs = append(tfArgs, n)
+		}
+		phsStr := strings.Join(phs, ",")
+		tfClause = " AND TABLE_NAME IN (" + phsStr + ")"
+		fkTfClause = " AND k.TABLE_NAME IN (" + phsStr + ")"
+		opTfClause = " AND object_name IN (" + phsStr + ")"
+	}
+
+	// 设置 max_execution_time 作为服务端超时兜底（MySQL 版 statement_timeout）。
+	// 上限 30000ms（30s），防止单个 statement 占满整个 --timeout 预算。
+	if deadline, ok := ctx.Deadline(); ok {
+		remaining := time.Until(deadline)
+		if remaining > 0 {
+			ms := int(remaining.Milliseconds())
+			if ms > 30000 {
+				ms = 30000
+			}
+			if ms < 1000 {
+				ms = 1000
+			}
+			if _, err := db.ExecContext(ctx, fmt.Sprintf("SET SESSION max_execution_time=%d", ms)); err != nil {
+				Logf(ctx, "[mysql] set max_execution_time failed: %v (queries will run without server-side timeout guard)", err)
+			}
+		}
+	}
+
+	// Try Level 1: information_schema.TABLES (fastest)
+	Logf(ctx, "[mysql] [collect] [Level 1] %s", `
 		SELECT TABLE_NAME, COALESCE(TABLE_ROWS,0), COALESCE(DATA_LENGTH+INDEX_LENGTH,0),
 		       COALESCE(TABLE_COMMENT,''), COALESCE(ENGINE,'')
 		FROM information_schema.TABLES
-		WHERE TABLE_SCHEMA=? AND TABLE_TYPE='BASE TABLE'
+		WHERE TABLE_SCHEMA=? AND TABLE_TYPE='BASE TABLE'` + tfClause + `
 		ORDER BY TABLE_NAME`)
+	qArgs := append([]any{dbName}, tfArgs...)
 	rows, err := db.QueryContext(ctx, `
 		SELECT TABLE_NAME, COALESCE(TABLE_ROWS,0), COALESCE(DATA_LENGTH+INDEX_LENGTH,0),
 		       COALESCE(TABLE_COMMENT,''), COALESCE(ENGINE,'')
 		FROM information_schema.TABLES
-		WHERE TABLE_SCHEMA=? AND TABLE_TYPE='BASE TABLE'
-		ORDER BY TABLE_NAME`, dbName)
-	if err != nil {
-		return nil, schema.NewDBError(redactedDSN, dbName, "", "query tables", err)
-	}
-	defer rows.Close()
+		WHERE TABLE_SCHEMA=? AND TABLE_TYPE='BASE TABLE'`+tfClause+`
+		ORDER BY TABLE_NAME`, qArgs...)
 
 	var tables []*schema.Table
-	for rows.Next() {
-		t := &schema.Table{}
-		if err := rows.Scan(&t.Name, &t.RowCount, &t.SizeBytes, &t.Comment, &t.Engine); err != nil {
-			continue
+	if err != nil {
+		if isPermissionErr(err) {
+			// Level 2: SHOW TABLE STATUS (fallback when information_schema not accessible)
+			Logf(ctx, "[mysql] [collect] [Level 2] information_schema.TABLES denied, trying SHOW TABLE STATUS")
+			rows, err = db.QueryContext(ctx, "SHOW TABLE STATUS FROM `"+dbName+"`")
+			if err != nil {
+				return nil, schema.NewDBError(redactedDSN, dbName, "", "query tables (fallback)", err)
+			}
+			defer rows.Close()
+			// SHOW TABLE STATUS columns: Name, Engine, Version, Row_format, Rows, Avg_row_length,
+			// Data_length, Max_data_length, Index_length, Data_free, Auto_increment, Create_time,
+			// Update_time, Check_time, Collation, Checksum, Create_options, Comment
+			for rows.Next() {
+				var t schema.Table
+				var name, engine string
+				var rowsCount, dataLen, idxLen int64
+				var comment string
+				var version, rowFmt, avgRowLen, maxDataLen, dataFree, autoInc sql.NullInt64
+				var createTime, updateTime, checkTime, collation, checksum, createOpts sql.NullString
+				if err := rows.Scan(&name, &engine, &version, &rowFmt, &rowsCount, &avgRowLen,
+					&dataLen, &maxDataLen, &idxLen, &dataFree, &autoInc,
+					&createTime, &updateTime, &checkTime, &collation, &checksum, &createOpts, &comment); err != nil {
+					continue
+				}
+				t.Name = name
+				t.Engine = engine
+				t.RowCount = rowsCount
+				t.SizeBytes = dataLen + idxLen
+				t.Comment = comment
+				tables = append(tables, &t)
+			}
+			rows.Close()
+			if err := rows.Err(); err != nil {
+				log.Printf("[mysql] rows iteration: %v", err)
+			}
+			// Apply table filter in Go (SHOW TABLE STATUS doesn't support parameterized WHERE)
+			if len(tfArgs) > 0 {
+				filter := make(map[string]bool, len(tfArgs))
+				for _, n := range tfArgs {
+					filter[n.(string)] = true
+				}
+				var filtered []*schema.Table
+				for _, t := range tables {
+					if filter[t.Name] {
+						filtered = append(filtered, t)
+					}
+				}
+				tables = filtered
+			}
+		} else {
+			return nil, schema.NewDBError(redactedDSN, dbName, "", "query tables", err)
 		}
-		tables = append(tables, t)
-	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
-		log.Printf("[mysql] rows iteration: %v", err)
+	} else {
+		defer rows.Close()
+		for rows.Next() {
+			t := &schema.Table{}
+			if err := rows.Scan(&t.Name, &t.RowCount, &t.SizeBytes, &t.Comment, &t.Engine); err != nil {
+				continue
+			}
+			tables = append(tables, t)
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			log.Printf("[mysql] rows iteration: %v", err)
+		}
 	}
 
 	total := len(tables)
@@ -136,8 +225,8 @@ func collectMySQLDB(ctx context.Context, db *sql.DB, dbName, redactedDSN string)
 		       COALESCE(COLUMN_DEFAULT,''), EXTRA, COALESCE(COLUMN_COMMENT,''),
 		       TABLE_NAME
 		FROM information_schema.COLUMNS
-		WHERE TABLE_SCHEMA=?
-		ORDER BY TABLE_NAME, ORDINAL_POSITION`, dbName)
+		WHERE TABLE_SCHEMA=?`+tfClause+`
+		ORDER BY TABLE_NAME, ORDINAL_POSITION`, append([]any{dbName}, tfArgs...)...)
 	if err != nil {
 		return nil, schema.NewDBError(redactedDSN, dbName, "", "batch query columns", err)
 	}
@@ -176,8 +265,8 @@ func collectMySQLDB(ctx context.Context, db *sql.DB, dbName, redactedDSN string)
 	iRows, err := db.QueryContext(ctx, `
 		SELECT TABLE_NAME, INDEX_NAME, COLUMN_NAME, NON_UNIQUE, SEQ_IN_INDEX
 		FROM information_schema.STATISTICS
-		WHERE TABLE_SCHEMA=?
-		ORDER BY TABLE_NAME, INDEX_NAME, SEQ_IN_INDEX`, dbName)
+		WHERE TABLE_SCHEMA=?`+tfClause+`
+		ORDER BY TABLE_NAME, INDEX_NAME, SEQ_IN_INDEX`, append([]any{dbName}, tfArgs...)...)
 	if err == nil {
 		// Map to group columns per index per table: tableKey -> [indexKey]*Index
 		type idxKey struct{ tbl, name string }
@@ -225,8 +314,8 @@ func collectMySQLDB(ctx context.Context, db *sql.DB, dbName, redactedDSN string)
 		       k.REFERENCED_TABLE_SCHEMA, k.REFERENCED_TABLE_NAME, k.REFERENCED_COLUMN_NAME,
 		       k.TABLE_NAME
 		FROM information_schema.KEY_COLUMN_USAGE k
-		WHERE k.TABLE_SCHEMA=? AND k.REFERENCED_TABLE_NAME IS NOT NULL
-		ORDER BY k.TABLE_NAME, k.CONSTRAINT_NAME, k.ORDINAL_POSITION`, dbName)
+		WHERE k.TABLE_SCHEMA=? AND k.REFERENCED_TABLE_NAME IS NOT NULL`+fkTfClause+`
+		ORDER BY k.TABLE_NAME, k.CONSTRAINT_NAME, k.ORDINAL_POSITION`, append([]any{dbName}, tfArgs...)...)
 	if err == nil {
 		for fRows.Next() {
 			var name, col, refDB, refTable, refCol, tbl string
@@ -270,7 +359,7 @@ func collectMySQLDB(ctx context.Context, db *sql.DB, dbName, redactedDSN string)
 	ruleRows, err := db.QueryContext(ctx, `
 		SELECT CONSTRAINT_NAME, DELETE_RULE, UPDATE_RULE, TABLE_NAME
 		FROM information_schema.REFERENTIAL_CONSTRAINTS
-		WHERE CONSTRAINT_SCHEMA=?`, dbName)
+		WHERE CONSTRAINT_SCHEMA=?`+tfClause, append([]any{dbName}, tfArgs...)...)
 	if err == nil {
 		for ruleRows.Next() {
 			var cName, delRule, updRule, tbl string
@@ -305,8 +394,8 @@ func collectMySQLDB(ctx context.Context, db *sql.DB, dbName, redactedDSN string)
 			       COALESCE(SUM(count_read), 0),
 			       COALESCE(SUM(count_write), 0)
 			FROM performance_schema.table_io_waits_summary_by_table
-			WHERE object_schema=?
-			GROUP BY object_name`, dbName)
+			WHERE object_schema=?`+opTfClause+`
+			GROUP BY object_name`, append([]any{dbName}, tfArgs...)...)
 		if err == nil {
 			for oRows.Next() {
 				var tbl string
@@ -355,7 +444,7 @@ func collectMySQLDB(ctx context.Context, db *sql.DB, dbName, redactedDSN string)
 		}
 
 		// Sample row for comment inference
-		if !IsNoSample(ctx) {
+		if IsSample(ctx) {
 			if cd := colMap[t.Name]; cd != nil && len(cd.colsWithoutComment) > 0 && t.RowCount > 0 {
 				if sample, err := fetchMySQLSampleRow(ctx, db, dbName, t.Name); err == nil {
 					for _, c := range cd.colsWithoutComment {

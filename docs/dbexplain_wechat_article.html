@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>dbexplain v0.0.9 + v0.1.0 合并发布</title>
+<title>dbexplain v0.1.7 发布</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700;900&family=JetBrains+Mono:wght@400;600&display=swap');
 
@@ -36,7 +36,6 @@
     padding: 40px 24px 80px;
   }
 
-  /* ── 顶部装饰线 ── */
   .top-rule {
     display: flex;
     align-items: center;
@@ -46,7 +45,6 @@
   .top-rule .line { flex: 1; height: 2px; background: var(--ink); }
   .top-rule .dot { width: 6px; height: 6px; background: var(--rust); border-radius: 50%; }
 
-  /* ── 标签行 ── */
   .tags {
     display: flex;
     flex-wrap: wrap;
@@ -63,7 +61,6 @@
     letter-spacing: 0.05em;
   }
 
-  /* ── 主标题 ── */
   h1.headline {
     font-size: 28px;
     font-weight: 900;
@@ -79,7 +76,6 @@
     padding-bottom: 1px;
   }
 
-  /* ── 副标题 ── */
   .subtitle {
     font-size: 13px;
     color: var(--muted);
@@ -90,7 +86,6 @@
     border-bottom: 1px solid var(--border);
   }
 
-  /* ── 引言块 ── */
   .lede {
     font-size: 16px;
     font-weight: 600;
@@ -102,7 +97,6 @@
     margin-bottom: 40px;
   }
 
-  /* ── 章节标题 ── */
   h2.section {
     font-size: 20px;
     font-weight: 700;
@@ -129,13 +123,11 @@
     border-left: 3px solid var(--gold);
   }
 
-  /* ── 正文段落 ── */
   p { margin-bottom: 14px; }
 
   strong { color: var(--ink); font-weight: 700; }
   em { font-style: italic; color: var(--muted); }
 
-  /* ── 代码块 ── */
   pre {
     background: var(--code-bg);
     color: var(--code-fg);
@@ -160,7 +152,6 @@
     color: var(--rust);
   }
 
-  /* ── 特性卡片网格 ── */
   .feature-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -176,7 +167,6 @@
   .feature-card .title { font-weight: 700; font-size: 13px; margin-bottom: 4px; }
   .feature-card .desc { font-size: 12px; color: var(--muted); line-height: 1.6; }
 
-  /* ── 对比表格 ── */
   table {
     width: 100%;
     border-collapse: collapse;
@@ -202,7 +192,6 @@
   .badge-yes { color: #27ae60; font-weight: 700; }
   .badge-partial { color: var(--gold); font-weight: 700; }
 
-  /* ── 数字亮点栏 ── */
   .stats-row {
     display: flex;
     gap: 0;
@@ -227,7 +216,6 @@
   }
   .stat .label { font-size: 11px; color: var(--muted); letter-spacing: 0.05em; }
 
-  /* ── 流程步骤 ── */
   .steps { margin: 16px 0; }
   .step {
     display: flex;
@@ -252,7 +240,6 @@
   .step-content { font-size: 14px; line-height: 1.7; }
   .step-content strong { color: var(--rust); }
 
-  /* ── 查询结果模拟 ── */
   .query-result {
     background: #0d1117;
     color: #c9d1d9;
@@ -270,7 +257,6 @@
   .query-result .num { color: #f0c040; }
   .query-result .sep { color: #30363d; }
 
-  /* ── 分隔线 ── */
   .divider {
     display: flex;
     align-items: center;
@@ -289,7 +275,6 @@
     background: var(--border);
   }
 
-  /* ── 引用注意框 ── */
   .callout {
     background: #fffbf0;
     border: 1px solid var(--gold);
@@ -311,7 +296,6 @@
     line-height: 1.7;
   }
 
-  /* ── 尾部 ── */
   .footer {
     margin-top: 56px;
     padding-top: 24px;
@@ -341,7 +325,6 @@
     letter-spacing: 0.08em;
   }
 
-  /* ── 支持矩阵 ── */
   .db-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -387,37 +370,34 @@
 <div class="tags">
   <span class="tag">开源工具</span>
   <span class="tag">AI Agent</span>
-  <span class="tag">CSV/SQL 查询引擎</span>
+  <span class="tag">性能优化</span>
+  <span class="tag">Prometheus</span>
   <span class="tag">Go</span>
-  <span class="tag">v0.0.9 + v0.1.0</span>
+  <span class="tag">v0.1.7</span>
 </div>
 
-<h1 class="headline">那个给 AI 用的数据库工具，<br>现在能<em>直接分析 Excel</em> 了</h1>
+<h1 class="headline">给 AI 用的数据库工具，现在<em>快了一个数量级</em></h1>
 
 <div class="subtitle">
-  dbexplain v0.0.9 + v0.1.0 合并发布 · 2026年6月 · Apache 2.0
+  dbexplain v0.1.7 发布 · 2026年6月 · Apache 2.0
 </div>
 
 <div class="lede">
-  11 种数据源 + 纯 Go 内存 SQL 引擎 + 安全策略引擎。不需要数据库就能跑 SQL 查询，AI Agent 直接分析 CSV/Excel —— 一个二进制，零依赖。
+  16 种数据源 · Schema 采集性能提升 50-100 倍 · CSV/Excel 流式读取 · Prometheus 行输出给 LLM 消费 · 连接检查子命令。一次发布，六项硬核优化。
 </div>
-
-<p>如果你还没听说过 <strong>dbexplain</strong>：它是一个专为 AI Agent 设计的数据库 Schema 上下文生成工具。但这次 v0.0.9 + v0.1.0 合并发布之后，它的能力已经远远超出了"Schema 采集"的范畴。</p>
-
-<p>最核心的变化是：<strong>现在它能直接对 CSV 和 Excel 文件执行 SQL 查询了</strong>。不是调用外部引擎，而是内置了一个纯 Go 实现的内存 SQL 引擎。</p>
 
 <div class="stats-row">
   <div class="stat">
-    <span class="number">11</span>
+    <span class="number">16</span>
     <span class="label">支持数据源类型</span>
   </div>
   <div class="stat">
-    <span class="number">66+</span>
-    <span class="label">查询引擎单元测试</span>
+    <span class="number">~7</span>
+    <span class="label">100表所需查询次数(原500+)</span>
   </div>
   <div class="stat">
-    <span class="number">15</span>
-    <span class="label">业务分析 QA 场景</span>
+    <span class="number">10</span>
+    <span class="label">平台分发包(tarballs)</span>
   </div>
   <div class="stat">
     <span class="number">0</span>
@@ -425,87 +405,206 @@
   </div>
 </div>
 
-<div class="divider">核心亮点</div>
+<div class="divider">性能飞跃</div>
 
-<h2 class="section"><span class="num">01</span>内置 SQL 引擎：从此 CSV 不再是二等公民</h2>
+<h2 class="section"><span class="num">01</span>Schema 采集：从 N+1 到批量查询</h2>
 
-<p>这是本次发布最重磅的能力。v0.1.0 新增了 <strong>纯 Go 实现的内存 SQL 查询引擎</strong>，支持对 CSV/TSV/XLSX 文件执行完整的 SELECT 查询：</p>
+<p>这是本次发布最硬核的优化。在 v0.1.6 及之前，dbexplain 对 PostgreSQL 和 MySQL 做 Schema 采集时，采用 <strong>N+1 查询模式</strong>：每个表单独查询 columns + indexes + foreign keys。100 个表 = 400-600 次数据库往返。</p>
 
-<pre><span class="comment">-- WHERE 过滤 + 列投影</span>
-<span class="cmd">dbexplain</span> execute -env --label my_data \
-  <span class="str">'SELECT employee_id, completion_rate FROM sales_data WHERE completion_rate < 60'</span> --human
+<p>v0.1.7 将其重构为 <strong>per-schema 批量查询</strong>：在 tables 循环之前，一次性查出整个 schema 的所有 columns/indexes/FK，Go 侧用 map 按表名分组。100 个表从 400-600 次往返降至 <strong>~7 次</strong>。</p>
 
-<span class="comment">-- GROUP BY + 聚合</span>
-<span class="cmd">dbexplain</span> execute -env --label my_data \
-  <span class="str">'SELECT department, AVG(rate) AS avg_rate FROM data GROUP BY department ORDER BY avg_rate DESC'</span> --human
+<table>
+  <thead>
+    <tr><th>场景</th><th>优化前</th><th>优化后</th><th>提升</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>PG 100 表采集</td>
+      <td>~300 次查询</td>
+      <td>~3 次</td>
+      <td class="badge-yes">100×</td>
+    </tr>
+    <tr>
+      <td>MySQL 100 表采集</td>
+      <td>~500 次查询</td>
+      <td>~5 次</td>
+      <td class="badge-yes">100×</td>
+    </tr>
+    <tr>
+      <td>MySQL 100 表 + op_stats</td>
+      <td>~600 次查询</td>
+      <td>~6 次</td>
+      <td class="badge-yes">100×</td>
+    </tr>
+  </tbody>
+</table>
 
-<span class="comment">-- 跨文件 JOIN（CSV ↔ XLSX）</span>
-<span class="cmd">dbexplain</span> execute -env --label my_data \
-  <span class="str">'SELECT o.branch_name, AVG(t.completion_rate) FROM sales_data t JOIN org_info o ON t.dept_id = o.dept_id GROUP BY o.branch_name'</span> --human
+<div class="callout-info">
+  <strong>原理很简单</strong>：数据库的瓶颈不是单条 SQL 的执行速度，而是网络往返次数（RTT）。将 300 条独立查询合并为 3 条批量查询，网络开销从 300 RTT 降为 3 RTT。<br>
+  <code>information_schema.COLUMNS WHERE TABLE_SCHEMA=? ORDER BY TABLE_NAME, ORDINAL_POSITION</code> — 一次查出全部表的全部列。
+</div>
 
-<span class="comment">-- 列间算术 + CAST 类型转换</span>
-<span class="cmd">dbexplain</span> execute -env --label my_data \
-  <span class="str">'SELECT employee_id, CAST(channel_cnt AS FLOAT) / total_cnt * 100 AS pct FROM data WHERE total_cnt > 0'</span> --human</pre>
+<h2 class="section"><span class="num">02</span>两个新 Flag：按需跳过，不采集多余数据</h2>
 
-<p>支持的语法完整到让人意外：</p>
+<p>很多场景下，你只需要表结构，不需要样本数据或性能指标。v0.1.7 新增了两个全局 flag：</p>
 
 <div class="feature-grid">
   <div class="feature-card">
-    <div class="icon">🔍</div>
-    <div class="title">WHERE + 运算符</div>
-    <div class="desc">= != &lt; &gt; LIKE IN BETWEEN IS NULL AND/OR/NOT，完整覆盖</div>
+    <div class="icon">🔇</div>
+    <div class="title">--no-sample</div>
+    <div class="desc">跳过 SELECT * ... LIMIT 1 样本行采集。纯结构分析场景 CPU 时间减半，100 表省 100 次查询。</div>
   </div>
   <div class="feature-card">
-    <div class="icon">📊</div>
-    <div class="title">GROUP BY + 聚合</div>
-    <div class="desc">SUM/AVG/COUNT/MAX/MIN + HAVING 过滤 + COUNT(DISTINCT col)</div>
-  </div>
-  <div class="feature-card">
-    <div class="icon">🔗</div>
-    <div class="title">跨文件 JOIN</div>
-    <div class="desc">CSV↔CSV、XLSX↔XLSX、CSV↔XLSX，LEFT/RIGHT JOIN 全部支持</div>
-  </div>
-  <div class="feature-card">
-    <div class="icon">🧮</div>
-    <div class="title">表达式 + 函数</div>
-    <div class="desc">列间算术、CAST、ABS、ROUND、子查询 IN/NOT IN</div>
-  </div>
-  <div class="feature-card">
-    <div class="icon">📐</div>
-    <div class="title">UNION + DISTINCT ON</div>
-    <div class="desc">跨表合并结果，每组保留首行</div>
-  </div>
-  <div class="feature-card">
-    <div class="icon">⚡</div>
-    <div class="title">NULLS FIRST/LAST</div>
-    <div class="desc">空值排序位置精确控制</div>
+    <div class="icon">⏭️</div>
+    <div class="title">--skip-opstats</div>
+    <div class="desc">跳过 MySQL performance_schema op stats 采集。100 表省 100 次查询。MySQL 独有。</div>
   </div>
 </div>
+
+<pre><span class="comment"># 只采集结构，不要样本数据，不要性能统计</span>
+<span class="cmd">dbexplain</span> -dsn <span class="str">'mysql://user:pass@host:3306/mydb?label=test'</span> \
+  --no-sample --skip-opstats --human</pre>
+
+<h2 class="section"><span class="num">03</span>CSV/Excel 流式读取：大文件不再撑爆内存</h2>
+
+<p>此前，<code>SELECT * FROM file LIMIT 10</code> 会把整个文件读入内存后才截断前 10 行。200MB 的 CSV = 必须占用 200MB 内存。</p>
+
+<p>v0.1.7 改为流式读取：</p>
+
+<div class="steps">
+  <div class="step">
+    <div class="step-num">1</div>
+    <div class="step-content"><strong>CSV</strong>：使用 <code>csvReader.Read()</code> 逐行读取，读到 limit 行即停。内存占用 O(limit) 而非 O(N)。</div>
+  </div>
+  <div class="step">
+    <div class="step-num">2</div>
+    <div class="step-content"><strong>XLSX</strong>：使用 <code>excelize.Rows</code> 迭代器替代 <code>GetRows()</code>，逐行 yield，不加载整个工作表。</div>
+  </div>
+</div>
+
+<div class="callout">
+  <strong>注意</strong>：流式读取仅在 <code>SELECT * LIMIT N</code> 快速路径中生效。涉及 WHERE/GROUP BY/JOIN/聚合 的查询仍需要全量数据，走原有路径。
+</div>
+
+<h2 class="section"><span class="num">04</span>inferRefs 加索引：1000 表从千万级降到万级</h2>
+
+<p>外键推断函数 <code>inferRefs()</code> 此前用 O(N²) 全表扫描匹配列名。1000 个表、平均每表 20 列 = 2000 万次比较。</p>
+
+<p>v0.1.7 增加了 <code>map[name][]tableEntry</code> 倒排索引：</p>
+
+<pre><span class="comment">// 优化前：遍历全部表匹配列名</span>
+<span class="cmd">for</span> _, tgt := <span class="cmd">range</span> tables {  <span class="comment">// O(N) per column</span>
+    ...
+}
+
+<span class="comment">// 优化后：map lookup O(1)</span>
+nameIndex := <span class="cmd">map</span>[string][]tableEntry{}
+<span class="cmd">for</span> _, e := <span class="cmd">range</span> tables {
+    nameIndex[strings.ToLower(e.table.Name)] = <span class="cmd">append</span>(nameIndex[...], e)
+}
+
+<span class="comment">// 内层循环</span>
+<span class="cmd">for</span> _, tgt := <span class="cmd">range</span> nameIndex[stemLC] { ... }  <span class="comment">// O(1)</span></pre>
+
+<p>效果：1000 表的场景从 ~2000 万次比较降至 ~2 万次，千倍级提升。</p>
+
+<div class="divider">Agent 体验</div>
+
+<h2 class="section"><span class="num">05</span>Prometheus 行输出：LLM 终于能看懂指标了</h2>
+
+<p>这是 v0.1.7 对 AI Agent 最重要的体验改进。此前，dbexplain 采集 Prometheus 只输出表名和列结构（_labels 表有 label_name、_metrics 表有 metric_name/type/help/unit）。LLM Agent 只知道「有哪些 metric」，不知道「这些 metric 长什么样」。</p>
+
+<p>v0.1.7 在 JSON 输出中增加了 <code>rows</code> 字段：</p>
+
+<pre><span class="comment">// 以前：只有表结构</span>
+{
+  "name": "_labels",
+  "columns": [{ "name": "label_name", "type": "text" }]
+}
+
+<span class="comment">// 现在：表结构 + 样本数据行</span>
+{
+  "name": "_labels",
+  "columns": [...],
+  "rows": [
+    { "label_name": "instance" },
+    { "label_name": "job" },
+    { "label_name": "__name__" },
+    ...  <span class="comment">// ~206 条 label 名</span>
+  ]
+}</pre>
 
 <div class="callout-info">
-  <strong>为什么这很重要？</strong> 业务数据大量以 CSV/Excel 形式存在，但传统 CLI 工具（grep/awk）面对结构化查询力不从心。现在 AI Agent 可以用标准 SQL 直接分析这些文件，不需要导入数据库、不需要写 Python 脚本。
+  <strong>为什么这很重要？</strong> VeinMap 等 LLM Agent 做 NL→PromQL 语义匹配时，需要知道具体的 label 名和 metric 元数据。以前只能看到「有 206 个 label」，现在可以直接消费这 206 条样本数据做精确匹配。这是 Agent 智能问数的 P0 阻塞解除。
 </div>
 
-<p>引擎底层是递归下降解析器 + 哈希 JOIN 引擎 + 哈希聚合器，全部用 Go 手写，零外部依赖。66 个单元测试覆盖所有语法路径和边界条件。</p>
+<h2 class="section"><span class="num">06</span>dbexplain check：一键验证全链路连通性</h2>
 
-<div class="divider">重磅更新</div>
+<p>新增的 <code>check</code> 子命令可以一次性验证所有 DSN 的语法正确性和数据库连通性：</p>
 
-<h2 class="section"><span class="num">02</span>数据源矩阵：从 9 到 11</h2>
+<pre><span class="comment"># 自动加载 .env.dbexplain，检查全部 DSN</span>
+<span class="cmd">dbexplain check</span>
 
-<p>v0.0.9 新增了 CSV/TSV 和 XLSX 两类文件数据源，使总数据源数达到 11 种：</p>
+<span class="comment"># 只检查特定 label 的 DSN</span>
+<span class="cmd">dbexplain check --label my-prom</span>
+
+<span class="comment"># 输出示例：</span>
+No. EnvKey Label              Kind       Host:Port             Syntax  Connect
+── ────── ─────────────────── ────────── ──────────────────── ─────── ───────────────
+1   DB1   my-mysql            mysql      192.168.1.100:3306   ✅ OK   ✅ OK 42ms
+2   DB2   my-prom             prometheus 192.168.0.127:9090   ✅ OK   ✅ OK 156ms</pre>
+
+<p>支持 <code>--dsn</code>、<code>--config</code>、<code>--timeout</code>、<code>--label</code> 参数，密码自动脱敏，退出码反映失败项。v0.1.7 将 <code>--env</code> 默认值改为 <code>true</code>，无需显式传参即可自动加载配置。</p>
+
+<div class="divider">安全加固</div>
+
+<h2 class="section"><span class="num">07</span>CTE 写操作拦截 & DSN 密码兼容</h2>
+
+<h3 class="subsection">CTE 写检测加固</h3>
+
+<p>v0.1.7 修复了一个 sqlguard 只读校验绕过漏洞：<code>WITH x AS (SELECT 1) INSERT INTO y VALUES (1)</code> 可以绕过之前的检测。三层加固：</p>
+
+<div class="steps">
+  <div class="step">
+    <div class="step-num">1</div>
+    <div class="step-content">WITH 检测提前到 AST 解析之前，不再依赖 AST</div>
+  </div>
+  <div class="step">
+    <div class="step-num">2</div>
+    <div class="step-content"><code>containsCTEWrite()</code> 增加主查询体写动词检查</div>
+  </div>
+  <div class="step">
+    <div class="step-num">3</div>
+    <div class="step-content">修复 Go 经典陷阱：<code>break</code> 在 <code>switch+for</code> 嵌套中只跳出 switch 的语义问题（改用 labeled break）</div>
+  </div>
+</div>
+
+<h3 class="subsection">DSN 密码中的 # 字符</h3>
+
+<p>Go 的 <code>url.Parse</code> 会将密码中的 <code>#</code>（如 <code>redis://:pwd#123@host</code>）解释为 URL fragment，导致解析失败。新增 <code>escapeUserinfoHash()</code> 预处理，自动转义 userinfo 段内的 <code>#</code> 为 <code>%23</code>。</p>
+
+<div class="divider">数据库矩阵</div>
+
+<h2 class="section"><span class="num">08</span>16 种数据源 + GaussDB Oracle 兼容</h2>
+
+<p>v0.1.7 继续扩展数据源支持，新增了 GaussDB Oracle 兼容模式的全面适配：</p>
 
 <div class="db-grid">
   <div class="db-item">
+    <span class="db-name" style="color:#c0392b">Prometheus</span>
+    <span class="db-note">Meta 表行输出 + DSL 联邦</span>
+  </div>
+  <div class="db-item">
     <span class="db-name">MySQL</span>
-    <span class="db-note">外键、索引、字段注释推断</span>
+    <span class="db-note">外键、索引、字段注释</span>
   </div>
   <div class="db-item">
     <span class="db-name">PostgreSQL</span>
     <span class="db-note">多 Schema、行数统计</span>
   </div>
   <div class="db-item">
-    <span class="db-name">GaussDB</span>
-    <span class="db-note">兼容 pg 协议</span>
+    <span class="db-name" style="color:#c0392b">GaussDB</span>
+    <span class="db-note">Oracle 兼容模式 DSN 参数</span>
   </div>
   <div class="db-item">
     <span class="db-name">ClickHouse</span>
@@ -532,219 +631,82 @@
     <span class="db-note">向量集合元数据</span>
   </div>
   <div class="db-item">
-    <span class="db-name" style="color:#c0392b">CSV/TSV <span class="new">NEW</span></span>
-    <span class="db-note">文件查询引擎: SQL 完整子集</span>
+    <span class="db-name">Oracle</span>
+    <span class="db-note">go-sqlmock 验证采集</span>
   </div>
   <div class="db-item">
-    <span class="db-name" style="color:#c0392b">XLSX Excel <span class="new">NEW</span></span>
-    <span class="db-note">多 Sheet JOIN，跨格式 JOIN</span>
+    <span class="db-name">Hive</span>
+    <span class="db-note">DESCRIBE FORMATTED</span>
+  </div>
+  <div class="db-item">
+    <span class="db-name">DuckDB</span>
+    <span class="db-note">CGO 静态链接</span>
+  </div>
+  <div class="db-item">
+    <span class="db-name">CSV/TSV</span>
+    <span class="db-note">流式读取 + SQL 引擎</span>
+  </div>
+  <div class="db-item">
+    <span class="db-name">XLSX Excel</span>
+    <span class="db-note">迭代器读取 + 跨格式 JOIN</span>
+  </div>
+  <div class="db-item">
+    <span class="db-name" style="color:#c0392b">SQL 日志截断</span>
+    <span class="db-note">--sql-log-max-len 配置</span>
   </div>
 </div>
 
-<div class="divider">只读查询</div>
+<div class="divider">性能摘要</div>
 
-<h2 class="section"><span class="num">03</span> execute 子命令：沙箱保护下的只读查询</h2>
-
-<p>v0.0.7 引入的 <code>execute</code> 子命令，经过两个版本的打磨已臻成熟。它提供了一个<strong>三层安全防护</strong>的只读查询环境：</p>
-
-<div class="steps">
-  <div class="step">
-    <div class="step-num">1</div>
-    <div class="step-content"><strong>sqlguard 只读校验</strong>：动词白名单（SELECT/EXPLAIN/SHOW/DESC/PRAGMA），多语句检测，自动 LIMIT 1000 注入</div>
-  </div>
-  <div class="step">
-    <div class="step-num">2</div>
-    <div class="step-content"><strong>策略引擎细粒度访问控制</strong>：表级拒绝（DENY_TABLES）、列级屏蔽（MASK_COLUMNS）、语句级黑名单</div>
-  </div>
-  <div class="step">
-    <div class="step-num">3</div>
-    <div class="step-content"><strong>双超时保护</strong>：应用层 context 超时 + 数据库层语句超时（MySQL/PG/CH）</div>
-  </div>
-</div>
-
-<p>非 SQL 数据库各有专属查询方式：</p>
-
-<pre><span class="comment"># MongoDB：JSON 格式查询</span>
-<span class="cmd">dbexplain</span> execute -env --label mongo <span class="str">'{"find":"users","filter":{"age":{"$gt":18}}}'</span>
-
-<span class="comment"># Redis：原生命令（30+ 只读命令白名单）</span>
-<span class="cmd">dbexplain</span> execute -env --label redis <span class="str">'GET user:1001'</span>
-
-<span class="comment"># ES：通过 _sql 端点执行标准 SQL</span>
-<span class="cmd">dbexplain</span> execute -env --label es <span class="str">'SELECT * FROM my_index LIMIT 5'</span></pre>
-
-<div class="divider">安全升级</div>
-
-<h2 class="section"><span class="num">04</span>策略引擎：不再裸奔的数据库凭证</h2>
-
-<p>v0.0.8 引入的细粒度安全策略引擎，在这次发布中得到了充分验证和完善：</p>
+<h2 class="section"><span class="num">09</span>v0.1.7 性能优化全览</h2>
 
 <table>
   <thead>
-    <tr><th>策略</th><th>作用</th><th>示例</th></tr>
+    <tr><th>优化项</th><th>优化前</th><th>优化后</th><th>提升</th></tr>
   </thead>
   <tbody>
     <tr>
-      <td><strong>DENY_TABLES</strong></td>
-      <td>表级禁止访问</td>
-      <td><code>DENY_TABLES=sensitive,audit_log</code></td>
+      <td>PG 100 表 Schema 采集</td>
+      <td>~300 次查询</td>
+      <td>~3 次</td>
+      <td class="badge-yes">100×</td>
     </tr>
     <tr>
-      <td><strong>DENY_COLUMNS</strong></td>
-      <td>列级禁止访问</td>
-      <td><code>DENY_COLUMNS=users.password_hash</code></td>
+      <td>MySQL 100 表 Schema 采集</td>
+      <td>~500 次查询</td>
+      <td>~5 次</td>
+      <td class="badge-yes">100×</td>
     </tr>
     <tr>
-      <td><strong>MASK_COLUMNS</strong></td>
-      <td>列值替换不阻断</td>
-      <td><code>MASK_COLUMNS=email=REDACTED,card_no=****</code></td>
+      <td>inferRefs 1000 表</td>
+      <td>~2000 万次比较</td>
+      <td>~2 万次</td>
+      <td class="badge-yes">1000×</td>
     </tr>
     <tr>
-      <td><strong>DENY_STATEMENTS</strong></td>
-      <td>语句级黑名单</td>
-      <td><code>DENY_STATEMENTS=DROP TABLE,FLUSHALL</code></td>
+      <td>CSV 200MB LIMIT 10</td>
+      <td>200MB 内存</td>
+      <td>~10KB 内存</td>
+      <td class="badge-yes">20000×</td>
+    </tr>
+    <tr>
+      <td>XLSX 10万行 LIMIT 100</td>
+      <td>全量加载</td>
+      <td>迭代器</td>
+      <td class="badge-yes">O(N)→O(limit)</td>
     </tr>
   </tbody>
 </table>
 
-<p>而且这些策略对<strong>所有 11 种数据源</strong>一致生效。SQL 数据库支持完整三层策略，MongoDB/Qdrant 支持语句+集合级，Redis 支持语句+Key 级（含通配符）。</p>
-
-<p>配合 v0.0.6 引入的<strong>硬件绑定加密</strong>，现在整个链路从<strong>凭证存储 → 传输 → 使用</strong>都有了保障。</p>
-
-<div class="divider">分发包</div>
-
-<h2 class="section"><span class="num">05</span>第三方分发包：AI Agent 开箱即用</h2>
-
-<p>这次发布首次提供了<strong>完整的第三方分发包</strong>（<code>testdata/account-manager-skill/</code>），包含：</p>
-
-<div class="steps">
-  <div class="step">
-    <div class="step-num">1</div>
-    <div class="step-content"><strong>5 平台预编译二进制</strong>：Linux amd64/arm64、macOS Intel/Silicon、Windows</div>
-  </div>
-  <div class="step">
-    <div class="step-num">2</div>
-    <div class="step-content"><strong>完整的 AI Agent Skill</strong>：SKILL.md 包含语法速览、业务知识、排障指南、可追溯分析规范</div>
-  </div>
-  <div class="step">
-    <div class="step-num">3</div>
-    <div class="step-content"><strong>一键离线安装</strong>：<code>bash scripts/install.sh --offline ./assets/dbexplain-linux-amd64</code></div>
-  </div>
+<div class="callout">
+  <strong>关于 CPU 使用率</strong>：此前用户反馈 dbexplain 进程 CPU 使用率高，主要在 collect 操作中。经分析发现，主要瓶颈不是本地 CPU 计算，而是数据库 IO — N+1 查询模式下大量的网络往返等待。v0.1.7 的批量查询优化将 400-600 次往返降至 ~7 次，IO 等待时间大幅缩减，CPU 使用率自然下降。
 </div>
-
-<div class="callout-info">
-  <strong>macOS 用户注意</strong>：安装脚本已自动处理 Gatekeeper 拦截问题（<code>xattr -d com.apple.quarantine</code>），无需手动操作。
-</div>
-
-<div class="divider">实战案例</div>
-
-<h2 class="section"><span class="num">06</span>一个真实场景：客户经理触达分析</h2>
-
-<p>想象一下：市场部发来一个 CSV 文件 —— 「客户经理触达运营数据」，40 列、2000 行。你的 AI Agent 需要分析哪个省份触达率最高、哪个渠道最有效。</p>
-
-<p>以前你需要：写 Python 脚本 → pandas 处理 → 调格式 → 出报告。现在：</p>
-
-<pre><span class="comment"># 配置数据源</span>
-<span class="cmd">echo</span> <span class="str">'DB1=csv:///path/to/touch_data.csv?label=touch-ops'</span> &gt; .env.dbexplain
-
-<span class="comment"># 跨省排行</span>
-<span class="cmd">dbexplain</span> execute -env --label touch-ops \
-  <span class="str">'SELECT province, AVG(reach_rate) AS avg_rate FROM data GROUP BY province ORDER BY avg_rate DESC'</span> --human
-
-<span class="comment"># 渠道效能（企微占比排名）</span>
-<span class="cmd">dbexplain</span> execute -env --label touch-ops \
-  <span class="str">'SELECT employee_id, CAST(wecom_cnt AS FLOAT) / total_cnt * 100 AS wecom_pct FROM data WHERE total_cnt > 0 ORDER BY wecom_pct DESC LIMIT 5'</span> --human
-
-<span class="comment"># 跨文件 JOIN：关联组织架构做二级行排名</span>
-<span class="cmd">dbexplain</span> execute -env --label touch-ops \
-  <span class="str">'SELECT o.branch_name, AVG(t.reach_rate) FROM data t JOIN org o ON t.dept_id = o.dept_id GROUP BY o.branch_name ORDER BY avg_rate DESC'</span> --human</pre>
-
-<p><strong>全部在命令行完成，零脚本，零依赖。</strong></p>
-
-<div class="divider">架构演进</div>
-
-<h2 class="section"><span class="num">07</span>CapSQL 架构：新增数据库不再改 execute.go</h2>
-
-<p>v0.1.0 完成了一项重要的架构改进：<strong>CapSQL 能力声明</strong>。每个 Connector 现在声明自己的<strong>能力标签</strong>（CapSQL / CapFile），execute 子命令根据能力标签自动路由，不再需要硬编码的类型分支：</p>
-
-<pre><span class="comment">// 之前：新增数据库要改 execute.go 的 switch</span>
-<span class="comment">// 现在：Connector 声明 CapSQL → execute 自动识别</span>
-
-<span class="cmd">func</span> (c *MySQLConnector) Capabilities() capabilities.Set {
-    <span class="cmd">return</span> capabilities.NewSet(capabilities.CapSQL)
-}</pre>
-
-<p>这意味着<strong>新增数据库连接器不再需要修改 execute.go</strong>，实现了宪法要求的类型分支消除。架构更加清晰、可扩展。</p>
-
-<div class="divider">版本追踪</div>
-
-<h2 class="section"><span class="num">08</span>v0.0.9 → v0.1.0 完整变更</h2>
-
-<table>
-  <thead>
-    <tr><th>版本</th><th>类别</th><th>内容</th></tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td>v0.0.9</td>
-      <td>数据源</td>
-      <td>CSV/TSV/XLSX 文件 Schema 采集</td>
-    </tr>
-    <tr>
-      <td>v0.0.9</td>
-      <td>编码</td>
-      <td>GBK/GB2312 编码支持，自定义分隔符</td>
-    </tr>
-    <tr>
-      <td>v0.0.9</td>
-      <td>日志</td>
-      <td>采集进度日志解耦，stderr 不再被污染</td>
-    </tr>
-    <tr>
-      <td>v0.0.9</td>
-      <td>CLI</td>
-      <td>--human 放查询语句后也生效</td>
-    </tr>
-    <tr>
-      <td>v0.1.0</td>
-      <td>安全</td>
-      <td>CTE/SELECT INTO 绕过修复、SET SESSION 竞态修复、策略泄漏修复</td>
-    </tr>
-    <tr>
-      <td>v0.1.0</td>
-      <td>正确性</td>
-      <td>PG FK Schema JOIN、索引解析、cache 原子写入、ORDER BY 别名排序</td>
-    </tr>
-    <tr>
-      <td>v0.1.0</td>
-      <td>引擎</td>
-      <td>纯 Go SQL 引擎 + GROUP BY/JOIN/聚合/表达式/UNION/子查询</td>
-    </tr>
-    <tr>
-      <td>v0.1.0</td>
-      <td>架构</td>
-      <td>CapSQL 能力声明，新增数据库不再改 execute.go</td>
-    </tr>
-    <tr>
-      <td>v0.1.0</td>
-      <td>JSON</td>
-      <td>instances 包装格式、groups/issues/refs 顶级键</td>
-    </tr>
-    <tr>
-      <td>v0.1.0</td>
-      <td>分发包</td>
-      <td>account-manager-skill 第三方分发包定型</td>
-    </tr>
-  </tbody>
-</table>
 
 <div class="divider">写在最后</div>
 
-<p>从 v0.0.4 到 v0.1.0，dbexplain 在三个月内完成了从"Schema 采集工具"到"数据库上下文编译器 + 文件查询引擎"的蜕变。</p>
+<p>v0.1.7 是 dbexplain 在性能方向上的一个里程碑。从 v0.0.4 的 Schema 采集工具，到 v0.1.0 的文件查询引擎，到 v0.1.5 的安全审计，再到 v0.1.7 的性能跃升——每一步都在让这个工具更适合 AI Agent 的生产环境使用。</p>
 
-<p>这个项目的核心理念一直没变：<strong>Make Databases AI-Readable</strong>。但 v0.1.0 迈出了关键的一步——不再只是把数据库结构喂给 AI，而是让 AI 能<strong>直接对文件数据和数据库执行只读查询</strong>，获取真实的业务洞察。</p>
-
-<p>接下来的路线：MCP Server 协议支持、企业级 SSO 集成、更多 SQL 方言兼容。</p>
+<p>接下来的方向：持续优化大 Schema 场景的性能，完善 Prometheus DSL 的 SQL 兼容性，以及更多企业级功能。</p>
 
 <p>欢迎试用、Star、提 Issue。</p>
 
@@ -756,8 +718,8 @@
     <a href="https://github.com/IamWWT/dbexplain/blob/main/CHANGELOG.md">
       ⬡ 完整 CHANGELOG
     </a>
-    <a href="https://github.com/IamWWT/dbexplain/blob/main/docs/test/13-file-query-engine.md">
-      ⬡ 文件查询引擎 QA 测试报告
+    <a href="https://github.com/IamWWT/dbexplain/releases/tag/v0.1.7">
+      ⬡ v0.1.7 Release Assets
     </a>
   </div>
   <div class="brand">

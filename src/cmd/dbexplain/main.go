@@ -143,9 +143,15 @@ func main() {
 	language := flag.String("language", userLang, "manual language: zh (Chinese) or en (English)")
 	filterFlag := flag.String("filter", "", "filter --manual output by keyword (case-insensitive)")
 	metricsFlag := flag.Bool("metrics", false, "output collection metrics in Prometheus text format (to stderr)")
-	noSample := flag.Bool("no-sample", false, "skip sample row fetching during schema collection")
+	sample := flag.Bool("sample", false, "enable sample row fetching for comment inference (default: off)")
 	skipOpstats := flag.Bool("skip-opstats", false, "skip MySQL performance_schema op stats")
+	tableName := flag.String("table", "", "only collect the specified table schema (SQL data sources only)")
+	tablesOnly := flag.Bool("tables", false, "compact table list mode (name, engine, row count)")
 	flag.Parse()
+
+	if *tableName != "" && *tablesOnly {
+		log.Fatal("--table and --tables are mutually exclusive")
+	}
 
 	// --label is an alias for -include (schema collection also supports label filtering)
 	if *labelFilter != "" {
@@ -234,15 +240,10 @@ func main() {
 
 	startAll := time.Now()
 
-	// Collection summary log
-	collectLogFile, err := os.OpenFile(filepath.Join(logDir, "collect.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-	if err != nil {
-		log.Printf("create collect log: %v", err)
-		collectLogFile = os.Stderr
-	} else {
-		defer collectLogFile.Close()
-	}
-	collectLogger := log.New(collectLogFile, "", log.LstdFlags)
+	// All goroutines write to the shared dbexplain.log with [label=X] [kind=Y] prefix
+	// log.Writer() returns the io.Writer that standard log output is configured to use,
+	// which is dbexplain.log (set above via log.SetOutput(logFile)).
+	// No per-label files or collect.log are created — consolidation goal achieved.
 
 	metricsCollector := metrics.NewCollector()
 
@@ -271,21 +272,17 @@ func main() {
 			if label == "" {
 				label = fmt.Sprintf("db_%d", i)
 			}
-			logFileName := filepath.Join(logDir, label+".log")
-			logFile, err := os.OpenFile(logFileName, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-			if err != nil {
-				log.Printf("create log file %s: %v", logFileName, err)
-				logFile = os.Stderr
-			} else {
-				defer logFile.Close()
-			}
-			logger := log.New(logFile, "", log.LstdFlags)
+			// All goroutine logs go to the shared dbexplain.log with instance prefix.
+			logger := log.New(log.Writer(), fmt.Sprintf("[label=%s] [kind=%s] ", label, parsed.Kind), log.LstdFlags)
 			collectCtx := connector.WithLogger(ctx, logger)
-			if *noSample {
-				collectCtx = connector.WithNoSample(collectCtx)
+			if *sample {
+				collectCtx = connector.WithSample(collectCtx)
 			}
 			if *skipOpstats {
 				collectCtx = connector.WithSkipOpstats(collectCtx)
+			}
+			if *tableName != "" {
+				collectCtx = connector.WithTableFilter(collectCtx, []string{*tableName})
 			}
 			collectCtx, cancel := context.WithTimeout(collectCtx, *perDSNTimeout)
 			defer cancel()
@@ -315,9 +312,9 @@ func main() {
 
 	wg.Wait()
 	if len(instances) == 0 {
-		collectLogger.Printf("[!] 所有 DSN 采集均失败，报告为空。请检查日志: %s", logDir)
+		log.Printf("[collect-summary] 所有 DSN 采集均失败，报告为空。请检查日志: %s", logDir)
 	} else {
-		collectLogger.Printf("全部采集完成，总耗时 %v", time.Since(startAll))
+		log.Printf("[collect-summary] 全部采集完成，总耗时 %v", time.Since(startAll))
 	}
 
 	// Build capability map by database kind
@@ -389,7 +386,7 @@ func main() {
 
 	// Write AI context files
 	if *contextDir != "" {
-		output.WriteContext(*contextDir, result)
+		output.WriteContext(*contextDir, result, *tableName)
 	}
 
 	// Output
@@ -403,7 +400,7 @@ func main() {
 				log.Fatal(err)
 			}
 		} else {
-			out = output.CaptureText(result, *humanOut)
+			out = output.CaptureText(result, *humanOut, *tablesOnly)
 			data, err := encodeOutput(out)
 			if err != nil {
 				log.Fatalf("encode output: %v", err)
@@ -422,7 +419,7 @@ func main() {
 			fmt.Fprint(os.Stderr, metricsCollector.PrometheusText())
 		}
 	} else {
-		render.Print(result, *humanOut)
+		render.Print(result, *humanOut, *tablesOnly)
 		if *metricsFlag {
 			fmt.Fprint(os.Stderr, metricsCollector.PrometheusText())
 		}
@@ -596,9 +593,15 @@ func handleCollect(args []string) {
 	perDSNTimeout := fs.Duration("timeout", 20*time.Second, "per-DSN collect timeout")
 	maxConcurrent := fs.Int("conn", 10, "max concurrent connections for schema collection")
 	metricsFlag := fs.Bool("metrics", false, "output collection metrics in Prometheus text format (to stderr)")
-	noSample := fs.Bool("no-sample", false, "skip sample row fetching during schema collection")
+	sample := fs.Bool("sample", false, "enable sample row fetching for comment inference (default: off)")
 	skipOpstats := fs.Bool("skip-opstats", false, "skip MySQL performance_schema op stats")
+	hcTableName := fs.String("table", "", "only collect the specified table schema (SQL data sources only)")
+	hcTablesOnly := fs.Bool("tables", false, "compact table list mode (name, engine, row count)")
 	fs.Parse(args)
+
+	if *hcTableName != "" && *hcTablesOnly {
+		log.Fatal("--table and --tables are mutually exclusive")
+	}
 
 	// --label is an alias for -include
 	if *labelFilter != "" {
@@ -674,14 +677,8 @@ func handleCollect(args []string) {
 
 	startAll := time.Now()
 
-	collectLogFile, err := os.OpenFile(filepath.Join(logDir, "collect.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-	if err != nil {
-		log.Printf("create collect log: %v", err)
-		collectLogFile = os.Stderr
-	} else {
-		defer collectLogFile.Close()
-	}
-	collectLogger := log.New(collectLogFile, "", log.LstdFlags)
+	// All goroutine logs go to the shared dbexplain.log with [label=X] [kind=Y] prefix.
+	// No per-label files or collect.log are created.
 
 	metricsCollector := metrics.NewCollector()
 
@@ -709,21 +706,17 @@ func handleCollect(args []string) {
 			if label == "" {
 				label = fmt.Sprintf("db_%d", i)
 			}
-			logFileName := filepath.Join(logDir, label+".log")
-			logFile, err := os.OpenFile(logFileName, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-			if err != nil {
-				log.Printf("create log file %s: %v", logFileName, err)
-				logFile = os.Stderr
-			} else {
-				defer logFile.Close()
-			}
-			logger := log.New(logFile, "", log.LstdFlags)
+			// All goroutine logs go to the shared dbexplain.log with instance prefix.
+			logger := log.New(log.Writer(), fmt.Sprintf("[label=%s] [kind=%s] ", label, parsed.Kind), log.LstdFlags)
 			collectCtx := connector.WithLogger(ctx, logger)
-			if *noSample {
-				collectCtx = connector.WithNoSample(collectCtx)
+			if *sample {
+				collectCtx = connector.WithSample(collectCtx)
 			}
 			if *skipOpstats {
 				collectCtx = connector.WithSkipOpstats(collectCtx)
+			}
+			if *hcTableName != "" {
+				collectCtx = connector.WithTableFilter(collectCtx, []string{*hcTableName})
 			}
 			collectCtx, cancel := context.WithTimeout(collectCtx, *perDSNTimeout)
 			defer cancel()
@@ -753,9 +746,9 @@ func handleCollect(args []string) {
 
 	wg.Wait()
 	if len(instances) == 0 {
-		collectLogger.Printf("[!] 所有 DSN 采集均失败，报告为空。请检查日志: %s", logDir)
+		log.Printf("[collect-summary] 所有 DSN 采集均失败，报告为空。请检查日志: %s", logDir)
 	} else {
-		collectLogger.Printf("全部采集完成，总耗时 %v", time.Since(startAll))
+		log.Printf("[collect-summary] 全部采集完成，总耗时 %v", time.Since(startAll))
 	}
 
 	kindCaps := make(map[string]*capabilities.Set)
@@ -820,7 +813,7 @@ func handleCollect(args []string) {
 	}
 
 	if *contextDir != "" {
-		output.WriteContext(*contextDir, result)
+		output.WriteContext(*contextDir, result, *hcTableName)
 	}
 
 	if *outputFile != "" {
@@ -831,7 +824,7 @@ func handleCollect(args []string) {
 				log.Fatal(err)
 			}
 		} else {
-			out = output.CaptureText(result, *humanOut)
+			out = output.CaptureText(result, *humanOut, *hcTablesOnly)
 			data, err := encodeOutput(out)
 			if err != nil {
 				log.Fatalf("encode output: %v", err)
@@ -850,7 +843,7 @@ func handleCollect(args []string) {
 			fmt.Fprint(os.Stderr, metricsCollector.PrometheusText())
 		}
 	} else {
-		render.Print(result, *humanOut)
+		render.Print(result, *humanOut, *hcTablesOnly)
 		if *metricsFlag {
 			fmt.Fprint(os.Stderr, metricsCollector.PrometheusText())
 		}

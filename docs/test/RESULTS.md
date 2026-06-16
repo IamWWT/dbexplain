@@ -35,10 +35,18 @@
 | — | **v0.1.7 GaussDB oracleCompatible** | **PASS** | 4/4 | DSN 解析 + DSNParam 取值 + SQL 日志截断默认/自定义/截断
 | — | **v0.1.7 DSN # 密码兼容** | **PASS** | 7/7 | 5 connector × # 密码解析 + 2 × Redacted 脱敏
 | — | **v0.1.7 批量查询优化** | **PASS** | 5/5 | 编译/vet/connector测试/analyze测试/选择性编译
-| — | **v0.1.7 --no-sample --skip-opstats** | **PASS** | 3/3 | flag 定义/context 注入/consumer 检查
+| — | **v0.1.7 --sample --skip-opstats** | **PASS** | 4/4 | flag 定义/context 注入/consumer 检查/context helper 单元测试
+| — | **v0.1.7 statement_timeout 超时兜底** | **PASS** | 3/3 | collectPGDB SET/SetMaxOpenConns(1)/check handler 集成
+| — | **v0.1.7 --label check 过滤** | **PASS** | 1/1 | check handler --label 参数解析+过滤
 | — | **v0.1.7 inferRefs name index** | **PASS** | 2/2 | 编译通过/analyze 测试不退化
 | — | **v0.1.7 CSV/XLSX 流式** | **PASS** | 3/3 | 编译通过/connector测试/csv+xlsx 选择性编译
 | — | **v0.1.7 check --env default** | **PASS** | 1/1 | 默认 true 自动加载
+| — | **v0.1.7 Hint SQL 透传** | **PASS** | 9/9 | sqlguard Validate/AutoLimit/firstWord × hint SQL + executor wrapExplain × hint SQL (6种数据库)
+| — | **v0.1.7 --table/--tables** | **PASS** | 6/6 | flag 定义+互斥校验/connector filter/context注入/--tables render/context chunks过滤/编译
+| — | **v0.1.7 PG 采集降级** | **PASS** | 3/3 | isPermissionErr/Level 1 保留/Level 2+3 语句定义+编译
+| — | **v0.1.7 MySQL 采集降级** | **PASS** | 3/3 | isPermissionErr/SHOW TABLE STATUS 回退/tfArgs Go 侧过滤
+| — | **v0.1.7 日志合并** | **PASS** | 3/3 | 无 collect.log/无 per-label log/[label=][kind=] 前缀
+| — | **v0.1.7 --timeout 修复** | **PASS** | 6/6 | PG cap 30s/PG 外层查询保护/GaussDB 外层查询保护/MySQL max_execution_time/编译通过/最小构建验证
 
 **总计: 全部通过。**
 
@@ -434,7 +442,7 @@ echo -e "SELECT * FROM @prom.up WHERE job=\"prometheus\"\n.exit" | ./release/dbe
 
 ---
 
-*测试基准: v0.0.4 → v0.0.5 → v0.0.6 → v0.0.7 → v0.0.8 → v0.0.9 → v0.1.0 → v0.1.1 → v0.1.2 → v0.1.3 → v0.1.4 → v0.1.5 → v0.1.6 (21项代码审计修复) → **v0.1.7 (Prometheus meta rows + CTE 写检测)**. 历史版本报告已归档.*
+*测试基准: v0.0.4 → v0.0.5 → v0.0.6 → v0.0.7 → v0.0.8 → v0.0.9 → v0.1.0 → v0.1.1 → v0.1.2 → v0.1.3 → v0.1.4 → v0.1.5 → v0.1.6 (21项代码审计修复) → **v0.1.7 (Prometheus meta rows + CTE 写检测 + --table/--tables)**. 历史版本报告已归档.*
 
 ## v0.1.5 新增验证项
 

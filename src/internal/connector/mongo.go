@@ -34,6 +34,9 @@ func (mongoConnector) Capabilities() []capabilities.Capability {
 }
 
 func (mongoConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instance, error) {
+	if names := GetTableFilter(ctx); len(names) > 0 {
+		return nil, fmt.Errorf("--table not supported for mongodb data source")
+	}
 	if d.DBName == "" {
 		return nil, fmt.Errorf("mongodb: database name required in DSN (e.g. mongodb://.../mydb)")
 	}

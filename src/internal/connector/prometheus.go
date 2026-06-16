@@ -90,6 +90,9 @@ func doPromRequest(ctx context.Context, baseURL, path string, d *dsn.DSN, timeou
 // ── Collect ──
 
 func (promConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instance, error) {
+	if names := GetTableFilter(ctx); len(names) > 0 {
+		return nil, fmt.Errorf("--table not supported for prometheus data source")
+	}
 	baseURL := promBaseURL(d)
 	timeout := promTimeout(d)
 

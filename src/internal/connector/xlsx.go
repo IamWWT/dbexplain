@@ -221,6 +221,9 @@ func ReadXLSXSheets(path string) ([]XLSXSheet, error) {
 // ---- Connector interface implementation ---- //
 
 func (xlsxConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instance, error) {
+	if names := GetTableFilter(ctx); len(names) > 0 {
+		return nil, fmt.Errorf("--table not supported for xlsx data source")
+	}
 	path := d.FilePath()
 
 	sheets, err := xlsxCollectSheets(path)

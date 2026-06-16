@@ -25,6 +25,12 @@ func TestValidate_AllowedReadOps(t *testing.T) {
 		{"CHECK TABLE users"},
 		{"SELECT * FROM t INTO @var"}, // MySQL variable assignment (read-only)
 		{"SELECT id, name INTO @a, @b FROM t"},
+		// Optimizer hint SQL — /*+ */ should pass through
+		{"SELECT /*+ index(t idx) */ * FROM t"},
+		{"SELECT /*+ FULL(t) */ * FROM t WHERE id=1"},
+		{"SELECT /*+ hashjoin(t1 t2) */ * FROM t1 JOIN t2 ON t1.id = t2.id"},
+		{"SELECT /*+ leading(t1 t2) */ * FROM t1, t2 WHERE t1.id = t2.id"},
+		{"EXPLAIN SELECT /*+ hint */ * FROM t"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.sql, func(t *testing.T) {
@@ -184,6 +190,9 @@ func TestAutoLimit_AddsLimit(t *testing.T) {
 		{"select id from t", 50, "select id from t LIMIT 50"},
 		{"WITH cte AS (SELECT 1) SELECT * FROM cte", 500, "WITH cte AS (SELECT 1) SELECT * FROM cte LIMIT 500"},
 		{"EXPLAIN SELECT * FROM t", 200, "EXPLAIN SELECT * FROM t LIMIT 200"},
+		// Optimizer hint SQL — should get LIMIT appended correctly
+		{"SELECT /*+ hint */ * FROM t", 200, "SELECT /*+ hint */ * FROM t LIMIT 200"},
+		{"SELECT /*+ FULL(t) */ * FROM t WHERE id=1", 100, "SELECT /*+ FULL(t) */ * FROM t WHERE id=1 LIMIT 100"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.sql, func(t *testing.T) {
@@ -284,6 +293,9 @@ func TestFirstWord(t *testing.T) {
 		{"  (  SELECT 1", "SELECT"}, // strips '(' then trims, first word is SELECT
 		{"singleword", "singleword"},
 		{"", ""},
+		// Optimizer hint comment should not interfere with first-word detection
+		{"SELECT /*+ hint */ * FROM t", "SELECT"},
+		{"  SELECT /*+ hint */ * FROM t", "SELECT"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {

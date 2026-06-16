@@ -17,7 +17,7 @@ import (
 )
 
 // WriteContext writes AI context files (summary, topology, diagnostics, chunks) to a directory.
-func WriteContext(dir string, result *analyze.Result) {
+func WriteContext(dir string, result *analyze.Result, tableName string) {
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		log.Fatalf("create context dir: %v", err)
 	}
@@ -39,7 +39,7 @@ func WriteContext(dir string, result *analyze.Result) {
 	if err := os.MkdirAll(chunksDir, 0755); err != nil {
 		log.Fatalf("create chunks dir: %v", err)
 	}
-	chunks := ctxcompress.GenerateChunks(result, 15)
+	chunks := ctxcompress.GenerateChunks(result, 15, tableName)
 	for _, chunk := range chunks {
 		md := ctxcompress.RenderChunkMarkdown(&chunk)
 		name := strings.ReplaceAll(strings.ReplaceAll(chunk.Table, "/", "_"), "\\", "_") + ".md"
@@ -63,7 +63,7 @@ func writeJSON(path string, v any) {
 }
 
 // CaptureText captures render.Print output as a string.
-func CaptureText(result *analyze.Result, human bool) string {
+func CaptureText(result *analyze.Result, human bool, tablesOnly bool) string {
 	r, w, err := os.Pipe()
 	if err != nil {
 		return ""
@@ -84,7 +84,7 @@ func CaptureText(result *analyze.Result, human bool) string {
 		close(done)
 	}()
 
-	render.Print(result, human)
+	render.Print(result, human, tablesOnly)
 	w.Close()
 	os.Stdout = old
 	<-done

@@ -82,6 +82,9 @@ func newRedisClient(d *dsn.DSN) (redis.UniversalClient, bool, error) {
 }
 
 func (redisConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instance, error) {
+	if names := GetTableFilter(ctx); len(names) > 0 {
+		return nil, fmt.Errorf("--table not supported for redis data source")
+	}
 	rdb, isCluster, err := newRedisClient(d)
 	if err != nil {
 		return nil, schema.NewDBError(d.Redacted(), "", "", "create client", err)

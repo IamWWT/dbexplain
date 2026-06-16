@@ -40,12 +40,17 @@ func (gaussdbConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instan
 		return nil, schema.NewDBError(d.Redacted(), "", "", "open", err)
 	}
 	defer db.Close()
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
 
 	pingCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	if err := db.PingContext(pingCtx); err != nil {
 		return nil, schema.NewDBError(d.Redacted(), "", "", "ping", err)
 	}
+
+	// 设置 statement_timeout 保护数据库列表查询（collectPGDB 内也会设置）
+	setPGStatementTimeout(ctx, db)
 
 	inst := &schema.Instance{DSN: d.Redacted(), Kind: "gaussdb", Label: d.Label}
 
@@ -96,7 +101,9 @@ func (gaussdbConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instan
 
 	for _, dbName := range dbNames {
 		Logf(ctx, "[gaussdb] collecting database %s", dbName)
-		database, err := collectPGDB(ctx, db, dbName, d.Redacted())
+		// GaussDB Oracle 兼容模式使用 information_schema.COLUMNS 替代 PG 专用函数
+		collectCtx := WithGaussDBCompat(ctx)
+		database, err := collectPGDB(collectCtx, db, dbName, d.Redacted())
 		if err != nil {
 			Logf(ctx, "error in db %s: %v", dbName, err)
 			continue

@@ -42,12 +42,17 @@ func (postgresConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Insta
 		return nil, schema.NewDBError(d.Redacted(), "", "", "open", err)
 	}
 	defer db.Close()
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
 
 	pingCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	if err := db.PingContext(pingCtx); err != nil {
 		return nil, schema.NewDBError(d.Redacted(), "", "", "ping", err)
 	}
+
+	// 设置 statement_timeout 保护数据库列表查询（collectPGDB 内也会设置）
+	setPGStatementTimeout(ctx, db)
 
 	kind := d.Kind
 	if kind == "" {
@@ -97,6 +102,35 @@ func (postgresConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Insta
 func collectPGDB(ctx context.Context, db *sql.DB, dbName, redactedDSN string) (*schema.Database, error) {
 	database := &schema.Database{Name: dbName}
 
+	// Build table filter clause ($2, $3, ... since $1 is schema name)
+	tfClause := ""
+	relTfClause := ""
+	idxTfClause := ""
+	fkTfClause := ""
+	pgL2TfClause := ""
+	pgL3TfClause := ""
+	var tfArgs []any
+	if names := GetTableFilter(ctx); len(names) > 0 {
+		phs := make([]string, len(names))
+		for i, n := range names {
+			phs[i] = fmt.Sprintf("$%d", i+2)
+			tfArgs = append(tfArgs, n)
+		}
+		phsStr := strings.Join(phs, ",")
+		tfClause = " AND t.tablename IN (" + phsStr + ")"
+		relTfClause = " AND c.relname IN (" + phsStr + ")"
+		idxTfClause = " AND tablename IN (" + phsStr + ")"
+		fkTfClause = " AND c1.relname IN (" + phsStr + ")"
+		pgL2TfClause = " AND relname IN (" + phsStr + ")"
+		pgL3TfClause = " AND tablename IN (" + phsStr + ")"
+	}
+
+	// 设置 statement_timeout 作为服务端超时兜底
+	// GaussDB 的 lib/pq 兼容层可能不支持 Go context 取消传播，
+	// statement_timeout 确保服务端主动取消长时间运行的查询。
+	// 上限 30s 防止单个 statement 占满整个 --timeout 预算。
+	setPGStatementTimeout(ctx, db)
+
 	// 查询所有非系统 schema
 	Logf(ctx, "[postgres] [collect] %s", `
 		SELECT nspname FROM pg_namespace
@@ -126,46 +160,60 @@ func collectPGDB(ctx context.Context, db *sql.DB, dbName, redactedDSN string) (*
 		schemas = []string{"public"}
 	}
 
+	// Define fallback queries for table collection
+	// Level 1 (fastest+most complete): current 4-table JOIN with pg_stat_user_tables
+	level1Query := `SELECT t.tablename,
+	       COALESCE(s.n_live_tup, 0),
+	       COALESCE(pg_total_relation_size(c.oid), 0),
+	       COALESCE(obj_description(c.oid, 'pg_class'), ''),
+	       COALESCE(s.seq_scan, 0), COALESCE(s.idx_scan, 0),
+	       COALESCE(s.n_tup_ins, 0), COALESCE(s.n_tup_upd, 0), COALESCE(s.n_tup_del, 0)
+	FROM pg_tables t
+	JOIN pg_class c ON c.relname = t.tablename
+	JOIN pg_namespace n ON n.oid = c.relnamespace AND n.nspname = t.schemaname
+	LEFT JOIN pg_stat_user_tables s ON s.schemaname = t.schemaname AND s.relname = t.tablename
+	WHERE t.schemaname = $1`
+
+	// Level 2 (when pg_class/pg_namespace not accessible): pg_stat_user_tables only, no size/comment
+	level2Query := `SELECT relname,
+	       COALESCE(n_live_tup, 0),
+	       0, '',
+	       COALESCE(seq_scan, 0), COALESCE(idx_scan, 0),
+	       COALESCE(n_tup_ins, 0), COALESCE(n_tup_upd, 0), COALESCE(n_tup_del, 0)
+	FROM pg_stat_user_tables WHERE schemaname = $1`
+
+	// Level 3 (minimal fallback): pg_tables only, all stats empty
+	level3Query := `SELECT tablename, 0, 0, '', 0, 0, 0, 0, 0
+	FROM pg_tables WHERE schemaname = $1`
+
+	level1Full := level1Query + tfClause + ` ORDER BY t.tablename`
+
+	// Log Level 1 query template once, not per-schema
+	Logf(ctx, "[postgres] [collect] [Level 1] table query: %s", level1Query)
+
 	var tables []*schema.Table
 	for _, schemaName := range schemas {
-		Logf(ctx, "[postgres] [collect] %s", `
-			SELECT t.tablename,
-			       COALESCE(s.n_live_tup, 0),
-			       COALESCE(pg_total_relation_size(c.oid), 0),
-			       COALESCE(obj_description(c.oid, 'pg_class'), ''),
-			       COALESCE(s.seq_scan, 0),
-			       COALESCE(s.idx_scan, 0),
-			       COALESCE(s.n_tup_ins, 0),
-			       COALESCE(s.n_tup_upd, 0),
-			       COALESCE(s.n_tup_del, 0)
-			FROM pg_tables t
-			JOIN pg_class c ON c.relname = t.tablename
-			JOIN pg_namespace n ON n.oid = c.relnamespace AND n.nspname = t.schemaname
-			LEFT JOIN pg_stat_user_tables s
-				ON s.schemaname = t.schemaname AND s.relname = t.tablename
-			WHERE t.schemaname = $1
-			ORDER BY t.tablename`)
-		tRows, err := db.QueryContext(ctx, `
-			SELECT t.tablename,
-			       COALESCE(s.n_live_tup, 0),
-			       COALESCE(pg_total_relation_size(c.oid), 0),
-			       COALESCE(obj_description(c.oid, 'pg_class'), ''),
-			       COALESCE(s.seq_scan, 0),
-			       COALESCE(s.idx_scan, 0),
-			       COALESCE(s.n_tup_ins, 0),
-			       COALESCE(s.n_tup_upd, 0),
-			       COALESCE(s.n_tup_del, 0)
-			FROM pg_tables t
-			JOIN pg_class c ON c.relname = t.tablename
-			JOIN pg_namespace n ON n.oid = c.relnamespace AND n.nspname = t.schemaname
-			LEFT JOIN pg_stat_user_tables s
-				ON s.schemaname = t.schemaname AND s.relname = t.tablename
-			WHERE t.schemaname = $1
-			ORDER BY t.tablename`, schemaName)
+		var tRows *sql.Rows
+		var err error
+		args := append([]any{schemaName}, tfArgs...)
+
+		// Try Level 1 (4-table JOIN with pg_stat_user_tables)
+		tRows, err = db.QueryContext(ctx, level1Full, args...)
+		if err != nil && isPermissionErr(err) {
+			Logf(ctx, "[postgres] [collect] schema=%s Level 1 denied, trying Level 2", schemaName)
+			level2Full := level2Query + pgL2TfClause + ` ORDER BY relname`
+			tRows, err = db.QueryContext(ctx, level2Full, args...)
+		}
+		if err != nil && isPermissionErr(err) {
+			Logf(ctx, "[postgres] [collect] schema=%s Level 2 denied, trying Level 3", schemaName)
+			level3Full := level3Query + pgL3TfClause + ` ORDER BY tablename`
+			tRows, err = db.QueryContext(ctx, level3Full, args...)
+		}
 		if err != nil {
 			Logf(ctx, "[postgres] query tables in schema %s: %v", schemaName, err)
 			continue
 		}
+		schemaTableCount := 0
 		for tRows.Next() {
 			t := &schema.Table{}
 			var seqScan, idxScan, ntupIns, ntupUpd, ntupDel int64
@@ -185,11 +233,13 @@ func collectPGDB(ctx context.Context, db *sql.DB, dbName, redactedDSN string) (*
 				t.Name = schemaName + "." + t.Name
 			}
 			tables = append(tables, t)
+			schemaTableCount++
 		}
 		tRows.Close()
 		if err := tRows.Err(); err != nil {
 			log.Printf("[postgres] rows iteration: %v", err)
 		}
+		Logf(ctx, "[postgres] [collect] schema=%s → %d tables", schemaName, schemaTableCount)
 	}
 
 	total := len(tables)
@@ -202,8 +252,61 @@ func collectPGDB(ctx context.Context, db *sql.DB, dbName, redactedDSN string) (*
 	}
 	colMap := map[string]*pgColData{}
 
-	for _, schemaName := range schemas {
-		batchSQL := `
+	if IsGaussDBCompat(ctx) {
+		// GaussDB 兼容模式：使用 pg_attribute + pg_type 直接查询系统表，
+		// 避免 pg_catalog.format_type()、pg_get_expr()、col_description() 等 PG-only 函数。
+		// pg_class/pg_namespace/pg_attribute/pg_type 是所有 GaussDB 兼容模式（含 Oracle）均支持的底层系统表。
+		for _, schemaName := range schemas {
+			rows, err := db.QueryContext(ctx, `
+				SELECT c.relname,
+				       a.attname,
+				       t.typname,
+				       a.atttypmod,
+				       NOT a.attnotnull
+				FROM pg_attribute a
+				JOIN pg_class c ON c.oid = a.attrelid
+				JOIN pg_namespace n ON n.oid = c.relnamespace
+				JOIN pg_type t ON t.oid = a.atttypid
+				WHERE n.nspname=$1 AND a.attnum>0 AND NOT a.attisdropped`+relTfClause+`
+				ORDER BY c.relname, a.attnum`, append([]any{schemaName}, tfArgs...)...)
+			if err != nil {
+				Logf(ctx, "[postgres] gaussdb batch columns error for schema %s: %v", schemaName, err)
+				continue
+			}
+			for rows.Next() {
+				var relname, attname, typname string
+				var atttypmod int32
+				var nullable bool
+				if err := rows.Scan(&relname, &attname, &typname, &atttypmod, &nullable); err != nil {
+					continue
+				}
+				tableKey := relname
+				if schemaName != "public" {
+					tableKey = schemaName + "." + relname
+				}
+				cd, ok := colMap[tableKey]
+				if !ok {
+					cd = &pgColData{}
+					colMap[tableKey] = cd
+				}
+				c := &schema.Column{
+					Name:     attname,
+					Type:     formatGaussDBType(typname, atttypmod),
+					Nullable: nullable,
+					Default:  "",
+					Comment:  "",
+				}
+				cd.columns = append(cd.columns, c)
+				cd.colsWithoutComment = append(cd.colsWithoutComment, c)
+			}
+			rows.Close()
+			if err := rows.Err(); err != nil {
+				log.Printf("[postgres] gaussdb batch columns iteration: %v", err)
+			}
+		}
+	} else {
+		for _, schemaName := range schemas {
+			batchSQL := `
 			SELECT c.relname,
 			       a.attname,
 			       pg_catalog.format_type(a.atttypid, a.atttypmod),
@@ -220,7 +323,7 @@ func collectPGDB(ctx context.Context, db *sql.DB, dbName, redactedDSN string) (*
 			WHERE n.nspname=$1 AND a.attnum>0 AND NOT a.attisdropped
 			ORDER BY c.relname, a.attnum`
 		Logf(ctx, "[postgres] [collect] %s", batchSQL)
-		bRows, err := db.QueryContext(ctx, batchSQL, schemaName)
+		bRows, err := db.QueryContext(ctx, batchSQL+relTfClause, append([]any{schemaName}, tfArgs...)...)
 		if err != nil {
 			Logf(ctx, "[postgres] batch columns error for schema %s: %v", schemaName, err)
 			continue
@@ -259,6 +362,7 @@ func collectPGDB(ctx context.Context, db *sql.DB, dbName, redactedDSN string) (*
 		if err := bRows.Err(); err != nil {
 			log.Printf("[postgres] batch columns iteration: %v", err)
 		}
+		}
 	}
 
 	// --- Batch 2: indexes (all schemas) ---
@@ -269,7 +373,7 @@ func collectPGDB(ctx context.Context, db *sql.DB, dbName, redactedDSN string) (*
 			FROM pg_indexes WHERE schemaname=$1`)
 		iRows, err := db.QueryContext(ctx, `
 			SELECT tablename, indexname, indexdef
-			FROM pg_indexes WHERE schemaname=$1`, schemaName)
+			FROM pg_indexes WHERE schemaname=$1`+idxTfClause, append([]any{schemaName}, tfArgs...)...)
 		if err != nil {
 			Logf(ctx, "[postgres] batch indexes error for schema %s: %v", schemaName, err)
 			continue
@@ -322,7 +426,7 @@ func collectPGDB(ctx context.Context, db *sql.DB, dbName, redactedDSN string) (*
 			JOIN pg_namespace n2 ON n2.oid=c2.relnamespace
 			JOIN pg_attribute a ON a.attrelid=c.conrelid AND a.attnum=ANY(c.conkey)
 			JOIN pg_attribute a2 ON a2.attrelid=c.confrelid AND a2.attnum=ANY(c.confkey)
-			WHERE c.contype='f' AND n1.nspname=$1`, schemaName)
+			WHERE c.contype='f' AND n1.nspname=$1`+fkTfClause, append([]any{schemaName}, tfArgs...)...)
 		if err != nil {
 			Logf(ctx, "[postgres] batch FK error for schema %s: %v", schemaName, err)
 			continue
@@ -374,8 +478,8 @@ func collectPGDB(ctx context.Context, db *sql.DB, dbName, redactedDSN string) (*
 		t.Indexes = idxMap[t.Name]
 		t.ForeignKeys = fkMap[t.Name]
 
-		// Sample row for comment inference (still per-table, controlled by --no-sample)
-		if !IsNoSample(ctx) {
+		// Sample row for comment inference (still per-table, controlled by --sample)
+		if IsSample(ctx) {
 			if cd := colMap[t.Name]; cd != nil && len(cd.colsWithoutComment) > 0 && t.RowCount > 0 {
 				sample, err := fetchPGSampleRow(ctx, db, schemaName, baseName)
 				if err == nil {
@@ -400,6 +504,27 @@ func parsePGTableName(name string) (schema, table string) {
 		return name[:idx], name[idx+1:]
 	}
 	return "public", name
+}
+
+// setPGStatementTimeout sets PostgreSQL/GaussDB statement_timeout from context deadline.
+// Caps per-statement timeout at 30s to prevent a single query consuming the entire collection budget.
+// Must be called after db.SetMaxOpenConns(1) for the timeout to apply to all subsequent queries.
+func setPGStatementTimeout(ctx context.Context, db *sql.DB) {
+	if deadline, ok := ctx.Deadline(); ok {
+		remaining := time.Until(deadline)
+		if remaining > 0 {
+			secs := int(remaining.Seconds())
+			if secs > 30 {
+				secs = 30
+			}
+			if secs < 1 {
+				secs = 1
+			}
+			if _, err := db.ExecContext(ctx, fmt.Sprintf("SET statement_timeout = '%ds'", secs)); err != nil {
+				Logf(ctx, "[postgres] set statement_timeout failed: %v (queries will run without server-side timeout guard)", err)
+			}
+		}
+	}
 }
 
 // quotePGIdent 为 PostgreSQL 标识符加上双引号转义
@@ -513,6 +638,56 @@ func pgFKAction(code string) string {
 		return "SET DEFAULT"
 	default:
 		return code
+	}
+}
+
+// formatGaussDBType reconstructs a type string from pg_type.typname and pg_attribute.atttypmod.
+// GaussDB Oracle 兼容模式没有 pg_catalog.format_type()，但 typname + atttypmod 在所有模式下均可用。
+// atttypmod 编码规则与 PostgreSQL 一致：
+//   varchar(n)   → atttypmod = n + 4 (VARHDRSZ)
+//   numeric(p,s) → atttypmod = ((p << 16) | (s * 2)) + 4
+//   int4/text/... → atttypmod = -1 (无长度修饰)
+func formatGaussDBType(typname string, atttypmod int32) string {
+	switch typname {
+	case "varchar":
+		if atttypmod > 4 {
+			return fmt.Sprintf("character varying(%d)", atttypmod-4)
+		}
+		return "character varying"
+	case "bpchar":
+		if atttypmod > 4 {
+			return fmt.Sprintf("character(%d)", atttypmod-4)
+		}
+		return "character"
+	case "numeric":
+		if atttypmod > 4 {
+			raw := atttypmod - 4
+			precision := raw >> 16
+			scale := (raw & 0xFFFF) / 2
+			if scale > 0 {
+				return fmt.Sprintf("numeric(%d,%d)", precision, scale)
+			}
+			return fmt.Sprintf("numeric(%d)", precision)
+		}
+		return "numeric"
+	case "int2":
+		return "smallint"
+	case "int4":
+		return "integer"
+	case "int8":
+		return "bigint"
+	case "float4":
+		return "real"
+	case "float8":
+		return "double precision"
+	case "bool":
+		return "boolean"
+	case "timestamptz":
+		return "timestamp with time zone"
+	case "timetz":
+		return "time with time zone"
+	default:
+		return typname
 	}
 }
 

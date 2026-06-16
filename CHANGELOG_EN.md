@@ -47,17 +47,60 @@
 ### ⚡ Schema Collection Performance Optimization
 
 - **PG/MySQL batch queries replace N+1**: PostgreSQL and MySQL schema collection refactored to per-schema batch queries, replacing the per-table N+1 pattern. 100 tables: 400-600 round trips reduced to ~7. Refactored `fillPGTable`/`fillMySQLTable` — batch query columns/indexes/FKs, group by table name in Go maps. (P1)
-- **`--no-sample` skip sample rows**: New global flag to skip `SELECT * ... LIMIT 1` sample row fetching. Saves 100 queries per 100 tables. Halves CPU time for pure structural analysis. (P2)
+- **`--sample` opt-in sample rows (default: off)**: New global flag to enable `SELECT * ... LIMIT 1` sample row fetching for comment inference. **Disabled by default**, enable with `--sample`. Saves ~14s for 465-table GaussDB. (P2)
 - **`--skip-opstats` skip MySQL op_stats**: New flag to skip MySQL `performance_schema.table_io_waits_summary_by_table` collection. Saves 100 queries per 100 tables. (P3)
 - **CSV/XLSX streaming reads**: CSV `SELECT * LIMIT N` now uses `csvReader.Read()` streaming (`readCSVDataStreaming`), XLSX uses `excelize.Rows` iterator. Large file LIMIT queries reduced from O(N) to O(limit) memory. (P5)
 
-### 🔧 Analysis Engine Optimization
+### ✨ `--table` / `--tables` Schema Collection Flags
+
+- **`--table NAME` (connector-level SQL filter)**: New collect subcommand flag that filters table schema at the **connector level**. MySQL/PostgreSQL/SQLite/ClickHouse/DuckDB/Oracle inject `AND table_name IN (...)` parameterized filter into table list, columns/indexes/FKs queries. Non-SQL sources (Redis/Mongo/ES/Qdrant/Prometheus/CSV/XLSX/Hive) return `--table not supported` and skip. (P1)
+- **`--tables` (compact list mode)**: Render-layer compact table listing (name/engine/rows/size/comment only), no columns/indexes/FKs/relationships/clusters/issues. Collects all tables, renders compactly. (P3)
+- **`--table` AI Context chunks filtering**: `output.WriteContext()` + `GenerateChunks()` accept `tableName` parameter. When `--table NAME` is set, chunks/ directory only outputs that table's .md. summary/topology/diagnostics keep global overview. (P4)
+- **`--table` / `--tables` mutual exclusivity**: `log.Fatal` if both are specified. (P5)
+- **Implementation**: `connector.WithTableFilter(ctx, names)` / `GetTableFilter(ctx)` context pattern (reuses `WithSample` approach), `Connector` interface unchanged. Each SQL connector handles its own dialect placeholders (`?`/`$N`/`:N`/single-quote escape).
+- **Files changed**: `connector.go` (context methods), 7 SQL connectors (filter injection), 8 non-SQL connectors (skip+hint), `main.go` (flag defs+injection), `render.go` (tablesOnly mode), `output.go`+`context/compress.go` (chunks filtering). (15 files)
+
+### ⚡ Schema Collection Degradation Optimization (PG/GaussDB/MySQL)
+
+- **PG/GaussDB 3-level degradation chain**: Current 4-table JOIN (pg_tables + pg_class + pg_namespace + pg_stat_user_tables LEFT JOIN) retained as Level 1 (fastest+most complete). Automatically degrades to Level 2 (pg_stat_user_tables only, no size/comment) when pg_class/pg_namespace permissions are denied, and further to Level 3 (pg_tables only, table names without stats) if Level 2 is also denied. `isPermissionErr()` detects `permission denied` errors; normal path is unaffected. (P1)
+- **MySQL 2-level degradation chain**: information_schema.TABLES (Level 1, fastest) degrades to SHOW TABLE STATUS (Level 2) on permission denied. Table filter applied in Go for Level 2. (P1)
+- **SQL logging improvements**: PG/GaussDB table collection: SQL template logged once before the loop (`[Level 1] table query: ...`), loop only logs `schema=xxx → N tables`. Schema name shown as `schema=` prefix instead of bare `$1`. No per-schema query text repetition. (P3)
+- **`isPermissionErr()` shared**: Moved to `connector.go` as a package-level function, shared by PG and MySQL connectors. Eliminates duplication. (P3)
+- **Security**: Level 2/3 queries all use parameterized `$1` + optional `$2, $3, ...` to prevent SQL injection. Error messages sanitized — no password/path exposure.
+
+### 🐛 `--timeout` Not Working Fix
+
+- **`statement_timeout` capped at 30s**: `collectPGDB()` previously set `statement_timeout` to the remaining time (e.g., 18s). Since PG's `statement_timeout` is per-statement, 10 queries at 18s each could accumulate 180s total, far exceeding the `--timeout` budget. Fix: cap at 30s per statement. New shared helper `setPGStatementTimeout()`. (P0)
+- **Outer DB listing query now protected**: `postgresConnector.Collect()` and `gaussdbConnector.Collect()` now call `setPGStatementTimeout()` before the `pg_database` listing query, which previously had no server-side timeout guard. (P1)
+- **MySQL collection path gets `max_execution_time`**: `collectMySQLDB()` now sets `SET SESSION max_execution_time` (capped at 30000ms / 30s) at entry. Previously MySQL collection relied solely on Go context cancellation (unreliable with database/sql driver cancel mechanisms). (P1)
+
+### 📋 Unified Log Consolidation
+
+- **Single `dbexplain.log`**: Removed collect.log and per-label `<label>.log` files. All goroutine logs consolidated into `dbexplain.log` with `[label=X] [kind=Y] ` per-line prefix for instance identification. (P2)
+- **Implementation**: Goroutine-side loggers use `log.Writer()` (pointing to `dbexplain.log`) + `fmt.Sprintf()` for prefix construction via `log.New()`. `Logf()` callers unchanged. (P2)
+- **Collect summary**: `collectLogger` replaced with `log.Printf("[collect-summary] ...")`, also writing to `dbexplain.log`. (P4)
 
 - **`inferRefs()` name index**: Foreign key inference now builds a `map[name][]tableEntry` inverted index. Complexity reduced from O(N_cols × N_tables) to O(N_cols). 1000 tables from tens of millions of comparisons to thousands. (P4)
 
 ### 🛠 `dbexplain check` loads .env by default
 
 - **`--env` default changed to `true`**: `dbexplain check` auto-loads `.env.dbexplain` without requiring the `--env` flag. Explicit `--env=false --dsn xxx` still works. (6)
+
+### 🐛 GaussDB Timeout & Password Fixes
+
+- **`statement_timeout` server-side safety net**: `collectPGDB()` now extracts remaining time from context deadline and executes `SET statement_timeout = 'Ns'`. Fixes GaussDB Oracle mode where `lib/pq` Go context cancellation doesn't propagate properly — ensures the server actively cancels long-running queries.
+- **`SetMaxOpenConns(1)`**: GaussDB/PostgreSQL Collect functions now set single connection pool to ensure `statement_timeout` applies to all queries in the session.
+- **DSN password `#@!` compatibility**: `escapeUserinfoHash()` now properly handles `#` and subsequent special characters like `@!` in DSN passwords.
+
+### 🔧 `dbexplain check --label` support
+
+- **`--label` filter**: `dbexplain check` now supports `--label` flag to filter DSNs by label.
+
+### 🔧 Hint SQL `/*+ */` passthrough test verification
+
+- **`sqlguard` hint SQL tests**: Added `/*+ */` hint test cases for Validate/AutoLimit/firstWord covering GaussDB/MySQL/Oracle/PG hint styles, verifying hint comments don't interfere with read-only validation or LIMIT injection. (6 items)
+- **`executor` wrapExplain hint SQL tests**: New `executor_test.go` verifying correct EXPLAIN wrapping with hints for 7 SQL databases (gaussdb/mysql/postgres/oracle/hive/sqlite/clickhouse). (7 items)
+- **Fallback path confirmed**: When `/*+ */` comments cause AST parse failure, Validate/AutoLimit automatically fall back to string-based first-word detection, passing hints through as SQL body to the database. All databases with native hint support (GaussDB/MySQL/Oracle/Hive + PostgreSQL via pg_hint_plan extension) work correctly.
 
 ## v0.1.6 (2026-06-12) — Bug Bash + Prometheus DSL Core Upgrade
 

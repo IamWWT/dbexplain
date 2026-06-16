@@ -994,4 +994,27 @@ READ_ONLY_VIOLATION: write stage "$out" is not allowed in aggregation pipeline
 
 ---
 
-*案例库持续更新中。v0.1.7 新增：Prometheus meta 表 `rows` 输出（`_labels`/`_metrics` JSON 带全量数据）、CTE 写操作检测（WITH + INSERT/UPDATE/DELETE 拦截）、MongoDB `$facet` 子管道写操作检测。全部查询已通过 --human 实测验证。*
+## 15. Schema 采集：--table / --tables 参数
+
+```bash
+# 精简表格列表（只显示名称/引擎/行数/大小/注释，不输出列详情）
+dbexplain collect --label my-gs --human --tables
+
+# 只采集指定表的 schema（connector 级 SQL 过滤，仅 SQL 数据源）
+dbexplain collect --label my-gs --human --table users
+
+# 单表采集 + AI Context 输出（chunks 只包含该表）
+dbexplain collect --label my-gs --human --table users --context /tmp/ctx
+
+# 非 SQL 数据源指定 --table 时跳过并提示
+dbexplain collect --label my-prom --table up
+# → skip my-prom: --table not supported for prometheus data source
+
+# --table 和 --tables 互斥
+dbexplain collect --label my-gs --table users --tables
+# → Fatal: --table and --tables are mutually exclusive
+```
+
+---
+
+*案例库持续更新中。v0.1.7 新增：`--table`/`--tables` 收集参数、Prometheus meta 表 `rows` 输出（`_labels`/`_metrics` JSON 带全量数据）、CTE 写操作检测（WITH + INSERT/UPDATE/DELETE 拦截）、MongoDB `$facet` 子管道写操作检测。全部查询已通过 --human 实测验证。*

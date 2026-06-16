@@ -3,6 +3,7 @@ package connector
 import (
 	"context"
 	"log"
+	"strings"
 
 	"github.com/IamWWT/dbexplain/internal/capabilities"
 	"github.com/IamWWT/dbexplain/internal/dsn"
@@ -24,6 +25,12 @@ func TruncateSQL(sql string) string {
 	return sql
 }
 
+// isPermissionErr detects database permission-denied errors for fallback logic.
+// Used by PG, MySQL, and other connectors for collection-level degradation.
+func isPermissionErr(err error) bool {
+	return strings.Contains(err.Error(), "permission denied")
+}
+
 type LoggerKey struct{}
 
 func WithLogger(ctx context.Context, logger *log.Logger) context.Context {
@@ -40,17 +47,19 @@ func Logf(ctx context.Context, format string, args ...interface{}) {
 
 // --- collect option context keys ---
 
-type ctxKeyNoSample struct{}
+type ctxKeySample struct{}
 type ctxKeySkipOpstats struct{}
+type ctxKeyGaussDBCompat struct{}
 
-// WithNoSample returns a context that tells collectors to skip sample row fetching.
-func WithNoSample(ctx context.Context) context.Context {
-	return context.WithValue(ctx, ctxKeyNoSample{}, true)
+// WithSample returns a context that tells collectors to fetch sample rows
+// for comment inference. By default, sample rows are NOT fetched.
+func WithSample(ctx context.Context) context.Context {
+	return context.WithValue(ctx, ctxKeySample{}, true)
 }
 
-// IsNoSample reports whether the context has the no-sample flag set.
-func IsNoSample(ctx context.Context) bool {
-	v, _ := ctx.Value(ctxKeyNoSample{}).(bool)
+// IsSample reports whether the context has the sample flag set.
+func IsSample(ctx context.Context) bool {
+	v, _ := ctx.Value(ctxKeySample{}).(bool)
 	return v
 }
 
@@ -62,6 +71,35 @@ func WithSkipOpstats(ctx context.Context) context.Context {
 // IsSkipOpstats reports whether the context has the skip-opstats flag set.
 func IsSkipOpstats(ctx context.Context) bool {
 	v, _ := ctx.Value(ctxKeySkipOpstats{}).(bool)
+	return v
+}
+
+// WithGaussDBCompat returns a context that tells the PG collector to use
+// information_schema.COLUMNS instead of pg_catalog functions for GaussDB Oracle
+// compatibility mode, which does not support pg_catalog.format_type(), pg_get_expr(),
+// or col_description().
+func WithGaussDBCompat(ctx context.Context) context.Context {
+	return context.WithValue(ctx, ctxKeyGaussDBCompat{}, true)
+}
+
+// IsGaussDBCompat reports whether the context indicates GaussDB Oracle compatibility mode.
+func IsGaussDBCompat(ctx context.Context) bool {
+	v, _ := ctx.Value(ctxKeyGaussDBCompat{}).(bool)
+	return v
+}
+
+type ctxKeyTableFilter struct{}
+
+// WithTableFilter returns a context that tells collectors to only collect
+// the specified table names. An empty or nil slice means no filtering.
+func WithTableFilter(ctx context.Context, names []string) context.Context {
+	return context.WithValue(ctx, ctxKeyTableFilter{}, names)
+}
+
+// GetTableFilter returns the table name filter from the context.
+// Returns nil when no filter is set (collect all tables).
+func GetTableFilter(ctx context.Context) []string {
+	v, _ := ctx.Value(ctxKeyTableFilter{}).([]string)
 	return v
 }
 

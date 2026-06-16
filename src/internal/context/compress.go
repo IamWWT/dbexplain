@@ -227,7 +227,7 @@ type ChunkFK struct {
 }
 
 // GenerateChunks creates retrieval chunks for top-ranked tables.
-func GenerateChunks(result *analyze.Result, topN int) []TableChunk {
+func GenerateChunks(result *analyze.Result, topN int, tableFilter string) []TableChunk {
 	// Build a lookup of table importance scores
 	type key struct{ inst, db, table string }
 	scores := map[key]float64{}
@@ -247,6 +247,10 @@ func GenerateChunks(result *analyze.Result, topN int) []TableChunk {
 	for _, r := range result.Ranks {
 		if len(chunks) >= topN {
 			break
+		}
+		// When tableFilter is set, skip non-matching tables
+		if tableFilter != "" && !strings.EqualFold(r.Table, tableFilter) {
+			continue
 		}
 		// Find the schema table
 		var t *schema.Table

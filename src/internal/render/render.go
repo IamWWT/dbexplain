@@ -40,7 +40,7 @@ var (
 func section(title string) { fmt.Printf("\n%s\n", bold(cyan("> "+title))) }
 func hr()                  { fmt.Println(dim(strings.Repeat("-", 72))) }
 
-func Print(result *analyze.Result, human bool) {
+func Print(result *analyze.Result, human bool, tablesOnly bool) {
 	u := result.Universe
 
 	section(fmt.Sprintf("Instances (%d)", len(u.Instances)))
@@ -56,51 +56,86 @@ func Print(result *analyze.Result, human bool) {
 		)
 	}
 
-	for _, inst := range u.Instances {
-		for _, db := range inst.Databases {
-			section(formatDBContext(inst, db, human))
-			for _, t := range db.Tables {
-				printTable(inst, db, t, human)
+	if tablesOnly {
+		// Compact table list mode: one line per table
+		for _, inst := range u.Instances {
+			for _, db := range inst.Databases {
+				section(formatDBContext(inst, db, human))
+				fmt.Printf("  %s  %s  %s  %s  %s\n",
+					bold(pad("name", 30)), bold(pad("engine", 12)), bold(pad("rows", 14)), bold(pad("size", 10)), bold("comment"))
+				fmt.Printf("  %s  %s  %s  %s  %s\n",
+					dim(strings.Repeat("-", 30)), dim(strings.Repeat("-", 12)),
+					dim(strings.Repeat("-", 14)), dim(strings.Repeat("-", 10)),
+					dim(strings.Repeat("-", 20)))
+				for _, t := range db.Tables {
+					size := ""
+					if t.SizeBytes > 0 {
+						size = fmtSize(t.SizeBytes)
+					}
+					rows := ""
+					if t.RowCount > 0 {
+						rows = fmt.Sprintf("~%s", fmtInt(t.RowCount))
+					}
+					engine := ""
+					if t.Engine != "" {
+						engine = t.Engine
+					}
+					fmt.Printf("  %s  %s  %s  %s  %s\n",
+						pad(truncate(t.Name, 30), 30),
+						pad(engine, 12),
+						pad(rows, 14),
+						pad(size, 10),
+						dim(t.Comment))
+				}
 			}
 		}
-	}
-
-	explicit := filterRefs(result.Refs, false)
-	inferred := filterRefs(result.Refs, true)
-	section(fmt.Sprintf("Relationships  (%d explicit FK, %d inferred)", len(explicit), len(inferred)))
-	if len(result.Refs) == 0 {
-		fmt.Println(dim("  no relationships found"))
 	} else {
-		printRefs(result.Refs)
-	}
-
-	if len(result.Groups) > 0 {
-		section(fmt.Sprintf("Clusters (%d)", len(result.Groups)))
-		for _, g := range result.Groups {
-			if len(g.Tables) < 2 {
-				continue
-			}
-			fmt.Printf("  %s\n", bold(g.Name))
-			for _, qt := range g.Tables {
-				fmt.Printf("    * %s\n", dim(qt.Instance+"/"+qt.DB+"/"+qt.Table))
+		for _, inst := range u.Instances {
+			for _, db := range inst.Databases {
+				section(formatDBContext(inst, db, human))
+				for _, t := range db.Tables {
+					printTable(inst, db, t, human)
+				}
 			}
 		}
-	}
 
-	if len(result.Issues) > 0 {
-		section(fmt.Sprintf("Issues (%d)", len(result.Issues)))
-		for _, iss := range result.Issues {
-			icon := "[!]"
-			col := yellow
-			if iss.Severity == "info" {
-				icon = "[i]"
-				col = blue
+		explicit := filterRefs(result.Refs, false)
+		inferred := filterRefs(result.Refs, true)
+		section(fmt.Sprintf("Relationships  (%d explicit FK, %d inferred)", len(explicit), len(inferred)))
+		if len(result.Refs) == 0 {
+			fmt.Println(dim("  no relationships found"))
+		} else {
+			printRefs(result.Refs)
+		}
+
+		if len(result.Groups) > 0 {
+			section(fmt.Sprintf("Clusters (%d)", len(result.Groups)))
+			for _, g := range result.Groups {
+				if len(g.Tables) < 2 {
+					continue
+				}
+				fmt.Printf("  %s\n", bold(g.Name))
+				for _, qt := range g.Tables {
+					fmt.Printf("    * %s\n", dim(qt.Instance+"/"+qt.DB+"/"+qt.Table))
+				}
 			}
-			fmt.Printf("  %s %s  %s\n",
-				col(icon),
-				dim(iss.Instance+"/"+iss.DB+"/"+iss.Table),
-				iss.Message,
-			)
+		}
+
+		if len(result.Issues) > 0 {
+			section(fmt.Sprintf("Issues (%d)", len(result.Issues)))
+			for _, iss := range result.Issues {
+				icon := "[!]"
+				col := yellow
+				if iss.Severity == "info" {
+					icon = "[i]"
+					col = blue
+				}
+				fmt.Printf("  %s %s  %s\n",
+					col(icon),
+					dim(iss.Instance+"/"+iss.DB+"/"+iss.Table),
+					iss.Message,
+				)
+			}
 		}
 	}
 	fmt.Println()

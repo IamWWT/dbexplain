@@ -28,6 +28,7 @@ func Handle(args []string) {
 	configFile := fs.String("config", "", "JSON config file path")
 	useEnv := fs.Bool("env", true, "Load from .env config file (default: auto-detect)")
 	timeout := fs.Duration("timeout", 10*time.Second, "Per-DSN connection timeout")
+	sample := fs.Bool("sample", false, "enable sample row fetching for comment inference (default: off)")
 	labelFilter := fs.String("label", "", "filter by label")
 	fs.Parse(args)
 
@@ -131,9 +132,12 @@ func Handle(args []string) {
 
 		// 2. Test connectivity via connector.Collect with timeout
 		// Suppress collection logs during connectivity check
-		discardCtx := connector.WithLogger(context.Background(),
+		collectCtx := connector.WithLogger(context.Background(),
 			log.New(io.Discard, "", 0))
-		ctx, cancel := context.WithTimeout(discardCtx, *timeout)
+		if *sample {
+			collectCtx = connector.WithSample(collectCtx)
+		}
+		ctx, cancel := context.WithTimeout(collectCtx, *timeout)
 		oldLogOut := log.Writer()
 		log.SetOutput(io.Discard)
 		start := time.Now()
