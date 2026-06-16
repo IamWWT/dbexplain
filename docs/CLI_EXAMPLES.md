@@ -1,6 +1,6 @@
 # dbexplain CLI 查询案例库
 
-> 所有查询均已在本环境（v0.1.4, 17+ DSN 条目）跑通验证。`--human` 用于可读表格输出，不加则为 JSON（供 AI Agent 消费）。
+> 所有查询均已在本环境（v0.1.7, 16 DSN 条目）跑通验证。`--human` 用于可读表格输出，不加则为 JSON（供 AI Agent 消费）。
 > `--human` 可放在查询语句之前或之后：`dbexplain execute -env --db 1 --human "SELECT 1"` 与 `dbexplain execute -env --db 1 "SELECT 1" --human` 等价。
 
 ---
@@ -793,6 +793,186 @@ Switched to: openim-redis
 
 ---
 
+## 26. v0.1.7 新特性：Prometheus meta 表 `rows` 输出
+
+```bash
+# JSON 输出中 _labels 和 _metrics 表携带 rows 字段
+dbexplain -dsn 'prometheus://192.168.0.127:9440?label=my-prom' --json | python3 -c "
+import json,sys
+data = json.load(sys.stdin)
+for inst in data.get('instances', []):
+    for db in inst.get('databases', []):
+        for tbl in db.get('tables', []):
+            if tbl['name'] == '_metrics':
+                print(f\"表: {tbl['name']}, 行数: {tbl.get('row_count')}, rows_in_json: {len(tbl.get('rows',[]))}\")
+                for r in tbl['rows'][:3]:
+                    print(f\"  metric={r['metric']}, type={r['type']}, help={r['help'][:50]}...\")
+"
+```
+
+输出：
+```
+表: _metrics, 行数: 644, rows_in_json: 644
+  metric=DCGM_FI_DEV_CORRECTABLE_REMAPPED_ROWS, type=counter, help=Number of remapped rows for correctable errors...
+  metric=DCGM_FI_DEV_ECC_SBE_VOL_TOTAL, type=counter, help=Total number of single-bit volatile ECC errors...
+  metric=DCGM_FI_DEV_RETIRED_PENDING, type=counter, help=Number of pending retired pages...
+```
+
+```bash
+# 单独查看 _labels 的 rows
+dbexplain -dsn 'prometheus://192.168.0.127:9440?label=my-prom' --json | python3 -c "
+import json,sys
+data = json.load(sys.stdin)
+for inst in data.get('instances', []):
+    for db in inst.get('databases', []):
+        for tbl in db.get('tables', []):
+            if tbl['name'] == '_labels':
+                print(f\"表: {tbl['name']}, rows_in_json: {len(tbl.get('rows',[]))}\")
+                print(f\"前 5 个 label: {[r['name'] for r in tbl['rows'][:5]]}\")
+"
+```
+
+输出：
+```
+表: _labels, rows_in_json: 206
+前 5 个 label: ['DCGM_FI_DRIVER_VERSION', '__name__', 'alertname', 'alertstate', 'beta_kubernetes_io_arch']
+```
+
+```bash
+# 终端模式（--human）不受影响 — rows 仅 JSON 中有
+dbexplain -dsn 'prometheus://192.168.0.127:9440?label=my-prom' --human 2>&1 | head -10
+```
+
+输出：
+```
+kind     label    db           table              columns              rows
+───────  ───────  ───────────  ─────────────────  ───────────────────  ──────
+promethe my-prom  prometheus   _labels            name                 206
+promethe my-prom  prometheus   _metrics           metric, type...      644
+```
+
+---
+
+## 27. v0.1.7 新特性：CTE 写操作检测（通用 SQL 安全）
+
+```bash
+# 复杂 CTE 写操作：多 CTE + INSERT（拦截）
+dbexplain execute \
+  -dsn 'sqlite:///home/wwt/Downloads/aigc/proj/agents/aiops/intent-apparatus/data/rules.db?label=test-sqlite' \
+  'WITH
+  cte1 AS (SELECT id, rule_name FROM rules WHERE type = "anomaly"),
+  cte2 AS (SELECT COUNT(*) AS cnt FROM cte1)
+  INSERT INTO backup_rules SELECT * FROM cte2' --human
+```
+
+输出：
+```
+READ_ONLY_VIOLATION: WITH CTE contains write operation
+```
+
+```bash
+# CTE + UPDATE（拦截）
+dbexplain execute \
+  -dsn 'sqlite:///home/wwt/Downloads/aigc/proj/agents/aiops/intent-apparatus/data/rules.db?label=test-sqlite' \
+  'WITH cte AS (SELECT id, confidence FROM hit_logs WHERE rule_id = 1)
+  UPDATE rules SET confidence = (SELECT avg(confidence) FROM cte)' --human
+```
+
+输出：
+```
+READ_ONLY_VIOLATION: WITH CTE contains write operation
+```
+
+```bash
+# CTE + DELETE（拦截）
+dbexplain execute \
+  -dsn 'sqlite:///home/wwt/Downloads/aigc/proj/agents/aiops/intent-apparatus/data/rules.db?label=test-sqlite' \
+  'WITH cte AS (SELECT id FROM hit_logs WHERE confidence < 0.1)
+  DELETE FROM hit_logs WHERE id IN (SELECT id FROM cte)' --human
+```
+
+输出：
+```
+READ_ONLY_VIOLATION: WITH CTE contains write operation
+```
+
+```bash
+# CTE + INSERT INTO ... SELECT（真实风格，拦截）
+dbexplain execute \
+  -dsn 'sqlite:///home/wwt/Downloads/aigc/proj/agents/aiops/intent-apparatus/data/rules.db?label=test-sqlite' \
+  "WITH monthly_stats AS (
+    SELECT rule_id, strftime('%Y-%m', created_at) AS month, COUNT(*) AS hits
+    FROM hit_logs GROUP BY rule_id, month
+  )
+  INSERT INTO summary_table (rule_id, month, total_hits)
+  SELECT rule_id, month, hits FROM monthly_stats" --human
+```
+
+输出：
+```
+READ_ONLY_VIOLATION: WITH CTE contains write operation
+```
+
+```bash
+# 复杂合法 CTE：多 CTE + JOIN + 聚合 + LIMIT（允许）
+dbexplain execute \
+  -dsn 'sqlite:///home/wwt/Downloads/aigc/proj/agents/aiops/intent-apparatus/data/rules.db?label=test-sqlite' \
+  'WITH
+  rule_types AS (SELECT type, COUNT(*) AS cnt FROM rules GROUP BY type HAVING cnt > 1),
+  top_hits AS (SELECT rule_id, COUNT(*) AS hits FROM hit_logs GROUP BY rule_id ORDER BY hits DESC LIMIT 5)
+  SELECT r.rule_id, r.type, r.analytics_pattern,
+         COALESCE(t.hits, 0) AS hit_count
+  FROM rules r
+  LEFT JOIN top_hits t ON r.rule_id = t.rule_id
+  WHERE r.type IN (SELECT type FROM rule_types)
+  ORDER BY hit_count DESC
+  LIMIT 10' --human
+```
+
+输出：
+```
++-------------------------------+--------+-------------------+-----------+
+| rule_id                       | type   | analytics_pattern | hit_count |
++-------------------------------+--------+-------------------+-----------+
+| r_hardware_recommendation_001 | INTENT | metric            | 46359     |
+| r_query_log_001               | INTENT | metric            | 0         |
+| r_software_source_query_002   | INTENT | metric            | 0         |
+| r_resource_scaling_001        | INTENT | metric            | 0         |
+| r_voNR_binding_001            | INTENT | metric            | 0         |
++-------------------------------+--------+-------------------+-----------+
+5 row(s) in set (120ms)
+```
+
+```bash
+# 普通 INSERT（非 CTE，同样拦截）
+dbexplain execute \
+  -dsn 'sqlite:///home/wwt/Downloads/aigc/proj/agents/aiops/intent-apparatus/data/rules.db?label=test-sqlite' \
+  'INSERT INTO y VALUES(1)' --human
+```
+
+输出：
+```
+READ_ONLY_VIOLATION: write operation "INSERT" is not allowed
+```
+
+---
+
+## 28. v0.1.7 新特性：MongoDB `$facet` 写操作检测
+
+```bash
+# $facet 嵌套子管道中的 $out 现能被正确检测（JSON 原生格式）
+dbexplain execute \
+  -dsn 'mongodb://openIM:****@192.168.0.127:27017/openim_v3?label=test-mongo' \
+  '{"aggregate":"user","pipeline":[{"$facet":{"stats":[{"$group":{"_id":"$role","count":{"$sum":1}}}],"export":[{"$out":"backup_collection"}]}}]}' --human 2>&1 | head -5
+```
+
+输出：
+```
+READ_ONLY_VIOLATION: write stage "$out" is not allowed in aggregation pipeline
+```
+
+---
+
 | DB | Label | Kind | 关键表/集合 | 数据量 |
 |----|-------|------|-----------|--------|
 | DB1 | aiops-mysql | mysql | testdb.iplist, port | 12 / 30 行 |
@@ -810,8 +990,8 @@ Switched to: openim-redis
 | DB13 | csv-users | csv | users | 3 行 |
 | DB14 | csv-test-data | csv | users, products, types | 3 表 |
 | DB15 | tsv-test-data | tsv | data | 2 行 |
-| DB16 | prom | prometheus | up, node_cpu_*, prometheus_tsdb_* | 1000+ time series |
+| DB16 | my-prom | prometheus | up, node_cpu_*, prometheus_tsdb_* | 1000+ time series |
 
 ---
 
-*案例库持续更新中。v0.1.4 新增 Prometheus 连接器 + PromQL 查询 + DSL IR 重构 + REPL Prometheus 完备支持（含 DSL 与安全策略）+ ES 原生 JSON 查询 REPL 支持 + Prometheus × SQL 联邦查询 + 文件引擎哈希索引优化。全部查询已通过 --human 实测验证。*
+*案例库持续更新中。v0.1.7 新增：Prometheus meta 表 `rows` 输出（`_labels`/`_metrics` JSON 带全量数据）、CTE 写操作检测（WITH + INSERT/UPDATE/DELETE 拦截）、MongoDB `$facet` 子管道写操作检测。全部查询已通过 --human 实测验证。*
