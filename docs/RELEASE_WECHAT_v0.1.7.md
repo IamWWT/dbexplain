@@ -207,7 +207,60 @@ GaussDB 用户：  ❌ 勉强跑通，报错被吞 →  ✅ 独立连接器，�
 
 ---
 
-## 5. 📊 版本演进
+## 5. 🐛 SanitizeErr 死循环修复 — GaussDB 28P01 认证失败卡死 (ISSUE-095)
+
+### 背景：为什么进程会卡死？
+
+`dbexplain check` 连接 GaussDB 输入错误密码时（28P01 报错），进程**永久卡死**，Ctrl+C 都救不了。用户在等了一个小时后问："到底是网络问题还是工具问题？"
+
+排查过程层层深入：
+```
+[连接超时？]  → 排查 lib/pq context 取消 → 不是
+[TCP 卡住？]  → 排查 goroutine 泄漏 → 不是
+[mutex 死锁？] → 排查 sync.Mutex → 不是
+[日志卡住？]  → 加日志跟踪执行路径 → 定位 SanitizeErr
+```
+
+**根因**：`d.Redacted()` 占位符格式 `gaussdb://{dbuser}:{dbpassword}@host:port/db` 仍然匹配 URL 模式，`SanitizeErr()` 进入死循环。
+```
+第1轮：{dbpassword} → ***  // ✅ 替换成功
+第2轮：*** → ***           // ❌ 字符串没变，但循环继续
+第3轮：*** → ***           // ❌ 无限循环...
+```
+
+### 修复
+
+一行代码解决：`newMsg == msg → break`
+
+```go
+newMsg := msg[:passStart] + "***" + msg[passStart+atIdx:]
+if newMsg == msg {
+    break  // 替换后字符串无变化 → 已脱敏完毕，退出循环
+}
+msg = newMsg
+```
+
+### 防御加固
+
+除了根本原因修复，还做了 3 项防御性加固：
+
+| # | 问题 | 修复 |
+|---|------|------|
+| 1 | `db.Close()` 可能阻塞 | GaussDB/PostgreSQL 改 goroutine 关闭 `defer func() { go db.Close() }()` |
+| 2 | `defer cancel()` 在 for 循环中堆积 | 改为 select 后显式 `cancel()` |
+| 3 | `[DEBUG]` 日志默认输出到 stderr | 移入 dbexplain.log，通过 `Logf()` 输出 |
+
+为什么是"防御"而不是"修复"？这三个在重现环境中**不会触发**，但它们代表同一类风险——当 lib/pq 驱动不再"好好工作"时，这些代码路径会从不会出问题变成问题的放大器。
+
+### 教训：已脱敏字符串不要再过 SanitizeErr
+
+这件事最大的教训不是 SanitizeErr 的循环逻辑，而是**`SanitizeErr` 和 `Redacted()` 的职责边界不清晰**。一个负责输出时脱敏，一个负责错误处理时脱敏，两个都对了，但放在一起就互咬了。
+
+记录到项目宪法（CLAUDE.md）作为**安全红线的必修课**。
+
+---
+
+## 6. 📊 版本演进
 
 ```
 v0.0.2: 5 种数据源起步
@@ -216,14 +269,14 @@ v0.1.3: + DuckDB，双版本构建
 v0.1.4: + Prometheus 时序数据库
 v0.1.5: + Oracle + Hive，15 种，六层安全管道
 v0.1.6: Prometheus DSL 升级 + Bug Bash 21 项修复
-v0.1.7: 👁️ Prometheus meta 表 rows + CTE 写检测加固 + GaussDB Oracle 兼容
+v0.1.7: 👁️ Prometheus meta 表 rows + CTE 写检测加固 + GaussDB Oracle 兼容 + SanitizeErr 死循环修复
 ```
 
 **dbexplain — 15 种异构数据源的确定性上下文编译器：Schema 采集、只读查询、联邦 JOIN、安全审计，All in one 单二进制。**
 
 ---
 
-## 6. 快速试用
+## 7. 快速试用
 
 ```bash
 # 1. 查看 Prometheus _metrics 的 rows 数据
@@ -258,3 +311,4 @@ Prometheus meta 表 rows 这个改动，代码量不到 20 行。但对 LLM Agen
 
 *项目开源协议：Apache 2.0*
 *版本：v0.1.7 (2026-06-16)*
+*包含 ISSUE-095 (SanitizeErr 死循环) + ISSUE-096 (--verbose 日志级别控制) 计划*
