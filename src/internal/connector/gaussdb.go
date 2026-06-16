@@ -50,8 +50,26 @@ func (gaussdbConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instan
 	inst := &schema.Instance{DSN: d.Redacted(), Kind: "gaussdb", Label: d.Label}
 
 	var dbNames []string
+	// oracleCompatible=true 时跳过 datistemplate 查询（Oracle 兼容模式无此列）
+	isOracleCompat := d.DSNParam("oracleCompatible") == "true"
 	if d.DBName != "" {
 		dbNames = []string{d.DBName}
+	} else if isOracleCompat {
+		Logf(ctx, "[gaussdb] [collect] %s", `SELECT datname FROM pg_database WHERE datallowconn ORDER BY datname (oracleCompatible)`)
+		rows, err := db.QueryContext(ctx, `SELECT datname FROM pg_database WHERE datallowconn ORDER BY datname`)
+		if err != nil {
+			return nil, schema.NewDBError(d.Redacted(), "", "", "list databases", err)
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var n string
+			if err := rows.Scan(&n); err == nil {
+				dbNames = append(dbNames, n)
+			}
+		}
+		if err := rows.Err(); err != nil {
+			log.Printf("[gaussdb] rows iteration: %v", err)
+		}
 	} else {
 		Logf(ctx, "[gaussdb] [collect] %s", `SELECT datname FROM pg_database WHERE NOT datistemplate AND datallowconn ORDER BY datname`)
 		rows, err := db.QueryContext(ctx, `SELECT datname FROM pg_database WHERE NOT datistemplate AND datallowconn ORDER BY datname`)
