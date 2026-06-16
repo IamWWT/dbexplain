@@ -61,6 +61,7 @@ func collectOracleSchema(ctx context.Context, db *sql.DB, d *dsn.DSN) (*schema.I
 	if d.DBName != "" {
 		owners = []string{strings.ToUpper(d.DBName)}
 	} else {
+		Logf(ctx, "[oracle] [collect] %s", "SELECT DISTINCT owner FROM all_tables ORDER BY owner")
 		rows, err := db.QueryContext(ctx, "SELECT DISTINCT owner FROM all_tables ORDER BY owner")
 		if err != nil {
 			return nil, schema.NewDBError(d.Redacted(), "", "", "list owners", err)
@@ -80,10 +81,10 @@ func collectOracleSchema(ctx context.Context, db *sql.DB, d *dsn.DSN) (*schema.I
 	}
 
 	for _, owner := range owners {
-		logf(ctx, "[oracle] collecting schema %s", owner)
+		Logf(ctx, "[oracle] collecting schema %s", owner)
 		database, err := collectOracleDB(ctx, db, owner, d.Redacted())
 		if err != nil {
-			logf(ctx, "error in schema %s: %v", owner, err)
+			Logf(ctx, "error in schema %s: %v", owner, err)
 			continue
 		}
 		inst.Databases = append(inst.Databases, database)
@@ -93,6 +94,7 @@ func collectOracleSchema(ctx context.Context, db *sql.DB, d *dsn.DSN) (*schema.I
 
 func collectOracleDB(ctx context.Context, db *sql.DB, owner, redactedDSN string) (*schema.Database, error) {
 	database := &schema.Database{Name: owner}
+	Logf(ctx, "[oracle] [collect] %s", "SELECT t.table_name, COALESCE(t.num_rows, 0), COALESCE(c.comments, '') FROM all_tables t LEFT JOIN all_tab_comments c ON c.owner = t.owner AND c.table_name = t.table_name AND c.table_type = 'TABLE' WHERE t.owner = :1 ORDER BY t.table_name")
 	rows, err := db.QueryContext(ctx, `
 		SELECT t.table_name, COALESCE(t.num_rows, 0), COALESCE(c.comments, '')
 		FROM all_tables t
@@ -119,7 +121,7 @@ func collectOracleDB(ctx context.Context, db *sql.DB, owner, redactedDSN string)
 
 	total := len(tables)
 	for i, t := range tables {
-		logf(ctx, "[oracle] collecting table %d/%d: %s.%s", i+1, total, owner, t.Name)
+		Logf(ctx, "[oracle] collecting table %d/%d: %s.%s", i+1, total, owner, t.Name)
 		fillOracleTable(ctx, db, owner, t, redactedDSN)
 	}
 	database.Tables = tables
@@ -128,6 +130,7 @@ func collectOracleDB(ctx context.Context, db *sql.DB, owner, redactedDSN string)
 
 func fillOracleTable(ctx context.Context, db *sql.DB, owner string, t *schema.Table, redactedDSN string) {
 	// columns
+	Logf(ctx, "[oracle] [collect] %s", "SELECT c.column_name, c.data_type, c.nullable, COALESCE(c.data_default, ''), COALESCE(cc.comments, ''), c.column_id FROM all_tab_columns c LEFT JOIN all_col_comments cc ON cc.owner = c.owner AND cc.table_name = c.table_name AND cc.column_name = c.column_name WHERE c.owner = :1 AND c.table_name = :2 ORDER BY c.column_id")
 	colRows, err := db.QueryContext(ctx, `
 		SELECT c.column_name, c.data_type,
 		       c.nullable, COALESCE(c.data_default, ''),
@@ -137,7 +140,7 @@ func fillOracleTable(ctx context.Context, db *sql.DB, owner string, t *schema.Ta
 		WHERE c.owner = :1 AND c.table_name = :2
 		ORDER BY c.column_id`, owner, t.Name)
 	if err != nil {
-		logf(ctx, "[oracle] columns error %s.%s: %v", owner, t.Name, err)
+		Logf(ctx, "[oracle] columns error %s.%s: %v", owner, t.Name, err)
 		return
 	}
 	defer colRows.Close()
@@ -164,6 +167,7 @@ func fillOracleTable(ctx context.Context, db *sql.DB, owner string, t *schema.Ta
 	}
 
 	// constraints (PK/UK) — set IsPrimary and IsUnique
+	Logf(ctx, "[oracle] [collect] %s", "SELECT cc.constraint_name, c.constraint_type, cc.column_name FROM all_cons_columns cc JOIN all_constraints c ON c.constraint_name = cc.constraint_name AND c.owner = cc.owner WHERE c.owner = :1 AND c.table_name = :2 AND c.constraint_type IN ('P', 'U') ORDER BY c.constraint_name, cc.position")
 	cRows, err := db.QueryContext(ctx, `
 		SELECT cc.constraint_name, c.constraint_type, cc.column_name
 		FROM all_cons_columns cc
@@ -198,10 +202,11 @@ func fillOracleTable(ctx context.Context, db *sql.DB, owner string, t *schema.Ta
 			}
 		}
 	} else {
-		logf(ctx, "[oracle] constraint query failed for %s: %v", t.Name, err)
+		Logf(ctx, "[oracle] constraint query failed for %s: %v", t.Name, err)
 	}
 
 	// indexes
+	Logf(ctx, "[oracle] [collect] %s", "SELECT ic.index_name, ic.column_name, i.uniqueness FROM all_ind_columns ic JOIN all_indexes i ON i.index_name = ic.index_name AND i.owner = ic.index_owner AND i.table_owner = ic.table_owner AND i.table_name = ic.table_name WHERE ic.table_owner = :1 AND ic.table_name = :2 ORDER BY ic.index_name, ic.column_position")
 	idxRows, err := db.QueryContext(ctx, `
 		SELECT ic.index_name, ic.column_name, i.uniqueness
 		FROM all_ind_columns ic
@@ -234,10 +239,11 @@ func fillOracleTable(ctx context.Context, db *sql.DB, owner string, t *schema.Ta
 			t.Indexes = append(t.Indexes, idx)
 		}
 	} else {
-		logf(ctx, "[oracle] index query failed for %s: %v", t.Name, err)
+		Logf(ctx, "[oracle] index query failed for %s: %v", t.Name, err)
 	}
 
 	// foreign keys — 4-table JOIN with position alignment
+	Logf(ctx, "[oracle] [collect] %s", "SELECT a.constraint_name, a.column_name, c.r_owner, c.r_constraint_name, a.position FROM all_cons_columns a JOIN all_constraints c ON c.constraint_name = a.constraint_name AND c.owner = a.owner WHERE c.owner = :1 AND c.table_name = :2 AND c.constraint_type = 'R' ORDER BY a.constraint_name, a.position")
 	fkRows, err := db.QueryContext(ctx, `
 		SELECT a.constraint_name, a.column_name,
 		       c.r_owner, c.r_constraint_name, a.position
@@ -286,7 +292,7 @@ func fillOracleTable(ctx context.Context, db *sql.DB, owner string, t *schema.Ta
 				WHERE owner = :1 AND constraint_name = :2 AND constraint_type = 'P'`,
 				ref.rOwner, ref.rConstraint).Scan(&refTable, &deleteRule)
 			if err != nil {
-				logf(ctx, "[oracle] FK resolve table failed for %s: %v", name, err)
+				Logf(ctx, "[oracle] FK resolve table failed for %s: %v", name, err)
 				continue
 			}
 			fk.RefDB = ref.rOwner
@@ -299,7 +305,7 @@ func fillOracleTable(ctx context.Context, db *sql.DB, owner string, t *schema.Ta
 				WHERE owner = :1 AND constraint_name = :2
 				ORDER BY position`, ref.rOwner, ref.rConstraint)
 			if err != nil {
-				logf(ctx, "[oracle] FK resolve columns failed for %s: %v", name, err)
+				Logf(ctx, "[oracle] FK resolve columns failed for %s: %v", name, err)
 				continue
 			}
 			for refColRows.Next() {
@@ -315,7 +321,7 @@ func fillOracleTable(ctx context.Context, db *sql.DB, owner string, t *schema.Ta
 			}
 		}
 	} else {
-		logf(ctx, "[oracle] FK query failed for %s: %v", t.Name, err)
+		Logf(ctx, "[oracle] FK query failed for %s: %v", t.Name, err)
 	}
 
 	// sampling for comment inference
@@ -327,7 +333,7 @@ func fillOracleTable(ctx context.Context, db *sql.DB, owner string, t *schema.Ta
 				}
 			}
 		} else {
-			logf(ctx, "[oracle] sample row failed for %s.%s: %v", owner, t.Name, err)
+			Logf(ctx, "[oracle] sample row failed for %s.%s: %v", owner, t.Name, err)
 		}
 	}
 }
@@ -336,6 +342,7 @@ func fillOracleTable(ctx context.Context, db *sql.DB, owner string, t *schema.Ta
 func fetchOracleSampleRow(ctx context.Context, db *sql.DB, owner, table string) (map[string]string, error) {
 	q := fmt.Sprintf("SELECT * FROM %s.%s FETCH FIRST 1 ROWS ONLY",
 		quoteOracle(owner), quoteOracle(table))
+	Logf(ctx, "[oracle] [collect] %s", "SELECT * FROM %s.%s FETCH FIRST 1 ROWS ONLY")
 	rows, err := db.QueryContext(ctx, q)
 	if err != nil {
 		return nil, err

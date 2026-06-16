@@ -54,6 +54,7 @@ func (hiveConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instance,
 func collectHiveSchema(ctx context.Context, db *sql.DB, inst *schema.Instance) (*schema.Instance, error) {
 
 	// Discover databases
+	Logf(ctx, "[hive] [collect] %s", "SHOW DATABASES")
 	dbRows, err := db.QueryContext(ctx, "SHOW DATABASES")
 	if err != nil {
 		return nil, schema.NewDBError(inst.DSN, "", "", "list databases", err)
@@ -76,10 +77,10 @@ func collectHiveSchema(ctx context.Context, db *sql.DB, inst *schema.Instance) (
 	}
 
 	for _, dbName := range dbNames {
-		logf(ctx, "[hive] collecting database %s", dbName)
+		Logf(ctx, "[hive] collecting database %s", dbName)
 		database, err := collectHiveDB(ctx, db, dbName, inst.DSN)
 		if err != nil {
-			logf(ctx, "[hive] error in database %s: %v", dbName, err)
+			Logf(ctx, "[hive] error in database %s: %v", dbName, err)
 			continue
 		}
 		inst.Databases = append(inst.Databases, database)
@@ -91,6 +92,7 @@ func collectHiveDB(ctx context.Context, db *sql.DB, dbName, redactedDSN string) 
 	database := &schema.Database{Name: dbName}
 
 	// List tables
+	Logf(ctx, "[hive] [collect] %s", "SHOW TABLES IN %s")
 	rows, err := db.QueryContext(ctx, fmt.Sprintf("SHOW TABLES IN %s", quoteHive(dbName)))
 	if err != nil {
 		return nil, schema.NewDBError(redactedDSN, dbName, "", "list tables", err)
@@ -111,7 +113,7 @@ func collectHiveDB(ctx context.Context, db *sql.DB, dbName, redactedDSN string) 
 
 	total := len(tableNames)
 	for i, tName := range tableNames {
-		logf(ctx, "[hive] collecting table %d/%d: %s.%s", i+1, total, dbName, tName)
+		Logf(ctx, "[hive] collecting table %d/%d: %s.%s", i+1, total, dbName, tName)
 		t := &schema.Table{Name: tName, RowCount: -1}
 		fillHiveTable(ctx, db, dbName, t, redactedDSN)
 		database.Tables = append(database.Tables, t)
@@ -122,9 +124,10 @@ func collectHiveDB(ctx context.Context, db *sql.DB, dbName, redactedDSN string) 
 func fillHiveTable(ctx context.Context, db *sql.DB, dbName string, t *schema.Table, redactedDSN string) {
 	// DESCRIBE FORMATTED for column metadata
 	descSQL := fmt.Sprintf("DESCRIBE FORMATTED %s.%s", quoteHive(dbName), quoteHive(t.Name))
+	Logf(ctx, "[hive] [collect] %s", "DESCRIBE FORMATTED %s.%s")
 	descRows, err := db.QueryContext(ctx, descSQL)
 	if err != nil {
-		logf(ctx, "[hive] DESCRIBE FORMATTED failed for %s.%s: %v", dbName, t.Name, err)
+		Logf(ctx, "[hive] DESCRIBE FORMATTED failed for %s.%s: %v", dbName, t.Name, err)
 		return
 	}
 	defer descRows.Close()
@@ -176,13 +179,14 @@ func fillHiveTable(ctx context.Context, db *sql.DB, dbName string, t *schema.Tab
 				}
 			}
 		} else {
-			logf(ctx, "[hive] sample row failed for %s.%s: %v", dbName, t.Name, err)
+			Logf(ctx, "[hive] sample row failed for %s.%s: %v", dbName, t.Name, err)
 		}
 	}
 }
 
 func fetchHiveSampleRow(ctx context.Context, db *sql.DB, dbName, table string) (map[string]string, error) {
 	q := fmt.Sprintf("SELECT * FROM %s.%s LIMIT 1", quoteHive(dbName), quoteHive(table))
+	Logf(ctx, "[hive] [collect] %s", "SELECT * FROM %s.%s LIMIT 1")
 	rows, err := db.QueryContext(ctx, q)
 	if err != nil {
 		return nil, err

@@ -59,10 +59,12 @@ func (postgresConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Insta
 	if d.DBName != "" {
 		dbNames = []string{d.DBName}
 	} else {
+		Logf(ctx, "[postgres] [collect] %s", `SELECT datname FROM pg_database WHERE NOT datistemplate AND datallowconn ORDER BY datname`)
 		rows, err := db.QueryContext(ctx, `SELECT datname FROM pg_database WHERE NOT datistemplate AND datallowconn ORDER BY datname`)
 		if err != nil {
 			// GaussDB（Oracle 兼容模式）可能没有 datistemplate 列，回退到简单查询
-			logf(ctx, "[postgres] datistemplate query failed, trying fallback: %v", err)
+			Logf(ctx, "[postgres] datistemplate query failed, trying fallback: %v", err)
+			Logf(ctx, "[postgres] [collect] %s", `SELECT datname FROM pg_database WHERE datallowconn ORDER BY datname`)
 			rows, err = db.QueryContext(ctx, `SELECT datname FROM pg_database WHERE datallowconn ORDER BY datname`)
 			if err != nil {
 				return nil, schema.NewDBError(d.Redacted(), "", "", "list databases", err)
@@ -81,10 +83,10 @@ func (postgresConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Insta
 	}
 
 	for _, dbName := range dbNames {
-		logf(ctx, "[postgres] collecting database %s", dbName)
+		Logf(ctx, "[postgres] collecting database %s", dbName)
 		database, err := collectPGDB(ctx, db, dbName, d.Redacted())
 		if err != nil {
-			logf(ctx, "error in db %s: %v", dbName, err)
+			Logf(ctx, "error in db %s: %v", dbName, err)
 			continue
 		}
 		inst.Databases = append(inst.Databases, database)
@@ -96,6 +98,10 @@ func collectPGDB(ctx context.Context, db *sql.DB, dbName, redactedDSN string) (*
 	database := &schema.Database{Name: dbName}
 
 	// 查询所有非系统 schema
+	Logf(ctx, "[postgres] [collect] %s", `
+		SELECT nspname FROM pg_namespace
+		WHERE nspname NOT LIKE 'pg_%' AND nspname != 'information_schema'
+		ORDER BY nspname`)
 	schemaRows, err := db.QueryContext(ctx, `
 		SELECT nspname FROM pg_namespace
 		WHERE nspname NOT LIKE 'pg_%' AND nspname != 'information_schema'
@@ -122,6 +128,23 @@ func collectPGDB(ctx context.Context, db *sql.DB, dbName, redactedDSN string) (*
 
 	var tables []*schema.Table
 	for _, schemaName := range schemas {
+		Logf(ctx, "[postgres] [collect] %s", `
+			SELECT t.tablename,
+			       COALESCE(s.n_live_tup, 0),
+			       COALESCE(pg_total_relation_size(c.oid), 0),
+			       COALESCE(obj_description(c.oid, 'pg_class'), ''),
+			       COALESCE(s.seq_scan, 0),
+			       COALESCE(s.idx_scan, 0),
+			       COALESCE(s.n_tup_ins, 0),
+			       COALESCE(s.n_tup_upd, 0),
+			       COALESCE(s.n_tup_del, 0)
+			FROM pg_tables t
+			JOIN pg_class c ON c.relname = t.tablename
+			JOIN pg_namespace n ON n.oid = c.relnamespace AND n.nspname = t.schemaname
+			LEFT JOIN pg_stat_user_tables s
+				ON s.schemaname = t.schemaname AND s.relname = t.tablename
+			WHERE t.schemaname = $1
+			ORDER BY t.tablename`)
 		tRows, err := db.QueryContext(ctx, `
 			SELECT t.tablename,
 			       COALESCE(s.n_live_tup, 0),
@@ -140,7 +163,7 @@ func collectPGDB(ctx context.Context, db *sql.DB, dbName, redactedDSN string) (*
 			WHERE t.schemaname = $1
 			ORDER BY t.tablename`, schemaName)
 		if err != nil {
-			logf(ctx, "[postgres] query tables in schema %s: %v", schemaName, err)
+			Logf(ctx, "[postgres] query tables in schema %s: %v", schemaName, err)
 			continue
 		}
 		for tRows.Next() {
@@ -172,7 +195,7 @@ func collectPGDB(ctx context.Context, db *sql.DB, dbName, redactedDSN string) (*
 	total := len(tables)
 	for i, t := range tables {
 		schemaName, baseName := parsePGTableName(t.Name)
-		logf(ctx, "[%s] 采集表 %d/%d: %s", dbName, i+1, total, t.Name)
+		Logf(ctx, "[%s] 采集表 %d/%d: %s", dbName, i+1, total, t.Name)
 		fillPGTable(ctx, db, schemaName, baseName, t, redactedDSN)
 	}
 	database.Tables = tables
@@ -195,6 +218,21 @@ func quotePGIdent(name string) string {
 func fillPGTable(ctx context.Context, db *sql.DB, schemaName, baseName string, t *schema.Table, redactedDSN string) {
 	// columns — 使用 pg_class+pg_namespace JOIN 替代 ::regclass 转换，
 	// 兼容 GaussDB（不支持 schema.table::regclass 语法）
+	Logf(ctx, "[postgres] [collect] %s", `
+		SELECT a.attname,
+		       pg_catalog.format_type(a.atttypid, a.atttypmod),
+		       NOT a.attnotnull,
+		       COALESCE(pg_get_expr(d.adbin, d.adrelid),''),
+		       COALESCE(col_description(a.attrelid, a.attnum),''),
+		       COALESCE((SELECT string_agg(contype::text,'')
+		                 FROM pg_constraint c
+		                 WHERE a.attnum = ANY(c.conkey) AND c.conrelid = a.attrelid),'')
+		FROM pg_attribute a
+		LEFT JOIN pg_attrdef d ON d.adrelid=a.attrelid AND d.adnum=a.attnum
+		JOIN pg_class c ON c.oid = a.attrelid
+		JOIN pg_namespace n ON n.oid = c.relnamespace
+		WHERE c.relname=$1 AND n.nspname=$2 AND a.attnum>0 AND NOT a.attisdropped
+		ORDER BY a.attnum`)
 	colRows, err := db.QueryContext(ctx, `
 		SELECT a.attname,
 		       pg_catalog.format_type(a.atttypid, a.atttypmod),
@@ -211,7 +249,7 @@ func fillPGTable(ctx context.Context, db *sql.DB, schemaName, baseName string, t
 		WHERE c.relname=$1 AND n.nspname=$2 AND a.attnum>0 AND NOT a.attisdropped
 		ORDER BY a.attnum`, baseName, schemaName)
 	if err != nil {
-		logf(ctx, "[postgres] columns error %s: %v", t.Name, err)
+		Logf(ctx, "[postgres] columns error %s: %v", t.Name, err)
 		return
 	}
 	defer colRows.Close()
@@ -245,11 +283,14 @@ func fillPGTable(ctx context.Context, db *sql.DB, schemaName, baseName string, t
 				}
 			}
 		} else {
-			logf(ctx, "[postgres] sample row failed for %s: %v", t.Name, err)
+			Logf(ctx, "[postgres] sample row failed for %s: %v", t.Name, err)
 		}
 	}
 
 	// indexes
+	Logf(ctx, "[postgres] [collect] %s", `
+		SELECT indexname, indexdef FROM pg_indexes
+		WHERE schemaname=$2 AND tablename=$1`)
 	idxRows, err := db.QueryContext(ctx, `
 		SELECT indexname, indexdef FROM pg_indexes
 		WHERE schemaname=$2 AND tablename=$1`, baseName, schemaName)
@@ -269,10 +310,21 @@ func fillPGTable(ctx context.Context, db *sql.DB, schemaName, baseName string, t
 			log.Printf("[postgres] rows iteration: %v", err)
 		}
 	} else {
-		logf(ctx, "[postgres] index query failed for %s: %v", t.Name, err)
+		Logf(ctx, "[postgres] index query failed for %s: %v", t.Name, err)
 	}
 
 	// foreign keys (including on_delete/on_update from pg_constraint)
+	Logf(ctx, "[postgres] [collect] %s", `
+		SELECT c.conname, a.attname, c2.relname, a2.attname,
+		       c.confupdtype, c.confdeltype
+		FROM pg_constraint c
+		JOIN pg_class c1 ON c1.oid=c.conrelid
+		JOIN pg_namespace n1 ON n1.oid=c1.relnamespace
+		JOIN pg_class c2 ON c2.oid=c.confrelid
+		JOIN pg_namespace n2 ON n2.oid=c2.relnamespace
+		JOIN pg_attribute a ON a.attrelid=c.conrelid AND a.attnum=ANY(c.conkey)
+		JOIN pg_attribute a2 ON a2.attrelid=c.confrelid AND a2.attnum=ANY(c.confkey)
+		WHERE c.contype='f' AND c1.relname=$1 AND n1.nspname=$2`)
 	fkRows, err := db.QueryContext(ctx, `
 		SELECT c.conname, a.attname, c2.relname, a2.attname,
 		       c.confupdtype, c.confdeltype
@@ -311,12 +363,13 @@ func fillPGTable(ctx context.Context, db *sql.DB, schemaName, baseName string, t
 			log.Printf("[postgres] rows iteration: %v", err)
 		}
 	} else {
-		logf(ctx, "[postgres] FK query failed for %s: %v", t.Name, err)
+		Logf(ctx, "[postgres] FK query failed for %s: %v", t.Name, err)
 	}
 }
 
 func fetchPGSampleRow(ctx context.Context, db *sql.DB, schemaName, table string) (map[string]string, error) {
 	query := fmt.Sprintf(`SELECT * FROM %s.%s LIMIT 1`, quotePGIdent(schemaName), quotePGIdent(table))
+	Logf(ctx, "[postgres] [collect] %s", query)
 	rows, err := db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
@@ -386,7 +439,7 @@ func (postgresConnector) ExecQuery(ctx context.Context, opts query.ExecuteOpts) 
 	// Set statement timeout if specified
 	if opts.Timeout > 0 {
 		if _, err := db.ExecContext(ctx, fmt.Sprintf("SET statement_timeout = '%ds'", opts.Timeout)); err != nil {
-			logf(ctx, "[postgres] set statement_timeout failed: %v (query will still run without timeout guard)", err)
+			Logf(ctx, "[postgres] set statement_timeout failed: %v (query will still run without timeout guard)", err)
 		}
 	}
 

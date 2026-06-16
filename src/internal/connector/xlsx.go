@@ -225,6 +225,9 @@ func (xlsxConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instance,
 func (xlsxConnector) ExecQuery(ctx context.Context, opts query.ExecuteOpts) (*query.QueryResult, error) {
 	path := opts.DSN.FilePath()
 
+	logSQL := TruncateSQL(opts.SQL)
+	Logf(ctx, "[xlsx] [execute] %s", logSQL)
+
 	// Fast path: SELECT * [LIMIT N [OFFSET M]]
 	limit, offset := xlsxParseSelectStar(opts.SQL)
 	if limit >= 0 {

@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.1.7 (2026-06-16) — Prometheus Meta Table Rows + CTE Write Detection Hardening
+## v0.1.7 (2026-06-16) — Prometheus Meta Table Rows + CTE Write Detection Hardening + GaussDB Oracle-Compatible Mode Adaptation
 
 ### ✨ Prometheus Meta Table Rows
 
@@ -10,6 +10,34 @@
 ### 🐛 CTE Write Detection Hardening
 
 - **WITH + main query write interception**: Fixed a vulnerability where `WITH x AS (SELECT 1) INSERT INTO y VALUES (1)` bypassed read-only validation. Three-layer fix: (1) WITH detection moved before AST parsing; (2) `containsCTEWrite()` now checks the main query body for write verbs; (3) Fixed `break` in nested `switch` + `for` only breaking the `switch` (Go semantics) — replaced with labeled `break`. **Advantage**: Eliminates the CTE write bypass path against sqlguard, strengthening read-only security completeness.
+
+### 🔧 GaussDB Oracle-Compatible Mode Full Adaptation
+
+- **Separate GaussDB connector** (`connector/gaussdb.go`): Split from `postgresConnector` into an independent `gaussdbConnector`, reusing package-level functions (`collectPGDB()`, `buildPGDSN()`, etc.) for zero code duplication. Registers kind `"gaussdb"`, DSN scheme `gaussdb://` unchanged.
+- **EXPLAIN format adaptation**: GaussDB Oracle-compatible mode doesn't support `BUFFERS` option; `wrapExplain()` now uses `EXPLAIN (ANALYZE, FORMAT TEXT)` (PostgreSQL retains `BUFFERS`).
+- **CLI help updates**: `manual.go` and `db_sections.go` now document PostgreSQL and GaussDB separately, noting GaussDB Oracle-mode limitations.
+- **New documentation**: `docs/databases/gaussdb.md` — standalone GaussDB compatibility guide with DSN config, Oracle mode details, verified items, known differences, distributed deployment notes.
+- **Doc cleanup**: `COMPATIBILITY_GAUSSDB_TDSQL.md` split into pure TDSQL content; GaussDB content moved to the new document.
+- **`datistemplate` fallback**: When the `pg_database.datistemplate` column is missing (Oracle-compatible mode), automatically falls back to a query without that column.
+
+### 🛠 `dbexplain check` Configuration Validation
+
+- **New `dbexplain check` subcommand**: Validates .env config file format, DSN syntax correctness, and database connectivity. Supports `--dsn` (repeatable), `--config` (JSON), `--timeout`, `--env` flags. Auto-discovers .env.dbexplain with password-masked error messages. Exit code: 0 for all pass, 1 for any failure.
+- **Test documentation**: `docs/test/21-check-command.md` — 11 E2E test cases covering all scenarios.
+
+### 📋 Configurable SQL Log Truncation
+
+- **`--sql-log-max-len` global flag**: SQL log truncation length changed from hardcoded 2000 to default 5000 characters, user-configurable via `--sql-log-max-len N`. Clearly documented as characters (not rows).
+- **`connector.TruncateSQL()` unified entry point**: Extracted duplicate truncation logic into a single helper, all ~11 truncation sites unified. New `connector.MaxSQLLogLen` package-level variable.
+- **Unit tests**: Default value, truncation behavior, and custom length — 3 test cases.
+
+### 📄 Documentation
+
+- **`docs/test/21-check-command.md`**: New 11 test cases for the check subcommand.
+- **`docs/CODE_MAP.md`**: Added `dbexplain check` → `internal/check/handler.go` mapping.
+- **`docs/file_index.md`**: Added `test/21-check-command.md` entry.
+- **`docs/test/RESULTS.md`**: Updated v0.1.7 test results.
+- **`.env.dbexplain.example`**: Added GaussDB DSN configuration example.
 
 ## v0.1.6 (2026-06-12) — Bug Bash + Prometheus DSL Core Upgrade
 

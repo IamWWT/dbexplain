@@ -41,6 +41,14 @@ func ExecQuery(opts *ExecOptions) (*query.QueryResult, error) {
 		return nil, fmt.Errorf("ExecOptions.Parsed is nil")
 	}
 
+	// Log original SQL (truncated to MaxSQLLogLen chars for safety)
+	ctx := opts.Context
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	logSQL := connector.TruncateSQL(sqlArg)
+	connector.Logf(ctx, "[%s] [execute] %s", opts.Parsed.Kind, logSQL)
+
 	// SQL-specific validation and transformation
 	if opts.IsSQL {
 		if err := sqlguard.Validate(sqlArg); err != nil {
@@ -57,6 +65,11 @@ func ExecQuery(opts *ExecOptions) (*query.QueryResult, error) {
 			}
 		} else {
 			sqlArg = sqlguard.AutoLimit(sqlArg, opts.Limit)
+		}
+		// Log wrapped SQL if different from original (after EXPLAIN/AutoLimit transformation)
+		if sqlArg != logSQL && len(sqlArg) > 0 {
+			wrappedLog := connector.TruncateSQL(sqlArg)
+			connector.Logf(ctx, "[%s] [execute] (wrapped) %s", opts.Parsed.Kind, wrappedLog)
 		}
 	} else {
 		if err := opts.Policies.CheckNative(sqlArg, opts.Parsed.Kind); err != nil {

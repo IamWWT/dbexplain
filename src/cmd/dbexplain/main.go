@@ -9,6 +9,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -16,6 +17,7 @@ import (
 	"github.com/IamWWT/dbexplain/internal/analyze"
 	"github.com/IamWWT/dbexplain/internal/capabilities"
 	"github.com/IamWWT/dbexplain/internal/cache"
+	"github.com/IamWWT/dbexplain/internal/check"
 	"github.com/IamWWT/dbexplain/internal/connector"
 	"github.com/IamWWT/dbexplain/internal/dsn"
 	"github.com/IamWWT/dbexplain/internal/config"
@@ -39,6 +41,20 @@ func preScanLanguage() string {
 	return "zh"
 }
 
+// preScanSQLLogMaxLen scans os.Args for --sql-log-max-len before any FlagSet.Parse.
+// This allows it to work as a global flag across all subcommands (collect, execute, repl, check, etc.).
+func preScanSQLLogMaxLen() {
+	for i := 0; i < len(os.Args); i++ {
+		if os.Args[i] == "--sql-log-max-len" && i+1 < len(os.Args) {
+			v, err := strconv.Atoi(os.Args[i+1])
+			if err == nil && v > 0 {
+				connector.MaxSQLLogLen = v
+			}
+			return
+		}
+	}
+}
+
 func hasHelpFlag() bool {
 	for _, a := range os.Args[1:] {
 		if a == "-h" || a == "--help" {
@@ -49,6 +65,9 @@ func hasHelpFlag() bool {
 }
 
 func main() {
+	// Pre-scan global flags before any FlagSet.Parse
+	preScanSQLLogMaxLen()
+
 	// Intercept subcommands BEFORE flag.Parse
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
@@ -69,6 +88,9 @@ func main() {
 			return
 		case "execute":
 			handleExecute(os.Args[2:])
+			return
+		case "check":
+			check.Handle(os.Args[2:])
 			return
 		case "list":
 			list.Handle(os.Args[2:])

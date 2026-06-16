@@ -16,6 +16,10 @@ import (
 func executeSQLQuery(ctx context.Context, db *sql.DB, sqlStr string, maxRows int) (*query.QueryResult, error) {
 	start := time.Now()
 
+	// Log SQL with truncation for safety
+	logSQL := TruncateSQL(sqlStr)
+	Logf(ctx, "[query] [execute] %s", logSQL)
+
 	rows, err := db.QueryContext(ctx, sqlStr)
 	if err != nil {
 		return nil, err

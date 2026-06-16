@@ -6,8 +6,10 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"log"
 	"math"
 	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -41,6 +43,7 @@ func handleExecute(args []string) {
 	explain := fs.Bool("explain", false, "Wrap query with EXPLAIN")
 	dslMode := fs.Bool("dsl", false, "Enable DSL mode: parse @label.table references")
 	human := fs.Bool("human", false, "Human-readable table output (default: JSON)")
+	logDirFlag := fs.String("log-dir", "/var/log/dbexplain", "directory for log files")
 	fs.Parse(args)
 
 	// Allow flags after the SQL query for convenience.
@@ -105,6 +108,13 @@ func handleExecute(args []string) {
 				i++
 				*configFile = extraArgs[i]
 			}
+		case "--log-dir":
+			if hasEq && val != "" {
+				*logDirFlag = val
+			} else if i+1 < len(extraArgs) && !strings.HasPrefix(extraArgs[i+1], "--") {
+				i++
+				*logDirFlag = extraArgs[i]
+			}
 		}
 	}
 
@@ -158,7 +168,8 @@ func handleExecute(args []string) {
 			os.Exit(1)
 		}
 		if dslQuery.HasSourceRefs() {
-			handleDSLExecute(dslQuery, allEntries, *human, *limit, *explain, *timeout)
+			logDir := config.ResolveLogDir(*logDirFlag)
+			handleDSLExecute(dslQuery, allEntries, *human, *limit, *explain, *timeout, logDir)
 			return
 		}
 	}
@@ -205,6 +216,16 @@ func handleExecute(args []string) {
 	}
 
 	// SQL and native execution via shared pipeline
+	execCtx := context.Background()
+	logDir := config.ResolveLogDir(*logDirFlag)
+	if parsed.Label != "" {
+		logFileName := filepath.Join(logDir, parsed.Label+".log")
+		logFile, err := os.OpenFile(logFileName, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+		if err == nil {
+			defer logFile.Close()
+			execCtx = connector.WithLogger(execCtx, log.New(logFile, "", log.LstdFlags))
+		}
+	}
 	result, execErr := executor.ExecQuery(&executor.ExecOptions{
 		Conn:       c,
 		Parsed:     parsed,
@@ -215,6 +236,7 @@ func handleExecute(args []string) {
 		Policies:   policies,
 		Lock:       queryLock,
 		IsSQL:      isSQL,
+		Context:    execCtx,
 	})
 	if execErr != nil {
 		fmt.Fprintln(os.Stderr, execErr)
@@ -239,7 +261,7 @@ func handleExecute(args []string) {
 }
 
 // handleDSLExecute handles the DSL execution path.
-func handleDSLExecute(dslQuery *dsl.DSLQuery, allEntries []config.DSNEntry, human bool, limit int, explain bool, timeoutSec int) {
+func handleDSLExecute(dslQuery *dsl.DSLQuery, allEntries []config.DSNEntry, human bool, limit int, explain bool, timeoutSec int, logDir string) {
 	bound, err := dsl.Bind(dslQuery, allEntries)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -252,7 +274,7 @@ func handleDSLExecute(dslQuery *dsl.DSLQuery, allEntries []config.DSNEntry, huma
 		os.Exit(1)
 	}
 	if len(kinds) > 1 {
-		dslExecFederated(dslQuery, bound, allEntries, human, limit, explain, timeoutSec)
+		dslExecFederated(dslQuery, bound, allEntries, human, limit, explain, timeoutSec, logDir)
 		return
 	}
 
@@ -265,11 +287,11 @@ func handleDSLExecute(dslQuery *dsl.DSLQuery, allEntries []config.DSNEntry, huma
 
 	switch primary.Vendor {
 	case dsl.VendorSQL:
-		dslExecSQL(dslQuery, bound, human, limit, explain, timeoutSec, allEntries)
+		dslExecSQL(dslQuery, bound, human, limit, explain, timeoutSec, allEntries, logDir)
 	case dsl.VendorFile:
 		dslExecFile(dslQuery, bound, human, limit, allEntries)
 	case dsl.VendorPromQL:
-		dslExecPromQL(dslQuery, bound, human, limit, timeoutSec, allEntries)
+		dslExecPromQL(dslQuery, bound, human, limit, timeoutSec, allEntries, logDir)
 	default:
 		fmt.Fprintf(os.Stderr, "DSL error: %s data sources not supported in DSL mode\n", primary.Vendor)
 		os.Exit(1)
@@ -290,7 +312,7 @@ func kindName(k dsl.SourceKind) string {
 }
 
 // dslExecSQL compiles and executes a DSL query against an SQL database.
-func dslExecSQL(dslQuery *dsl.DSLQuery, bound *dsl.BoundQuery, human bool, limit int, explain bool, timeoutSec int, allEntries []config.DSNEntry) {
+func dslExecSQL(dslQuery *dsl.DSLQuery, bound *dsl.BoundQuery, human bool, limit int, explain bool, timeoutSec int, allEntries []config.DSNEntry, logDir string) {
 	compiledSQL, err := dsl.CompileToSQL(dslQuery, bound)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -312,6 +334,14 @@ func dslExecSQL(dslQuery *dsl.DSLQuery, bound *dsl.BoundQuery, human bool, limit
 
 	policies := policy.Load(envKeyForLabel(primary.DSN.Label, allEntries))
 
+	execCtx := context.Background()
+	if parsed.Label != "" {
+		if lf, err := os.OpenFile(filepath.Join(logDir, parsed.Label+".log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644); err == nil {
+			defer lf.Close()
+			execCtx = connector.WithLogger(execCtx, log.New(lf, "", log.LstdFlags))
+		}
+	}
+
 	result, execErr := executor.ExecQuery(&executor.ExecOptions{
 		Conn:       c,
 		Parsed:     parsed,
@@ -322,6 +352,7 @@ func dslExecSQL(dslQuery *dsl.DSLQuery, bound *dsl.BoundQuery, human bool, limit
 		Policies:   policies,
 		Lock:       queryLock,
 		IsSQL:      true,
+		Context:    execCtx,
 	})
 	if execErr != nil {
 		fmt.Fprintln(os.Stderr, execErr)
@@ -360,7 +391,7 @@ func dslExecFile(dslQuery *dsl.DSLQuery, bound *dsl.BoundQuery, human bool, limi
 // dslExecPromQL executes a DSL query against a Prometheus data source.
 // It converts the SQL AST to QueryIR, compiles to PromQL, and executes
 // through the non-SQL pipeline (IsSQL=false, bypassing sqlguard).
-func dslExecPromQL(dslQuery *dsl.DSLQuery, bound *dsl.BoundQuery, human bool, limit int, timeoutSec int, allEntries []config.DSNEntry) {
+func dslExecPromQL(dslQuery *dsl.DSLQuery, bound *dsl.BoundQuery, human bool, limit int, timeoutSec int, allEntries []config.DSNEntry, logDir string) {
 	primary := bound.PrimarySource()
 	if primary == nil {
 		fmt.Fprintln(os.Stderr, "DSL error: no resolved source")
@@ -423,6 +454,13 @@ func dslExecPromQL(dslQuery *dsl.DSLQuery, bound *dsl.BoundQuery, human bool, li
 	}
 
 	// Execute through non-SQL pipeline (IsSQL=false → bypasses sqlguard)
+	execCtx := context.Background()
+	if parsed.Label != "" {
+		if lf, err := os.OpenFile(filepath.Join(logDir, parsed.Label+".log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644); err == nil {
+			defer lf.Close()
+			execCtx = connector.WithLogger(execCtx, log.New(lf, "", log.LstdFlags))
+		}
+	}
 	result, execErr := executor.ExecQuery(&executor.ExecOptions{
 		Conn:       c,
 		Parsed:     parsed,
@@ -433,6 +471,7 @@ func dslExecPromQL(dslQuery *dsl.DSLQuery, bound *dsl.BoundQuery, human bool, li
 		Policies:   policies,
 		Lock:       queryLock,
 		IsSQL:      false,
+		Context:    execCtx,
 	})
 	if execErr != nil {
 		fmt.Fprintln(os.Stderr, execErr)
@@ -568,7 +607,7 @@ func dslExecPromQL(dslQuery *dsl.DSLQuery, bound *dsl.BoundQuery, human bool, li
 // dslExecFederated executes a DSL query that references multiple source kinds
 // (e.g., SQL + file, or multiple SQL DBs). It materializes all data in memory
 // then uses the file query engine as a federated merge layer.
-func dslExecFederated(dslQuery *dsl.DSLQuery, bound *dsl.BoundQuery, allEntries []config.DSNEntry, human bool, limit int, explain bool, timeoutSec int) {
+func dslExecFederated(dslQuery *dsl.DSLQuery, bound *dsl.BoundQuery, allEntries []config.DSNEntry, human bool, limit int, explain bool, timeoutSec int, logDir string) {
 	// Materialize all sources
 	type materialized struct {
 		alias  string
@@ -588,6 +627,13 @@ func dslExecFederated(dslQuery *dsl.DSLQuery, bound *dsl.BoundQuery, allEntries 
 				os.Exit(1)
 			}
 			policies := policy.Load(envKeyForLabel(bs.DSN.Label, allEntries))
+			fedCtx := context.Background()
+			if bs.DSN.Label != "" {
+				if lf, err := os.OpenFile(filepath.Join(logDir, bs.DSN.Label+".log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644); err == nil {
+					defer lf.Close()
+					fedCtx = connector.WithLogger(fedCtx, log.New(lf, "", log.LstdFlags))
+				}
+			}
 			result, execErr := executor.ExecQuery(&executor.ExecOptions{
 				Conn:       c,
 				Parsed:     bs.DSN,
@@ -598,6 +644,7 @@ func dslExecFederated(dslQuery *dsl.DSLQuery, bound *dsl.BoundQuery, allEntries 
 				Policies:   policies,
 				Lock:       queryLock,
 				IsSQL:      true,
+				Context:    fedCtx,
 			})
 			if execErr != nil {
 				fmt.Fprintln(os.Stderr, execErr)
@@ -680,10 +727,18 @@ func dslExecFederated(dslQuery *dsl.DSLQuery, bound *dsl.BoundQuery, allEntries 
 					os.Exit(1)
 				}
 				policies := policy.Load(envKeyForLabel(bs.DSN.Label, allEntries))
+				fedCtx := context.Background()
+				if bs.DSN.Label != "" {
+					if lf, err := os.OpenFile(filepath.Join(logDir, bs.DSN.Label+".log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644); err == nil {
+						defer lf.Close()
+						fedCtx = connector.WithLogger(fedCtx, log.New(lf, "", log.LstdFlags))
+					}
+				}
 				result, execErr := executor.ExecQuery(&executor.ExecOptions{
 					Conn: c, Parsed: bs.DSN, SQL: promQL,
 					Limit: limit, Explain: false, TimeoutSec: timeoutSec,
 					Policies: policies, Lock: queryLock, IsSQL: false,
+					Context: fedCtx,
 				})
 				if execErr != nil {
 					fmt.Fprintln(os.Stderr, execErr)

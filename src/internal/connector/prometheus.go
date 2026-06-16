@@ -98,12 +98,12 @@ func (promConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instance,
 
 	// 1. Labels
 	if err := collectLabels(ctx, baseURL, d, timeout, db); err != nil {
-		logf(ctx, "[prometheus] labels collect warning: %v", err)
+		Logf(ctx, "[prometheus] labels collect warning: %v", err)
 	}
 
 	// 2. Metrics metadata
 	if err := collectMetricsMeta(ctx, baseURL, d, timeout, db); err != nil {
-		logf(ctx, "[prometheus] metadata collect warning: %v", err)
+		Logf(ctx, "[prometheus] metadata collect warning: %v", err)
 	}
 
 	inst.Databases = append(inst.Databases, db)
@@ -229,6 +229,9 @@ func (promConnector) ExecQuery(ctx context.Context, opts query.ExecuteOpts) (*qu
 	if sql == "" {
 		return nil, fmt.Errorf("READ_ONLY_VIOLATION: empty PromQL query")
 	}
+
+	logSQL := TruncateSQL(opts.SQL)
+	Logf(ctx, "[prometheus] [execute] %s", logSQL)
 
 	d := opts.DSN
 	baseURL := promBaseURL(d)

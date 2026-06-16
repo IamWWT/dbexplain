@@ -53,6 +53,7 @@ func (mysqlConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instance
 	if d.DBName != "" {
 		dbNames = []string{d.DBName}
 	} else {
+		Logf(ctx, "[mysql] [collect] %s", "SHOW DATABASES")
 		rows, err := db.QueryContext(ctx, "SHOW DATABASES")
 		if err != nil {
 			return nil, schema.NewDBError(d.Redacted(), "", "", "list databases", err)
@@ -72,10 +73,10 @@ func (mysqlConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instance
 	}
 
 	for _, dbName := range dbNames {
-		logf(ctx, "[mysql] collecting database %s", dbName)
+		Logf(ctx, "[mysql] collecting database %s", dbName)
 		database, err := collectMySQLDB(ctx, db, dbName, d.Redacted())
 		if err != nil {
-			logf(ctx, "error in db %s: %v", dbName, err)
+			Logf(ctx, "error in db %s: %v", dbName, err)
 			continue
 		}
 		inst.Databases = append(inst.Databases, database)
@@ -85,6 +86,12 @@ func (mysqlConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instance
 
 func collectMySQLDB(ctx context.Context, db *sql.DB, dbName, redactedDSN string) (*schema.Database, error) {
 	database := &schema.Database{Name: dbName}
+	Logf(ctx, "[mysql] [collect] %s", `
+		SELECT TABLE_NAME, COALESCE(TABLE_ROWS,0), COALESCE(DATA_LENGTH+INDEX_LENGTH,0),
+		       COALESCE(TABLE_COMMENT,''), COALESCE(ENGINE,'')
+		FROM information_schema.TABLES
+		WHERE TABLE_SCHEMA=? AND TABLE_TYPE='BASE TABLE'
+		ORDER BY TABLE_NAME`)
 	rows, err := db.QueryContext(ctx, `
 		SELECT TABLE_NAME, COALESCE(TABLE_ROWS,0), COALESCE(DATA_LENGTH+INDEX_LENGTH,0),
 		       COALESCE(TABLE_COMMENT,''), COALESCE(ENGINE,'')
@@ -111,7 +118,7 @@ func collectMySQLDB(ctx context.Context, db *sql.DB, dbName, redactedDSN string)
 
 	total := len(tables)
 	for i, t := range tables {
-		logf(ctx, "[%s] 采集表 %d/%d: %s", dbName, i+1, total, t.Name)
+		Logf(ctx, "[%s] 采集表 %d/%d: %s", dbName, i+1, total, t.Name)
 		fillMySQLTable(ctx, db, dbName, t, redactedDSN)
 	}
 	database.Tables = tables
@@ -120,6 +127,12 @@ func collectMySQLDB(ctx context.Context, db *sql.DB, dbName, redactedDSN string)
 
 func fillMySQLTable(ctx context.Context, db *sql.DB, dbName string, t *schema.Table, redactedDSN string) {
 	// columns
+	Logf(ctx, "[mysql] [collect] %s", `
+		SELECT COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, COLUMN_KEY,
+		       COALESCE(COLUMN_DEFAULT,''), EXTRA, COALESCE(COLUMN_COMMENT,'')
+		FROM information_schema.COLUMNS
+		WHERE TABLE_SCHEMA=? AND TABLE_NAME=?
+		ORDER BY ORDINAL_POSITION`)
 	colRows, err := db.QueryContext(ctx, `
 		SELECT COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, COLUMN_KEY,
 		       COALESCE(COLUMN_DEFAULT,''), EXTRA, COALESCE(COLUMN_COMMENT,'')
@@ -127,7 +140,7 @@ func fillMySQLTable(ctx context.Context, db *sql.DB, dbName string, t *schema.Ta
 		WHERE TABLE_SCHEMA=? AND TABLE_NAME=?
 		ORDER BY ORDINAL_POSITION`, dbName, t.Name)
 	if err != nil {
-		logf(ctx, "[mysql] columns error %s.%s: %v", dbName, t.Name, err)
+		Logf(ctx, "[mysql] columns error %s.%s: %v", dbName, t.Name, err)
 		return
 	}
 	defer colRows.Close()
@@ -162,11 +175,12 @@ func fillMySQLTable(ctx context.Context, db *sql.DB, dbName string, t *schema.Ta
 				}
 			}
 		} else {
-			logf(ctx, "[mysql] sample row failed for %s.%s: %v", dbName, t.Name, err)
+			Logf(ctx, "[mysql] sample row failed for %s.%s: %v", dbName, t.Name, err)
 		}
 	}
 
 	// indexes and primary key (single SHOW INDEX query)
+	Logf(ctx, "[mysql] [collect] %s", "SHOW INDEX FROM "+quoteMySQL(t.Name))
 	idxRows, err := db.QueryContext(ctx, "SHOW INDEX FROM "+quoteMySQL(t.Name))
 	if err == nil {
 		defer idxRows.Close()
@@ -197,10 +211,16 @@ func fillMySQLTable(ctx context.Context, db *sql.DB, dbName string, t *schema.Ta
 			t.Indexes = append(t.Indexes, idx)
 		}
 	} else {
-		logf(ctx, "[mysql] index query failed for %s: %v", t.Name, err)
+		Logf(ctx, "[mysql] index query failed for %s: %v", t.Name, err)
 	}
 
 	// foreign keys
+	Logf(ctx, "[mysql] [collect] %s", `
+		SELECT k.CONSTRAINT_NAME, k.COLUMN_NAME,
+		       k.REFERENCED_TABLE_SCHEMA, k.REFERENCED_TABLE_NAME, k.REFERENCED_COLUMN_NAME
+		FROM information_schema.KEY_COLUMN_USAGE k
+		WHERE k.TABLE_SCHEMA=? AND k.TABLE_NAME=? AND k.REFERENCED_TABLE_NAME IS NOT NULL
+		ORDER BY k.CONSTRAINT_NAME, k.ORDINAL_POSITION`)
 	fkRows, err := db.QueryContext(ctx, `
 		SELECT k.CONSTRAINT_NAME, k.COLUMN_NAME,
 		       k.REFERENCED_TABLE_SCHEMA, k.REFERENCED_TABLE_NAME, k.REFERENCED_COLUMN_NAME
@@ -232,11 +252,15 @@ func fillMySQLTable(ctx context.Context, db *sql.DB, dbName string, t *schema.Ta
 			log.Printf("[mysql] rows iteration: %v", err)
 		}
 	} else {
-		logf(ctx, "[mysql] FK query failed for %s: %v", t.Name, err)
+		Logf(ctx, "[mysql] FK query failed for %s: %v", t.Name, err)
 	}
 
 	// fetch FK on_delete/on_update rules from REFERENTIAL_CONSTRAINTS
 	if len(t.ForeignKeys) > 0 {
+		Logf(ctx, "[mysql] [collect] %s", `
+			SELECT CONSTRAINT_NAME, DELETE_RULE, UPDATE_RULE
+			FROM information_schema.REFERENTIAL_CONSTRAINTS
+			WHERE CONSTRAINT_SCHEMA=? AND TABLE_NAME=?`)
 		ruleRows, err := db.QueryContext(ctx, `
 			SELECT CONSTRAINT_NAME, DELETE_RULE, UPDATE_RULE
 			FROM information_schema.REFERENTIAL_CONSTRAINTS
@@ -268,6 +292,11 @@ func fillMySQLTable(ctx context.Context, db *sql.DB, dbName string, t *schema.Ta
 // collectMySQLOpStats 从 performance_schema 采集表级 IO 统计。
 // 如果 performance_schema 不可用（如 TDSQL 分布式版本或关闭了该功能），静默跳过。
 func collectMySQLOpStats(ctx context.Context, db *sql.DB, dbName string, t *schema.Table) {
+	Logf(ctx, "[mysql] [collect] %s", `
+		SELECT COALESCE(SUM(count_read), 0),
+		       COALESCE(SUM(count_write), 0)
+		FROM performance_schema.table_io_waits_summary_by_table
+		WHERE object_schema = ? AND object_name = ?`)
 	row := db.QueryRowContext(ctx, `
 		SELECT COALESCE(SUM(count_read), 0),
 		       COALESCE(SUM(count_write), 0)
@@ -276,7 +305,7 @@ func collectMySQLOpStats(ctx context.Context, db *sql.DB, dbName string, t *sche
 
 	var countRead, countWrite int64
 	if err := row.Scan(&countRead, &countWrite); err != nil {
-		logf(ctx, "[mysql] performance_schema unavailable for %s.%s, skipping op stats", dbName, t.Name)
+		Logf(ctx, "[mysql] performance_schema unavailable for %s.%s, skipping op stats", dbName, t.Name)
 		return
 	}
 	t.OpStats = &schema.OpStats{
@@ -364,7 +393,7 @@ func (mysqlConnector) ExecQuery(ctx context.Context, opts query.ExecuteOpts) (*q
 	// Set max execution time if timeout specified
 	if opts.Timeout > 0 {
 		if _, err := db.ExecContext(ctx, fmt.Sprintf("SET SESSION max_execution_time=%d", opts.Timeout*1000)); err != nil {
-			logf(ctx, "[mysql] set max_execution_time failed: %v (query will still run without timeout guard)", err)
+			Logf(ctx, "[mysql] set max_execution_time failed: %v (query will still run without timeout guard)", err)
 		}
 	}
 

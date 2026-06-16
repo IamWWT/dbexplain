@@ -104,7 +104,7 @@ func (esConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instance, e
 			continue
 		}
 		count++
-		logf(ctx, "[es] 采集索引 %d/%d: %s", count, total, indexName)
+		Logf(ctx, "[es] 采集索引 %d/%d: %s", count, total, indexName)
 		t := &schema.Table{
 			Name:   indexName,
 			Engine: "elasticsearch",
@@ -149,6 +149,8 @@ func (esConnector) ExecQuery(ctx context.Context, opts query.ExecuteOpts) (*quer
 
 	// Detect JSON native query → route to _search
 	sql := strings.TrimSpace(opts.SQL)
+	logSQL := TruncateSQL(opts.SQL)
+	Logf(ctx, "[elasticsearch] [execute] %s", logSQL)
 	if len(sql) > 0 && (sql[0] == '{' || sql[0] == '[') {
 		return esSearchQuery(ctx, host, port, scheme, opts)
 	}

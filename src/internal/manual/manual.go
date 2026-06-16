@@ -60,6 +60,7 @@ func PrintHelp() {
 			"    dbexplain repl                 Interactive REPL mode (DSL + multi-source)\n"+
 			"  Utility:\n"+
 			"    dbexplain list                 List all configured databases\n"+
+			"    dbexplain check                Validate config file and test connections\n"+
 			"    dbexplain encrypt <file>       Encrypt .env config with machine fingerprint\n"+
 			"  Help:\n"+
 			"    dbexplain <dbtype>             Database-specific reference (e.g. mysql, redis)\n"+
@@ -75,6 +76,7 @@ func PrintHelp() {
 			"    dbexplain repl                 Interactive REPL mode (DSL + multi-source)\n"+
 			"  Utility:\n"+
 			"    dbexplain list                 List all configured databases\n"+
+			"    dbexplain check                Validate config file and test connections\n"+
 			"    dbexplain encrypt <file>       Encrypt .env config with machine fingerprint\n"+
 			"  Help:\n"+
 			"    dbexplain <dbtype>             Database-specific reference (e.g. mysql, redis)\n"+
@@ -106,7 +108,8 @@ func PrintHelp() {
 			"  --context <dir>, --cache <f>  AI context / delta scan\n"+
 			"  --log-dir <dir>, -timeout d   Logs / timeout (default /var/log/dbexplain, 20s)\n"+
 			"  --conn N                     Max concurrent connections (default 10)\n"+
-			"  --language zh|en, --version   Language / version\n\n",
+			"  --language zh|en, --version   Language / version\n"+
+			"  --sql-log-max-len N           Max SQL log length in chars (default 5000)\n\n",
 		"Flags (dbexplain [flags]):\n"+
 			"  -dsn, -env, -config                 Input sources\n"+
 			"  -include, -exclude, -label          Filter by type/label/key\n"+
@@ -114,7 +117,8 @@ func PrintHelp() {
 			"  --context <dir>, --cache <f>  AI context / delta scan\n"+
 			"  --log-dir <dir>, -timeout d   Logs / timeout (default /var/log/dbexplain, 20s)\n"+
 			"  --conn N                     Max concurrent connections (default 10)\n"+
-			"  --language zh|en, --version   Language / version\n\n",
+			"  --language zh|en, --version   Language / version\n"+
+			"  --sql-log-max-len N           Max SQL log length in chars (default 5000)\n\n",
 	))
 
 	fmt.Fprint(out, p(

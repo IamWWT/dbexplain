@@ -72,7 +72,7 @@ Core philosophy: **deterministic facts only — LLMs consume structured IR exter
 |----------|--------|----------|:-------:|:-----:|:----:|:---:|------------|
 | **Relational** | MySQL | `mysql://` | ✅ | ✅ SQL | ✅ | ✅ | FK, indexes, column comment inference |
 | | PostgreSQL | `postgres://` | ✅ | ✅ SQL | ✅ | ✅ | Multi-schema, row counts, SSL configurable |
-| | GaussDB | `gaussdb://` | ✅ | ✅ SQL | ✅ | ✅ | PostgreSQL-protocol compatible |
+| | GaussDB | `gaussdb://` | ✅ | ✅ SQL | ✅ | ✅ | Separate connector, Oracle-compatible mode |
 | | SQLite | `sqlite://` | ✅ | ✅ SQL | ✅ | ✅ | Pure Go driver, no CGO |
 | | Oracle | `oracle://` `oracles://` | ✅ | ✅ SQL | ✅ | ✅ | FK/indexes/PK, TLS, 12c+ FETCH FIRST required |
 | **Analytical** | ClickHouse | `clickhouse://` | ✅ | ✅ SQL | ✅ | ✅ | Sort / partition / primary keys |

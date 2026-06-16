@@ -70,7 +70,7 @@
 |------|--------|------|:----------:|:----:|:--------:|:---:|------|
 | **关系型** | MySQL | `mysql://` | ✅ | ✅ SQL | ✅ | ✅ | 外键、索引、字段注释推断 |
 | | PostgreSQL | `postgres://` | ✅ | ✅ SQL | ✅ | ✅ | 多 Schema、行数统计、SSL 可配 |
-| | GaussDB | `gaussdb://` | ✅ | ✅ SQL | ✅ | ✅ | PostgreSQL 协议兼容 |
+| | GaussDB | `gaussdb://` | ✅ | ✅ SQL | ✅ | ✅ | 独立连接器，Oracle 兼容模式 |
 | | SQLite | `sqlite://` | ✅ | ✅ SQL | ✅ | ✅ | 纯 Go 驱动，无 CGO |
 | | Oracle | `oracle://` `oracles://` | ✅ | ✅ SQL | ✅ | ✅ | 外键/索引/主键、TLS、12c+ 需 FETCH FIRST |
 | **分析型** | ClickHouse | `clickhouse://` | ✅ | ✅ SQL | ✅ | ✅ | 排序键 / 分区键 / 主键 |

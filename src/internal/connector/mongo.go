@@ -38,7 +38,7 @@ func (mongoConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instance
 		return nil, fmt.Errorf("mongodb: database name required in DSN (e.g. mongodb://.../mydb)")
 	}
 
-	logf(ctx, "[mongo] connect start: %s", d.Redacted())
+	Logf(ctx, "[mongo] connect start: %s", d.Redacted())
 
 	clientOpts := options.Client().
 		ApplyURI(d.Raw).
@@ -54,33 +54,33 @@ func (mongoConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instance
 		disCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		defer cancel()
 		if err := client.Disconnect(disCtx); err != nil {
-			logf(ctx, "[mongo] disconnect error: %v", err)
+			Logf(ctx, "[mongo] disconnect error: %v", err)
 		}
 	}()
 
 	pingCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	logf(ctx, "[mongo] ping...")
+	Logf(ctx, "[mongo] ping...")
 	if err := client.Ping(pingCtx, readpref.Primary()); err != nil {
 		return nil, schema.NewDBError(d.Redacted(), d.DBName, "", "ping", err)
 	}
-	logf(ctx, "[mongo] ping ok")
+	Logf(ctx, "[mongo] ping ok")
 
 	db := client.Database(d.DBName)
 
 	colCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	logf(ctx, "[mongo] list collections: %s", d.DBName)
+	Logf(ctx, "[mongo] list collections: %s", d.DBName)
 	collections, err := db.ListCollectionNames(colCtx, bson.D{})
 	if err != nil {
 		return nil, schema.NewDBError(d.Redacted(), d.DBName, "", "list collections", err)
 	}
-	logf(ctx, "[mongo] collections found: db=%s count=%d", d.DBName, len(collections))
+	Logf(ctx, "[mongo] collections found: db=%s count=%d", d.DBName, len(collections))
 
 	database := &schema.Database{Name: d.DBName}
 	total := len(collections)
 	for i, collName := range collections {
-		logf(ctx, "[mongo] 采集集合 %d/%d: %s", i+1, total, collName)
+		Logf(ctx, "[mongo] 采集集合 %d/%d: %s", i+1, total, collName)
 		table := collectMongoCollectionMeta(ctx, db, collName)
 		database.Tables = append(database.Tables, table)
 	}
@@ -91,7 +91,7 @@ func (mongoConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instance
 		Label:     d.Label,
 		Databases: []*schema.Database{database},
 	}
-	logf(ctx, "[mongo] collect done")
+	Logf(ctx, "[mongo] collect done")
 	return inst, nil
 }
 
@@ -122,6 +122,9 @@ func (mongoConnector) ExecQuery(ctx context.Context, opts query.ExecuteOpts) (*q
 	if spec.Find != "" && spec.Aggregate != "" {
 		return nil, fmt.Errorf("READ_ONLY_VIOLATION: specify either \"find\" or \"aggregate\", not both")
 	}
+
+	logSQL := TruncateSQL(opts.SQL)
+	Logf(ctx, "[mongo] [execute] %s", logSQL)
 
 	if opts.DSN.DBName == "" {
 		return nil, fmt.Errorf("mongo query: database name required in DSN")
@@ -294,7 +297,7 @@ func collectMongoCollectionMeta(ctx context.Context, db *mongo.Database, collNam
 	estCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	if n, err := coll.EstimatedDocumentCount(estCtx); err != nil {
-		logf(ctx, "[mongo] estimated count failed for %s.%s: %v", db.Name(), collName, err)
+		Logf(ctx, "[mongo] estimated count failed for %s.%s: %v", db.Name(), collName, err)
 	} else {
 		t.RowCount = n
 	}

@@ -89,7 +89,7 @@ func (redisConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instance
 	defer rdb.Close()
 
 	if isCluster && d.DBName != "" && d.DBName != "0" {
-		logf(ctx, "[redis] WARNING: cluster mode only supports db0, ignoring requested DB %s", d.DBName)
+		Logf(ctx, "[redis] WARNING: cluster mode only supports db0, ignoring requested DB %s", d.DBName)
 	}
 
 	pingCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
@@ -113,13 +113,13 @@ func (redisConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instance
 	infoMap := aggregateInfo(ctx, rdb, isCluster)
 
 	// ── 流式扫描并聚合 key 模式 ──
-	logf(ctx, "[redis] start scanning keys (cluster=%v)...", isCluster)
+	Logf(ctx, "[redis] start scanning keys (cluster=%v)...", isCluster)
 	families := streamScanAndGroup(ctx, rdb, isCluster)
-	logf(ctx, "[redis] scan finished, %d unique patterns", len(families))
+	Logf(ctx, "[redis] scan finished, %d unique patterns", len(families))
 
 	// ── 批量分析每个模式 ──
 	for i, fam := range families {
-		logf(ctx, "[redis] analyze pattern %d/%d: %s", i+1, len(families), fam.Pattern)
+		Logf(ctx, "[redis] analyze pattern %d/%d: %s", i+1, len(families), fam.Pattern)
 		t := buildFamilyTable(ctx, rdb, fam)
 		dbEntry.Tables = append(dbEntry.Tables, t)
 	}
@@ -135,7 +135,7 @@ func (redisConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instance
 func aggregateInfo(ctx context.Context, rdb redis.UniversalClient, isCluster bool) map[string]string {
 	info, err := rdb.Info(ctx, "server", "keyspace", "memory", "stats").Result()
 	if err != nil {
-		logf(ctx, "[redis] INFO failed: %v", err)
+		Logf(ctx, "[redis] INFO failed: %v", err)
 		return map[string]string{}
 	}
 	infoMap := parseRedisInfo(info)
@@ -244,7 +244,7 @@ func streamScanAndGroup(ctx context.Context, rdb redis.UniversalClient, isCluste
 					}
 					totalScanned++
 					if totalScanned%100 == 0 {
-						logf(ctx, "[redis] scanned %d keys across cluster, %d patterns so far", totalScanned, len(aggregates))
+						Logf(ctx, "[redis] scanned %d keys across cluster, %d patterns so far", totalScanned, len(aggregates))
 					}
 				}
 				return iter.Err()
@@ -267,7 +267,7 @@ func streamScanAndGroup(ctx context.Context, rdb redis.UniversalClient, isCluste
 			}
 			totalScanned++
 			if totalScanned%100 == 0 {
-				logf(ctx, "[redis] scanned %d keys, %d patterns so far", totalScanned, len(aggregates))
+				Logf(ctx, "[redis] scanned %d keys, %d patterns so far", totalScanned, len(aggregates))
 			}
 			if totalScanned >= maxScanKeys {
 				break
@@ -306,7 +306,7 @@ func buildFamilyTable(ctx context.Context, rdb redis.UniversalClient, fam family
 	memCmd := pipe.MemoryUsage(ctx, fam.Example, 0) // 0 表示不采样
 	_, err := pipe.Exec(ctx)
 	if err != nil {
-		logf(ctx, "[redis] pipeline failed for %s: %v", fam.Example, err)
+		Logf(ctx, "[redis] pipeline failed for %s: %v", fam.Example, err)
 		t.Comment = fmt.Sprintf("read error: %v", err)
 		return t
 	}
@@ -525,6 +525,9 @@ func (redisConnector) ExecQuery(ctx context.Context, opts query.ExecuteOpts) (*q
 	if !redisReadOps[cmd] {
 		return nil, fmt.Errorf("READ_ONLY_VIOLATION: redis command %q is not allowed (read-only only)", cmd)
 	}
+
+	logSQL := TruncateSQL(opts.SQL)
+	Logf(ctx, "[redis] [execute] %s", logSQL)
 
 	rdb, _, err := newRedisClient(opts.DSN)
 	if err != nil {

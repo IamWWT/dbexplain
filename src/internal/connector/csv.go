@@ -92,7 +92,7 @@ func (csvConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instance, 
 	for _, f := range files {
 		tbl, err := readCSVFile(f, delimiter, encoding)
 		if err != nil {
-			logf(ctx, "[csv] skip %s: %v", f, err)
+			Logf(ctx, "[csv] skip %s: %v", f, err)
 			continue
 		}
 		db.Tables = append(db.Tables, tbl)
@@ -116,6 +116,9 @@ func (csvConnector) ExecQuery(ctx context.Context, opts query.ExecuteOpts) (*que
 	if encoding == "" {
 		encoding = "utf-8"
 	}
+
+	logSQL := TruncateSQL(opts.SQL)
+	Logf(ctx, "[csv] [execute] %s", logSQL)
 
 	// Fast path: SELECT * [LIMIT N [OFFSET M]]
 	limit, offset := parseSelectStar(opts.SQL)

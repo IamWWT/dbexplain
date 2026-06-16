@@ -84,6 +84,7 @@
 | [`test/18-prometheus.md`](test/18-prometheus.md) | Prometheus 连接器测试（含 meta rows T29/T30） |
 | [`test/19-oracle-hive.md`](test/19-oracle-hive.md) | Oracle + Hive 连接器测试 |
 | [`test/20-cte-write-detection.md`](test/20-cte-write-detection.md) | CTE 写检测加固测试 |
+| [`test/21-check-command.md`](test/21-check-command.md) | check 子命令测试（配置验证+连通性） |
 | [`test/RESULTS.md`](test/RESULTS.md) | 全量测试结果汇总 |
 
 ## 七、资产文件
@@ -103,7 +104,7 @@
 |------|------|
 | [`RELEASE_WECHAT_v0.1.2.md`](RELEASE_WECHAT_v0.1.2.md) | v0.1.2 公众号发布文案 |
 | [`RELEASE_WECHAT_v0.1.6.md`](RELEASE_WECHAT_v0.1.6.md) | v0.1.6 公众号发布文案（Bug Bash：全局代码审计修复） |
-| [`RELEASE_WECHAT_v0.1.7.md`](RELEASE_WECHAT_v0.1.7.md) | v0.1.7 公众号发布文案（Prometheus meta 表 rows + CTE 写检测加固） |
+| [`RELEASE_WECHAT_v0.1.7.md`](RELEASE_WECHAT_v0.1.7.md) | v0.1.7 公众号发布文案（Prometheus meta 表 rows + CTE 写检测加固 + GaussDB Oracle 兼容） |
 | [`dbexplain_wechat_article.html`](dbexplain_wechat_article.html) | 微信公众号文章 HTML |
 
 ---

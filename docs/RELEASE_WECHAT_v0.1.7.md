@@ -1,6 +1,6 @@
-# dbexplain v0.1.7 发布：给 LLM 装上数据眼睛 + 安全审计闭环
+# dbexplain v0.1.7 发布：给 LLM 装上数据眼睛 + GaussDB Oracle 兼容 + 安全审计闭环
 
-> **Prometheus meta 表 `rows` 输出**：LLM Agent 不再"盲猜" metric 名，直接消费语义化样本数据做 NL→PromQL 匹配。同时完成全局代码审计，45 个发现，3 项修复。
+> **Prometheus meta 表 `rows` 输出**：LLM Agent 不再"盲猜" metric 名，直接消费语义化样本数据做 NL→PromQL 匹配。**GaussDB Oracle 兼容模式**：独立连接器让华为高斯数据库用户也能用上全部功能。同时完成全局代码审计，45 个发现，3 项修复。
 
 ---
 
@@ -18,7 +18,9 @@ v0.1.7 做的不是"新功能"，而是**让现有功能真正可用**：
 
 3. **🔧 代码审计 45 个发现** — 3 个 real fix（MongoDB `$facet` 子管道写绕过、Hive TLS 自动跳过验证、凭证泄露到 metrics），42 个确认误报或理论问题。
 
-> **诚实地说**：v0.1.7 功能变更不大。但它解决了两个 P0 阻塞问题——一个阻塞产品集成，一个阻塞安全合规。
+4. **🇨🇳 GaussDB Oracle 兼容模式适配** — 华为高斯数据库在 Oracle 兼容模式下 `::regclass` 转换、EXPLAIN BUFFERS、statement_timeout 均不可用。以前勉强跑通，出错了也不知道为什么。现在：独立连接器 + 自动降级 + 完整文档。
+
+> **诚实地说**：v0.1.7 功能变更不大。但它解决了两个 P0 阻塞问题——一个阻塞产品集成，一个阻塞安全合规，外加一个国内企业高频场景的兼容性痛点。
 
 ---
 
@@ -157,7 +159,55 @@ bash build.sh                         →  5平台全量构建通过
 
 ---
 
-## 4. 📊 版本演进
+## 4. 🇨🇳 GaussDB Oracle 兼容模式适配
+
+### 背景：为什么 GaussDB 值得单独做？
+
+在国内企业级市场，华为 GaussDB 是 PostgreSQL 兼容生态里**最特殊的那一个**。
+
+说它"PG 协议兼容"没错——它确实能用 `lib/pq` 驱动连。但 Oracle 兼容模式下差异多得让人头疼：
+
+| 差异 | 影响 |
+|------|------|
+| `::regclass` 类型转换不可用 | PG 标准写法，Oracle 模式报错 |
+| EXPLAIN 不支持 `BUFFERS` 选项 | PG 连接器的 EXPLAIN 查询直接失败 |
+| `statement_timeout` GUC 不识别 | 每次连接都报错到日志 |
+| `pg_database.datistemplate` 列缺失 | 数据库列表查询报错 |
+| 业务表不在 `public` schema | 每个表都要 `schema.tablename` 全限定 |
+
+以前所有这些差异都被**捂着**——PG 连接器勉强能跑，但各种报错被 `COALESCE` 或 `defer` 吞掉了，用户不知道 GaussDB 的支持其实是有问题的。
+
+### 解决：独立连接器 + 自动降级
+
+v0.1.7 的架构决策：**不给 PG 连接器加补丁，给 GaussDB 单独开一个**。
+
+```
+postgresConnector  →  Register("postgres")  →  EXPLAIN(BUFFERS) ✅
+                                                     ↓
+gaussdbConnector   →  Register("gaussdb")   →  EXPLAIN(无BUFFERS) ✅
+                    (新文件 gaussdb.go)       + ::regclass 自动规避
+                                             + datistemplate 自动回退
+                                             + 无 statement_timeout 噪音
+```
+
+**关键设计**：复用 `collectPGDB()`、`buildPGDSN()`、`executeSQLQuery()` 等包级函数，零代码重复。但 EXPLAIN 格式、超时设置、日志前缀各自独立。
+
+### 文档
+
+- 新增 `docs/databases/gaussdb.md` — 独立兼容性指南，包含 Oracle 模式说明、已验证兼容项列表、已知差异、分布式部署注意事项
+- CLI 帮助（`dbexplain gaussdb`）现在正确标注 GaussDB 的已知限制，不再混在 PG 文档里
+
+### 影响
+
+```
+GaussDB 用户：  ❌ 勉强跑通，报错被吞 →  ✅ 独立连接器，日志清晰
+                ❌ EXPLAIN 查询失败    →  ✅ 自动降级 FORMAT TEXT
+                ❌ 问题定位靠猜       →  ✅ 完整兼容性文档
+```
+
+---
+
+## 5. 📊 版本演进
 
 ```
 v0.0.2: 5 种数据源起步
@@ -166,14 +216,14 @@ v0.1.3: + DuckDB，双版本构建
 v0.1.4: + Prometheus 时序数据库
 v0.1.5: + Oracle + Hive，15 种，六层安全管道
 v0.1.6: Prometheus DSL 升级 + Bug Bash 21 项修复
-v0.1.7: 👁️ Prometheus meta 表 rows 输出 + CTE 写检测加固
+v0.1.7: 👁️ Prometheus meta 表 rows + CTE 写检测加固 + GaussDB Oracle 兼容
 ```
 
 **dbexplain — 15 种异构数据源的确定性上下文编译器：Schema 采集、只读查询、联邦 JOIN、安全审计，All in one 单二进制。**
 
 ---
 
-## 5. 快速试用
+## 6. 快速试用
 
 ```bash
 # 1. 查看 Prometheus _metrics 的 rows 数据
@@ -189,6 +239,9 @@ dbexplain execute -env --dsl "
 
 # 3. 采集完整 Schema（含 meta 表 rows）
 dbexplain -dsn 'prometheus://your-host:9090?label=prom' --json -o schema.json
+
+# 4. GaussDB Schema 采集（Oracle 兼容模式）
+dbexplain -dsn 'gaussdb://user:pass@host:25308/db?label=gauss-db&sslmode=disable' --human
 ```
 
 ---

@@ -137,6 +137,7 @@ INPUT ──→ COLLECT ──→ ANALYZE ──→ OUTPUT
 | `dbexplain collect` | `cmd/dbexplain/main.go` → `handleCollect()` | 显式 Schema 采集子命令 |
 | `dbexplain diff` | `cmd/dbexplain/diff.go` → `handleDiff()` | Schema 变更对比 |
 | `dbexplain list` | `internal/list/handler.go` → `handleList()` | 列出已配置 DSN |
+| `dbexplain check` | `internal/check/handler.go` → `Handle()` | 配置验证+连通性检测 |
 | `dbexplain all` | `internal/manual/` → `handleManual()` | 全部参考手册 |
 | `dbexplain <dbtype>` | `internal/manual/` → `handleManual()` | 专项手册（mysql/redis/...） |
 | `dbexplain encrypt` | `internal/encrypt/handler.go` → `handleEncrypt()` | 配置加密 |

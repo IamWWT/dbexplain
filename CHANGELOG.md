@@ -1,6 +1,6 @@
 # 变更日志
 
-## v0.1.7 (2026-06-16) — Prometheus Meta 表行输出 + CTE 写检测加固
+## v0.1.7 (2026-06-16) — Prometheus Meta 表行输出 + CTE 写检测加固 + GaussDB Oracle 兼容模式适配
 
 ### ✨ Prometheus meta 表行输出
 
@@ -10,6 +10,34 @@
 ### 🐛 CTE 写操作检测加固
 
 - **WITH + 主查询写操作拦截**: `WITH x AS (SELECT 1) INSERT INTO y VALUES (1)` 绕过只读校验的漏洞修复。三层加固：(1) WITH 检测提前到 AST 解析之前；(2) `containsCTEWrite()` 增加主查询体写动词检查；(3) 修复 `break` 在 `switch` + `for` 嵌套中只跳出 `switch` 的 Go 语义陷阱（改用 labeled break）。**优势**：消除 CTE 写操作绕过 sqlguard 的路径，增强只读安全防护的完备性。
+
+### 🔧 GaussDB Oracle 兼容模式全面适配
+
+- **独立 GaussDB 连接器** (`connector/gaussdb.go`): 从 `postgresConnector` 分离为独立的 `gaussdbConnector`，复用 `collectPGDB()`、`buildPGDSN()` 等包级函数实现零代码重复。注册 kind `"gaussdb"`，DSN 方案 `gaussdb://` 不变。
+- **EXPLAIN 格式适配**: GaussDB Oracle 兼容模式不支持 `BUFFERS` 选项，`wrapExplain()` 改为 `EXPLAIN (ANALYZE, FORMAT TEXT)`（PostgreSQL 保留 `BUFFERS`）。
+- **CLI 帮助更新**: `manual.go` 和 `db_sections.go` 中 PostgreSQL 和 GaussDB 分开说明，标注 GaussDB Oracle 兼容模式的已知限制。
+- **新增文档**: `docs/databases/gaussdb.md` — GaussDB 独立兼容性指南，包含 DSN 配置、Oracle 模式说明、已验证兼容项、已知差异、分布式注意事项。
+- **文档清理**: `COMPATIBILITY_GAUSSDB_TDSQL.md` 拆分为纯 TDSQL 内容，GaussDB 部分移至新文档。
+- **`datistemplate` 回退**: 当 `pg_database.datistemplate` 列缺失时（Oracle 兼容模式），自动回退到无该列的备用查询。
+
+### 🛠 `dbexplain check` 配置检查子命令
+
+- **新增 `dbexplain check`**: 验证 .env 配置文件格式、DSN 语法正确性、数据库连通性。支持 `--dsn`（重复）、`--config`（JSON）、`--timeout`、`--env` 参数。自动发现 .env.dbexplain，带密码脱敏的错误信息显示。退出码：全通过为 0，有失败项为 1。
+- **测试文档**: `docs/test/21-check-command.md` — 11 项端到端测试覆盖全部场景。
+
+### 📋 SQL 日志截断可配置化
+
+- **`--sql-log-max-len` 全局参数**: SQL 日志截断长度从硬编码 2000 改为默认 5000 字符，用户可通过全局 `--sql-log-max-len N` 指定。标注是字符（characters）而非行数（rows）。
+- **`connector.TruncateSQL()` 统一入口**: 提取重复截断逻辑到单一定义，所有 ~11 处截断点统一调用。新增 `connector.MaxSQLLogLen` 包级变量。
+- **单元测试**: 默认值、截断行为、自定义长度三项测试覆盖。
+
+### 📄 文档
+
+- **`docs/test/21-check-command.md`**: 新增 check 子命令 11 项测试用例。
+- **`docs/CODE_MAP.md`**: 新增 `dbexplain check` → `internal/check/handler.go` 映射。
+- **`docs/file_index.md`**: 新增 `test/21-check-command.md` 条目。
+- **`docs/test/RESULTS.md`**: 更新 v0.1.7 测试结果。
+- **`.env.dbexplain.example`**: 补充 GaussDB DSN 配置示例。
 
 ## v0.1.6 (2026-06-12) — Bug Bash + Prometheus DSL 内核升级
 

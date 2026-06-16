@@ -50,6 +50,7 @@ func (sqliteConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instanc
 	inst := &schema.Instance{DSN: d.Redacted(), Kind: "sqlite", Label: d.Label}
 	database := &schema.Database{Name: path}
 
+	Logf(ctx, "[sqlite] [collect] %s", `SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name`)
 	rows, err := db.QueryContext(ctx, `SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name`)
 	if err != nil {
 		return nil, schema.NewDBError(d.Redacted(), "", "", "list tables", err)
@@ -70,7 +71,7 @@ func (sqliteConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instanc
 
 	total := len(tableNames)
 	for i, tn := range tableNames {
-		logf(ctx, "[sqlite] 采集表 %d/%d: %s", i+1, total, tn)
+		Logf(ctx, "[sqlite] 采集表 %d/%d: %s", i+1, total, tn)
 		t := &schema.Table{Name: tn}
 		fillSQLiteTable(ctx, db, t, d.Redacted())
 		database.Tables = append(database.Tables, t)
@@ -81,9 +82,10 @@ func (sqliteConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instanc
 
 func fillSQLiteTable(ctx context.Context, db *sql.DB, t *schema.Table, redactedDSN string) {
 	// columns
+	Logf(ctx, "[sqlite] [collect] %s", fmt.Sprintf("PRAGMA table_info('%s')", strings.ReplaceAll(t.Name, "'", "''")))
 	colRows, err := db.QueryContext(ctx, fmt.Sprintf("PRAGMA table_info('%s')", strings.ReplaceAll(t.Name, "'", "''")))
 	if err != nil {
-		logf(ctx, "[sqlite] columns error %s: %v", t.Name, err)
+		Logf(ctx, "[sqlite] columns error %s: %v", t.Name, err)
 		return
 	}
 	defer colRows.Close()
@@ -113,6 +115,7 @@ func fillSQLiteTable(ctx context.Context, db *sql.DB, t *schema.Table, redactedD
 	}
 
 	// row count
+	Logf(ctx, "[sqlite] [collect] %s", fmt.Sprintf(`SELECT COUNT(*) FROM "%s"`, strings.ReplaceAll(t.Name, `"`, `""`)))
 	if err := db.QueryRowContext(ctx, fmt.Sprintf(`SELECT COUNT(*) FROM "%s"`, strings.ReplaceAll(t.Name, `"`, `""`))).Scan(&t.RowCount); err != nil {
 		log.Printf("[sqlite] row count for %s: %v", t.Name, err)
 	}
@@ -126,11 +129,12 @@ func fillSQLiteTable(ctx context.Context, db *sql.DB, t *schema.Table, redactedD
 				}
 			}
 		} else {
-			logf(ctx, "[sqlite] sample row failed for %s: %v", t.Name, err)
+			Logf(ctx, "[sqlite] sample row failed for %s: %v", t.Name, err)
 		}
 	}
 
 	// indexes
+	Logf(ctx, "[sqlite] [collect] %s", fmt.Sprintf("PRAGMA index_list('%s')", strings.ReplaceAll(t.Name, "'", "''")))
 	idxRows, err := db.QueryContext(ctx, fmt.Sprintf("PRAGMA index_list('%s')", strings.ReplaceAll(t.Name, "'", "''")))
 	if err == nil {
 		defer idxRows.Close()
@@ -142,6 +146,7 @@ func fillSQLiteTable(ctx context.Context, db *sql.DB, t *schema.Table, redactedD
 				continue
 			}
 			idx.Unique = unique == 1
+			Logf(ctx, "[sqlite] [collect] %s", fmt.Sprintf("PRAGMA index_info('%s')", strings.ReplaceAll(idx.Name, "'", "''")))
 			icols, err := db.QueryContext(ctx, fmt.Sprintf("PRAGMA index_info('%s')", strings.ReplaceAll(idx.Name, "'", "''")))
 			if err == nil {
 				for icols.Next() {
@@ -164,6 +169,7 @@ func fillSQLiteTable(ctx context.Context, db *sql.DB, t *schema.Table, redactedD
 	}
 
 	// foreign keys
+	Logf(ctx, "[sqlite] [collect] %s", fmt.Sprintf("PRAGMA foreign_key_list('%s')", strings.ReplaceAll(t.Name, "'", "''")))
 	fkRows, err := db.QueryContext(ctx, fmt.Sprintf("PRAGMA foreign_key_list('%s')", strings.ReplaceAll(t.Name, "'", "''")))
 	if err == nil {
 		defer fkRows.Close()

@@ -87,6 +87,7 @@ func (duckdbConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instanc
 
 	// Enumerate all user tables/views via information_schema
 	// DuckDB has no multi-database concept, single "main" schema
+	Logf(ctx, "[duckdb] [collect] %s", "SELECT table_name, table_type FROM information_schema.tables WHERE table_schema NOT IN ('information_schema', 'pg_catalog', 'temp') ORDER BY table_name")
 	rows, err := db.QueryContext(ctx, `
 		SELECT table_name, table_type
 		FROM information_schema.tables
@@ -112,10 +113,10 @@ func (duckdbConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instanc
 
 	total := len(tableNames)
 	for i, tn := range tableNames {
-		logf(ctx, "[duckdb] 采集表 %d/%d: %s", i+1, total, tn)
+		Logf(ctx, "[duckdb] 采集表 %d/%d: %s", i+1, total, tn)
 		t, err := collectDuckDBTable(ctx, db, tn, d.Redacted())
 		if err != nil {
-			logf(ctx, "[duckdb] skip table %s: %v", tn, err)
+			Logf(ctx, "[duckdb] skip table %s: %v", tn, err)
 			continue
 		}
 		database.Tables = append(database.Tables, t)
@@ -129,6 +130,7 @@ func collectDuckDBTable(ctx context.Context, db *sql.DB, tableName, redactedDSN 
 	t := &schema.Table{Name: tableName}
 
 	// Step 1: Column info via pragma_table_info (most reliable for DuckDB)
+	Logf(ctx, "[duckdb] [collect] %s", `SELECT name, type, "notnull", dflt_value, pk FROM pragma_table_info('%s')`)
 	colRows, err := db.QueryContext(ctx, fmt.Sprintf(
 		`SELECT name, type, "notnull", dflt_value, pk FROM pragma_table_info('%s')`,
 		strings.ReplaceAll(tableName, "'", "''")))
@@ -169,6 +171,7 @@ func collectDuckDBTable(ctx context.Context, db *sql.DB, tableName, redactedDSN 
 	}
 
 	// Step 2: Row count
+	Logf(ctx, "[duckdb] [collect] %s", `SELECT COUNT(*) FROM "%s"`)
 	if err := db.QueryRowContext(ctx, fmt.Sprintf(
 		`SELECT COUNT(*) FROM "%s"`,
 		strings.ReplaceAll(tableName, `"`, `""`)),
@@ -185,11 +188,12 @@ func collectDuckDBTable(ctx context.Context, db *sql.DB, tableName, redactedDSN 
 				}
 			}
 		} else {
-			logf(ctx, "[duckdb] sample row failed for %s: %v", tableName, err)
+			Logf(ctx, "[duckdb] sample row failed for %s: %v", tableName, err)
 		}
 	}
 
 	// Step 4: Indexes via duckdb_constraints()
+	Logf(ctx, "[duckdb] [collect] %s", "SELECT constraint_type, constraint_text FROM duckdb_constraints() WHERE table_name = '%s'")
 	constraintRows, err := db.QueryContext(ctx, fmt.Sprintf(`
 		SELECT constraint_type, constraint_text
 		FROM duckdb_constraints()
@@ -234,7 +238,7 @@ func collectDuckDBTable(ctx context.Context, db *sql.DB, tableName, redactedDSN 
 			log.Printf("[duckdb] rows iteration: %v", err)
 		}
 	} else {
-		logf(ctx, "[duckdb] constraints query failed for %s: %v", tableName, err)
+		Logf(ctx, "[duckdb] constraints query failed for %s: %v", tableName, err)
 	}
 
 	return t, nil
@@ -282,6 +286,7 @@ func extractFKRef(text string) string {
 
 func fetchDuckDBSampleRow(ctx context.Context, db *sql.DB, table string) (map[string]string, error) {
 	q := fmt.Sprintf(`SELECT * FROM "%s" LIMIT 1`, strings.ReplaceAll(table, `"`, `""`))
+	Logf(ctx, "[duckdb] [collect] %s", `SELECT * FROM "%s" LIMIT 1`)
 	rows, err := db.QueryContext(ctx, q)
 	if err != nil {
 		return nil, err

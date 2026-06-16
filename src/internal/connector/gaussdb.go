@@ -53,10 +53,12 @@ func (gaussdbConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instan
 	if d.DBName != "" {
 		dbNames = []string{d.DBName}
 	} else {
+		Logf(ctx, "[gaussdb] [collect] %s", `SELECT datname FROM pg_database WHERE NOT datistemplate AND datallowconn ORDER BY datname`)
 		rows, err := db.QueryContext(ctx, `SELECT datname FROM pg_database WHERE NOT datistemplate AND datallowconn ORDER BY datname`)
 		if err != nil {
 			// GaussDB Oracle 兼容模式可能没有 datistemplate 列，回退到简单查询
-			logf(ctx, "[gaussdb] datistemplate query failed, trying fallback: %v", err)
+			Logf(ctx, "[gaussdb] datistemplate query failed, trying fallback: %v", err)
+			Logf(ctx, "[gaussdb] [collect] %s", `SELECT datname FROM pg_database WHERE datallowconn ORDER BY datname`)
 			rows, err = db.QueryContext(ctx, `SELECT datname FROM pg_database WHERE datallowconn ORDER BY datname`)
 			if err != nil {
 				return nil, schema.NewDBError(d.Redacted(), "", "", "list databases", err)
@@ -75,10 +77,10 @@ func (gaussdbConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instan
 	}
 
 	for _, dbName := range dbNames {
-		logf(ctx, "[gaussdb] collecting database %s", dbName)
+		Logf(ctx, "[gaussdb] collecting database %s", dbName)
 		database, err := collectPGDB(ctx, db, dbName, d.Redacted())
 		if err != nil {
-			logf(ctx, "error in db %s: %v", dbName, err)
+			Logf(ctx, "error in db %s: %v", dbName, err)
 			continue
 		}
 		inst.Databases = append(inst.Databases, database)
@@ -103,7 +105,7 @@ func (gaussdbConnector) ExecQuery(ctx context.Context, opts query.ExecuteOpts) (
 	// SET 失败时仅记录日志，查询继续运行（应用层超时兜底）
 	if opts.Timeout > 0 {
 		if _, err := db.ExecContext(ctx, fmt.Sprintf("SET statement_timeout = '%ds'", opts.Timeout)); err != nil {
-			logf(ctx, "[gaussdb] set statement_timeout failed: %v (query will still run without timeout guard)", err)
+			Logf(ctx, "[gaussdb] set statement_timeout failed: %v (query will still run without timeout guard)", err)
 		}
 	}
 

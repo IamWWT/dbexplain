@@ -59,6 +59,7 @@ func (clickhouseConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Ins
 	if d.DBName != "" && d.DBName != "default" {
 		dbNames = []string{d.DBName}
 	} else {
+		Logf(ctx, "[clickhouse] [collect] %s", "SELECT name FROM system.databases WHERE name NOT IN ('system','information_schema','INFORMATION_SCHEMA') ORDER BY name")
 		rows, err := cli.queryRows(ctx, "SELECT name FROM system.databases WHERE name NOT IN ('system','information_schema','INFORMATION_SCHEMA') ORDER BY name")
 		if err != nil {
 			return nil, schema.NewDBError(d.Redacted(), "", "", "list databases", err)
@@ -69,10 +70,10 @@ func (clickhouseConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Ins
 	}
 
 	for _, dbName := range dbNames {
-		logf(ctx, "[clickhouse] collecting database %s", dbName)
+		Logf(ctx, "[clickhouse] collecting database %s", dbName)
 		database, err := collectCHDB(ctx, cli, dbName, d.Redacted())
 		if err != nil {
-			logf(ctx, "error in db %s: %v", dbName, err)
+			Logf(ctx, "error in db %s: %v", dbName, err)
 			continue
 		}
 		inst.Databases = append(inst.Databases, database)
@@ -82,6 +83,7 @@ func (clickhouseConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Ins
 
 func collectCHDB(ctx context.Context, cli *chHTTP, dbName, redactedDSN string) (*schema.Database, error) {
 	database := &schema.Database{Name: dbName}
+	Logf(ctx, "[clickhouse] [collect] %s", "SELECT name, engine, toUInt64(total_rows), toUInt64(total_bytes), comment FROM system.tables WHERE database='%s' AND engine NOT LIKE '%%View%%' ORDER BY name")
 	rows, err := cli.queryRows(ctx, fmt.Sprintf(`
 		SELECT name, engine, toUInt64(total_rows), toUInt64(total_bytes), comment
 		FROM system.tables WHERE database='%s' AND engine NOT LIKE '%%View%%'
@@ -98,7 +100,7 @@ func collectCHDB(ctx context.Context, cli *chHTTP, dbName, redactedDSN string) (
 	}
 	total := len(tables)
 	for i, t := range tables {
-		logf(ctx, "[%s] 采集表 %d/%d: %s", dbName, i+1, total, t.Name)
+		Logf(ctx, "[%s] 采集表 %d/%d: %s", dbName, i+1, total, t.Name)
 		fillCHTable(ctx, cli, dbName, t, redactedDSN)
 		database.Tables = append(database.Tables, t)
 	}
@@ -113,6 +115,7 @@ func collectCHDB(ctx context.Context, cli *chHTTP, dbName, redactedDSN string) (
 // ClickHouse 的 tables 字段是内核解析数组，无需正则提取，无文本解析误差。
 func collectCHOpStats(ctx context.Context, cli *chHTTP, dbName string, tables []*schema.Table) {
 	// 批量查询所有表的 query_count（最近 7 天）
+	Logf(ctx, "[clickhouse] [collect] %s", "SELECT table_name, count() AS cnt, avg(query_duration_ms) AS avg_ms FROM system.query_log ARRAY JOIN tables AS table_name WHERE type = 'QueryFinish' AND event_time > now() - INTERVAL 7 DAY AND tables IS NOT NULL AND database = '%s' GROUP BY table_name")
 	rows, err := cli.queryRows(ctx, fmt.Sprintf(`
 		SELECT table_name, count() AS cnt, avg(query_duration_ms) AS avg_ms
 		FROM system.query_log
@@ -123,7 +126,7 @@ func collectCHOpStats(ctx context.Context, cli *chHTTP, dbName string, tables []
 		  AND database = '%s'
 		GROUP BY table_name`, escCH(dbName)))
 	if err != nil {
-		logf(ctx, "[clickhouse] query_log unavailable for %s: %v", dbName, err)
+		Logf(ctx, "[clickhouse] query_log unavailable for %s: %v", dbName, err)
 		return
 	}
 
@@ -145,13 +148,14 @@ func collectCHOpStats(ctx context.Context, cli *chHTTP, dbName string, tables []
 }
 
 func fillCHTable(ctx context.Context, cli *chHTTP, dbName string, t *schema.Table, redactedDSN string) {
+	Logf(ctx, "[clickhouse] [collect] %s", "SELECT name, type, default_kind, default_expression, comment, is_in_primary_key, is_in_sorting_key, is_in_partition_key FROM system.columns WHERE database='%s' AND table='%s' ORDER BY position")
 	rows, err := cli.queryRows(ctx, fmt.Sprintf(`
 		SELECT name, type, default_kind, default_expression, comment,
 		       is_in_primary_key, is_in_sorting_key, is_in_partition_key
 		FROM system.columns WHERE database='%s' AND table='%s'
 		ORDER BY position`, escCH(dbName), escCH(t.Name)))
 	if err != nil {
-		logf(ctx, "[clickhouse] columns error %s: %v", t.Name, err)
+		Logf(ctx, "[clickhouse] columns error %s: %v", t.Name, err)
 		return
 	}
 	var colsWithoutComment []*schema.Column
@@ -183,11 +187,12 @@ func fillCHTable(ctx context.Context, cli *chHTTP, dbName string, t *schema.Tabl
 				}
 			}
 		} else {
-			logf(ctx, "[clickhouse] sample row failed for %s.%s: %v", dbName, t.Name, err)
+			Logf(ctx, "[clickhouse] sample row failed for %s.%s: %v", dbName, t.Name, err)
 		}
 	}
 
 	// 表元数据
+	Logf(ctx, "[clickhouse] [collect] %s", "SELECT partition_key, sorting_key, primary_key FROM system.tables WHERE database='%s' AND name='%s'")
 	meta, err := cli.queryRows(ctx, fmt.Sprintf(`
 		SELECT partition_key, sorting_key, primary_key
 		FROM system.tables WHERE database='%s' AND name='%s'`, escCH(dbName), escCH(t.Name)))
@@ -311,6 +316,8 @@ func (clickhouseConnector) ExecQuery(ctx context.Context, opts query.ExecuteOpts
 
 	// Build query with optional max_execution_time
 	sql := opts.SQL
+	logSQL := TruncateSQL(opts.SQL)
+	Logf(ctx, "[clickhouse] [execute] %s", logSQL)
 	if opts.Timeout > 0 {
 		sql = fmt.Sprintf("%s SETTINGS max_execution_time=%d", sql, opts.Timeout)
 	}

@@ -70,7 +70,7 @@ func (qdrantConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instanc
 	database := &schema.Database{Name: "default"}
 	total := len(collections)
 	for i, collName := range collections {
-		logf(ctx, "[qdrant] 采集集合 %d/%d: %s", i+1, total, collName)
+		Logf(ctx, "[qdrant] 采集集合 %d/%d: %s", i+1, total, collName)
 		t := &schema.Table{
 			Name:    collName,
 			Comment: "vector collection",
@@ -115,6 +115,9 @@ func (qdrantConnector) ExecQuery(ctx context.Context, opts query.ExecuteOpts) (*
 	if spec.Scroll == "" && spec.Count == "" {
 		return nil, fmt.Errorf("READ_ONLY_VIOLATION: qdrant query must specify \"scroll\" or \"count\"")
 	}
+
+	logSQL := TruncateSQL(opts.SQL)
+	Logf(ctx, "[qdrant] [execute] %s", logSQL)
 
 	host := opts.DSN.Host
 	if host == "" {
