@@ -1,5 +1,5 @@
 # ============================================================
-# dbexplain v0.1.5 — One-click installer (Windows PowerShell)
+# dbexplain v0.1.7 — One-click installer (Windows PowerShell)
 # ============================================================
 # Installs the dbexplain binary and optionally deploys
 # the AI Agent skill.
@@ -28,7 +28,7 @@ param(
     [switch]$Help
 )
 
-$VERSION = "v0.1.5"
+$VERSION = "v0.1.7"
 $REPO = "IamWWT/dbexplain"
 $TOOL_NAME = "dbexplain"
 $EditionSuffix = if ($Edition) { $Edition } else { "" }  # resolved below
@@ -69,7 +69,7 @@ Examples:
   .\install.ps1 -NoSkill          # Tool only, no skill
   .\install.ps1 -Edition duckdb   # Install DuckDB edition
   .\install.ps1 -Offline          # Offline: you provide the binary
-  .\install.ps1 -Offline "C:\downloads\dbexplain-v0.1.5-windows-amd64-std-upx.tar.gz"  # Tarball
+  .\install.ps1 -Offline "C:\downloads\dbexplain-v0.1.7-windows-amd64-std-upx.tar.gz"  # Tarball
   .\install.ps1 -Offline "C:\downloads\dbexplain-windows-amd64-std.exe"   # Raw exe
   .\install.ps1 -Update           # Update to latest version
 

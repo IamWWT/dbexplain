@@ -238,6 +238,25 @@ select_edition() {
     TARBALL_DIR="$(get_tarball_dirname "$BINARY_SUFFIX")"
 }
 
+# ── Offline edition detection ──
+# Auto-detect edition from tarball/binary filename (e.g. *-std-*, *-duckdb-*)
+detect_offline_edition() {
+    local path="$1"
+    local fname
+    fname="$(basename "$path")"
+    case "$fname" in
+        *-duckdb-*|*-duckdb)
+            echo "duckdb"
+            ;;
+        *-std-*|*-std)
+            echo "std"
+            ;;
+        *)
+            echo ""
+            ;;
+    esac
+}
+
 # ── Resolve install directory ──
 resolve_install_dir() {
     if [ "$OS" = "darwin" ]; then
@@ -348,6 +367,13 @@ install_offline() {
         local found
         found="$(tar -tzf "$tarball_path" | grep -E 'dbexplain(-[^-]+){2,}(\.exe)?$' | grep -v '/$' | head -1)"
         if [ -n "$found" ]; then
+            # Auto-detect edition from found binary name (e.g. dbexplain-linux-amd64-duckdb → duckdb)
+            local detected_edition
+            detected_edition="$(echo "$found" | grep -oE '(std|duckdb)')"
+            if [ -n "$detected_edition" ]; then
+                BINARY_SUFFIX="$detected_edition"
+                info "Auto-detected edition from binary: ${BINARY_SUFFIX}"
+            fi
             tar -xzf "$tarball_path" -C "$tmp" "$found"
             local extracted="${tmp}/${found}"
             chmod +x "$extracted"
@@ -582,6 +608,17 @@ main() {
     echo ""
 
     detect_platform
+
+    # Offline mode: auto-detect edition from filename, skip interactive prompt
+    if [ "$OFFLINE_MODE" = true ] && [ -z "$EDITION" ] && [ -n "$OFFLINE_PATH" ]; then
+        local detected
+        detected="$(detect_offline_edition "$OFFLINE_PATH")"
+        if [ -n "$detected" ]; then
+            EDITION="$detected"
+            info "Auto-detected edition: ${EDITION}"
+        fi
+    fi
+
     select_edition
     resolve_install_dir
 
