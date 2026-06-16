@@ -21,6 +21,10 @@
 - **`datistemplate` 回退**: 当 `pg_database.datistemplate` 列缺失时（Oracle 兼容模式），自动回退到无该列的备用查询。
 - **`oracleCompatible=true` DSN 参数**: 新增可选参数，设置后跳过 PG 模式专属的 `datistemplate` 查询，直接使用 Oracle 兼容模式的备选查询。避免日志中出现无效查询失败记录。示例：`gaussdb://user:pwd@host:5432/mydb?oracleCompatible=true&label=my-gauss-oracle`。
 
+### 🐛 DSN 密码特殊字符兼容
+
+- **`#` 自动转义**: DSN 密码中的 `#` 字符（如 `redis://:pwd#123@host`）被 Go `url.Parse` 解释为 URL fragment 导致解析失败。新增 `escapeUserinfoHash()` 预处理，自动将 userinfo 段内 `#` 转义为 `%23`。修复涉及全 connector。（ISSUE-091）
+
 ### 🛠 `dbexplain check` 配置检查子命令
 
 - **新增 `dbexplain check`**: 验证 .env 配置文件格式、DSN 语法正确性、数据库连通性。支持 `--dsn`（重复）、`--config`（JSON）、`--timeout`、`--env` 参数。自动发现 .env.dbexplain，带密码脱敏的错误信息显示。退出码：全通过为 0，有失败项为 1。

@@ -21,6 +21,10 @@
 - **`datistemplate` fallback**: When the `pg_database.datistemplate` column is missing (Oracle-compatible mode), automatically falls back to a query without that column.
 - **`oracleCompatible=true` DSN param**: New optional parameter. When set, skips the PG-mode `datistemplate` query and goes directly to the Oracle-compatible fallback. Avoids failed query log noise. Example: `gaussdb://user:pwd@host:5432/mydb?oracleCompatible=true&label=my-gauss-oracle`.
 
+### 🐛 DSN Password Special Character Handling
+
+- **`#` auto-escape**: `#` in DSN passwords (e.g. `redis://:pwd#123@host`) was interpreted as a URL fragment by Go's `url.Parse`, causing parse failures. Added `escapeUserinfoHash()` preprocessing to auto-escape `#` to `%23` in the userinfo segment. Fix applies to all connectors. (ISSUE-091)
+
 ### 🛠 `dbexplain check` Configuration Validation
 
 - **New `dbexplain check` subcommand**: Validates .env config file format, DSN syntax correctness, and database connectivity. Supports `--dsn` (repeatable), `--config` (JSON), `--timeout`, `--env` flags. Auto-discovers .env.dbexplain with password-masked error messages. Exit code: 0 for all pass, 1 for any failure.

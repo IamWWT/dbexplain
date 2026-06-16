@@ -27,6 +27,9 @@ type DSN struct {
 
 // ParseDSN accepts: scheme://[user[:pass]@]host[:port][/dbname][?label=alias]
 func ParseDSN(raw string) (*DSN, error) {
+	// Pre-escape # in userinfo — Go url.Parse treats bare # as URL fragment.
+	// Without this, passwords containing # (e.g. "pwd#123") break parsing.
+	raw = escapeUserinfoHash(raw)
 	u, err := url.Parse(raw)
 	if err != nil {
 		return nil, fmt.Errorf("invalid DSN: %w", err)
@@ -223,4 +226,27 @@ func (d *DSN) DSNParam(key string) string {
 		}
 	}
 	return ""
+}
+
+// escapeUserinfoHash escapes bare # to %23 in the userinfo portion
+// (between :// and last @) of a DSN URL. Go's url.Parse treats # as a
+// fragment delimiter, which breaks passwords containing #.
+func escapeUserinfoHash(raw string) string {
+	// Find :// as scheme separator
+	afterScheme := strings.Index(raw, "://")
+	if afterScheme < 0 {
+		return raw
+	}
+	start := afterScheme + 3
+	// Find the last @ (userinfo ends at last @ before host)
+	lastAt := strings.LastIndex(raw, "@")
+	if lastAt < 0 || lastAt <= start {
+		return raw
+	}
+	userinfo := raw[start:lastAt]
+	if !strings.Contains(userinfo, "#") {
+		return raw
+	}
+	escaped := strings.ReplaceAll(userinfo, "#", "%23")
+	return raw[:start] + escaped + raw[lastAt:]
 }

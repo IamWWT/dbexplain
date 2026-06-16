@@ -982,6 +982,18 @@
       "file": "src/internal/connector/gaussdb.go, postgres.go, executor.go, manual, docs",
       "created": "2026-06-16",
       "labels": ["v0.1.7", "bug", "gaussdb", "connector"]
+    },
+    {
+      "id": "ISSUE-091",
+      "title": "DSN 密码含 # 字符导致 url.Parse 解析崩溃",
+      "status": "closed",
+      "closed": "2026-06-16",
+      "priority": "medium",
+      "category": "bug",
+      "description": "用户在 DSN 密码中使用 # 字符（如 redis://:pwd#123@host:6379/0）时，Go url.Parse 将 # 解释为 URL fragment 起始符，导致解析失败。修复：在 ParseDSN 入口增加 escapeUserinfoHash() 预处理，自动将 userinfo 中的 # 转义为 %23 再传入 url.Parse。@ 字符取最后一个 @ 的行为天然正确，无需处理。",
+      "file": "src/internal/dsn/dsn.go",
+      "created": "2026-06-16",
+      "labels": ["v0.1.7", "bug", "dsn", "security"]
     }
   ]
 }

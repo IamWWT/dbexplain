@@ -174,6 +174,9 @@ func TestRedacted(t *testing.T) {
 		{raw: "postgres://user:passw@rd@host:5432/db", want: "postgres://{dbuser}:{dbpassword}@host:5432/db"},
 		{raw: "redis://:p@ssw@rd@host:6379/0", want: "redis://{dbpassword}@host:6379/0"},
 		{raw: "mysql://user:p%40ss@host/db", want: "mysql://{dbuser}:{dbpassword}@host/db"}, // URL-encoded @
+		// # in password — auto-escaped by ParseDSN
+		{raw: "mysql://root:p#ss@localhost:9433/testdb", want: "mysql://{dbuser}:{dbpassword}@localhost:9433/testdb"},
+		{raw: "redis://:pwd#123@localhost:6379/0", want: "redis://{dbpassword}@localhost:6379/0"},
 	}
 
 	for _, tt := range tests {
@@ -207,5 +210,37 @@ func TestParseDSN_EdgeCases(t *testing.T) {
 	}
 	if d.Password != "" {
 		t.Errorf("Password: got %q, want empty", d.Password)
+	}
+}
+
+func TestParseDSN_HashInPassword(t *testing.T) {
+	tests := []struct {
+		raw      string
+		wantPass string
+		wantHost string
+		wantKind string
+	}{
+		{raw: "mysql://root:p#ss@localhost:9433/testdb", wantPass: "p#ss", wantHost: "localhost", wantKind: "mysql"},
+		{raw: "postgres://user:pwd#123@host:5432/db", wantPass: "pwd#123", wantHost: "host", wantKind: "postgres"},
+		{raw: "redis://:pwd#123@localhost:6379/0", wantPass: "pwd#123", wantHost: "localhost", wantKind: "redis"},
+		{raw: "gaussdb://u:p#ss@host:5432/db?label=test", wantPass: "p#ss", wantHost: "host", wantKind: "gaussdb"},
+		{raw: "clickhouse://default:P#ss@host:8123/db", wantPass: "P#ss", wantHost: "host", wantKind: "clickhouse"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.raw, func(t *testing.T) {
+			d, err := ParseDSN(tt.raw)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if d.Password != tt.wantPass {
+				t.Errorf("Password: got %q, want %q", d.Password, tt.wantPass)
+			}
+			if d.Host != tt.wantHost {
+				t.Errorf("Host: got %q, want %q", d.Host, tt.wantHost)
+			}
+			if d.Kind != tt.wantKind {
+				t.Errorf("Kind: got %q, want %q", d.Kind, tt.wantKind)
+			}
+		})
 	}
 }
