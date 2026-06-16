@@ -289,8 +289,37 @@ func main() {
 
 			logger.Printf("[采集中] %s", label)
 			start := time.Now()
-			inst, err := connector.Collect(collectCtx, rawDSN)
-			elapsed := time.Since(start)
+
+			// Run collection in sub-goroutine with timeout guard.
+			// lib/pq context cancellation is unreliable when the server is unresponsive
+			// (GaussDB Oracle compat mode is known to hang). A select+channel pattern
+			// ensures we don't hang forever — the sub-goroutine may leak but the
+			// process continues.
+			type collectOutcome struct {
+				inst *schema.Instance
+				err  error
+			}
+			outcome := make(chan collectOutcome, 1)
+			go func() {
+				subInst, subErr := connector.Collect(collectCtx, rawDSN)
+				outcome <- collectOutcome{subInst, subErr}
+			}()
+
+			var (
+				inst    *schema.Instance
+				elapsed time.Duration
+			)
+			select {
+			case res := <-outcome:
+				inst = res.inst
+				err = res.err // err 来自外层 parsed,err:=ParseDSN()—已判空，可安全复用
+				elapsed = time.Since(start)
+			case <-collectCtx.Done():
+				elapsed = time.Since(start)
+				logger.Printf("[超时] %s (超过 %v) — 连接无响应，跳过", label, *perDSNTimeout)
+				metricsCollector.Record(label, parsed.Kind, false, elapsed, 0, 0, "timeout: collect hung")
+				return
+			}
 
 			if err != nil {
 				metricsCollector.Record(label, parsed.Kind, false, elapsed, 0, 0, config.SanitizeErr(err).Error())
@@ -723,8 +752,37 @@ func handleCollect(args []string) {
 
 			logger.Printf("[采集中] %s", label)
 			start := time.Now()
-			inst, err := connector.Collect(collectCtx, rawDSN)
-			elapsed := time.Since(start)
+
+			// Run collection in sub-goroutine with timeout guard.
+			// lib/pq context cancellation is unreliable when the server is unresponsive
+			// (GaussDB Oracle compat mode is known to hang). A select+channel pattern
+			// ensures we don't hang forever — the sub-goroutine may leak but the
+			// process continues.
+			type collectOutcome struct {
+				inst *schema.Instance
+				err  error
+			}
+			outcome := make(chan collectOutcome, 1)
+			go func() {
+				subInst, subErr := connector.Collect(collectCtx, rawDSN)
+				outcome <- collectOutcome{subInst, subErr}
+			}()
+
+			var (
+				inst    *schema.Instance
+				elapsed time.Duration
+			)
+			select {
+			case res := <-outcome:
+				inst = res.inst
+				err = res.err // err 来自外层 parsed,err:=ParseDSN()—已判空，可安全复用
+				elapsed = time.Since(start)
+			case <-collectCtx.Done():
+				elapsed = time.Since(start)
+				logger.Printf("[超时] %s (超过 %v) — 连接无响应，跳过", label, *perDSNTimeout)
+				metricsCollector.Record(label, parsed.Kind, false, elapsed, 0, 0, "timeout: collect hung")
+				return
+			}
 
 			if err != nil {
 				metricsCollector.Record(label, parsed.Kind, false, elapsed, 0, 0, config.SanitizeErr(err).Error())
