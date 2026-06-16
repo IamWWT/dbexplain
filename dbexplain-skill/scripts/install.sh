@@ -2,7 +2,7 @@
 set -e
 
 # ============================================================
-# dbexplain v0.1.6 — One-click installer (Linux / macOS)
+# dbexplain v0.1.7 — One-click installer (Linux / macOS)
 # ============================================================
 # Installs the dbexplain binary system-wide and optionally
 # deploys the AI Agent skill to supported platforms.
@@ -21,7 +21,7 @@ set -e
 #   bash install.sh --help              Show this help
 # ============================================================
 
-VERSION="v0.1.6"
+VERSION="v0.1.7"
 REPO="IamWWT/dbexplain"
 TOOL_NAME="dbexplain"
 
@@ -79,7 +79,7 @@ Examples:
   bash install.sh --no-skill               # Tool only, no skill
   bash install.sh --edition duckdb         # Install DuckDB edition
   bash install.sh --offline                # Offline: you provide the binary
-  bash install.sh --offline ./dbexplain-v0.1.6-linux-amd64-std-upx.tar.gz  # Tarball
+  bash install.sh --offline ./dbexplain-v0.1.7-linux-amd64-std-upx.tar.gz  # Tarball
   bash install.sh --offline ./dbexplain-linux-amd64-std         # Raw binary
   bash install.sh --update                 # Update to latest version
 
@@ -316,7 +316,7 @@ install_online() {
 # ── Offline install: use provided path, tarball, or prompt user ──
 # Accepts both:
 #   - Raw binary:  dbexplain-linux-amd64-std
-#   - Tarball:     dbexplain-v0.1.6-std-upx.tar.gz (auto-detected by .tar.gz suffix)
+#   - Tarball:     dbexplain-v0.1.7-std-upx.tar.gz (auto-detected by .tar.gz suffix)
 install_offline() {
     echo ""
 

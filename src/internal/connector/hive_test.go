@@ -61,14 +61,14 @@ func TestBuildHiveConfig(t *testing.T) {
 			name: "TLS enabled",
 			dsn:  "hives://user:pass@host:10000/db?label=test",
 			check: func(t *testing.T, d *dsn.DSN, cfg gohive.Config) {
-				if !cfg.SSLInsecureSkip {
-					t.Error("SSLInsecureSkip should be true")
+				if cfg.SSLInsecureSkip {
+					t.Error("SSLInsecureSkip should be false (secure default)")
 				}
 				if cfg.TLSConfig == nil {
 					t.Fatal("TLSConfig should not be nil")
 				}
-				if !cfg.TLSConfig.InsecureSkipVerify {
-					t.Error("TLSConfig.InsecureSkipVerify should be true")
+				if cfg.TLSConfig != nil && cfg.TLSConfig.InsecureSkipVerify {
+					t.Error("TLSConfig.InsecureSkipVerify should be false (secure default)")
 				}
 			},
 		},
@@ -421,10 +421,24 @@ func TestCollectHiveSchema_QueryError(t *testing.T) {
 func TestHiveConfigTLS(t *testing.T) {
 	d, _ := dsn.ParseDSN("hives://host:10000/db?label=tlstest")
 	cfg := buildHiveConfig(d)
-	if !cfg.SSLInsecureSkip {
-		t.Error("SSLInsecureSkip should be true for hives://")
+	if cfg.SSLInsecureSkip {
+		t.Error("SSLInsecureSkip should be false for hives:// without explicit skip-verify")
+	}
+	if cfg.TLSConfig != nil && cfg.TLSConfig.InsecureSkipVerify {
+		t.Error("TLSConfig.InsecureSkipVerify should be false for hives:// without explicit skip-verify")
 	}
 	_ = cfg.TLSConfig // should be *tls.Config
+}
+
+func TestHiveConfigTLSWithSkipVerify(t *testing.T) {
+	d, _ := dsn.ParseDSN("hives://host:10000/db?sslinsecureskipverify=true&label=tlstest-skip")
+	cfg := buildHiveConfig(d)
+	if !cfg.SSLInsecureSkip {
+		t.Error("SSLInsecureSkip should be true when sslinsecureskipverify=true")
+	}
+	if cfg.TLSConfig == nil || !cfg.TLSConfig.InsecureSkipVerify {
+		t.Error("TLSConfig.InsecureSkipVerify should be true when sslinsecureskipverify=true")
+	}
 }
 
 func TestHiveConfigSSLDeps(t *testing.T) {

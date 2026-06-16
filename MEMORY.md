@@ -226,17 +226,17 @@ wc -c /tmp/perf-prev-1.json /tmp/perf-curr-1.json
 | 5 | **已完成 (v0.1.1)** | 结构整理 + 统一 DSL 查询入口 + AST 级安全升级 + Schema Diff + 窗口函数 |
 | 6 | **已完成 (v0.1.2)** | DSL 联邦查询 + REPL + Build Tags + 9.5MB UPX |
 | 7 | 规划中 | LLM Ecosystem Integration + MCP Server + 企业特性 |
-| 8 | **进行中 (v0.1.6)** | Bug Bash — 全量代码审计修复：nil panic + 静默吞错 + 错误消息质量 + 防御编码 |
+| 8 | **已完成 (v0.1.6)** | Bug Bash — 全量代码审计修复：nil panic + 静默吞错 + 错误消息质量 + 防御编码 |
+| 9 | **已完成 (v0.1.7)** | Prometheus meta 表 rows 输出 + CTE 写检测加固 |
 
-当前版本：**v0.1.6** — Bug Bash 代码审计修复（nil panic、静默吞错、防御编码）
+当前版本：**v0.1.7** — Prometheus meta 表 rows 输出 + CTE 写检测加固
 
-## 最新测试 (v0.1.6)
+## 最新测试 (v0.1.7)
 
 - **编译验证**: `go build ./...` + `go vet ./...` + `go test ./... -count=1` 全部通过
 - **选择性编译**: `bash build.sh minimal mysql,postgres` 通过
-- **版本确认**: `dbexplain --version` → `v0.1.6`
+- **版本确认**: `dbexplain --version` → `v0.1.7`
 - **全量构建**: `bash build.sh` (prod, 5 平台) 通过
-- **代码审计修复**: 21 项修复，20 个源文件修改，不改变架构和功能
-- **全链路闭环测试**: docs/test 全部场景通过，涵盖 15/16 DSNs、SQL/NoSQL/文件/Prometheus 所有数据源（std 版，CGO_ENABLED=0）
-- **DuckDB 版**: 本轮回合未测试（需 CGO 交叉编译环境），结果沿用 v0.1.5
-- **已知问题**: Qdrant DSN `qdrant://:Qdrant@2026!@localhost:9426` 因 `@` 在密码中导致 URL 解析失败（预存问题，需 URL 编码 `%40`）
+- **Prometheus meta rows**: `_labels` 输出 206 行 label 名，`_metrics` 输出 644 行（metric/type/help/unit）
+- **CTE 写检测**: WITH + 主查询写操作（`WITH x AS (...) INSERT ...`）正确拦截
+- **全链路闭环测试**: docs/test 全部场景通过

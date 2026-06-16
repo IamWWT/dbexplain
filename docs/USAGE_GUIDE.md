@@ -23,15 +23,15 @@
 
 ### Linux
 
-> v0.1.6+ 以 tarball（`.tar.gz`）形式发布，每个 tarball 对应一个平台。
+> v0.1.7+ 以 tarball（`.tar.gz`）形式发布，每个 tarball 对应一个平台。
 
 ```bash
 # 下载对应平台的 tarball（linux amd64 标准版，UPX 压缩）
-wget https://github.com/IamWWT/dbexplain/releases/download/v0.1.6/dbexplain-v0.1.6-linux-amd64-std-upx.tar.gz
+wget https://github.com/IamWWT/dbexplain/releases/download/v0.1.7/dbexplain-v0.1.7-linux-amd64-std-upx.tar.gz
 
 # 解压出二进制
-tar -xzf dbexplain-v0.1.6-linux-amd64-std-upx.tar.gz
-cp dbexplain-v0.1.6-linux-amd64-std-upx/dbexplain-linux-amd64-std ./dbexplain
+tar -xzf dbexplain-v0.1.7-linux-amd64-std-upx.tar.gz
+cp dbexplain-v0.1.7-linux-amd64-std-upx/dbexplain-linux-amd64-std ./dbexplain
 chmod +x dbexplain
 ./dbexplain --version
 ```
@@ -43,11 +43,11 @@ chmod +x dbexplain
 ```bash
 # Intel 芯片用 darwin-amd64，M1/M2 芯片用 darwin-arm64
 # macOS 交叉编译不支持 UPX，使用 -noupx 包
-wget https://github.com/IamWWT/dbexplain/releases/download/v0.1.6/dbexplain-v0.1.6-darwin-arm64-std-noupx.tar.gz
+wget https://github.com/IamWWT/dbexplain/releases/download/v0.1.7/dbexplain-v0.1.7-darwin-arm64-std-noupx.tar.gz
 
 # 解压
-tar -xzf dbexplain-v0.1.6-darwin-arm64-std-noupx.tar.gz
-cp dbexplain-v0.1.6-darwin-arm64-std-noupx/dbexplain-darwin-arm64-std ./dbexplain
+tar -xzf dbexplain-v0.1.7-darwin-arm64-std-noupx.tar.gz
+cp dbexplain-v0.1.7-darwin-arm64-std-noupx/dbexplain-darwin-arm64-std ./dbexplain
 chmod +x dbexplain
 ./dbexplain --version
 ```
@@ -58,11 +58,11 @@ chmod +x dbexplain
 
 ```powershell
 # PowerShell
-Invoke-WebRequest https://github.com/IamWWT/dbexplain/releases/download/v0.1.6/dbexplain-v0.1.6-windows-amd64-std-upx.tar.gz -OutFile dbexplain-v0.1.6-windows-amd64-std-upx.tar.gz
+Invoke-WebRequest https://github.com/IamWWT/dbexplain/releases/download/v0.1.7/dbexplain-v0.1.7-windows-amd64-std-upx.tar.gz -OutFile dbexplain-v0.1.7-windows-amd64-std-upx.tar.gz
 
 # 解压（Windows 10+ 内置 tar）
-tar -xzf dbexplain-v0.1.6-windows-amd64-std-upx.tar.gz
-copy dbexplain-v0.1.6-windows-amd64-std-upx\dbexplain-windows-amd64-std.exe dbexplain.exe
+tar -xzf dbexplain-v0.1.7-windows-amd64-std-upx.tar.gz
+copy dbexplain-v0.1.7-windows-amd64-std-upx\dbexplain-windows-amd64-std.exe dbexplain.exe
 .\dbexplain.exe --version
 ```
 

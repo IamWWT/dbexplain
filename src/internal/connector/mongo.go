@@ -168,15 +168,42 @@ func (mongoConnector) ExecQuery(ctx context.Context, opts query.ExecuteOpts) (*q
 		if pipeline == nil {
 			pipeline = []map[string]interface{}{}
 		}
-		// Reject write stages in aggregation pipeline
+		// Reject write stages in aggregation pipeline (with $facet recursion)
 		mongoWriteStages := map[string]bool{
 			"$out": true, "$merge": true, "$indexStats": true,
 		}
-		for _, stage := range pipeline {
-			for key := range stage {
+		var checkStage func(stage map[string]interface{}) error
+		checkStage = func(stage map[string]interface{}) error {
+			for key, val := range stage {
 				if mongoWriteStages[strings.ToLower(key)] {
-					return nil, fmt.Errorf("READ_ONLY_VIOLATION: write stage %q is not allowed in aggregation pipeline", key)
+					return fmt.Errorf("READ_ONLY_VIOLATION: write stage %q is not allowed in aggregation pipeline", key)
 				}
+				// $facet contains nested sub-pipelines; recursively check each one
+				if strings.ToLower(key) == "$facet" {
+					if facetMap, ok := val.(map[string]interface{}); ok {
+						for _, facetVal := range facetMap {
+							subPipeline, ok := facetVal.([]interface{})
+							if !ok {
+								continue
+							}
+							for _, rawSubStage := range subPipeline {
+								subStage, ok := rawSubStage.(map[string]interface{})
+								if !ok {
+									continue
+								}
+								if err := checkStage(subStage); err != nil {
+									return err
+								}
+							}
+						}
+					}
+				}
+			}
+			return nil
+		}
+		for _, stage := range pipeline {
+			if err := checkStage(stage); err != nil {
+				return nil, err
 			}
 		}
 		// Append $limit to pipeline if specified

@@ -147,7 +147,7 @@ INPUT ──→ COLLECT ──→ ANALYZE ──→ OUTPUT
 
 | 测试文档 | 覆盖内容 | 关联源码 |
 |---------|---------|---------|
-| `docs/test/RESULTS.md` | 测试结果报告 v0.1.6 | — |
+| `docs/test/RESULTS.md` | 测试结果报告 v0.1.7 | — |
 | `docs/test/01-environment.md` | 环境准备、DSN 模板 | `internal/dsn/dsn.go` |
 | `docs/test/02-schema-collection.md` | 全数据源 Schema 采集 | 所有 `connector/*.go` |
 | `docs/test/03-execute-sql.md` | SQL 查询执行 | `execute.go`, `sqlguard/` |

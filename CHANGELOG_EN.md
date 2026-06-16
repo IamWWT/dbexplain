@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.1.7 (2026-06-15) — Prometheus Meta Table Rows + CTE Write Detection Hardening
+
+### ✨ Prometheus Meta Table Rows
+
+- **`_labels` / `_metrics` JSON output now includes `rows`**: The Prometheus connector's meta tables now populate `rows` in `--json` output — `_labels` (~206 label names) and `_metrics` (~644 metric metadata entries with type/help/unit). **Advantage**: LLM Agents (VeinMap, etc.) can consume semantic sample data for NL→PromQL matching instead of only seeing table names and column structures. This unblocks the P0 requirement for Agent-based natural language querying.
+- **`SampleRows` generic schema field**: `schema.Table` gains `SampleRows []map[string]any`, auto-exported as `rows` by the JSON renderer. **Advantage**: A general extension point — any connector can populate sample data rows for Agent consumption in the future.
+
+### 🐛 CTE Write Detection Hardening
+
+- **WITH + main query write interception**: Fixed a vulnerability where `WITH x AS (SELECT 1) INSERT INTO y VALUES (1)` bypassed read-only validation. Three-layer fix: (1) WITH detection moved before AST parsing; (2) `containsCTEWrite()` now checks the main query body for write verbs; (3) Fixed `break` in nested `switch` + `for` only breaking the `switch` (Go semantics) — replaced with labeled `break`. **Advantage**: Eliminates the CTE write bypass path against sqlguard, strengthening read-only security completeness.
+
 ## v0.1.6 (2026-06-12) — Bug Bash + Prometheus DSL Core Upgrade
 
 ### ✨ Prometheus DSL Core Upgrade

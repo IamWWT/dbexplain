@@ -144,6 +144,7 @@ func collectLabels(ctx context.Context, baseURL string, d *dsn.DSN, timeout int,
 			{Name: "name", Type: "string", Comment: "label name"},
 		},
 		Comment: fmt.Sprintf("%d labels — query via PromQL: label_values()", len(resp.Data)),
+		SampleRows: labelsToSampleRows(resp.Data),
 	})
 	return nil
 }
@@ -190,6 +191,11 @@ func collectMetricsMeta(ctx context.Context, baseURL string, d *dsn.DSN, timeout
 		}
 	}
 
+	samples := make([]map[string]any, len(rows))
+	for i, r := range rows {
+		samples[i] = map[string]any{"metric": r.Metric, "type": r.Type, "help": r.Help, "unit": r.Unit}
+	}
+
 	db.Tables = append(db.Tables, &schema.Table{
 		Name:    "_metrics",
 		Engine:  "prometheus_meta",
@@ -200,10 +206,22 @@ func collectMetricsMeta(ctx context.Context, baseURL string, d *dsn.DSN, timeout
 			{Name: "help", Type: "string"},
 			{Name: "unit", Type: "string"},
 		},
+		SampleRows: samples,
 	})
 	return nil
 }
 
+
+
+// labelsToSampleRows converts a label name list from Prometheus /api/v1/labels
+// into schema.SampleRows format for the _labels meta table.
+func labelsToSampleRows(data []string) []map[string]any {
+	samples := make([]map[string]any, len(data))
+	for i, label := range data {
+		samples[i] = map[string]any{"name": label}
+	}
+	return samples
+}
 // ── ExecQuery (PromQL) ──
 
 func (promConnector) ExecQuery(ctx context.Context, opts query.ExecuteOpts) (*query.QueryResult, error) {

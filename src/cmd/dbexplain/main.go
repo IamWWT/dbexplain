@@ -266,7 +266,7 @@ func main() {
 			elapsed := time.Since(start)
 
 			if err != nil {
-				metricsCollector.Record(label, parsed.Kind, false, elapsed, 0, 0, err.Error())
+				metricsCollector.Record(label, parsed.Kind, false, elapsed, 0, 0, config.SanitizeErr(err).Error())
 				logger.Printf("skip %s: %v", parsed.Redacted(), err)
 				return
 			}
@@ -696,7 +696,7 @@ func handleCollect(args []string) {
 			elapsed := time.Since(start)
 
 			if err != nil {
-				metricsCollector.Record(label, parsed.Kind, false, elapsed, 0, 0, err.Error())
+				metricsCollector.Record(label, parsed.Kind, false, elapsed, 0, 0, config.SanitizeErr(err).Error())
 				logger.Printf("skip %s: %v", parsed.Redacted(), err)
 				return
 			}

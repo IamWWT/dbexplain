@@ -417,6 +417,7 @@ MASK_COLUMNS=password_hash=***,card_number=****-****-****-****,email=REDACTED
 
 | 版本 | 变更 |
 |------|------|
+| v0.1.7 | Prometheus meta 表 rows 输出；CTE 写检测加固（WITH + 主查询写拦截） |
 | v0.1.6 | Bug Bash：全局代码审计，21 项防御性修复（nil panic、静默吞错、错误质量） |
 | v0.1.5 | DENY_COLUMNS + SELECT * 后置列剥离（StripDeniedColumns），不再拦截报错 |
 | v0.1.4 | Prometheus DenyTables/DenyColumns 支持（CheckNative PromQL 解析）；DSL IR 三层安全（Layer 1 预编译检查） |

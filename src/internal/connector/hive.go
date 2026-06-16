@@ -270,9 +270,16 @@ func buildHiveConfig(d *dsn.DSN) gohive.Config {
 	if v := d.DSNParam("sslca"); v != "" {
 		cfg.SSLCAFile = v
 	}
-	if d.TLS || d.DSNParam("sslinsecureskipverify") == "true" {
+	if d.TLS {
+		cfg.SSLInsecureSkip = d.TLSSkipVerify
+		cfg.TLSConfig = &tls.Config{InsecureSkipVerify: d.TLSSkipVerify}
+	}
+	if d.DSNParam("sslinsecureskipverify") == "true" {
 		cfg.SSLInsecureSkip = true
-		cfg.TLSConfig = &tls.Config{InsecureSkipVerify: true}
+		if cfg.TLSConfig == nil {
+			cfg.TLSConfig = &tls.Config{}
+		}
+		cfg.TLSConfig.InsecureSkipVerify = true
 	}
 
 	return cfg

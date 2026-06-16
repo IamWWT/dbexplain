@@ -71,6 +71,52 @@ promethe my-prom  prometheus   _labels            name                 206
 promethe my-prom  prometheus   _metrics           metric, type...      657
 ```
 
+### JSON 输出中的 `rows`（v0.1.7+）
+
+`dbexplain -dsn 'prometheus://...' --json` 输出中，`_labels` 和 `_metrics` 表包含 `rows` 字段，携带全量样本数据供 LLM Agent 消费：
+
+```json
+{
+  "name": "_labels",
+  "columns": [{"name": "name", "type": "text"}],
+  "row_count": 206,
+  "rows": [
+    {"name": "__name__"},
+    {"name": "instance"},
+    {"name": "job"},
+    ...
+  ]
+}
+```
+
+```json
+{
+  "name": "_metrics",
+  "columns": [
+    {"name": "metric", "type": "text"},
+    {"name": "type", "type": "text"},
+    {"name": "help", "type": "text"},
+    {"name": "unit", "type": "text"}
+  ],
+  "row_count": 657,
+  "rows": [
+    {"metric": "up", "type": "gauge", "help": "The up scrape metric", "unit": ""},
+    {"metric": "node_cpu_seconds_total", "type": "counter", "help": "CPU time", "unit": "seconds"},
+    ...
+  ]
+}
+```
+
+> **为什么 `--human` 不显示 `rows`？** 终端输出面向人类，聚焦表结构（列名、类型、行数）而非数据。JSON 输出面向 LLM Agent，Agent 需要样本数据做 NL→PromQL 语义匹配（知道有哪些 metric 名、type、help 描述）。
+
+> **设计架构**：
+> 1. **Schema 层**：`schema.Table.SampleRows []map[string]any` — 通用扩展点，任意连接器可填充
+> 2. **采集层**（`prometheus.go`）：`collectLabels()` / `collectMetricsMeta()` 在采集时填充数据
+> 3. **JSON 渲染层**（`render.go`）：`buildJSONResult()` 将 `SampleRows` 映射为 `rows`
+> 4. **只在 JSON 路径输出**：仅 `--json` 渲染 rows，终端/人类格式不渲染
+>
+> `map[string]any` 保持通用性 — _labels 只有 `name` 键，_metrics 有 `metric`/`type`/`help`/`unit` 四个键。
+
 ---
 
 ## PromQL 查询执行 (ExecQuery)

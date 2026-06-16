@@ -75,6 +75,9 @@ func TestValidate_RejectedWriteOps(t *testing.T) {
 		{"WITH ins AS (INSERT INTO t VALUES(1) RETURNING id) SELECT * FROM ins", "WITH CTE"},
 		{"WITH upd AS (UPDATE users SET status='banned' RETURNING id) SELECT * FROM upd", "WITH CTE"},
 		{"WITH a AS (INSERT INTO t VALUES(1)), b AS (SELECT 1) SELECT * FROM b", "WITH CTE"},
+		// CTE + main query write (WITH x AS (...) INSERT INTO y ...)
+		{"WITH x AS (SELECT 1) INSERT INTO y VALUES (1)", "WITH CTE"},
+		{"WITH x AS (SELECT 1), y AS (SELECT 2) DELETE FROM z", "WITH CTE"},
 		// SELECT INTO (PostgreSQL DDL write)
 		{"SELECT * INTO backup_users FROM users", "SELECT INTO"},
 		{"SELECT id, name INTO new_table FROM old_table WHERE created > NOW()-7", "SELECT INTO"},

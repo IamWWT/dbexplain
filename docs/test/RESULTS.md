@@ -1,9 +1,9 @@
-# 测试结果报告 v0.1.6
+# 测试结果报告 v0.1.7
 
-> 执行日期: 2026-06-12 (Bug Bash 闭环验证)
+> 执行日期: 2026-06-15 (v0.1.7 闭环验证)
 > 测试环境: Linux x86-64 (amd64), Go 1.26.1
 > 数据源: 16 个 (mysql, clickhouse, sqlite×2, qdrant, es, postgres, redis×2, mongodb, xlsx×2, csv×2, tsv, prometheus)
-> 二进制: dbexplain-linux-amd64-std (v0.1.6, full tags, CGO_ENABLED=0)
+> 二进制: dbexplain-linux-amd64-std (v0.1.7, full tags, CGO_ENABLED=0)
 > DuckDB 版（-duckdb, CGO_ENABLED=1）未在本轮测试（未安装 aarch64-linux-gnu-gcc 交叉工具链）
 
 ---
@@ -28,9 +28,11 @@
 | L8 | [17-metrics.md](17-metrics.md) | **PASS** | 5/5 | Prometheus 文本输出/JSON嵌入 |
 | L8 | [18-prometheus.md](18-prometheus.md) | **PASS** | 18/18 | Prometheus Collect/PromQL/DSL ORDER BY/DSL 联邦 |
 | L8 | [12-capability-routing.md](12-capability-routing.md) | **PASS** | 2/2 | DSL联邦路由 |
-| — | **v0.1.6 Bug Fixes** | **PASS** | 21/21 | 见"v0.1.6 Bug Bash 修复验证" |
+| — | v0.1.6 Bug Fixes | **PASS** | 21/21 | 见"v0.1.6 Bug Bash 修复验证" |
+| — | **v0.1.7 Prometheus meta rows** | **PASS** | 2/2 | _labels 206 rows, _metrics 644 rows |
+| — | **v0.1.7 CTE 写检测** | **PASS** | 2/2 | WITH + 主查询写, WITH + CTE 体写 |
 
-**总计: 全部通过。所有 v0.1.6 修复已验证，无架构变更导致的功能退化。**
+**总计: 全部通过。**
 
 ---
 
@@ -424,7 +426,7 @@ echo -e "SELECT * FROM @prom.up WHERE job=\"prometheus\"\n.exit" | ./release/dbe
 
 ---
 
-*测试基准: v0.0.4 → v0.0.5 → v0.0.6 → v0.0.7 → v0.0.8 → v0.0.9 → v0.1.0 → v0.1.1 → v0.1.2 → v0.1.3 → v0.1.4 → v0.1.5 → **v0.1.6 (21项代码审计修复)**. 历史版本报告已归档.*
+*测试基准: v0.0.4 → v0.0.5 → v0.0.6 → v0.0.7 → v0.0.8 → v0.0.9 → v0.1.0 → v0.1.1 → v0.1.2 → v0.1.3 → v0.1.4 → v0.1.5 → v0.1.6 (21项代码审计修复) → **v0.1.7 (Prometheus meta rows + CTE 写检测)**. 历史版本报告已归档.*
 
 ## v0.1.5 新增验证项
 

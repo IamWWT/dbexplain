@@ -37,6 +37,9 @@ type Table struct {
 	DataType   string // string|hash|list|set|zset|stream
 	// Operational stats (Phase 3) — reported by the database where available, nil if unsupported
 	OpStats *OpStats `json:"op_stats,omitempty"`
+	// SampleRows holds sample data rows for meta tables (e.g. _metrics, _labels).
+	// Populated only by connectors for meta tables; nil for all other tables.
+	SampleRows []map[string]any `json:"sample_rows,omitempty"`
 }
 
 // OpStats holds database-reported operational statistics.

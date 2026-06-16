@@ -362,6 +362,7 @@ type jsonTable struct {
 	KeyPattern   string       `json:"key_pattern,omitempty"`
 	DataType     string       `json:"data_type,omitempty"`
 	OpStats      *jsonOpStats `json:"op_stats,omitempty"`
+	Rows         []map[string]any `json:"rows,omitempty"`
 }
 
 type jsonOpStats struct {
@@ -460,6 +461,7 @@ func buildJSONResult(r *analyze.Result) *jsonResult {
 					OrderByKey:   t.OrderByKey,
 					KeyPattern:   t.KeyPattern,
 					DataType:     t.DataType,
+					Rows:         t.SampleRows,
 				}
 				if t.OpStats != nil {
 					jt.OpStats = &jsonOpStats{

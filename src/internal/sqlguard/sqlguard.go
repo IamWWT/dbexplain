@@ -66,6 +66,15 @@ func Validate(sql string) error {
 		}
 	}
 
+	// CTE (WITH) queries cannot be reliably validated by AST parsing because
+	// sqlast.Parse may silently ignore the CTE prefix and return a SelectStmt
+	// for the main query, bypassing CTE write detection. Handle WITH before AST.
+	normalized := strings.TrimSpace(statements[0])
+	firstToken := strings.ToUpper(firstWord(normalized))
+	if firstToken == "WITH" {
+		return validateCTE(normalized, sql)
+	}
+
 	// Try AST-level validation first — this handles standard SELECT / UNION.
 	stmt, err := sqlast.Parse(sql)
 	if err == nil {
@@ -93,8 +102,6 @@ func Validate(sql string) error {
 
 	// AST parsing failed — fall back to string-based first‑word detection
 	// for non‑standard read ops (EXPLAIN, SHOW, DESCRIBE, PRAGMA, etc.).
-	normalized := strings.TrimSpace(statements[0])
-	firstToken := strings.ToUpper(firstWord(normalized))
 
 	// Check write ops first
 	for _, op := range writeOps {
@@ -138,7 +145,8 @@ func Validate(sql string) error {
 }
 
 // containsCTEWrite checks if a WITH query contains write operations
-// inside CTE bodies. PostgreSQL allows data-modifying CTEs.
+// inside CTE bodies or in the main query after the CTE definitions.
+// PostgreSQL allows data-modifying CTEs; we reject them unconditionally.
 func containsCTEWrite(normalized string) bool {
 	upper := strings.ToUpper(normalized)
 	asIdx := strings.Index(upper, " AS ")
@@ -152,6 +160,8 @@ func containsCTEWrite(normalized string) bool {
 	bodyStart += asIdx + 4
 	depth := 0
 	writeVerbs := []string{"INSERT ", "UPDATE ", "DELETE ", "DROP ", "ALTER ", "TRUNCATE "}
+	var lastParenEnd int
+	cteLoop:
 	for i := bodyStart; i < len(upper); i++ {
 		switch upper[i] {
 		case '(':
@@ -166,6 +176,7 @@ func containsCTEWrite(normalized string) bool {
 				return false
 			}
 			if depth == 0 {
+				lastParenEnd = i + 1
 				rest := upper[i+1:]
 				trimmed := strings.TrimSpace(rest)
 				if strings.HasPrefix(trimmed, ",") {
@@ -180,7 +191,7 @@ func containsCTEWrite(normalized string) bool {
 					i = i + 1 + nextAS + 4 + nextBody - 1
 					depth = 1
 				} else {
-					break
+					break cteLoop
 				}
 			}
 		default:
@@ -193,7 +204,32 @@ func containsCTEWrite(normalized string) bool {
 			}
 		}
 	}
+	// After all CTE bodies are consumed, check the main query body
+	// for write operations (e.g., WITH x AS (...) INSERT INTO ...).
+	if lastParenEnd > 0 && lastParenEnd < len(upper) {
+		mainQuery := strings.TrimSpace(upper[lastParenEnd:])
+		firstToken := firstWord(mainQuery)
+		for _, op := range writeOps {
+			if firstToken == op {
+				return true
+			}
+		}
+	}
 	return false
+}
+
+// validateCTE checks a WITH query for write operations both inside CTE bodies
+// and in the main query body. This is called before AST parsing because
+// sqlast.Parse may silently consume the CTE prefix.
+func validateCTE(normalized, originalSQL string) error {
+	// Check if the main query after CTE is a write operation
+	if containsCTEWrite(normalized) {
+		return &ErrReadOnlyViolation{
+			SQL:    originalSQL,
+			Reason: "WITH CTE contains write operation",
+		}
+	}
+	return nil
 }
 
 // isSelectInto checks if a SELECT has an INTO clause targeting a table

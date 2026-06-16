@@ -1,5 +1,16 @@
 # 变更日志
 
+## v0.1.7 (2026-06-15) — Prometheus Meta 表行输出 + CTE 写检测加固
+
+### ✨ Prometheus meta 表行输出
+
+- **`_labels` / `_metrics` 表 JSON 输出增加 `rows`**: `dbexplain --json` 输出中 Prometheus 的连接器采集的 `_labels`（~206 条 label 名）和 `_metrics`（~644 条 metric 元数据含 type/help/unit）现包含 `rows` 字段。**优势**：VeinMap 等 LLM Agent 不再只能看到表名和列结构，可直接消费语义化样本数据做 NL→PromQL 语义匹配，是 Agent 智能问数的 P0 阻塞解除。
+- **`SampleRows` 通用 Schema 字段**: `schema.Table` 新增 `SampleRows []map[string]any`，JSON 渲染层自动透出为 `rows`。**优势**：通用扩展点，未来任意连接器都可以填充样本数据行供 Agent 消费。
+
+### 🐛 CTE 写操作检测加固
+
+- **WITH + 主查询写操作拦截**: `WITH x AS (SELECT 1) INSERT INTO y VALUES (1)` 绕过只读校验的漏洞修复。三层加固：(1) WITH 检测提前到 AST 解析之前；(2) `containsCTEWrite()` 增加主查询体写动词检查；(3) 修复 `break` 在 `switch` + `for` 嵌套中只跳出 `switch` 的 Go 语义陷阱（改用 labeled break）。**优势**：消除 CTE 写操作绕过 sqlguard 的路径，增强只读安全防护的完备性。
+
 ## v0.1.6 (2026-06-12) — Bug Bash + Prometheus DSL 内核升级
 
 ### ✨ Prometheus DSL 内核升级

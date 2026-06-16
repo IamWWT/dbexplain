@@ -87,7 +87,9 @@ cd src && $BIN diff --cache /tmp/e2e.cache --list-versions
 | L8 | DuckDB 连接器 | DuckDB 采集/查询/安全/DSL/构建隔离 | [16-duckdb.md](16-duckdb.md) |
 | L8 | 采集指标收集 | Prometheus 文本输出/JSON嵌入/向后兼容 | [17-metrics.md](17-metrics.md) |
 | L8 | Prometheus 连接器 | Prometheus targets/labels/metrics 采集 + PromQL 查询 | [18-prometheus.md](18-prometheus.md) |
+| L8 | Prometheus 连接器 | Prometheus targets/labels/metrics 采集 + PromQL 查询 | [18-prometheus.md](18-prometheus.md) |
 | L8 | Oracle + Hive 连接器 | 编译/DSN 解析/CLI 手册/选择性构建/回归确认 | [19-oracle-hive.md](19-oracle-hive.md) |
+| L5 | CTE 写检测加固 | WITH + 主查询写操作拦截 + CTE 体写检测 | [20-cte-write-detection.md](20-cte-write-detection.md) |
 
 ## 测试概览
 
@@ -162,7 +164,7 @@ dbexplain execute -dsn 'csv:///tmp/test.csv?label=test' "SELECT *"
 
 ## 最新测试结果
 
-完整测试结果报告见 [RESULTS.md](RESULTS.md)。v0.1.5 测试结果: **166+ 测试项通过 (100%)**，含 Oracle + Hive 连接器 26 测试（17 E2E 项 + 6 Oracle mock + 9 Hive mock）、DuckDB 连接器 20 测试、DSL 35 测试、Schema Diff 24 测试、窗口函数 33 测试、Metrics 5 测试、Prometheus 连接器 13 测试。
+完整测试结果报告见 [RESULTS.md](RESULTS.md)。v0.1.7 测试结果: **全部通过**，含 Prometheus meta 表 rows 2/2 + CTE 写检测 2/2。
 
 ## 快速导航
 
@@ -184,6 +186,7 @@ dbexplain execute -dsn 'csv:///tmp/test.csv?label=test' "SELECT *"
 17-metrics.md          # 采集指标
 18-prometheus.md       # Prometheus 连接器
 19-oracle-hive.md      # Oracle + Hive 连接器
+20-cte-write-detection.md # CTE 写检测加固
 ```
 
 ## 测试充分性评估
@@ -196,7 +199,7 @@ dbexplain execute -dsn 'csv:///tmp/test.csv?label=test' "SELECT *"
 | SQL 只读校验 | 高 | 100% | 28 用例 + 实机 8 动词验证 |
 | 查询引擎 | 高 | 100% | 17 DSN 实机执行 (SQL/NoSQL/文件/PromQL) |
 | 交叉编译 | 高 | 100% | 5/5 平台成功 |
-| 文档同步 | 高 | 100% | 全部文件版本 v0.1.5 一致 |
+| 文档同步 | 高 | 100% | 全部文件版本 v0.1.7 一致 |
 | 文件处理 (CSV/TSV/XLSX) | 中 | 90% | 基本功能覆盖，边界场景需补充 |
 | 能力架构 (CapSQL) | 高 | 100% | 全 17 连接器路由验证 |
 

@@ -53,6 +53,29 @@ if opts.Lock != nil {
 }
 ```
 
+### break 在 switch+for 嵌套中只跳出 switch
+
+```go
+// ❌ break 跳出的是 switch，不是外层 for 循环
+for i := range items {
+    switch x {
+    case 1:
+        if done { break } // ❌ 只跳出 switch，for 循环继续
+    }
+}
+
+// ✅ 使用 labeled break
+loop:
+for i := range items {
+    switch x {
+    case 1:
+        if done { break loop } // ✅ 跳出 for 循环
+    }
+}
+```
+
+> v0.1.7 血泪教训：`WITH x AS (...) INSERT ...` 的 CTE 写检测修复中，```break``` 未跳出外层 ```for``` 导致 ```lastParenEnd``` 被后续 ```VALUES(1)``` 的 ```)``` 覆盖，主查询体检测始终看到空字符串。
+
 ## 安全红线
 
 ### DSN 密码脱敏
