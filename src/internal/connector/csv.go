@@ -193,6 +193,33 @@ func execCSVSelectStar(path string, delimiter rune, encoding string, limit, offs
 		return nil, fmt.Errorf("csv: no matching files for %q", path)
 	}
 
+	// Fast streaming path: single file with LIMIT
+	if len(files) == 1 && limit > 0 {
+		data, columns, err := readCSVDataStreaming(files[0], delimiter, encoding, limit, offset)
+		if err != nil {
+			return nil, fmt.Errorf("csv: %w", err)
+		}
+		if columns == nil {
+			return nil, fmt.Errorf("csv: empty result")
+		}
+		result := &query.QueryResult{
+			Columns:  make([]query.ColumnInfo, len(columns)),
+			Rows:     make([][]*string, len(data)),
+			RowCount: len(data),
+		}
+		for i, col := range columns {
+			result.Columns[i] = query.ColumnInfo{Name: col, Type: "TEXT"}
+		}
+		for i, row := range data {
+			result.Rows[i] = make([]*string, len(row))
+			for j, val := range row {
+				v := val
+				result.Rows[i][j] = &v
+			}
+		}
+		return result, nil
+	}
+
 	// Read data from all files
 	var allData [][]string
 	var columns []string
@@ -249,6 +276,76 @@ func execCSVSelectStar(path string, delimiter rune, encoding string, limit, offs
 	}
 
 	return result, nil
+}
+
+// readCSVDataStreaming reads a CSV file up to limit+offset rows using streaming
+// to avoid loading the entire file into memory. Returns (dataRows, header, error).
+func readCSVDataStreaming(path string, delimiter rune, encoding string, limit, offset int) ([][]string, []string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil, fmt.Errorf("file not found: %s (use absolute path)", path)
+		}
+		return nil, nil, err
+	}
+	defer f.Close()
+
+	var reader io.Reader = f
+	if encoding != "utf-8" && encoding != "utf8" {
+		switch encoding {
+		case "gbk", "gb2312", "gb18030":
+			reader = transform.NewReader(f, simplifiedchinese.GBK.NewDecoder())
+		default:
+			return nil, nil, fmt.Errorf("unsupported encoding %q", encoding)
+		}
+	}
+
+	csvReader := csv.NewReader(bufio.NewReader(reader))
+	csvReader.Comma = delimiter
+	csvReader.LazyQuotes = true
+	csvReader.FieldsPerRecord = -1
+
+	// Read header row
+	header, err := csvReader.Read()
+	if err != nil {
+		return nil, nil, fmt.Errorf("csv read header %q: %w", path, err)
+	}
+
+	// Strip UTF-8 BOM from header
+	if len(header) > 0 && len(header[0]) >= 3 &&
+		header[0][0] == 0xEF && header[0][1] == 0xBB && header[0][2] == 0xBF {
+		header[0] = header[0][3:]
+	}
+
+	// Skip offset rows
+	for i := 0; i < offset; i++ {
+		if _, err := csvReader.Read(); err != nil {
+			if err == io.EOF {
+				return [][]string{}, header, nil
+			}
+			return nil, nil, fmt.Errorf("csv read %q: %w", path, err)
+		}
+	}
+
+	// Read up to limit data rows
+	var records [][]string
+	for i := 0; i < limit; i++ {
+		row, err := csvReader.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, nil, fmt.Errorf("csv read %q: %w", path, err)
+		}
+		// Strip UTF-8 BOM from first column in data rows
+		if len(row) > 0 && len(row[0]) >= 3 &&
+			row[0][0] == 0xEF && row[0][1] == 0xBB && row[0][2] == 0xBF {
+			row[0] = row[0][3:]
+		}
+		records = append(records, row)
+	}
+
+	return records, header, nil
 }
 
 // --- internal helpers ---

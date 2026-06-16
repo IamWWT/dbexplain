@@ -109,7 +109,9 @@ func PrintHelp() {
 			"  --log-dir <dir>, -timeout d   Logs / timeout (default /var/log/dbexplain, 20s)\n"+
 			"  --conn N                     Max concurrent connections (default 10)\n"+
 			"  --language zh|en, --version   Language / version\n"+
-			"  --sql-log-max-len N           Max SQL log length in chars (default 5000)\n\n",
+			"  --sql-log-max-len N           Max SQL log length in chars (default 5000)\n"+
+			"  --no-sample                   Skip sample row fetching during schema collection\n"+
+			"  --skip-opstats                Skip MySQL performance_schema op stats\n\n",
 		"Flags (dbexplain [flags]):\n"+
 			"  -dsn, -env, -config                 Input sources\n"+
 			"  -include, -exclude, -label          Filter by type/label/key\n"+
@@ -118,7 +120,9 @@ func PrintHelp() {
 			"  --log-dir <dir>, -timeout d   Logs / timeout (default /var/log/dbexplain, 20s)\n"+
 			"  --conn N                     Max concurrent connections (default 10)\n"+
 			"  --language zh|en, --version   Language / version\n"+
-			"  --sql-log-max-len N           Max SQL log length in chars (default 5000)\n\n",
+			"  --sql-log-max-len N           Max SQL log length in chars (default 5000)\n"+
+			"  --no-sample                   Skip sample row fetching during schema collection\n"+
+			"  --skip-opstats                Skip MySQL performance_schema op stats\n\n",
 	))
 
 	fmt.Fprint(out, p(

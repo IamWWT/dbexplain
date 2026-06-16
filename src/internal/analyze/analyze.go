@@ -125,6 +125,13 @@ func inferRefs(tables []tableEntry, existing []*schema.Ref) []*schema.Ref {
 		existingSet[r.FromInstance+r.FromDB+r.FromTable+r.FromCol] = true
 	}
 
+	// Build name index for O(1) table lookup
+	nameIndex := map[string][]tableEntry{}
+	for _, e := range tables {
+		n := strings.ToLower(e.table.Name)
+		nameIndex[n] = append(nameIndex[n], e)
+	}
+
 	var inferred []*schema.Ref
 	for _, src := range tables {
 		for _, col := range src.table.Columns {
@@ -151,11 +158,19 @@ func inferRefs(tables []tableEntry, existing []*schema.Ref) []*schema.Ref {
 			if existingSet[dedupKey] {
 				continue
 			}
-			for _, tgt := range tables {
+			// Look up matching target tables via name index (O(1) per stem)
+			stemLC := strings.ToLower(stem)
+			var candidates []tableEntry
+			switch {
+			case len(nameIndex[stemLC]) > 0:
+				candidates = nameIndex[stemLC]
+			case len(nameIndex[stemLC+"s"]) > 0:
+				candidates = nameIndex[stemLC+"s"]
+			case len(nameIndex[stemLC+"es"]) > 0:
+				candidates = nameIndex[stemLC+"es"]
+			}
+			for _, tgt := range candidates {
 				tname := strings.ToLower(tgt.table.Name)
-				if tname != stem && tname != stem+"s" && tname != stem+"es" {
-					continue
-				}
 				pkCol, ok := pkIndex[key{tgt.inst, tgt.db, tname}]
 				if !ok {
 					continue

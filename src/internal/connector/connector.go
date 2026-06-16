@@ -38,6 +38,33 @@ func Logf(ctx context.Context, format string, args ...interface{}) {
 	}
 }
 
+// --- collect option context keys ---
+
+type ctxKeyNoSample struct{}
+type ctxKeySkipOpstats struct{}
+
+// WithNoSample returns a context that tells collectors to skip sample row fetching.
+func WithNoSample(ctx context.Context) context.Context {
+	return context.WithValue(ctx, ctxKeyNoSample{}, true)
+}
+
+// IsNoSample reports whether the context has the no-sample flag set.
+func IsNoSample(ctx context.Context) bool {
+	v, _ := ctx.Value(ctxKeyNoSample{}).(bool)
+	return v
+}
+
+// WithSkipOpstats returns a context that tells MySQL collector to skip op-stats queries.
+func WithSkipOpstats(ctx context.Context) context.Context {
+	return context.WithValue(ctx, ctxKeySkipOpstats{}, true)
+}
+
+// IsSkipOpstats reports whether the context has the skip-opstats flag set.
+func IsSkipOpstats(ctx context.Context) bool {
+	v, _ := ctx.Value(ctxKeySkipOpstats{}).(bool)
+	return v
+}
+
 type Connector interface {
 	Collect(ctx context.Context, d *dsn.DSN) (*schema.Instance, error)
 	Capabilities() []capabilities.Capability

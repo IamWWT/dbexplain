@@ -95,6 +95,50 @@ func xlsxQuerySheet(path, sheetName string, limit, offset int) (*xlsxQueryResult
 	}
 	defer f.Close()
 
+	// Stream rows when LIMIT is specified to avoid loading entire sheet
+	if limit > 0 {
+		rows, err := f.Rows(sheetName)
+		if err != nil {
+			return nil, fmt.Errorf("xlsx read sheet %q: %w", sheetName, err)
+		}
+		defer rows.Close()
+
+		// Read header
+		if !rows.Next() {
+			return &xlsxQueryResult{}, nil
+		}
+		columns, err := rows.Columns()
+		if err != nil {
+			return nil, fmt.Errorf("xlsx read columns %q: %w", sheetName, err)
+		}
+		if len(columns) == 0 {
+			return &xlsxQueryResult{}, nil
+		}
+
+		// Skip offset rows
+		for i := 0; i < offset; i++ {
+			if !rows.Next() {
+				return &xlsxQueryResult{Columns: columns}, nil
+			}
+		}
+
+		// Read up to limit data rows
+		var data [][]string
+		for i := 0; i < limit && rows.Next(); i++ {
+			vals, err := rows.Columns()
+			if err != nil {
+				continue
+			}
+			data = append(data, vals)
+		}
+
+		return &xlsxQueryResult{
+			Columns:  columns,
+			Rows:     data,
+			RowCount: len(data),
+		}, nil
+	}
+
 	rows, err := f.GetRows(sheetName)
 	if err != nil {
 		return nil, fmt.Errorf("xlsx read sheet %q: %w", sheetName, err)

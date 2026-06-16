@@ -44,6 +44,21 @@
 - **`docs/test/RESULTS.md`**: Updated v0.1.7 test results.
 - **`.env.dbexplain.example`**: Added GaussDB DSN configuration example.
 
+### ⚡ Schema Collection Performance Optimization
+
+- **PG/MySQL batch queries replace N+1**: PostgreSQL and MySQL schema collection refactored to per-schema batch queries, replacing the per-table N+1 pattern. 100 tables: 400-600 round trips reduced to ~7. Refactored `fillPGTable`/`fillMySQLTable` — batch query columns/indexes/FKs, group by table name in Go maps. (P1)
+- **`--no-sample` skip sample rows**: New global flag to skip `SELECT * ... LIMIT 1` sample row fetching. Saves 100 queries per 100 tables. Halves CPU time for pure structural analysis. (P2)
+- **`--skip-opstats` skip MySQL op_stats**: New flag to skip MySQL `performance_schema.table_io_waits_summary_by_table` collection. Saves 100 queries per 100 tables. (P3)
+- **CSV/XLSX streaming reads**: CSV `SELECT * LIMIT N` now uses `csvReader.Read()` streaming (`readCSVDataStreaming`), XLSX uses `excelize.Rows` iterator. Large file LIMIT queries reduced from O(N) to O(limit) memory. (P5)
+
+### 🔧 Analysis Engine Optimization
+
+- **`inferRefs()` name index**: Foreign key inference now builds a `map[name][]tableEntry` inverted index. Complexity reduced from O(N_cols × N_tables) to O(N_cols). 1000 tables from tens of millions of comparisons to thousands. (P4)
+
+### 🛠 `dbexplain check` loads .env by default
+
+- **`--env` default changed to `true`**: `dbexplain check` auto-loads `.env.dbexplain` without requiring the `--env` flag. Explicit `--env=false --dsn xxx` still works. (6)
+
 ## v0.1.6 (2026-06-12) — Bug Bash + Prometheus DSL Core Upgrade
 
 ### ✨ Prometheus DSL Core Upgrade

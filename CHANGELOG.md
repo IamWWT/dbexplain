@@ -44,6 +44,21 @@
 - **`docs/test/RESULTS.md`**: 更新 v0.1.7 测试结果。
 - **`.env.dbexplain.example`**: 补充 GaussDB DSN 配置示例。
 
+### ⚡ Schema 采集性能优化
+
+- **PG/MySQL 批量查询替代 N+1**: PostgreSQL 和 MySQL schema 采集改为 per-schema 批量查询，替代原来的 per-table N+1 模式。100 表的场景从 400-600 次数据库往返降至 ~7 次。重构 `fillPGTable`/`fillMySQLTable`，批量查询 columns/indexes/FK 后 Go 侧 map 分组。（P1）
+- **`--no-sample` 跳过样本行**: 新增全局 flag，跳过 `SELECT * ... LIMIT 1` 样本行采集。100 表省 100 次查询。纯结构分析场景 CPU 时间减半。（P2）
+- **`--skip-opstats` 跳过 MySQL op_stats**: 新增 flag，跳过 MySQL `performance_schema.table_io_waits_summary_by_table` 采集。100 表省 100 次查询。（P3）
+- **CSV/XLSX 流式读取**: CSV `SELECT * LIMIT N` 改用 `csvReader.Read()` 逐行读取（`readCSVDataStreaming`），XLSX 改用 `excelize.Rows` 迭代器。大文件 LIMIT 查询从 O(N) 内存降到 O(limit)。（P5）
+
+### 🔧 分析引擎优化
+
+- **`inferRefs()` name index**: 外键推断增加 `map[name][]tableEntry` 倒排索引，复杂度从 O(N_cols × N_tables) 降至 O(N_cols)（map lookup O(1)）。1000 表从千万级比较降至万级。（P4）
+
+### 🛠 `dbexplain check` 默认加载 .env
+
+- **`--env` 默认值改为 `true`**: `dbexplain check` 不带参数时自动加载 `.env.dbexplain`，无需显式传 `--env`。（6）
+
 ## v0.1.6 (2026-06-12) — Bug Bash + Prometheus DSL 内核升级
 
 ### ✨ Prometheus DSL 内核升级

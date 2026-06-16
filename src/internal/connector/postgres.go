@@ -193,10 +193,202 @@ func collectPGDB(ctx context.Context, db *sql.DB, dbName, redactedDSN string) (*
 	}
 
 	total := len(tables)
+
+	// --- Batch 1: columns (all schemas) ---
+	// key: table full name (e.g., "public.users" or "schema.table")
+	type pgColData struct {
+		columns            []*schema.Column
+		colsWithoutComment []*schema.Column
+	}
+	colMap := map[string]*pgColData{}
+
+	for _, schemaName := range schemas {
+		batchSQL := `
+			SELECT c.relname,
+			       a.attname,
+			       pg_catalog.format_type(a.atttypid, a.atttypmod),
+			       NOT a.attnotnull,
+			       COALESCE(pg_get_expr(d.adbin, d.adrelid),''),
+			       COALESCE(col_description(a.attrelid, a.attnum),''),
+			       COALESCE((SELECT string_agg(contype::text,'')
+			                 FROM pg_constraint c2
+			                 WHERE a.attnum = ANY(c2.conkey) AND c2.conrelid = a.attrelid),'')
+			FROM pg_attribute a
+			LEFT JOIN pg_attrdef d ON d.adrelid=a.attrelid AND d.adnum=a.attnum
+			JOIN pg_class c ON c.oid = a.attrelid
+			JOIN pg_namespace n ON n.oid = c.relnamespace
+			WHERE n.nspname=$1 AND a.attnum>0 AND NOT a.attisdropped
+			ORDER BY c.relname, a.attnum`
+		Logf(ctx, "[postgres] [collect] %s", batchSQL)
+		bRows, err := db.QueryContext(ctx, batchSQL, schemaName)
+		if err != nil {
+			Logf(ctx, "[postgres] batch columns error for schema %s: %v", schemaName, err)
+			continue
+		}
+		for bRows.Next() {
+			var relname, attname, typ string
+			var nullable bool
+			var def, comment, constraints string
+			if err := bRows.Scan(&relname, &attname, &typ, &nullable, &def, &comment, &constraints); err != nil {
+				continue
+			}
+			tableKey := relname
+			if schemaName != "public" {
+				tableKey = schemaName + "." + relname
+			}
+			cd, ok := colMap[tableKey]
+			if !ok {
+				cd = &pgColData{}
+				colMap[tableKey] = cd
+			}
+			c := &schema.Column{
+				Name:      attname,
+				Type:      typ,
+				Nullable:  nullable,
+				Default:   def,
+				Comment:   comment,
+				IsPrimary: strings.Contains(constraints, "p"),
+				IsUnique:  strings.Contains(constraints, "u"),
+			}
+			cd.columns = append(cd.columns, c)
+			if comment == "" {
+				cd.colsWithoutComment = append(cd.colsWithoutComment, c)
+			}
+		}
+		bRows.Close()
+		if err := bRows.Err(); err != nil {
+			log.Printf("[postgres] batch columns iteration: %v", err)
+		}
+	}
+
+	// --- Batch 2: indexes (all schemas) ---
+	idxMap := map[string][]*schema.Index{}
+	for _, schemaName := range schemas {
+		Logf(ctx, "[postgres] [collect] %s", `
+			SELECT tablename, indexname, indexdef
+			FROM pg_indexes WHERE schemaname=$1`)
+		iRows, err := db.QueryContext(ctx, `
+			SELECT tablename, indexname, indexdef
+			FROM pg_indexes WHERE schemaname=$1`, schemaName)
+		if err != nil {
+			Logf(ctx, "[postgres] batch indexes error for schema %s: %v", schemaName, err)
+			continue
+		}
+		for iRows.Next() {
+			var tablename, indexname, indexdef string
+			if err := iRows.Scan(&tablename, &indexname, &indexdef); err != nil {
+				continue
+			}
+			tableKey := tablename
+			if schemaName != "public" {
+				tableKey = schemaName + "." + tablename
+			}
+			idx := &schema.Index{
+				Name:    indexname,
+				Unique:  strings.Contains(strings.ToUpper(indexdef), "UNIQUE"),
+				Columns: extractIndexColumns(indexdef),
+			}
+			idxMap[tableKey] = append(idxMap[tableKey], idx)
+		}
+		iRows.Close()
+		if err := iRows.Err(); err != nil {
+			log.Printf("[postgres] batch indexes iteration: %v", err)
+		}
+	}
+
+	// --- Batch 3: foreign keys (all schemas) ---
+	fkMap := map[string][]*schema.ForeignKey{}
+	for _, schemaName := range schemas {
+		Logf(ctx, "[postgres] [collect] %s", `
+			SELECT c1.relname AS tablename,
+			       c.conname, a.attname, c2.relname, a2.attname,
+			       c.confupdtype, c.confdeltype
+			FROM pg_constraint c
+			JOIN pg_class c1 ON c1.oid=c.conrelid
+			JOIN pg_namespace n1 ON n1.oid=c1.relnamespace
+			JOIN pg_class c2 ON c2.oid=c.confrelid
+			JOIN pg_namespace n2 ON n2.oid=c2.relnamespace
+			JOIN pg_attribute a ON a.attrelid=c.conrelid AND a.attnum=ANY(c.conkey)
+			JOIN pg_attribute a2 ON a2.attrelid=c.confrelid AND a2.attnum=ANY(c.confkey)
+			WHERE c.contype='f' AND n1.nspname=$1`)
+		fRows, err := db.QueryContext(ctx, `
+			SELECT c1.relname AS tablename,
+			       c.conname, a.attname, c2.relname, a2.attname,
+			       c.confupdtype, c.confdeltype
+			FROM pg_constraint c
+			JOIN pg_class c1 ON c1.oid=c.conrelid
+			JOIN pg_namespace n1 ON n1.oid=c1.relnamespace
+			JOIN pg_class c2 ON c2.oid=c.confrelid
+			JOIN pg_namespace n2 ON n2.oid=c2.relnamespace
+			JOIN pg_attribute a ON a.attrelid=c.conrelid AND a.attnum=ANY(c.conkey)
+			JOIN pg_attribute a2 ON a2.attrelid=c.confrelid AND a2.attnum=ANY(c.confkey)
+			WHERE c.contype='f' AND n1.nspname=$1`, schemaName)
+		if err != nil {
+			Logf(ctx, "[postgres] batch FK error for schema %s: %v", schemaName, err)
+			continue
+		}
+		for fRows.Next() {
+			var relname, name, col, refTable, refCol, onUpdateChar, onDeleteChar string
+			if err := fRows.Scan(&relname, &name, &col, &refTable, &refCol, &onUpdateChar, &onDeleteChar); err != nil {
+				continue
+			}
+			tableKey := relname
+			if schemaName != "public" {
+				tableKey = schemaName + "." + relname
+			}
+			// Group FK columns under the same constraint name
+			var fk *schema.ForeignKey
+			for _, existing := range fkMap[tableKey] {
+				if existing.Name == name {
+					fk = existing
+					break
+				}
+			}
+			if fk == nil {
+				fk = &schema.ForeignKey{
+					Name:     name,
+					RefTable: refTable,
+					OnUpdate: pgFKAction(onUpdateChar),
+					OnDelete: pgFKAction(onDeleteChar),
+				}
+				fkMap[tableKey] = append(fkMap[tableKey], fk)
+			}
+			fk.Columns = append(fk.Columns, col)
+			fk.RefColumns = append(fk.RefColumns, refCol)
+		}
+		fRows.Close()
+		if err := fRows.Err(); err != nil {
+			log.Printf("[postgres] batch FK iteration: %v", err)
+		}
+	}
+
+	// Assign batch results + sample rows
 	for i, t := range tables {
 		schemaName, baseName := parsePGTableName(t.Name)
 		Logf(ctx, "[%s] 采集表 %d/%d: %s", dbName, i+1, total, t.Name)
-		fillPGTable(ctx, db, schemaName, baseName, t, redactedDSN)
+
+		// Assign pre-fetched columns, indexes, FKs
+		if cd := colMap[t.Name]; cd != nil {
+			t.Columns = cd.columns
+		}
+		t.Indexes = idxMap[t.Name]
+		t.ForeignKeys = fkMap[t.Name]
+
+		// Sample row for comment inference (still per-table, controlled by --no-sample)
+		if !IsNoSample(ctx) {
+			if cd := colMap[t.Name]; cd != nil && len(cd.colsWithoutComment) > 0 && t.RowCount > 0 {
+				sample, err := fetchPGSampleRow(ctx, db, schemaName, baseName)
+				if err == nil {
+					for _, c := range cd.colsWithoutComment {
+						if val, ok := sample[c.Name]; ok {
+							c.Comment = schema.InferComment(c.Name, c.Type, val)
+						}
+					}
+				} else {
+					Logf(ctx, "[postgres] sample row failed for %s: %v", t.Name, err)
+				}
+			}
+		}
 	}
 	database.Tables = tables
 	return database, nil
@@ -213,158 +405,6 @@ func parsePGTableName(name string) (schema, table string) {
 // quotePGIdent 为 PostgreSQL 标识符加上双引号转义
 func quotePGIdent(name string) string {
 	return `"` + strings.ReplaceAll(name, `"`, `""`) + `"`
-}
-
-func fillPGTable(ctx context.Context, db *sql.DB, schemaName, baseName string, t *schema.Table, redactedDSN string) {
-	// columns — 使用 pg_class+pg_namespace JOIN 替代 ::regclass 转换，
-	// 兼容 GaussDB（不支持 schema.table::regclass 语法）
-	Logf(ctx, "[postgres] [collect] %s", `
-		SELECT a.attname,
-		       pg_catalog.format_type(a.atttypid, a.atttypmod),
-		       NOT a.attnotnull,
-		       COALESCE(pg_get_expr(d.adbin, d.adrelid),''),
-		       COALESCE(col_description(a.attrelid, a.attnum),''),
-		       COALESCE((SELECT string_agg(contype::text,'')
-		                 FROM pg_constraint c
-		                 WHERE a.attnum = ANY(c.conkey) AND c.conrelid = a.attrelid),'')
-		FROM pg_attribute a
-		LEFT JOIN pg_attrdef d ON d.adrelid=a.attrelid AND d.adnum=a.attnum
-		JOIN pg_class c ON c.oid = a.attrelid
-		JOIN pg_namespace n ON n.oid = c.relnamespace
-		WHERE c.relname=$1 AND n.nspname=$2 AND a.attnum>0 AND NOT a.attisdropped
-		ORDER BY a.attnum`)
-	colRows, err := db.QueryContext(ctx, `
-		SELECT a.attname,
-		       pg_catalog.format_type(a.atttypid, a.atttypmod),
-		       NOT a.attnotnull,
-		       COALESCE(pg_get_expr(d.adbin, d.adrelid),''),
-		       COALESCE(col_description(a.attrelid, a.attnum),''),
-		       COALESCE((SELECT string_agg(contype::text,'')
-		                 FROM pg_constraint c
-		                 WHERE a.attnum = ANY(c.conkey) AND c.conrelid = a.attrelid),'')
-		FROM pg_attribute a
-		LEFT JOIN pg_attrdef d ON d.adrelid=a.attrelid AND d.adnum=a.attnum
-		JOIN pg_class c ON c.oid = a.attrelid
-		JOIN pg_namespace n ON n.oid = c.relnamespace
-		WHERE c.relname=$1 AND n.nspname=$2 AND a.attnum>0 AND NOT a.attisdropped
-		ORDER BY a.attnum`, baseName, schemaName)
-	if err != nil {
-		Logf(ctx, "[postgres] columns error %s: %v", t.Name, err)
-		return
-	}
-	defer colRows.Close()
-
-	var colsWithoutComment []*schema.Column
-	for colRows.Next() {
-		c := &schema.Column{}
-		var constraints string
-		if err := colRows.Scan(&c.Name, &c.Type, &c.Nullable, &c.Default, &c.Comment, &constraints); err != nil {
-			continue
-		}
-		c.IsPrimary = strings.Contains(constraints, "p")
-		c.IsUnique = strings.Contains(constraints, "u")
-		t.Columns = append(t.Columns, c)
-		if c.Comment == "" {
-			colsWithoutComment = append(colsWithoutComment, c)
-		}
-	}
-	colRows.Close()
-	if err := colRows.Err(); err != nil {
-		log.Printf("[postgres] rows iteration: %v", err)
-	}
-
-	// 无注释推断
-	if len(colsWithoutComment) > 0 && t.RowCount > 0 {
-		sample, err := fetchPGSampleRow(ctx, db, schemaName, baseName)
-		if err == nil {
-			for _, c := range colsWithoutComment {
-				if val, ok := sample[c.Name]; ok {
-					c.Comment = schema.InferComment(c.Name, c.Type, val)
-				}
-			}
-		} else {
-			Logf(ctx, "[postgres] sample row failed for %s: %v", t.Name, err)
-		}
-	}
-
-	// indexes
-	Logf(ctx, "[postgres] [collect] %s", `
-		SELECT indexname, indexdef FROM pg_indexes
-		WHERE schemaname=$2 AND tablename=$1`)
-	idxRows, err := db.QueryContext(ctx, `
-		SELECT indexname, indexdef FROM pg_indexes
-		WHERE schemaname=$2 AND tablename=$1`, baseName, schemaName)
-	if err == nil {
-		defer idxRows.Close()
-		for idxRows.Next() {
-			idx := &schema.Index{}
-			var def string
-			if err := idxRows.Scan(&idx.Name, &def); err != nil {
-				continue
-			}
-			idx.Unique = strings.Contains(strings.ToUpper(def), "UNIQUE")
-			idx.Columns = extractIndexColumns(def)
-			t.Indexes = append(t.Indexes, idx)
-		}
-		if err := idxRows.Err(); err != nil {
-			log.Printf("[postgres] rows iteration: %v", err)
-		}
-	} else {
-		Logf(ctx, "[postgres] index query failed for %s: %v", t.Name, err)
-	}
-
-	// foreign keys (including on_delete/on_update from pg_constraint)
-	Logf(ctx, "[postgres] [collect] %s", `
-		SELECT c.conname, a.attname, c2.relname, a2.attname,
-		       c.confupdtype, c.confdeltype
-		FROM pg_constraint c
-		JOIN pg_class c1 ON c1.oid=c.conrelid
-		JOIN pg_namespace n1 ON n1.oid=c1.relnamespace
-		JOIN pg_class c2 ON c2.oid=c.confrelid
-		JOIN pg_namespace n2 ON n2.oid=c2.relnamespace
-		JOIN pg_attribute a ON a.attrelid=c.conrelid AND a.attnum=ANY(c.conkey)
-		JOIN pg_attribute a2 ON a2.attrelid=c.confrelid AND a2.attnum=ANY(c.confkey)
-		WHERE c.contype='f' AND c1.relname=$1 AND n1.nspname=$2`)
-	fkRows, err := db.QueryContext(ctx, `
-		SELECT c.conname, a.attname, c2.relname, a2.attname,
-		       c.confupdtype, c.confdeltype
-		FROM pg_constraint c
-		JOIN pg_class c1 ON c1.oid=c.conrelid
-		JOIN pg_namespace n1 ON n1.oid=c1.relnamespace
-		JOIN pg_class c2 ON c2.oid=c.confrelid
-		JOIN pg_namespace n2 ON n2.oid=c2.relnamespace
-		JOIN pg_attribute a ON a.attrelid=c.conrelid AND a.attnum=ANY(c.conkey)
-		JOIN pg_attribute a2 ON a2.attrelid=c.confrelid AND a2.attnum=ANY(c.confkey)
-		WHERE c.contype='f' AND c1.relname=$1 AND n1.nspname=$2`, baseName, schemaName)
-	if err == nil {
-		defer fkRows.Close()
-		fkMap := map[string]*schema.ForeignKey{}
-		for fkRows.Next() {
-			var name, col, refTable, refCol string
-			var onUpdateChar, onDeleteChar string
-			if err := fkRows.Scan(&name, &col, &refTable, &refCol, &onUpdateChar, &onDeleteChar); err != nil {
-				continue
-			}
-			fk, ok := fkMap[name]
-			if !ok {
-				fk = &schema.ForeignKey{
-					Name:     name,
-					RefTable: refTable,
-					OnUpdate: pgFKAction(onUpdateChar),
-					OnDelete: pgFKAction(onDeleteChar),
-				}
-				fkMap[name] = fk
-				t.ForeignKeys = append(t.ForeignKeys, fk)
-			}
-			fk.Columns = append(fk.Columns, col)
-			fk.RefColumns = append(fk.RefColumns, refCol)
-		}
-		if err := fkRows.Err(); err != nil {
-			log.Printf("[postgres] rows iteration: %v", err)
-		}
-	} else {
-		Logf(ctx, "[postgres] FK query failed for %s: %v", t.Name, err)
-	}
 }
 
 func fetchPGSampleRow(ctx context.Context, db *sql.DB, schemaName, table string) (map[string]string, error) {

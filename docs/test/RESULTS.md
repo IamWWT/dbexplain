@@ -34,6 +34,11 @@
 | — | **v0.1.7 check 子命令** | **PASS** | 11/11 | [21-check-command.md](21-check-command.md) 语法/连接/超时/混合/安全
 | — | **v0.1.7 GaussDB oracleCompatible** | **PASS** | 4/4 | DSN 解析 + DSNParam 取值 + SQL 日志截断默认/自定义/截断
 | — | **v0.1.7 DSN # 密码兼容** | **PASS** | 7/7 | 5 connector × # 密码解析 + 2 × Redacted 脱敏
+| — | **v0.1.7 批量查询优化** | **PASS** | 5/5 | 编译/vet/connector测试/analyze测试/选择性编译
+| — | **v0.1.7 --no-sample --skip-opstats** | **PASS** | 3/3 | flag 定义/context 注入/consumer 检查
+| — | **v0.1.7 inferRefs name index** | **PASS** | 2/2 | 编译通过/analyze 测试不退化
+| — | **v0.1.7 CSV/XLSX 流式** | **PASS** | 3/3 | 编译通过/connector测试/csv+xlsx 选择性编译
+| — | **v0.1.7 check --env default** | **PASS** | 1/1 | 默认 true 自动加载
 
 **总计: 全部通过。**
 

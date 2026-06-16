@@ -143,6 +143,8 @@ func main() {
 	language := flag.String("language", userLang, "manual language: zh (Chinese) or en (English)")
 	filterFlag := flag.String("filter", "", "filter --manual output by keyword (case-insensitive)")
 	metricsFlag := flag.Bool("metrics", false, "output collection metrics in Prometheus text format (to stderr)")
+	noSample := flag.Bool("no-sample", false, "skip sample row fetching during schema collection")
+	skipOpstats := flag.Bool("skip-opstats", false, "skip MySQL performance_schema op stats")
 	flag.Parse()
 
 	// --label is an alias for -include (schema collection also supports label filtering)
@@ -279,6 +281,12 @@ func main() {
 			}
 			logger := log.New(logFile, "", log.LstdFlags)
 			collectCtx := connector.WithLogger(ctx, logger)
+			if *noSample {
+				collectCtx = connector.WithNoSample(collectCtx)
+			}
+			if *skipOpstats {
+				collectCtx = connector.WithSkipOpstats(collectCtx)
+			}
 			collectCtx, cancel := context.WithTimeout(collectCtx, *perDSNTimeout)
 			defer cancel()
 
@@ -588,6 +596,8 @@ func handleCollect(args []string) {
 	perDSNTimeout := fs.Duration("timeout", 20*time.Second, "per-DSN collect timeout")
 	maxConcurrent := fs.Int("conn", 10, "max concurrent connections for schema collection")
 	metricsFlag := fs.Bool("metrics", false, "output collection metrics in Prometheus text format (to stderr)")
+	noSample := fs.Bool("no-sample", false, "skip sample row fetching during schema collection")
+	skipOpstats := fs.Bool("skip-opstats", false, "skip MySQL performance_schema op stats")
 	fs.Parse(args)
 
 	// --label is an alias for -include
@@ -709,6 +719,12 @@ func handleCollect(args []string) {
 			}
 			logger := log.New(logFile, "", log.LstdFlags)
 			collectCtx := connector.WithLogger(ctx, logger)
+			if *noSample {
+				collectCtx = connector.WithNoSample(collectCtx)
+			}
+			if *skipOpstats {
+				collectCtx = connector.WithSkipOpstats(collectCtx)
+			}
 			collectCtx, cancel := context.WithTimeout(collectCtx, *perDSNTimeout)
 			defer cancel()
 

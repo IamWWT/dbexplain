@@ -26,8 +26,9 @@ func Handle(args []string) {
 		return nil
 	})
 	configFile := fs.String("config", "", "JSON config file path")
-	useEnv := fs.Bool("env", false, "Load from .env config file")
+	useEnv := fs.Bool("env", true, "Load from .env config file (default: auto-detect)")
 	timeout := fs.Duration("timeout", 10*time.Second, "Per-DSN connection timeout")
+	labelFilter := fs.String("label", "", "filter by label")
 	fs.Parse(args)
 
 	var entries []config.DSNEntry
@@ -62,6 +63,21 @@ func Handle(args []string) {
 	// Load from --dsn
 	for _, raw := range dsnFlags {
 		entries = append(entries, config.DSNEntry{Raw: raw})
+	}
+
+	// Filter entries by label if --label is set
+	if *labelFilter != "" {
+		filtered := make([]config.DSNEntry, 0, len(entries))
+		for _, e := range entries {
+			parsed, err := dsn.ParseDSN(e.Raw)
+			if err != nil {
+				continue // skip invalid DSNs — will be reported later
+			}
+			if parsed.Label == *labelFilter {
+				filtered = append(filtered, e)
+			}
+		}
+		entries = filtered
 	}
 
 	if len(entries) == 0 {
