@@ -119,14 +119,16 @@ func collectPGDB(ctx context.Context, db *sql.DB, dbName, redactedDSN string) (*
 		tRows, err := db.QueryContext(ctx, `
 			SELECT t.tablename,
 			       COALESCE(s.n_live_tup, 0),
-			       COALESCE(pg_total_relation_size(quote_ident(t.schemaname) || '.' || quote_ident(t.tablename)), 0),
-			       COALESCE(obj_description((quote_ident(t.schemaname) || '.' || quote_ident(t.tablename))::regclass, 'pg_class'), ''),
+			       COALESCE(pg_total_relation_size(c.oid), 0),
+			       COALESCE(obj_description(c.oid, 'pg_class'), ''),
 			       COALESCE(s.seq_scan, 0),
 			       COALESCE(s.idx_scan, 0),
 			       COALESCE(s.n_tup_ins, 0),
 			       COALESCE(s.n_tup_upd, 0),
 			       COALESCE(s.n_tup_del, 0)
 			FROM pg_tables t
+			JOIN pg_class c ON c.relname = t.tablename
+			JOIN pg_namespace n ON n.oid = c.relnamespace AND n.nspname = t.schemaname
 			LEFT JOIN pg_stat_user_tables s
 				ON s.schemaname = t.schemaname AND s.relname = t.tablename
 			WHERE t.schemaname = $1
@@ -185,7 +187,8 @@ func quotePGIdent(name string) string {
 }
 
 func fillPGTable(ctx context.Context, db *sql.DB, schemaName, baseName string, t *schema.Table, redactedDSN string) {
-	// columns
+	// columns — 使用 pg_class+pg_namespace JOIN 替代 ::regclass 转换，
+	// 兼容 GaussDB（不支持 schema.table::regclass 语法）
 	colRows, err := db.QueryContext(ctx, `
 		SELECT a.attname,
 		       pg_catalog.format_type(a.atttypid, a.atttypmod),
@@ -197,8 +200,10 @@ func fillPGTable(ctx context.Context, db *sql.DB, schemaName, baseName string, t
 		                 WHERE a.attnum = ANY(c.conkey) AND c.conrelid = a.attrelid),'')
 		FROM pg_attribute a
 		LEFT JOIN pg_attrdef d ON d.adrelid=a.attrelid AND d.adnum=a.attnum
-		WHERE a.attrelid=$1::regclass AND a.attnum>0 AND NOT a.attisdropped
-		ORDER BY a.attnum`, schemaName+"."+baseName)
+		JOIN pg_class c ON c.oid = a.attrelid
+		JOIN pg_namespace n ON n.oid = c.relnamespace
+		WHERE c.relname=$1 AND n.nspname=$2 AND a.attnum>0 AND NOT a.attisdropped
+		ORDER BY a.attnum`, baseName, schemaName)
 	if err != nil {
 		logf(ctx, "[postgres] columns error %s: %v", t.Name, err)
 		return
