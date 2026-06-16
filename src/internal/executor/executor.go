@@ -107,7 +107,29 @@ func ExecQuery(opts *ExecOptions) (*query.QueryResult, error) {
 		Explain: opts.Explain,
 	}
 
-	result, err := q.ExecQuery(ctx, execOpts)
+	// Run query in sub-goroutine with timeout guard.
+	// lib/pq context cancellation is unreliable when the server is unresponsive,
+	// so a select+channel pattern ensures we don't hang forever.
+	type execResult struct {
+		result *query.QueryResult
+		err    error
+	}
+	execCh := make(chan execResult, 1)
+	go func() {
+		res, execErr := q.ExecQuery(ctx, execOpts)
+		execCh <- execResult{res, execErr}
+	}()
+
+	var (
+		result *query.QueryResult
+		err    error
+	)
+	select {
+	case r := <-execCh:
+		result, err = r.result, r.err
+	case <-ctx.Done():
+		return nil, fmt.Errorf("QUERY_TIMEOUT: query execution exceeded %d seconds", opts.TimeoutSec)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("QUERY_ERROR: %w", err)
 	}

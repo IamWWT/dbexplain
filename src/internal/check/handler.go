@@ -138,12 +138,30 @@ func Handle(args []string) {
 			collectCtx = connector.WithSample(collectCtx)
 		}
 		ctx, cancel := context.WithTimeout(collectCtx, *timeout)
+		defer cancel()
 		oldLogOut := log.Writer()
 		log.SetOutput(io.Discard)
 		start := time.Now()
-		_, err = connector.Collect(ctx, e.Raw)
+
+		// Run collection in sub-goroutine with timeout guard.
+		// lib/pq context cancellation is unreliable when the server is unresponsive,
+		// so a select+channel pattern ensures we don't hang forever.
+		type chkResult struct {
+			err error
+		}
+		ch := make(chan chkResult, 1)
+		go func() {
+			_, subErr := connector.Collect(ctx, e.Raw)
+			ch <- chkResult{subErr}
+		}()
+		select {
+		case res := <-ch:
+			err = res.err
+		case <-ctx.Done():
+			err = context.DeadlineExceeded
+		}
+
 		log.SetOutput(oldLogOut)
-		cancel()
 		elapsed := time.Since(start)
 		r.latency = fmt.Sprintf("%dms", elapsed.Milliseconds())
 
