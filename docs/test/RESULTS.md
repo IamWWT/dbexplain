@@ -1,6 +1,6 @@
 # 测试结果报告 v0.1.7
 
-> 执行日期: 2026-06-15 (v0.1.7 闭环验证)
+> 执行日期: 2026-06-16 (v0.1.7 闭环验证)
 > 测试环境: Linux x86-64 (amd64), Go 1.26.1
 > 数据源: 16 个 (mysql, clickhouse, sqlite×2, qdrant, es, postgres, redis×2, mongodb, xlsx×2, csv×2, tsv, prometheus)
 > 二进制: dbexplain-linux-amd64-std (v0.1.7, full tags, CGO_ENABLED=0)

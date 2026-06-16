@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.1.7 (2026-06-15) — Prometheus Meta Table Rows + CTE Write Detection Hardening
+## v0.1.7 (2026-06-16) — Prometheus Meta Table Rows + CTE Write Detection Hardening
 
 ### ✨ Prometheus Meta Table Rows
 

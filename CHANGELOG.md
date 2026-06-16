@@ -1,6 +1,6 @@
 # 变更日志
 
-## v0.1.7 (2026-06-15) — Prometheus Meta 表行输出 + CTE 写检测加固
+## v0.1.7 (2026-06-16) — Prometheus Meta 表行输出 + CTE 写检测加固
 
 ### ✨ Prometheus meta 表行输出
 
