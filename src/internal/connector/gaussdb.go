@@ -39,14 +39,18 @@ func (gaussdbConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instan
 	if err != nil {
 		return nil, schema.NewDBError(d.Redacted(), "", "", "open", err)
 	}
-	defer db.Close()
+	defer func() { go db.Close() }()
 	db.SetMaxOpenConns(1)
 	db.SetMaxIdleConns(1)
 
 	pingCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	if err := db.PingContext(pingCtx); err != nil {
-		return nil, schema.NewDBError(d.Redacted(), "", "", "ping", err)
+	Logf(ctx, "[DEBUG] gaussdb ping start: %s", d.Redacted())
+	pingStart := time.Now()
+	pingErr := db.PingContext(pingCtx)
+	Logf(ctx, "[DEBUG] gaussdb ping end: %s elapsed=%v err=%v", d.Redacted(), time.Since(pingStart), pingErr)
+	if pingErr != nil {
+		return nil, schema.NewDBError(d.Redacted(), "", "", "ping", pingErr)
 	}
 
 	// 设置 statement_timeout 保护数据库列表查询（collectPGDB 内也会设置）
@@ -121,7 +125,7 @@ func (gaussdbConnector) ExecQuery(ctx context.Context, opts query.ExecuteOpts) (
 	if err != nil {
 		return nil, fmt.Errorf("gaussdb open: %w", err)
 	}
-	defer db.Close()
+	defer func() { go db.Close() }()
 
 	db.SetMaxOpenConns(1)
 	db.SetMaxIdleConns(1)

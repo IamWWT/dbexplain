@@ -76,6 +76,36 @@ for i := range items {
 
 > v0.1.7 血泪教训：`WITH x AS (...) INSERT ...` 的 CTE 写检测修复中，```break``` 未跳出外层 ```for``` 导致 ```lastParenEnd``` 被后续 ```VALUES(1)``` 的 ```)``` 覆盖，主查询体检测始终看到空字符串。
 
+### 数据库超时：lib/pq 上下文取消不可靠 — select+channel 兜底
+
+PostgreSQL/GaussDB 的 `lib/pq` 驱动在数据库服务器无响应时，`context.WithTimeout` 取消不可靠（CancelRequest 走独立 TCP 连接也可能卡住）。
+
+```go
+// ✅ 子 goroutine + select + channel 三层超时防护
+type result struct {
+    inst *schema.Instance
+    err  error
+}
+ch := make(chan result, 1)
+go func() {
+    inst, err := someLongOp(ctx)
+    ch <- result{inst, err}
+}()
+select {
+case res := <-ch:
+    return res.inst, res.err
+case <-ctx.Done():
+    return nil, fmt.Errorf("TIMEOUT: operation exceeded %v", timeout)
+}
+
+// ❌ 仅依赖 lib/pq 的 context 取消
+ctx, cancel := context.WithTimeout(parentCtx, timeout)
+defer cancel()
+result, err := someLongOp(ctx)  // 可能永远卡住
+```
+
+> 子 goroutine 可能泄露（lib/pq 内部线程卡住），但不影响主流程。collect、check、execute 三处均已应用此模式。
+
 ## 安全红线
 
 ### DSN 密码脱敏
@@ -91,6 +121,8 @@ fmt.Println(d.Password)
 // ✅ 错误信息脱敏
 config.SanitizeErr(err)
 ```
+
+> **SanitizeErr 死循环陷阱 (ISSUE-095)**: `d.Redacted()` 占位符 `gaussdb://{dbuser}:{dbpassword}@host/db` 仍匹配 URL 模式 `://user:pass@host`。SanitizeErr 第一遍把 `{dbpassword}` 替换为 `***`，第二遍把 `***` 再替换为 `***`（无操作）→ 死循环。**修复**: `newMsg == msg → break`，检测无变化即退出。**教训**: 已脱敏字符串不要再经过 SanitizeErr。
 
 ### panic recover 用解析后的 DSN
 ```go

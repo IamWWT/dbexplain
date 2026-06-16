@@ -124,10 +124,13 @@ func ExecQuery(opts *ExecOptions) (*query.QueryResult, error) {
 		result *query.QueryResult
 		err    error
 	)
+	// Use time.NewTimer for reliable timeout (see handler.go for rationale).
+	execTimer := time.NewTimer(time.Duration(opts.TimeoutSec+5) * time.Second)
 	select {
 	case r := <-execCh:
 		result, err = r.result, r.err
-	case <-ctx.Done():
+		execTimer.Stop()
+	case <-execTimer.C:
 		return nil, fmt.Errorf("QUERY_TIMEOUT: query execution exceeded %d seconds", opts.TimeoutSec)
 	}
 	if err != nil {

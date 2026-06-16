@@ -47,6 +47,9 @@
 | — | **v0.1.7 MySQL 采集降级** | **PASS** | 3/3 | isPermissionErr/SHOW TABLE STATUS 回退/tfArgs Go 侧过滤
 | — | **v0.1.7 日志合并** | **PASS** | 3/3 | 无 collect.log/无 per-label log/[label=][kind=] 前缀
 | — | **v0.1.7 --timeout 修复** | **PASS** | 6/6 | PG cap 30s/PG 外层查询保护/GaussDB 外层查询保护/MySQL max_execution_time/编译通过/最小构建验证
+| — | **v0.1.7 select+channel 超时防护** | **PASS** | 3/3 | collect/check/execute 三处子 goroutine+select 模式，lib/pq 不可靠时保底 |
+| — | **v0.1.7 check 进度日志** | **PASS** | 2/2 | per-DSN 进度写入 dbexplain.log / 原始表格输出不变 |
+| — | **v0.1.7 连接阶段耗时日志** | **PASS** | 2/2 | [连接] 前置日志 / [连接成功]/[连接失败] 耗时统计 |
 
 **总计: 全部通过。**
 

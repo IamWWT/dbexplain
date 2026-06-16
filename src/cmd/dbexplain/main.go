@@ -247,6 +247,19 @@ func main() {
 
 	metricsCollector := metrics.NewCollector()
 
+	// Metrics channel — goroutines send metrics instead of calling metricsCollector.Record
+	// (which blocks with sync.Mutex in goroutine scheduling contexts when lib/pq is hung).
+	type metricSnapshot struct {
+		label     string
+		kind      string
+		success   bool
+		duration  time.Duration
+		numDBs    int
+		numTables int
+		errMsg    string
+	}
+	metricCh := make(chan metricSnapshot, len(dsns))
+
 	// Semaphore to limit concurrent connections
 	sem := make(chan struct{}, *maxConcurrent)
 
@@ -309,27 +322,30 @@ func main() {
 				inst    *schema.Instance
 				elapsed time.Duration
 			)
+			// Use time.NewTimer for reliable timeout (see handler.go for rationale).
+			timeTimer := time.NewTimer(*perDSNTimeout)
 			select {
 			case res := <-outcome:
 				inst = res.inst
 				err = res.err // err 来自外层 parsed,err:=ParseDSN()—已判空，可安全复用
 				elapsed = time.Since(start)
-			case <-collectCtx.Done():
+				timeTimer.Stop()
+			case <-timeTimer.C:
 				elapsed = time.Since(start)
 				logger.Printf("[采集超时] %s (超过 %v) — 连接/认证/查询任一阶段卡住，已跳过，不影响其他 label", label, *perDSNTimeout)
-				metricsCollector.Record(label, parsed.Kind, false, elapsed, 0, 0, "timeout: collect hung")
+				metricCh <- metricSnapshot{label, parsed.Kind, false, elapsed, 0, 0, "timeout: collect hung"}
 				return
 			}
 
 			if err != nil {
-				metricsCollector.Record(label, parsed.Kind, false, elapsed, 0, 0, config.SanitizeErr(err).Error())
+				metricCh <- metricSnapshot{label, parsed.Kind, false, elapsed, 0, 0, config.SanitizeErr(err).Error()}
 				logger.Printf("skip %s: %v", parsed.Redacted(), err)
 				return
 			}
 
 			nTables := totalTables(inst)
 			nDBs := len(inst.Databases)
-			metricsCollector.Record(label, parsed.Kind, true, elapsed, nDBs, nTables, "")
+			metricCh <- metricSnapshot{label, parsed.Kind, true, elapsed, nDBs, nTables, ""}
 
 			mu.Lock()
 			instances = append(instances, inst)
@@ -340,6 +356,11 @@ func main() {
 	}
 
 	wg.Wait()
+	// Drain metrics channel into collector (goroutines send via channel to avoid mutex blocking).
+	close(metricCh)
+	for snap := range metricCh {
+		metricsCollector.Record(snap.label, snap.kind, snap.success, snap.duration, snap.numDBs, snap.numTables, snap.errMsg)
+	}
 	if len(instances) == 0 {
 		log.Printf("[collect-summary] 所有 DSN 采集均失败，报告为空。请检查日志: %s", logDir)
 	} else {
@@ -711,6 +732,19 @@ func handleCollect(args []string) {
 
 	metricsCollector := metrics.NewCollector()
 
+	// Metrics channel — goroutines send metrics instead of calling metricsCollector.Record
+	// (which blocks with sync.Mutex on Go 1.26 in certain goroutine scheduling contexts).
+	type metricSnapshot struct {
+		label     string
+		kind      string
+		success   bool
+		duration  time.Duration
+		numDBs    int
+		numTables int
+		errMsg    string
+	}
+	metricCh := make(chan metricSnapshot, len(dsns))
+
 	sem := make(chan struct{}, *maxConcurrent)
 
 	for i, rawDSN := range dsns {
@@ -772,27 +806,30 @@ func handleCollect(args []string) {
 				inst    *schema.Instance
 				elapsed time.Duration
 			)
+			// Use time.NewTimer for reliable timeout (see handler.go for rationale).
+			timeTimer := time.NewTimer(*perDSNTimeout)
 			select {
 			case res := <-outcome:
 				inst = res.inst
 				err = res.err // err 来自外层 parsed,err:=ParseDSN()—已判空，可安全复用
 				elapsed = time.Since(start)
-			case <-collectCtx.Done():
+				timeTimer.Stop()
+			case <-timeTimer.C:
 				elapsed = time.Since(start)
 				logger.Printf("[采集超时] %s (超过 %v) — 连接/认证/查询任一阶段卡住，已跳过，不影响其他 label", label, *perDSNTimeout)
-				metricsCollector.Record(label, parsed.Kind, false, elapsed, 0, 0, "timeout: collect hung")
+				metricCh <- metricSnapshot{label, parsed.Kind, false, elapsed, 0, 0, "timeout: collect hung"}
 				return
 			}
 
 			if err != nil {
-				metricsCollector.Record(label, parsed.Kind, false, elapsed, 0, 0, config.SanitizeErr(err).Error())
+				metricCh <- metricSnapshot{label, parsed.Kind, false, elapsed, 0, 0, config.SanitizeErr(err).Error()}
 				logger.Printf("skip %s: %v", parsed.Redacted(), err)
 				return
 			}
 
 			nTables := totalTables(inst)
 			nDBs := len(inst.Databases)
-			metricsCollector.Record(label, parsed.Kind, true, elapsed, nDBs, nTables, "")
+			metricCh <- metricSnapshot{label, parsed.Kind, true, elapsed, nDBs, nTables, ""}
 
 			mu.Lock()
 			instances = append(instances, inst)
@@ -803,6 +840,11 @@ func handleCollect(args []string) {
 	}
 
 	wg.Wait()
+	// Drain metrics channel into collector (goroutines send via channel to avoid mutex blocking).
+	close(metricCh)
+	for snap := range metricCh {
+		metricsCollector.Record(snap.label, snap.kind, snap.success, snap.duration, snap.numDBs, snap.numTables, snap.errMsg)
+	}
 	if len(instances) == 0 {
 		log.Printf("[collect-summary] 所有 DSN 采集均失败，报告为空。请检查日志: %s", logDir)
 	} else {

@@ -92,6 +92,14 @@
 - **`SetMaxOpenConns(1)`**: GaussDB/PostgreSQL Collect functions now set single connection pool to ensure `statement_timeout` applies to all queries in the session.
 - **DSN password `#@!` compatibility**: `escapeUserinfoHash()` now properly handles `#` and subsequent special characters like `@!` in DSN passwords.
 
+### 🐛 `config.SanitizeErr()` Infinite Loop — check/collect Process Hang (ISSUE-095)
+
+- **Root Cause**: `d.Redacted()` placeholder `gaussdb://{dbuser}:{dbpassword}@host:port/db` still matches the URL pattern `://user:pass@host`. SanitizeErr's first pass replaces `{dbpassword}→***`, second pass replaces `***→***` (no-op, but string unchanged) → infinite loop. 28P01 authentication errors passing through this code path cause the process to hang permanently.
+- **Fix**: `newMsg == msg → break` — detects no-change replacements and exits the loop.
+- **Defense-in-depth**:
+  - GaussDB/PostgreSQL `db.Close()` changed to goroutine-based close (`defer func() { go db.Close() }()`), preventing lib/pq internal cleanup from blocking Collect return
+  - `check/handler.go` for-loop `defer cancel()` replaced with explicit `cancel()` after select, preventing cancel function accumulation
+
 ### 🔧 `dbexplain check --label` support
 
 - **`--label` filter**: `dbexplain check` now supports `--label` flag to filter DSNs by label.

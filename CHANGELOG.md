@@ -92,6 +92,14 @@
 - **`SetMaxOpenConns(1)`**: GaussDB/PostgreSQL 的 Collect 函数设置单连接，确保 `statement_timeout` 对本 session 全部查询生效。
 - **DSN 密码 `#@!` 兼容**: `escapeUserinfoHash()` 处理 `#` 后 DSN 中 `@!` 等字符的正确传递。
 
+### 🐛 `config.SanitizeErr()` 死循环 — check/collect 进程卡死 (ISSUE-095)
+
+- **根因**: `d.Redacted()` 占位符 `gaussdb://{dbuser}:{dbpassword}@host:port/db` 仍匹配 URL 模式 `://user:pass@host`。SanitizeErr 第一遍替换 `{dbpassword}→***`，第二遍对 `***→***` 无操作但字符串未变 → 无限循环。28P01 认证失败等错误经过此路径导致进程永久卡死。
+- **修复**: `newMsg == msg → break`，检测替换前后字符串无变化即退出循环。
+- **防御加固**:
+  - GaussDB/PostgreSQL `db.Close()` 改为 goroutine 关闭 (`defer func() { go db.Close() }()`)，防止 lib/pq 内部清理阻塞 Collect 返回
+  - `check/handler.go` for 循环内 `defer cancel()` 改为 select 后显式 `cancel()`，避免 cancel 函数堆积
+
 ### 🔧 `dbexplain check --label` 支持
 
 - **`--label` 过滤**: `dbexplain check` 新增 `--label` 参数，支持按 label 过滤待检查的 DSN。

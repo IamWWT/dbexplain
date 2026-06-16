@@ -235,7 +235,11 @@ func SanitizeErr(err error) error {
 		if atIdx < 0 {
 			break
 		}
-		msg = msg[:passStart] + "***" + msg[passStart+atIdx:]
+		newMsg := msg[:passStart] + "***" + msg[passStart+atIdx:]
+		if newMsg == msg {
+			break // 替换后字符串未变化 → 已脱敏完毕，避免死循环
+		}
+		msg = newMsg
 	}
 	return fmt.Errorf("%s", msg)
 }

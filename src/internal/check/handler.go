@@ -9,6 +9,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -30,6 +31,7 @@ func Handle(args []string) {
 	timeout := fs.Duration("timeout", 10*time.Second, "Per-DSN connection timeout")
 	sample := fs.Bool("sample", false, "enable sample row fetching for comment inference (default: off)")
 	labelFilter := fs.String("label", "", "filter by label")
+	logDirFlag := fs.String("log-dir", "/var/log/dbexplain", "directory for log files")
 	fs.Parse(args)
 
 	var entries []config.DSNEntry
@@ -91,6 +93,14 @@ func Handle(args []string) {
 	fmt.Printf("  Config file: %s\n", config.DescribeConfigSource(configPath))
 	fmt.Printf("  DSN count:   %d\n\n", len(entries))
 
+	// ── Open dbexplain.log for check progress logging ──
+	logDir := config.ResolveLogDir(*logDirFlag)
+	logFile, logErr := os.OpenFile(filepath.Join(logDir, "dbexplain.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if logErr == nil {
+		defer logFile.Close()
+	}
+	baseCheckLogger := log.New(logFile, "[check] ", log.LstdFlags)
+
 	// ── Check each DSN ──
 	type result struct {
 		envKey    string
@@ -107,7 +117,7 @@ func Handle(args []string) {
 	results := make([]result, 0, len(entries))
 	var syntaxFails, connFails, connOK int
 
-	for _, e := range entries {
+	for i, e := range entries {
 		r := result{envKey: e.EnvKey}
 
 		// 1. Parse DSN syntax
@@ -117,6 +127,7 @@ func Handle(args []string) {
 			r.syntaxErr = config.SanitizeErr(err).Error()
 			syntaxFails++
 			results = append(results, r)
+			baseCheckLogger.Printf("(#%d) SYNTAX ERROR: %s", i+1, r.syntaxErr)
 			continue
 		}
 		r.syntaxOK = true
@@ -130,6 +141,13 @@ func Handle(args []string) {
 			r.hostPort += ":" + parsed.Port
 		}
 
+		// ── Log check progress to dbexplain.log ──
+		var checkLogger *log.Logger
+		if logErr == nil {
+			checkLogger = log.New(logFile, fmt.Sprintf("[label=%s] [kind=%s] [check] ", r.label, r.kind), log.LstdFlags)
+			checkLogger.Printf("(#%d) connecting ...", i+1)
+		}
+
 		// 2. Test connectivity via connector.Collect with timeout
 		// Suppress collection logs during connectivity check
 		collectCtx := connector.WithLogger(context.Background(),
@@ -138,7 +156,6 @@ func Handle(args []string) {
 			collectCtx = connector.WithSample(collectCtx)
 		}
 		ctx, cancel := context.WithTimeout(collectCtx, *timeout)
-		defer cancel()
 		oldLogOut := log.Writer()
 		log.SetOutput(io.Discard)
 		start := time.Now()
@@ -154,12 +171,19 @@ func Handle(args []string) {
 			_, subErr := connector.Collect(ctx, e.Raw)
 			ch <- chkResult{subErr}
 		}()
+		// Use time.NewTimer instead of ctx.Done() for reliable timeout.
+		// Go's context.WithTimeout timer may not fire when lib/pq is blocked
+		// in a syscall (the Go runtime cannot schedule the timer goroutine).
+		// time.NewTimer uses the runtime timer heap which fires independently.
+		timeTimer := time.NewTimer(*timeout)
 		select {
 		case res := <-ch:
 			err = res.err
-		case <-ctx.Done():
+			timeTimer.Stop()
+		case <-timeTimer.C:
 			err = context.DeadlineExceeded
 		}
+		cancel()
 
 		log.SetOutput(oldLogOut)
 		elapsed := time.Since(start)
@@ -169,9 +193,15 @@ func Handle(args []string) {
 			r.connOK = false
 			r.connMsg = config.SanitizeErr(err).Error()
 			connFails++
+			if checkLogger != nil {
+				checkLogger.Printf("(#%d) FAIL after %s: %s", i+1, r.latency, r.connMsg)
+			}
 		} else {
 			r.connOK = true
 			connOK++
+			if checkLogger != nil {
+				checkLogger.Printf("(#%d) OK (%s)", i+1, r.latency)
+			}
 		}
 
 		results = append(results, r)

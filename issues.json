@@ -994,6 +994,65 @@
       "file": "src/internal/dsn/dsn.go",
       "created": "2026-06-16",
       "labels": ["v0.1.7", "bug", "dsn", "security"]
+    },
+    {
+      "id": "ISSUE-092",
+      "title": "lib/pq 驱动上下文取消不可靠 — select+channel 超时防护模式",
+      "status": "closed",
+      "closed": "2026-06-16",
+      "priority": "high",
+      "category": "bug",
+      "description": "GaussDB Oracle 兼容模式下，lib/pq 驱动对 context.WithTimeout 取消不可靠。当服务器无响应时，CancelRequest 走独立 TCP 连接也可能卡住。\n\n修复：三层超时防护——\n1. SQL 层 statement_timeout\n2. context.WithTimeout\n3. 子 goroutine + select + channel 模式：goroutine 内执行 Collect/ExecQuery，外层 select 等待 result channel 或 ctx.Done()，超时后返回不卡死主流程\n\n涉及所有 collect、check、execute 三处调用点。子 goroutine 可能泄露但不影响主流程。\n\n涉及文件: cmd/dbexplain/main.go (main + handleCollect), internal/check/handler.go, internal/executor/executor.go",
+      "file": "src/cmd/dbexplain/main.go, internal/check/handler.go, internal/executor/executor.go",
+      "created": "2026-06-16",
+      "labels": ["v0.1.7", "bug", "gaussdb", "timeout", "concurrency"]
+    },
+    {
+      "id": "ISSUE-093",
+      "title": "check 子命令缺少 per-DSN 进度日志",
+      "status": "closed",
+      "closed": "2026-06-16",
+      "priority": "medium",
+      "category": "feature",
+      "description": "dbexplain check 子命令在执行 DSN 连通性检查时，只输出最终表格结果，没有 per-DSN 实时进度。当某个 DSN 连接卡住时，用户只看到 \"DSN count: N\" 后无任何输出，无法判断卡在哪个 DSN。\n\n修复：1) 添加 --log-dir 参数；2) 检查过程中将 per-DSN 进度写入 dbexplain.log（格式 [label=X] [kind=Y] [check] connecting... / OK / FAIL）；3) 原始表格输出到 stdout 保持不变。",
+      "file": "src/internal/check/handler.go",
+      "created": "2026-06-16",
+      "labels": ["v0.1.7", "feature", "check", "logging"]
+    },
+    {
+      "id": "ISSUE-094",
+      "title": "采集连接阶段缺少细粒度耗时日志",
+      "status": "closed",
+      "closed": "2026-06-16",
+      "priority": "medium",
+      "category": "feature",
+      "description": "connector.Collect() 在连接数据库之前没有任何日志输出，导致排查卡住问题时无法区分是「连接阶段卡住」还是「查询阶段卡住」。\n\n修复：在 CollectSafe() 调用前后添加 Logf：\n- [连接] dsn...（连接前）\n- [连接成功] dsn 耗时 Xms（成功）\n- [连接失败] dsn 耗时 Xms: error（失败）\n\n日志通过上下文 Logf 写入 dbexplain.log，格式统一为 [label=X] [kind=Y]。",
+      "file": "src/internal/connector/connector.go",
+      "created": "2026-06-16",
+      "labels": ["v0.1.7", "feature", "logging", "connector"]
+    },
+    {
+      "id": "ISSUE-095",
+      "title": "CRITICAL: config.SanitizeErr() 死循环 — d.Redacted() 占位符匹配 URL 模式导致 check 卡死",
+      "status": "closed",
+      "closed": "2026-06-16",
+      "priority": "critical",
+      "category": "bug",
+      "description": "d.Redacted() 返回的占位符格式 gaussdb://{dbuser}:{dbpassword}@host:port/db 被 SanitizeErr() 误识别为真实 URL 并进入死循环：第1轮替换 {dbpassword}→***，得到 {dbuser}:***@host；第2轮发现 :// 仍在 → 找到 : → 找到 @ → ***→*** 无变化 → 循环永不退出。\n\n触发条件：check handler 对采集错误调用 config.SanitizeErr(err).Error()，当错误信息中包含 d.Redacted() 的 URL 且该 DSN 返回 28P01 或任何 PingContext 错误时触发。\n\n根因：SanitizeErr 的双重脱敏设计 —— Redacted() 已脱敏的字符串又被当作原始 DSN 再次处理，且替换后无变化时缺少退出条件。\n\n修复：newMsg == msg 时 break（字符串未变化说明已脱敏完毕）。通用处理所有 no-op 替换场景，不依赖特定占位符格式。",
+      "file": "src/internal/config/config.go:238",
+      "created": "2026-06-16",
+      "labels": ["critical", "bug", "dead-loop", "v0.1.7", "sanitize", "gaussdb", "28P01"]
+    },
+    {
+      "id": "ISSUE-096",
+      "title": "[next] 新增 --verbose 参数控制 [DEBUG] 日志输出到 dbexplain.log",
+      "status": "open",
+      "priority": "low",
+      "category": "feature",
+      "description": "gaussdb.go 中已添加 `[DEBUG]` 级别日志（ping 耗时等），但 connector.Logf() 没有日志级别过滤，当前这些日志默认就写入 dbexplain.log，用户无法控制。\n\n需求：\n1. connector 包新增 `Debugf(ctx, format, args...)` 函数，仅当 `connector.Verbose=true` 时输出\n2. `[DEBUG]` 消息体由 `Debugf()` 自动添加，调用者只需 `Debugf(ctx, \"ping start: %s\", d.Redacted())`\n3. `Verbose bool` 包级变量（与 `MaxSQLLogLen` 同级）\n4. `--verbose` / `-v` 全局 flag，类似 `preScanSQLLogMaxLen()` 在 main.go 中预先扫描 os.Args\n5. 默认 `Verbose=false`，`[DEBUG]` 日志不输出\n6. `Logf()` 行为不变（info 级别始终输出）",
+      "file": "src/internal/connector/connector.go, src/cmd/dbexplain/main.go, src/internal/connector/gaussdb.go",
+      "created": "2026-06-16",
+      "labels": ["next", "feature", "logging", "debug"]
     }
   ]
 }

@@ -41,7 +41,7 @@ func (postgresConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Insta
 	if err != nil {
 		return nil, schema.NewDBError(d.Redacted(), "", "", "open", err)
 	}
-	defer db.Close()
+	defer func() { go db.Close() }()
 	db.SetMaxOpenConns(1)
 	db.SetMaxIdleConns(1)
 
@@ -596,7 +596,7 @@ func (postgresConnector) ExecQuery(ctx context.Context, opts query.ExecuteOpts) 
 	if err != nil {
 		return nil, fmt.Errorf("postgres open: %w", err)
 	}
-	defer db.Close()
+	defer func() { go db.Close() }()
 
 	db.SetMaxOpenConns(1)
 	db.SetMaxIdleConns(1)

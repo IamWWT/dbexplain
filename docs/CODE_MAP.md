@@ -11,6 +11,7 @@
 | **入口/CLI** | `main` | `src/cmd/dbexplain/main.go` | — |
 | **查询执行** | `main` | `src/cmd/dbexplain/execute.go` | `docs/EXECUTE.md`, `docs/CLI_EXAMPLES.md` |
 | **DSN 解析** | `internal/dsn` | `src/internal/dsn/dsn.go`, `src/internal/dsn/dsn_test.go` | `docs/CONFIG_SEARCH.md` |
+| **配置管理** | `internal/config` | `src/internal/config/config.go` | `docs/CONFIG_SEARCH.md` |
 | **Schema 数据模型** | `schema` | `src/internal/schema/types.go`, `src/internal/schema/errors.go`, `src/internal/schema/infer.go`, `src/internal/schema/infer_test.go` | — |
 | **Connector 接口** | `connector` | `src/internal/connector/connector.go` (接口), `src/internal/connector/registry.go` (注册表), `src/internal/connector/runner.go` (Panic保护), `src/internal/connector/query.go` (SQL执行共享实现) | — |
 | **DuckDB** | `connector` | `src/internal/connector/duckdb.go` | `docs/databases/relational/DUCKDB.md` |
@@ -187,6 +188,7 @@ INPUT ──→ COLLECT ──→ ANALYZE ──→ OUTPUT
 | 加密文件无法解密 | `CONFIG_SEARCH.md` | `crypto/crypto.go`, `fingerprint*.go` |
 | 日志找不到 | `README.md` → `--log-dir` | `cmd/dbexplain/main.go` → `resolveLogDir()` |
 | Issue/修复记录 | `issues.json` | 对应版本的 `CHANGELOG.md` |
+| `dbexplain check` 连接 GaussDB 卡死 | `issues.json` → ISSUE-095 | `config/config.go` → `SanitizeErr()` |
 | 文档与代码不一致 | `CHANGELOG.md` v0.1.0 "文档对齐" | 按 `CODE_MAP.md` 逐模块比对 |
 
 ---

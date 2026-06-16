@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"strings"
+	"time"
 
 	"github.com/IamWWT/dbexplain/internal/capabilities"
 	"github.com/IamWWT/dbexplain/internal/dsn"
@@ -118,5 +119,14 @@ func Collect(ctx context.Context, rawDSN string) (*schema.Instance, error) {
 	if err != nil {
 		return nil, err
 	}
-	return CollectSafe(ctx, c, d)
+	Logf(ctx, "[连接] %s ...", d.Redacted())
+	start := time.Now()
+	inst, err := CollectSafe(ctx, c, d)
+	elapsed := time.Since(start)
+	if err != nil {
+		Logf(ctx, "[连接失败] %s 耗时 %v: %v", d.Redacted(), elapsed, err)
+	} else {
+		Logf(ctx, "[连接成功] %s 耗时 %v", d.Redacted(), elapsed)
+	}
+	return inst, err
 }
