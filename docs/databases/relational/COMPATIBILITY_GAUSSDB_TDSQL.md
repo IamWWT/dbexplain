@@ -1,23 +1,52 @@
 # GaussDB / TDSQL 兼容性确认清单
 
-> 本文档记录 GaussDB（PostgreSQL 兼容）和 TDSQL（MySQL 兼容）在 `dbexplain` 中的操作语义元数据兼容性注意事项。由于这两个数据库在特定环境下的行为可能与原生 PG/MySQL 不同，以下项目需要在实际环境中确认。
+> 本文档记录 GaussDB（PostgreSQL 兼容）和 TDSQL（MySQL 兼容）在 `dbexplain` 中的操作语义元数据兼容性注意事项。
+>
+> **v0.1.7 实机确认**：GaussDB（PG 兼容模式）的 Schema 采集已验证通过，列采集 `::regclass` 问题已修复。
 
 ---
 
 ## GaussDB（华为，PG 兼容）
 
-### pg_stat_user_tables 字段兼容性
+### 已验证兼容（v0.1.7 实机确认）
 
-GaussDB 的 `pg_stat_user_tables` 视图字段名和计数器语义需要与原生 PostgreSQL 对比确认：
+以下 pg_catalog 组件在 GaussDB 上已验证可用：
 
-| 字段 | PG 原生行为 | GaussDB 确认 | 影响 |
-|------|------------|-------------|------|
-| `n_tup_ins` | INSERT 行数 | 待确认 | 操作热度统计 |
-| `n_tup_upd` | UPDATE 行数 | 待确认 | 写放大检测 |
-| `n_tup_del` | DELETE 行数 | 待确认 | 墓碑行诊断 |
-| `n_tup_hot_upd` | HOT UPDATE 行数 | 待确认 | 存储效率 |
-| `n_live_tup` | 存活行数估计 | 待确认 | 表大小评估 |
-| `n_dead_tup` | 死行数 | 待确认 | 清理压力 |
+| 组件 | 状态 | 备注 |
+|------|------|------|
+| `pg_database` | ✅ 兼容 | 增加 `datistemplate` 列不存在时的回退查询（Oracle 兼容模式） |
+| `pg_namespace` | ✅ 兼容 | 标准 schema 发现查询 |
+| `pg_tables` + `pg_class` + `pg_namespace` | ✅ 兼容 | 改用 `c.oid` 显式 JOIN 替代 `::regclass`，跨 schema 同名表安全 |
+| `pg_attribute` | ✅ 兼容 | 无 `::regclass`，通过 `pg_class.oid` JOIN 关联 |
+| `pg_constraint` | ✅ 兼容 | `contype`, `conkey`, `confkey`, `confupdtype`, `confdeltype` 均可用 |
+| `pg_indexes` | ✅ 兼容 | 标准索引视图 |
+| `pg_attrdef` | ✅ 兼容 | 默认值表达式查询 |
+| `format_type()` | ✅ 兼容 | 类型格式化函数 |
+| `col_description()` | ✅ 兼容 | 列注释查询 |
+| `obj_description()` | ✅ 兼容 | 表注释查询，需使用 `c.oid` 入参而非 `::regclass` |
+| `pg_get_expr()` | ✅ 兼容 | 默认值表达式反编译（简单常量默认值已验证） |
+| `pg_total_relation_size()` | ✅ 兼容 | 表大小查询，需使用 `c.oid` 入参 |
+| `pg_stat_user_tables` | ✅ 兼容 | `n_live_tup`, `n_tup_ins/upd/del`, `seq_scan`, `idx_scan` 均可用 |
+
+### 已知差异
+
+#### `::regclass` 类型转换
+- **PostgreSQL**: `'schema.table'::regclass` 语法完全支持
+- **GaussDB Oracle 兼容模式**: **不支持**该语法，需使用 `pg_class` + `pg_namespace` 显式 JOIN
+- **GaussDB PG 兼容模式**: 部分版本支持，但推荐统一使用 JOIN 模式
+
+#### pg_stat_user_tables 字段兼容性
+
+GaussDB 的 `pg_stat_user_tables` 视图字段名和计数器语义在**单节点模式**下已验证兼容。**分布式模式**下留待确认：
+
+| 字段 | PG 原生行为 | GaussDB 单节点 | GaussDB 分布式 | 影响 |
+|------|------------|---------------|----------------|------|
+| `n_tup_ins` | INSERT 行数 | ✅ 已验证 | ⚠️ 待确认 | 操作热度统计 |
+| `n_tup_upd` | UPDATE 行数 | ✅ 已验证 | ⚠️ 待确认 | 写放大检测 |
+| `n_tup_del` | DELETE 行数 | ✅ 已验证 | ⚠️ 待确认 | 墓碑行诊断 |
+| `n_live_tup` | 存活行数估计 | ✅ 已验证 | ⚠️ 待确认 | 表大小评估 |
+
+> 注：分布式 GaussDB 在 CN 上查询 `pg_stat_user_tables` 可能只返回该 CN 的本地统计，而非全局聚合值。这是分布式架构的固有限制，非 bug。
 
 ### pg_stat_statements 扩展
 
@@ -31,6 +60,12 @@ GaussDB 提供 WDR（Workload Diagnosis Report）作为内置诊断功能：
 - `gs_wdr_report()` 函数生成诊断报告
 - `dbe_perf` Schema 下的系统视图
 - 待确认：是否可以通过 SQL 查询方式获取类似 `pg_stat_statements` 的归一化查询统计
+
+### 连接注意事项
+
+- **驱动**: 使用 `lib/pq`（PG 原生驱动），已验证在目标 GaussDB 版本上可用
+- **SSL**: 默认 `sslmode=disable`，如 GaussDB 要求 SSL 需配置 `?sslmode=require`
+- **超时**: `statement_timeout` GUC 在 GaussDB Oracle 兼容模式可能不可用，无超时保护时查询仍会运行
 
 ### 兜底机制
 

@@ -60,7 +60,12 @@ func (postgresConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Insta
 	} else {
 		rows, err := db.QueryContext(ctx, `SELECT datname FROM pg_database WHERE NOT datistemplate AND datallowconn ORDER BY datname`)
 		if err != nil {
-			return nil, schema.NewDBError(d.Redacted(), "", "", "list databases", err)
+			// GaussDB（Oracle 兼容模式）可能没有 datistemplate 列，回退到简单查询
+			logf(ctx, "[postgres] datistemplate query failed, trying fallback: %v", err)
+			rows, err = db.QueryContext(ctx, `SELECT datname FROM pg_database WHERE datallowconn ORDER BY datname`)
+			if err != nil {
+				return nil, schema.NewDBError(d.Redacted(), "", "", "list databases", err)
+			}
 		}
 		defer rows.Close()
 		for rows.Next() {
