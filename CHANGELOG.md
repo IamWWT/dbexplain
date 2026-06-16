@@ -19,6 +19,7 @@
 - **新增文档**: `docs/databases/gaussdb.md` — GaussDB 独立兼容性指南，包含 DSN 配置、Oracle 模式说明、已验证兼容项、已知差异、分布式注意事项。
 - **文档清理**: `COMPATIBILITY_GAUSSDB_TDSQL.md` 拆分为纯 TDSQL 内容，GaussDB 部分移至新文档。
 - **`datistemplate` 回退**: 当 `pg_database.datistemplate` 列缺失时（Oracle 兼容模式），自动回退到无该列的备用查询。
+- **`oracleCompatible=true` DSN 参数**: 新增可选参数，设置后跳过 PG 模式专属的 `datistemplate` 查询，直接使用 Oracle 兼容模式的备选查询。避免日志中出现无效查询失败记录。示例：`gaussdb://user:pwd@host:5432/mydb?oracleCompatible=true&label=my-gauss-oracle`。
 
 ### 🛠 `dbexplain check` 配置检查子命令
 

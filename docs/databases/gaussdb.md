@@ -16,10 +16,15 @@ GaussDB 兼容 PostgreSQL 协议，通过 `lib/pq` 驱动连接。Schema 采集�
 | 默认端口 | 25308 |
 | 别名 | `gaussdb`, `opengauss` |
 | SSL | 默认 `sslmode=disable`，如需 SSL 配置 `?sslmode=require` |
+| oracleCompatible | 可选参数。设 `true` 时跳过 PG 模式专属查询（`datistemplate`），避免无效查询失败日志 |
 
 示例：
 ```bash
+# PG 兼容模式（默认）
 dbexplain -dsn 'gaussdb://user:pwd@192.168.0.1:25308/mydb?label=my-gauss'
+
+# Oracle 兼容模式
+dbexplain -dsn 'gaussdb://user:pwd@192.168.0.1:25308/mydb?oracleCompatible=true&label=my-gauss-oracle'
 ```
 
 ### Oracle 兼容模式

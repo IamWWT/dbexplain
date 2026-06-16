@@ -145,10 +145,12 @@ func printManualGaussDB(p func(string, string) string) {
 ─── GaussDB (华为高斯) ────────────────────────────────────────
 
     DSN 格式:
-      gaussdb://用户:密码@主机:端口/库名?label=别名&sslmode=disable
+      gaussdb://用户:密码@主机:端口/库名?label=别名&sslmode=disable[&oracleCompatible=true]
 
     端口: 默认 25308
     别名: gaussdb, opengauss
+    可选参数:
+      oracleCompatible=true — Oracle 兼容模式优化，跳过 datistemplate 查询
 
     Oracle 兼容模式 (DBCOMPATIBILITY='A' / 'ORA'):
       GaussDB 使用 PostgreSQL 协议通过 lib/pq 驱动连接。
@@ -157,7 +159,7 @@ func printManualGaussDB(p func(string, string) string) {
 
     采集机制:
       • 多 Schema — 自动采集所有非系统 schema (public 非必需)
-      • 库列表   — pg_database (自动回退 datistemplate 缺失)
+      • 库列表   — pg_database (oracleCompatible 时跳过 datistemplate 查询)
       • 表元数据 — pg_class + pg_namespace JOIN（不使用 ::regclass）
       • 列信息   — pg_attribute + pg_constraint: 名称、类型、可空、默认值、
         主键/唯一约束、注释
@@ -173,16 +175,19 @@ func printManualGaussDB(p func(string, string) string) {
 
     示例:
       dbexplain -dsn 'gaussdb://user:pwd@192.168.0.1:25308/mydb?label=my-gauss'
+      dbexplain -dsn 'gaussdb://user:pwd@192.168.0.1:25308/mydb?oracleCompatible=true&label=my-gauss-oracle'
 `,
 		`
 
 ─── GaussDB (Huawei) ──────────────────────────────────────────
 
     DSN format:
-      gaussdb://user:password@host:port/dbname?label=alias&sslmode=disable
+      gaussdb://user:password@host:port/dbname?label=alias&sslmode=disable[&oracleCompatible=true]
 
     Port: default 25308
     Aliases: gaussdb, opengauss
+    Optional params:
+      oracleCompatible=true — skip datistemplate query for Oracle-compatible mode
 
     Oracle-compatible mode (DBCOMPATIBILITY='A' / 'ORA'):
       GaussDB connects via PostgreSQL wire protocol using lib/pq driver.
@@ -191,7 +196,7 @@ func printManualGaussDB(p func(string, string) string) {
 
     Collection mechanism:
       • Multi-schema — auto-collects all non-system schemas (public not required)
-      • DB list      — pg_database (auto-fallback when datistemplate missing)
+      • DB list      — pg_database (skips datistemplate query when oracleCompatible)
       • Table meta   — pg_class + pg_namespace JOIN (no ::regclass)
       • Column info  — pg_attribute + pg_constraint: name, type, nullable,
         default, PK/UNIQUE, comment
@@ -207,6 +212,7 @@ func printManualGaussDB(p func(string, string) string) {
 
     Example:
       dbexplain -dsn 'gaussdb://user:pwd@192.168.0.1:25308/mydb?label=my-gauss'
+      dbexplain -dsn 'gaussdb://user:pwd@192.168.0.1:25308/mydb?oracleCompatible=true&label=my-gauss-oracle'
 `))
 }
 

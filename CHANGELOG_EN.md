@@ -19,6 +19,7 @@
 - **New documentation**: `docs/databases/gaussdb.md` — standalone GaussDB compatibility guide with DSN config, Oracle mode details, verified items, known differences, distributed deployment notes.
 - **Doc cleanup**: `COMPATIBILITY_GAUSSDB_TDSQL.md` split into pure TDSQL content; GaussDB content moved to the new document.
 - **`datistemplate` fallback**: When the `pg_database.datistemplate` column is missing (Oracle-compatible mode), automatically falls back to a query without that column.
+- **`oracleCompatible=true` DSN param**: New optional parameter. When set, skips the PG-mode `datistemplate` query and goes directly to the Oracle-compatible fallback. Avoids failed query log noise. Example: `gaussdb://user:pwd@host:5432/mydb?oracleCompatible=true&label=my-gauss-oracle`.
 
 ### 🛠 `dbexplain check` Configuration Validation
 

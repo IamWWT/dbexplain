@@ -39,6 +39,7 @@ if d.DBName != "" {
 
 - **指定数据库优先**：若 DSN 中提供了库名（`/dbname` 路径段），则仅采集该库。
 - **系统库过滤**：通过 `NOT datistemplate AND datallowconn` 排除模板库（`template0`、`template1`）和不允许连接的库，保留业务库及 `postgres` 系统库。
+- **Oracle 兼容模式优化**：DSN 中设 `oracleCompatible=true` 时跳过 `datistemplate` 查询，直接使用 `SELECT datname FROM pg_database WHERE datallowconn`。Oracle 兼容模式（`DBCOMPATIBILITY='A'` / `'ORA'`）的 `pg_database` 表无 `datistemplate` 列，不设此参数会导致首次查询失败并触发自动回退（查询耗时 + 日志噪音）。
 - **只读查询**：仅读取 `pg_database` 系统表，无任何数据修改风险。
 
 ### 1.3 表信息采集（多 Schema 支持）
