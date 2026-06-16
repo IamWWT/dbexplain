@@ -1,6 +1,6 @@
 # GaussDB 结构采集与排障手册
 
-本文档详细说明 `dbexplain` 工具中 GaussDB 连接器（`connector/postgres.go`）的实现机制。GaussDB 与 PostgreSQL 共享同一连接器代码，通过 `lib/pq` 驱动连接，帮助理解其如何安全地获取数据库列表、表结构、列信息、索引和外键，并对无注释字段进行语义推断，同时提供常见问题的排障方法。
+本文档详细说明 `dbexplain` 工具中 GaussDB 连接器（`connector/gaussdb.go` + `connector/postgres.go`）的实现机制。GaussDB 使用独立的 `gaussdbConnector`（复用 `postgres` 包级函数如 `collectPGDB()`、`buildPGDSN()`），通过 `lib/pq` 驱动连接，帮助理解其如何安全地获取数据库列表、表结构、列信息、索引和外键，并对无注释字段进行语义推断，同时提供常见问题的排障方法。
 
 ---
 
@@ -9,7 +9,7 @@
 ### 1.1 连接建立与安全 Ping
 
 ```
-connStr := buildGaussDSN(d)
+connStr := buildPGDSN(d)
 db, err := sql.Open("postgres", connStr)
 defer db.Close()
 
@@ -18,7 +18,8 @@ if err := db.PingContext(pingCtx); err != nil { ... }
 ```
 
 - **驱动选择**：使用 `github.com/lib/pq`，与 PostgreSQL 共用同一驱动。GaussDB 兼容 PostgreSQL 有线协议，因此无需独立驱动。
-- **Kind 标识**：Kind 字段从 DSN 的 scheme 中提取（`gaussdb://`），而非硬编码。此设计在 v0.0.7 中修复，确保即使与 PG 共用 connector 代码，输出报告中仍正确标识为 GaussDB。
+- **独立连接器**：GaussDB 使用 `gaussdb.go` 中独立的 `gaussdbConnector`，与 `postgresConnector` 分离。包级函数（`collectPGDB()`、`buildPGDSN()`、`executeSQLQuery()`）复用避免代码重复。
+- **Kind 标识**：Kind 字段从 DSN 的 scheme 中提取（`gaussdb://`），由 `gaussdbConnector.Collect()` 设置为 `"gaussdb"`，确保输出报告中正确标识。
 - **DSN 格式**：`gaussdb://user:password@host:25308/dbname?label=xxx&sslmode=disable`。GaussDB 默认端口为 25308（区别于 PostgreSQL 的 5432）。label 参数用于在 `.env` 文件中匹配配置项（`DBEXPLAIN_DSN_xxx`）。
 - **SSL 控制**：通过 DSN 查询参数 `sslmode` 控制，支持 `disable`、`require`、`verify-ca`、`verify-full` 等标准 lib/pq 模式。默认使用 `sslmode=disable` 适用于内网环境；若服务器要求 SSL，需在 DSN 中指定 `sslmode=require` 并提供 CA 证书路径。
 - **超时控制**：Ping 操作使用独立的 5 秒超时，避免长时间阻塞。

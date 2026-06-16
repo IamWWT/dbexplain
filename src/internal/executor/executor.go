@@ -111,8 +111,11 @@ func wrapExplain(sql string, kind string) string {
 	switch kind {
 	case "mysql":
 		return "EXPLAIN FORMAT=JSON " + sql
-	case "postgres", "gaussdb":
+	case "postgres":
 		return "EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT) " + sql
+	case "gaussdb":
+		// GaussDB Oracle 兼容模式不支持 BUFFERS 选项
+		return "EXPLAIN (ANALYZE, FORMAT TEXT) " + sql
 	case "sqlite":
 		return "EXPLAIN QUERY PLAN " + sql
 	case "clickhouse":

@@ -475,8 +475,8 @@ DESCRIPTION
     类型             默认端口   采集方式               元数据亮点
     ───────────────  ────────  ────────────────────  ──────────────────
     mysql            3306      information_schema     FK、索引、注释推断
-    postgres         5432      pg_catalog             多Schema、行数统计
-    gaussdb          25308     pg_catalog (兼容PG)    行数、表大小
+    postgres         5432      pg_catalog             多Schema、行数统计、EXPLAIN BUFFERS
+    gaussdb          25308     pg_catalog (Oracle模式) 与PG同机制、无BUFFERS、regclass转换不可用
     clickhouse       8123      HTTP/system.tables     排序键/分区键/主键
     sqlite           -         PRAGMA                 纯Go驱动(无CGO)
     redis            6379      SCAN/Pipeline           键模式推断/风险诊断
@@ -496,8 +496,8 @@ DESCRIPTION
     Kind             Port     Collection Method      Metadata Highlights
     ───────────────  ───────  ────────────────────   ──────────────────
     mysql            3306     information_schema     FK, indexes, comment inference
-    postgres         5432     pg_catalog             Multi-schema, row estimates
-    gaussdb          25308    pg_catalog (PG compat) Row counts, table sizes
+    postgres         5432     pg_catalog             Multi-schema, row estimates, EXPLAIN BUFFERS
+    gaussdb          25308    pg_catalog (Oracle)     Same as PG, no BUFFERS, no ::regclass
     clickhouse       8123     HTTP/system.tables     Sort/partition/primary keys
     sqlite           -        PRAGMA                 Pure Go driver (no CGO)
     redis            6379     SCAN/Pipeline          Key pattern inference, risk diag

@@ -19,7 +19,8 @@ import (
 
 func init() {
 	Register("postgres", func() Connector { return postgresConnector{} })
-	Register("gaussdb", func() Connector { return postgresConnector{} })
+	// gaussdb 使用独立的 gaussdbConnector（见 gaussdb.go），
+	// 针对 Oracle 兼容模式 (DBCOMPATIBILITY='A'/'ORA') 做了适配。
 }
 
 type postgresConnector struct{}

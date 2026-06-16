@@ -34,8 +34,9 @@
 | | [`databases/relational/POSTGRESQL.md`](databases/relational/POSTGRESQL.md) | PostgreSQL |
 | | [`databases/relational/SQLITE.md`](databases/relational/SQLITE.md) | SQLite |
 | | [`databases/relational/DUCKDB.md`](databases/relational/DUCKDB.md) | DuckDB（可选构建，需 `-tags duckdb`） |
-| | [`databases/relational/GAUSSDB.md`](databases/relational/GAUSSDB.md) | GaussDB |
-| | [`databases/relational/COMPATIBILITY_GAUSSDB_TDSQL.md`](databases/relational/COMPATIBILITY_GAUSSDB_TDSQL.md) | GaussDB / TDSQL 兼容性说明 |
+| | [`databases/relational/GAUSSDB.md`](databases/relational/GAUSSDB.md) | GaussDB（实现手册） |
+| | [`databases/gaussdb.md`](databases/gaussdb.md) | GaussDB 兼容性指南（Oracle 模式） |
+| | [`databases/relational/COMPATIBILITY_GAUSSDB_TDSQL.md`](databases/relational/COMPATIBILITY_GAUSSDB_TDSQL.md) | TDSQL 兼容性说明 |
 | | [`databases/relational/ORACLE.md`](databases/relational/ORACLE.md) | Oracle（12c+ 需 FETCH FIRST 支持） |
 | **分析型** | [`databases/analytical/CLICKHOUSE.md`](databases/analytical/CLICKHOUSE.md) | ClickHouse |
 | | [`databases/analytical/HIVE.md`](databases/analytical/HIVE.md) | Hive（通过 HiveServer2 SQL, 端口 10000） |

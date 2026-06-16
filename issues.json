@@ -973,13 +973,13 @@
     },
     {
       "id": "ISSUE-090",
-      "title": "GaussDB ::regclass 不兼容导致列采集为空",
+      "title": "GaussDB Oracle 兼容模式全面适配 — 独立 connector、EXPLAIN 格式、CLI 帮助",
       "status": "closed",
       "closed": "2026-06-16",
       "priority": "high",
       "category": "bug",
-      "description": "GaussDB（Oracle兼容模式）不支持 PostgreSQL 的 'schema.table'::regclass 类型转换语法，导致 fillPGTable() 列查询 WHERE a.attrelid=$1::regclass 条件永不匹配，所有表显示 \"(no columns)\"。\n\n修复1: 列查询改用 JOIN pg_class + pg_namespace WHERE c.relname=$1 AND n.nspname=$2；表查询的 obj_description() 和 pg_total_relation_size() 改用 c.oid 入参。\n修复2: pg_database.datistemplate 列在部分 GaussDB 版本不存在，增加回退查询。\n\n审计: 完成全部 8 个 SQL 查询点的 GaussDB 兼容性审计，确认其余查询均可用。更新兼容性文档。\n\n涉及版本：v0.1.7",
-      "file": "src/internal/connector/postgres.go",
+      "description": "GaussDB（Oracle兼容模式 DBCOMPATIBILITY='A'/'ORA'）全面适配：\n\n1. 独立 gaussdbConnector: 新建 gaussdb.go，与 postgresConnector 分离，复用 collectPGDB()/buildPGDSN()/executeSQLQuery() 等包级函数，零代码重复。\n2. EXPLAIN 兼容: executor.go 中 GaussDB 去掉 BUFFERS 选项（Oracle模式不支持）。\n3. ::regclass 替代: 列查询和表查询改用 pg_class+pg_namespace 显式 JOIN。\n4. datistemplate 回退: 在 Oracle 兼容模式可能缺失，自动回退到简单查询。\n5. CLI 帮助: 更新 manual.go/db_sections.go 中 GaussDB/PostgreSQL 说明，标注 Oracle 模式限制。\n6. 文档: 新建 docs/databases/gaussdb.md 独立兼容性指南，清理 COMPATIBILITY_GAUSSDB_TDSQL.md。\n\n涉及文件: gaussdb.go, postgres.go, executor.go, manual.go, db_sections.go, gaussdb.md, COMPATIBILITY_GAUSSDB_TDSQL.md, CODE_MAP.md, file_index.md",
+      "file": "src/internal/connector/gaussdb.go, postgres.go, executor.go, manual, docs",
       "created": "2026-06-16",
       "labels": ["v0.1.7", "bug", "gaussdb", "connector"]
     }

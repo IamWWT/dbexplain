@@ -85,8 +85,8 @@ func printManualPostgres(p func(string, string) string) {
       • 库列表   — pg_database (跳过模板库和不可连接库)
       • 表元数据 — pg_class + pg_namespace: 表名、行数(n_live_tup)、
         体积(pg_total_relation_size)、注释(obj_description)
-      • 列信息   — information_schema.columns + pg_constraint:
-        名称、类型、可空、默认值、主键/唯一约束标记、注释(col_description)
+      • 列信息   — pg_attribute + pg_class + pg_namespace:
+        名称、类型(format_type)、可空、默认值、主键/唯一约束标记、注释(col_description)
       • 索引     — pg_indexes: 名称、唯一性、列列表
       • 外键     — pg_constraint (confreltype='f'): 约束名、列、引用表/列
       • 行数统计 — pg_stat_user_tables.n_live_tup (近似值)
@@ -122,8 +122,8 @@ func printManualPostgres(p func(string, string) string) {
       • DB list      — pg_database (skips templates and non-connectable DBs)
       • Table meta   — pg_class + pg_namespace: name, row count (n_live_tup),
         size (pg_total_relation_size), comment (obj_description)
-      • Column info  — information_schema.columns + pg_constraint:
-        name, type, nullable, default, PK/UNIQUE flag, comment (col_description)
+      • Column info  — pg_attribute + pg_class + pg_namespace:
+        name, type (format_type), nullable, default, PK/UNIQUE flag, comment (col_description)
       • Indexes      — pg_indexes: name, uniqueness, column list
       • Foreign keys — pg_constraint (confreltype='f'): constraint name, columns,
         referenced table/columns
@@ -142,36 +142,68 @@ func printManualPostgres(p func(string, string) string) {
 func printManualGaussDB(p func(string, string) string) {
 	fmt.Print(p(`
 
-─── GaussDB ───────────────────────────────────────────────────
+─── GaussDB (华为高斯) ────────────────────────────────────────
 
     DSN 格式:
-      gaussdb://用户:密码@主机:端口/库名?label=别名
+      gaussdb://用户:密码@主机:端口/库名?label=别名&sslmode=disable
 
     端口: 默认 25308
     别名: gaussdb, opengauss
 
-    说明:
-      GaussDB 兼容 PostgreSQL 协议，使用同一个 Connector。
-      采集机制、安全策略与 PostgreSQL 完全相同 (pg_catalog)。
-      支持行数统计、多 Schema 自动采集。
+    Oracle 兼容模式 (DBCOMPATIBILITY='A' / 'ORA'):
+      GaussDB 使用 PostgreSQL 协议通过 lib/pq 驱动连接。
+      采集机制与 PostgreSQL 基于相同的 pg_catalog 系统表。
+      已实机验证（v0.1.7）在 Oracle 兼容模式下可用。
+
+    采集机制:
+      • 多 Schema — 自动采集所有非系统 schema (public 非必需)
+      • 库列表   — pg_database (自动回退 datistemplate 缺失)
+      • 表元数据 — pg_class + pg_namespace JOIN（不使用 ::regclass）
+      • 列信息   — pg_attribute + pg_constraint: 名称、类型、可空、默认值、
+        主键/唯一约束、注释
+      • 索引     — pg_indexes
+      • 外键     — pg_constraint (含 ON UPDATE / ON DELETE 动作)
+      • 行数统计 — pg_stat_user_tables.n_live_tup (近似值)
+
+    已知限制 (Oracle 兼容模式):
+      • EXPLAIN 不支持 BUFFERS 选项（自动省略）
+      • statement_timeout GUC 可能不兼容（应用层超时兜底）
+      • ::regclass 类型转换不可用（已通过 JOIN 替代）
+      • 分布键、分区信息尚未采集
 
     示例:
       dbexplain -dsn 'gaussdb://user:pwd@192.168.0.1:25308/mydb?label=my-gauss'
 `,
 		`
 
-─── GaussDB ───────────────────────────────────────────────────
+─── GaussDB (Huawei) ──────────────────────────────────────────
 
     DSN format:
-      gaussdb://user:password@host:port/dbname?label=alias
+      gaussdb://user:password@host:port/dbname?label=alias&sslmode=disable
 
     Port: default 25308
     Aliases: gaussdb, opengauss
 
-    Notes:
-      GaussDB is PostgreSQL-protocol compatible and uses the same Connector.
-      Collection mechanism and safety policies are identical to PostgreSQL
-      (pg_catalog). Supports row stats and multi-schema auto-collection.
+    Oracle-compatible mode (DBCOMPATIBILITY='A' / 'ORA'):
+      GaussDB connects via PostgreSQL wire protocol using lib/pq driver.
+      Collection mechanism is based on pg_catalog, same as PostgreSQL.
+      Verified (v0.1.7) working in Oracle-compatible mode.
+
+    Collection mechanism:
+      • Multi-schema — auto-collects all non-system schemas (public not required)
+      • DB list      — pg_database (auto-fallback when datistemplate missing)
+      • Table meta   — pg_class + pg_namespace JOIN (no ::regclass)
+      • Column info  — pg_attribute + pg_constraint: name, type, nullable,
+        default, PK/UNIQUE, comment
+      • Indexes      — pg_indexes
+      • Foreign keys — pg_constraint (with ON UPDATE / ON DELETE actions)
+      • Row stats    — pg_stat_user_tables.n_live_tup (approximate)
+
+    Known limitations (Oracle-compatible mode):
+      • EXPLAIN does not support BUFFERS option (automatically omitted)
+      • statement_timeout GUC may be unavailable (app-level timeout fallback)
+      • ::regclass cast not supported (replaced by JOIN pattern)
+      • Distribution keys and partition info not yet collected
 
     Example:
       dbexplain -dsn 'gaussdb://user:pwd@192.168.0.1:25308/mydb?label=my-gauss'
