@@ -32,6 +32,7 @@
 | — | **v0.1.7 Prometheus meta rows** | **PASS** | 2/2 | _labels 206 rows, _metrics 644 rows |
 | — | **v0.1.7 CTE 写检测** | **PASS** | 2/2 | WITH + 主查询写, WITH + CTE 体写 |
 | — | **v0.1.7 check 子命令** | **PASS** | 11/11 | [21-check-command.md](21-check-command.md) 语法/连接/超时/混合/安全
+| — | **v0.1.7 GaussDB oracleCompatible** | **PASS** | 4/4 | DSN 解析 + DSNParam 取值 + SQL 日志截断默认/自定义/截断
 
 **总计: 全部通过。**
 

@@ -29,6 +29,7 @@ func TestParseDSN_Schemes(t *testing.T) {
 		// GaussDB variants
 		{raw: "gaussdb://user:pass@host:5432/db", wantKind: "gaussdb", wantHost: "host", wantPort: "5432"},
 		{raw: "opengauss://user@host/db", wantKind: "gaussdb"},
+		{raw: "gaussdb://user:pass@host:5432/db?oracleCompatible=true&label=my-gauss", wantKind: "gaussdb", wantHost: "host", wantPort: "5432"},
 
 		// SQLite variants
 		{raw: "sqlite://./test.db", wantKind: "sqlite"},
@@ -104,6 +105,7 @@ func TestParseDSN_QueryParams(t *testing.T) {
 		wantSSLMode string
 		wantTLS     bool
 		wantCluster bool
+		wantParams  map[string]string
 	}{
 		{raw: "mysql://root:pass@host:3306/db?label=myapp", wantLabel: "myapp"},
 		{raw: "postgres://user@host/db?sslmode=require", wantSSLMode: "require"},
@@ -113,6 +115,8 @@ func TestParseDSN_QueryParams(t *testing.T) {
 		{raw: "elasticsearch://host:9200?tls=true", wantTLS: true},
 		{raw: "redis://host:6379?tls=true", wantTLS: true},
 		{raw: "mysql://host/db?label=测试&tls=false", wantLabel: "测试", wantTLS: false},
+		{raw: "gaussdb://user:pass@host:5432/db?oracleCompatible=true&label=my-gauss", wantLabel: "my-gauss", wantParams: map[string]string{"oracleCompatible": "true"}},
+		{raw: "gaussdb://user:pass@host:5432/db?label=my-gauss", wantLabel: "my-gauss", wantParams: map[string]string{"oracleCompatible": ""}},
 	}
 
 	for _, tt := range tests {
@@ -132,6 +136,12 @@ func TestParseDSN_QueryParams(t *testing.T) {
 			}
 			if tt.wantCluster != d.Cluster {
 				t.Errorf("Cluster: got %v, want %v", d.Cluster, tt.wantCluster)
+			}
+			for key, want := range tt.wantParams {
+				got := d.DSNParam(key)
+				if got != want {
+					t.Errorf("DSNParam(%q): got %q, want %q", key, got, want)
+				}
 			}
 		})
 	}
