@@ -1,5 +1,7 @@
 # Schema 采集性能优化测试 (v0.1.7)
 
+> **已合并**: 本文件内容已合并到 [02-schema-collection.md §2.7](02-schema-collection.md#27-schema-采集性能优化-v017)。请直接参考该文件。
+
 > 验证 PG/MySQL 批量查询、`--no-sample`、`--skip-opstats`、CSV/XLSX 流式读取、`inferRefs` name index 五项优化。
 
 ---
@@ -118,9 +120,7 @@ cd /tmp && ../src/dbexplain check
 rm -f /tmp/.env.dbexplain
 ```
 
-<!--
-旧版 `--env=false` 测试已移除（v0.1.8 彻底移除 -env 参数）
--->
+<!-- 旧版 --env 测试已移除（v0.1.8 彻底移除 -env 参数） -->
 
 ### 7. inferRefs name index 不退化
 

@@ -77,10 +77,18 @@ $BIN execute -h 2>&1 | head -15
 $BIN list -h 2>&1 | head -10
 ```
 
-## 9.10 encrypt -h
+## 9.10 encrypt 子命令
 
 ```bash
+# encrypt -h 帮助
 $BIN encrypt -h 2>&1 | head -10
+# 预期: 包含 Usage of encrypt
+
+# encrypt 加密文件
+echo 'DBTEST=sqlite:///:memory:?label=test' > /tmp/test_encrypt.env
+$BIN encrypt /tmp/test_encrypt.env 2>&1 | head -5
+# 预期: 显示加密成功或密码提示
+rm -f /tmp/test_encrypt.env
 ```
 
 ## 9.11 collect 子命令
@@ -94,8 +102,12 @@ $BIN collect -h 2>&1 | head -10
 $BIN collect 2>&1 | head -3
 # 预期: 提示无 DSN 的错误消息
 
-# collect 向后兼容
-$BIN --human 2>&1 | head -5
+# collect 带 DSN（文件数据源，无需外部数据库）
+$BIN collect -dsn "csv:///tmp/dbexplain-test/users.csv?label=csv-users" --human 2>&1 | head -15
+# 预期: 显示 Schema 采集结果，包含 csv-users 的数据库/表信息
+
+# collect 向后兼容（无子命令 = collect）
+$BIN -dsn "csv:///tmp/dbexplain-test/users.csv?label=csv-users" --human 2>&1 | head -5
 # 预期: 与 collect --human 输出一致
 ```
 

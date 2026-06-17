@@ -12,8 +12,8 @@ BIN="../release/dbexplain"
 # 或使用 go run: BIN="go run ."
 ```
 
-> **配置优先级**：运行 `-env` 前确保 CWD 中有 `.env.dbexplain` 或设置 `DBPROBE_ENV_FILE=.env`。
-> 详见 [README.md](README.md#配置优先级说明) 和 [docs/CONFIG_SEARCH.md](../CONFIG_SEARCH.md)。
+> **配置优先级**：确保 CWD 中有 `.env.dbexplain` 或设置 `DBPROBE_ENV_FILE`。
+> 详见 [README.md](README.md#配置优先级说明) 和 [docs/CONFIG_SEARCH.md](../setup-guide/CONFIG_SEARCH.md)。
 
 ## 2.1 全量 Schema 采集 (JSON)
 
@@ -147,4 +147,67 @@ tables = sum(len(db.get('tables',[])) for db in inst.get('databases',[]))
 print(f'  kind={inst.get(\"kind\")} tables={tables}')
 "
 done
+```
+
+## 2.7 Schema 采集性能优化 (v0.1.7+)
+
+### 2.7.1 --no-sample flag
+
+```bash
+$BIN --help 2>&1 | grep no-sample
+# 预期: --no-sample  Skip sample row fetching during schema collection
+
+$BIN collect --help 2>&1 | grep no-sample
+# 预期: --no-sample  Skip sample row fetching during schema collection
+```
+
+### 2.7.2 --skip-opstats flag
+
+```bash
+$BIN --help 2>&1 | grep skip-opstats
+# 预期: --skip-opstats  Skip MySQL performance_schema op stats
+```
+
+### 2.7.3 CSV 流式读取验证
+
+```bash
+echo -e "id,name\n1,alice\n2,bob\n3,charlie\n4,dave\n5,eve" > /tmp/test_stream.csv
+
+$BIN execute -dsn "csv:///tmp/test_stream.csv?label=csvtest" -limit 3 "SELECT * FROM t LIMIT 2"
+# 预期: 返回 2 行（id=1,alice; id=2,bob）
+
+$BIN execute -dsn "csv:///tmp/test_stream.csv?label=csvtest" -limit 10 "SELECT * FROM t"
+# 预期: 返回全部 5 行
+
+rm -f /tmp/test_stream.csv
+```
+
+### 2.7.4 XLSX 流式读取验证
+
+```bash
+python3 -c "
+from openpyxl import Workbook
+wb = Workbook()
+ws = wb.active
+ws.title = 'Sheet1'
+ws.append(['id', 'name'])
+for i in range(1, 101):
+    ws.append([i, f'user{i}'])
+wb.save('/tmp/test_stream.xlsx')
+" 2>/dev/null || echo "skip (no python/openpyxl)"
+
+$BIN execute -dsn "xlsx:///tmp/test_stream.xlsx?label=xlsxtest" -limit 5 "SELECT * FROM Sheet1 LIMIT 3"
+# 预期: 返回 3 行
+
+$BIN execute -dsn "xlsx:///tmp/test_stream.xlsx?label=xlsxtest" -limit 5 "SELECT COUNT(*) AS cnt FROM Sheet1"
+# 预期: 返回 COUNT = 100
+
+rm -f /tmp/test_stream.xlsx
+```
+
+### 2.7.5 inferRefs name index 不退化
+
+```bash
+go test -tags full ./internal/analyze/ -v -count=1
+# 预期: PASS（或 [no test files] — analyze 包编译即验证）
 ```

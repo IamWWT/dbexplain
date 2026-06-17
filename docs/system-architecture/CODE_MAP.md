@@ -53,7 +53,7 @@
 
 | Connector | CapSQL | CapFile | CapFK | CapIndex | CapRowCount | CapSampling | CapTTL | CapPartition | CapVector | CapPromQL |
 |-----------|--------|---------|-------|----------|-------------|-------------|--------|--------------|-----------|-----------|
-| MySQL | ✓ | — | ✓ | ✓ | — | ✓ | — | — | — | — |
+| MySQL | ✓ | — | ✓ | ✓ | ✓ | ✓ | — | — | — | — |
 | PostgreSQL | ✓ | — | ✓ | ✓ | ✓ | ✓ | — | — | — | — |
 | SQLite | ✓ | — | ✓ | — | — | ✓ | — | — | — | — |
 | DuckDB | ✓ | — | ✓ | ✓ | ✓ | ✓ | — | — | — | — |
@@ -82,7 +82,7 @@
 | `CLI_EXAMPLES.md` | `execute.go`, `repl.go` | 15+ 条实测查询案例（含 REPL 全流程） |
 | `REPL.md` | `cmd/dbexplain/repl.go` | REPL 交互模式：启动/命令/安全/限制/测试结果 |
 | `POLICY.md` | `policy/policy.go`, `policy/policy_test.go` | DENY_TABLES/COLUMNS/STATEMENTS + MASK_COLUMNS |
-| `CONFIG_SEARCH.md` | `cmd/dbexplain/main.go`, `internal/dsn/dsn.go`, `crypto/` | 6 级路径搜索、加密配置自动解密 |
+| `CONFIG_SEARCH.md` | `cmd/dbexplain/main.go`, `internal/dsn/dsn.go`, `crypto/` | 7 级路径搜索、加密配置自动解密 |
 | `DEPLOY.md` | `build.sh`, `dbexplain-skill/scripts/` | 安装部署、Skill 集成 |
 | `SECURITY_CHECKLIST.md` | 全局 | 发布前安全检查清单 |
 | `FILE_PROCESSING.md` | `connector/csv.go`, `connector/xlsx.go`, `connector/infer.go` | CSV/TSV/XLSX 处理细节 |

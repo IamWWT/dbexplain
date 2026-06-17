@@ -11,6 +11,14 @@
 - **Migration**: Remove `-env` from all command invocations. The tool now auto-loads `.env.dbexplain` by default with no extra flags needed.
 - **ISSUE-098**: Refactoring task tracking.
 
+### 📄 SKILL Docs Upgrade — Scenario-Driven Authoring
+
+- **`docs/contribution-guide/SKILL_AUTHORING.md`: Added "Scenario-Driven Authoring" chapter**: Defines the scenario triad (user says → AI does → verify), P0/P1/P2 priority tiers (usage-frequency-driven content organization), scenario template, and content organization checklist. Addresses the gap where the original spec only covered "how to write" but not "how to organize by user scenarios".
+- **`dbexplain-skill/SKILL_ZH.md` / `SKILL_EN.md`: §4 decision table reorganized by P0/P1/P2 tiers**: P0 scenarios (DB inspection/schema/connectivity) first, P1 (query/statistics/topology) middle, P2 (Diff/federated/file analysis) last. New scenarios added: DB inspection, NL→SQL ("count last month's orders"), data quality check, Schema Diff. Trigger keywords expanded from 11 to 16.
+- **Connectivity check promoted from §8 Notes to §5.3 as standalone workflow step**: P0 scenario executed before schema collection, with verify checkpoint and fallback path. Duplicate `check`/`list` references removed from §6/§8.
+- **New §5.8 Schema Diff**: `dbexplain diff --cache` command mapped to "what changed" user scenario.
+- **Full section renumbering**: collect/execute/DSL/file query → 5.4/5.5/5.6/5.7, all cross-references updated.
+
 ## v0.1.7 (2026-06-16) — Prometheus Meta Table Rows + CTE Write Detection Hardening + GaussDB Oracle-Compatible Mode Adaptation
 
 ### ✨ Prometheus Meta Table Rows
@@ -50,7 +58,7 @@
 ### 📄 Documentation
 
 - **`docs/test/21-check-command.md`**: New 11 test cases for the check subcommand.
-- **`docs/CODE_MAP.md`**: Added `dbexplain check` → `internal/check/handler.go` mapping.
+- **`docs/system-architecture/CODE_MAP.md`**: Added `dbexplain check` → `internal/check/handler.go` mapping.
 - **`docs/file_index.md`**: Added `test/21-check-command.md` entry.
 - **`docs/test/RESULTS.md`**: Updated v0.1.7 test results.
 - **`.env.dbexplain.example`**: Added GaussDB DSN configuration example.
@@ -167,7 +175,7 @@
 - **Added** `docs/databases/relational/ORACLE.md` (Oracle data source usage guide)
 - **Added** `docs/databases/analytical/HIVE.md` (Hive data source usage guide)
 - **README bilingual sync**: data source count 13 → 15, connector layer gains Oracle (relational) / Hive (analytical)
-- **`docs/CODE_MAP.md`**: Added Oracle/Hive module mapping [+2 rows]
+- **`docs/system-architecture/CODE_MAP.md`**: Added Oracle/Hive module mapping [+2 rows]
 - **`docs/file_index.md`**: Added ORACLE.md / HIVE.md entries
 
 ## v0.1.4 (2026-06-04) — Prometheus Time Series DB Connector + Collection Metrics
@@ -193,7 +201,7 @@
 - **README bilingual sync**: source count 12 → 13, capability matrix gains "Time Series" Prometheus row (Collect/REPL/PromQL)
 - **README architecture restructure**: Both languages gain architecture hierarchy (5-layer ASCII diagram + layer description table). Tabularized capability matrix, core capabilities, output formats, security layers, binary variants, CLI quick reference, doc navigation. ES REPL marker updated to ✅, Prometheus DSL footnote updated for federation support.
 - **docs/file_index.md**: Added prometheus.md to §3 Time Series category
-- **docs/CODE_MAP.md**: Module mapping for Prometheus connector + CapPromQL capability matrix column + doc cross-references
+- **docs/system-architecture/CODE_MAP.md**: Module mapping for Prometheus connector + CapPromQL capability matrix column + doc cross-references
 - **CLI_EXAMPLES.md**: New Section 11 — Prometheus execution examples (execute/DSL/REPL/security checks), updated Section 13 REPL output and data source table
 - **docs/test/README.md**: Test overview updated (17 data sources / 153 test items / L8 Prometheus)
 - **docs/test/RESULTS.md**: v0.1.4 test results, 153/153 passed (100%)
@@ -325,17 +333,17 @@
 - **Pre-release checklist supplement** (ISSUE-073): SECURITY_CHECKLIST.md §6 added version consistency, CHANGELOG completeness, issues.json validation, binary smoke test, artifact integrity, stale doc reference check
 - **`docs/test/01-environment.md` expanded**: New §1.9 build mode factor analysis (compile time/size/functionality/UPX/security/scenario guide/verification/conclusions) with measured data
 - **`docs/test/RESULTS.md` build optimization**: 5 tag combinations with measured sizes, panorama Tag→Kind→DSN scheme mapping, security verification table
-- **`docs/DEPLOY.md` build table**: Mode descriptions updated with explicit GOOS/GOARCH lists
-- **`docs/SKILL_AUTHORING.md` overhaul**: Karpathy context engineering principles — added context economy/verifiability principles, metadata entry emphasis, description formula, input definition section, failure handling rules, progressive disclosure guide, eval-first iteration flow, complete example template
+- **`docs/setup-guide/DEPLOY.md` build table**: Mode descriptions updated with explicit GOOS/GOARCH lists
+- **`docs/contribution-guide/SKILL_AUTHORING.md` overhaul**: Karpathy context engineering principles — added context economy/verifiability principles, metadata entry emphasis, description formula, input definition section, failure handling rules, progressive disclosure guide, eval-first iteration flow, complete example template
 - **SKILL_ZH.md / SKILL_EN.md refactored**: 330→197 lines (within 200-line cap). Removed SQL syntax/error tables (referenced via references/), added input definition/failure handling, streamlined DSL/delta detection/params redundancy
 - **README Capability Matrix**: Replaced simple "Supported Data Sources" table with a 5-column capability matrix (Collect/SQL Query/REPL/DSL Federated/File Engine) × 11 data sources — one-glance panorama
 - **`docs/test/RESULTS.md` consolidation**: Merged 3 redundant sections (v0.1.0/v0.1.1/duplicate v0.1.2) into a single v0.1.2 report, added "Closed-Loop Verification Fixes" section
-- **`docs/REPL.md` updated**: Removed ClickHouse semicolon limitation (fixed); ES limitation expanded with detailed workarounds (SQL via `_sql`/collect)
+- **`docs/user-guide/REPL.md` updated**: Removed ClickHouse semicolon limitation (fixed); ES limitation expanded with detailed workarounds (SQL via `_sql`/collect)
 - **`docs/test/09-cli-help.md` expanded**: Added ClickHouse semicolon and ES JSON test cases
 - **REPL `.list`/`.databases` command** (ISSUE-074): New REPL dot commands to list all configured data sources with index, label, kind, and current connection marker
 - **CONSTITUTION.md review and update**: Core deliverables corrected (removed unimplemented IR Product concept); Principle 3 split into Collect/Query phases with updated MongoDB descriptions; Build & Release section streamlined to DEPLOY.md reference
 - **SECURITY_CHECKLIST.md enhanced**: New §5a pre-commit quick check (5 items, ~30s); §6 added 5 new pre-release checks (script version consistency, test doc version expectations, Markdown link validity, cross-platform version consistency, dev binary `-tags full` verification); §6 new "Historical Pitfalls" table
-- **Full stale reference cleanup**: Fixed `../docs/CONFIG_SEARCH.md` → `../CONFIG_SEARCH.md` in 10 test docs; fixed broken links in DEPLOY.md and file_index.md; 20+ stale references corrected project-wide
+- **Full stale reference cleanup**: Fixed `../docs/setup-guide/CONFIG_SEARCH.md` → `../CONFIG_SEARCH.md` in 10 test docs; fixed broken links in DEPLOY.md and file_index.md; 20+ stale references corrected project-wide
 - **Script version sync**: install.sh/uninstall.sh/install.ps1/uninstall.ps1 headers and `$VERSION` uniformly updated to v0.1.2 (previously lingering v0.1.0)
 
 ## v0.1.1 (2026-06-02) — Internal Restructuring + Unified DSL Query Entry
@@ -357,7 +365,7 @@
 
 ### Documentation
 - **README bilingual split**: README.md → symlink to README_ZH.md, new `README_EN.md` for independent English maintenance. Added doc navigation table, streamlined content
-- **New `docs/USAGE_GUIDE.md`**: Comprehensive coverage of all 11 data sources from install to query, with Linux/macOS/Windows instructions
+- **New `docs/user-guide/USAGE_GUIDE.md`**: Comprehensive coverage of all 11 data sources from install to query, with Linux/macOS/Windows instructions
 - **Stale content fixes**: CLI_EXAMPLES.md CSV section corrected (file engine supports full SQL); sql-syntax.md/troubleshooting.md window function labels updated to ✅ supported
 - **docs/test/ cleanup**: Removed outdated PNG screenshots
 
@@ -408,9 +416,9 @@
 
 ### Documentation Alignment (Phase D1-D5)
 - **24+ .md files aligned** with v0.1.0 code: version numbers, PostgreSQL schema scope, Qdrant TLS/execute, Redis readOps whitelist, data source counts, deprecated `--manual` references
-- **`docs/ALGORITHMS.md`**: Added `vector` and `file` capabilities; updated version status
-- **`docs/ARCHITECTURE.md`**: Replaced `--manual` with `all`/`<dbtype>`; updated directory structure
-- **`docs/POLICY.md`**: Added troubleshooting reference table (4 common issues)
+- **`docs/system-architecture/ALGORITHMS.md`**: Added `vector` and `file` capabilities; updated version status
+- **`docs/system-architecture/ARCHITECTURE.md`**: Replaced `--manual` with `all`/`<dbtype>`; updated directory structure
+- **`docs/security-policies/POLICY.md`**: Added troubleshooting reference table (4 common issues)
 - **`README.md` / `README_EN.md`**: Simplified by ~62% (541→207 / 540→194 lines), moved detail to docs/
 - **`issues.json`**: Merged ISSUE-062.md content as ISSUE-064; resolved numbering collision
 
@@ -534,7 +542,7 @@
 - **All 9 database types covered**: SQL types (MySQL/PostgreSQL/GaussDB/SQLite/ClickHouse/Elasticsearch) support all 3 levels; MongoDB/Qdrant support statement+collection level; Redis supports statement+key level (with wildcard matching)
 - **Global + per-DSN config**: `DENY_TABLES`/`DENY_COLUMNS`/`DENY_STATEMENTS` support global config and `DB<n>_` prefix for per-DSN appending
 - **Column value masking**: `MASK_COLUMNS` replaces sensitive column values post-execution (e.g. `password_hash=***`), as an alternative to hard blocking. Supports glob matching, works across all database types
-- **Dedicated documentation**: New `docs/POLICY.md` with per-database deny rules and configuration examples
+- **Dedicated documentation**: New `docs/security-policies/POLICY.md` with per-database deny rules and configuration examples
 - **Unit tests**: 39 test cases (Load/CheckSQL/CheckNative/Extract full coverage) + 10+ regression tests for security bypass vectors
 
 ### Credential Protection
@@ -561,9 +569,9 @@
 - **Malformed glob warnings**: Added `log.Printf` warnings for `globMatch()` and `filepath.Match()` error-drops in `policy.go`, making misconfigured patterns discoverable
 
 ### Documentation Updates
-- `docs/POLICY.md`: Security policy engine documentation (new)
-- `docs/EXECUTE.md`: Security architecture section expanded with bypass prevention and output safety
-- `docs/SECURITY_CHECKLIST.md`: 10+ new check items (credential protection/input validation/runtime safety/transport security)
+- `docs/security-policies/POLICY.md`: Security policy engine documentation (new)
+- `docs/user-guide/EXECUTE.md`: Security architecture section expanded with bypass prevention and output safety
+- `docs/security-policies/SECURITY_CHECKLIST.md`: 10+ new check items (credential protection/input validation/runtime safety/transport security)
 - `docs/CLICKHOUSE.md`: Auth method updated (URL params → request headers)
 - `docs/ELASTICSEARCH.md`: TLS description updated (hardcoded skip → `?tls-skip-verify=true` parameter)
 - `src/execute_test.go`: 13 new test cases (sanitizeCell/formatHuman full coverage)
@@ -614,9 +622,9 @@
   - Qdrant: JSON format `{"scroll":"collection_name","limit":100}` / `{"count":"collection_name"}`
 - **Query routing**: `isSQLKind()` routes by DSN type — SQL types through sqlguard, non-SQL types through per-connector internal whitelists
 - **Dual timeout protection**: Application context timeout + database-level statement timeout (MySQL `max_execution_time` / PG `statement_timeout` / CH `max_execution_time`)
-- **Security documentation**: New `docs/EXECUTE.md` covering security architecture, output format, usage examples, and CONSTITUTION compliance
+- **Security documentation**: New `docs/user-guide/EXECUTE.md` covering security architecture, output format, usage examples, and CONSTITUTION compliance
 - **`--human` table output**: New `--human` flag for execute — renders query results as ASCII table (MySQL/pg CLI style) instead of default JSON. NULL values clearly displayed, auto-width columns. Works across all 9 database types
-- **CLI example library**: New `docs/CLI_EXAMPLES.md` covering 7 active data sources with 13 executable queries, all verified against the live environment
+- **CLI example library**: New `docs/user-guide/CLI_EXAMPLES.md` covering 7 active data sources with 13 executable queries, all verified against the live environment
 
 ### Security Enhancements
 - **Redacted() credential sanitization fix**: URL-encoded passwords (e.g. `%23`) no longer leak; both username and password sanitized to `{dbuser}:{dbpassword}` placeholders, replacing the old `user:***` format
@@ -652,8 +660,8 @@
 - `README.md` / `README_EN.md`: New "Encrypt Config Files" section with full usage examples
 - `--manual` updated with complete encrypt subcommand documentation (bilingual)
 - `-h` updated with "Encryption" option group
-- `docs/SECURITY_CHECKLIST.md`: New "Config Encryption Checks" section
-- `docs/ARCHITECTURE.md`: New "Config Encryption Architecture" section
+- `docs/security-policies/SECURITY_CHECKLIST.md`: New "Config Encryption Checks" section
+- `docs/system-architecture/ARCHITECTURE.md`: New "Config Encryption Architecture" section
 - `.gitignore`: Added `*.enc` exclusion rules
 
 ### CLI Subcommand Hierarchy Restructure
@@ -698,7 +706,7 @@
 
 ### Documentation
 - `--manual` updated: config search priority section, `--log-dir` option, all `./dbexplain` → `dbexplain`
-- **New `docs/SECURITY_CHECKLIST.md`**: Pre-release security audit checklist covering credential protection, file encoding, input validation, and more
+- **New `docs/security-policies/SECURITY_CHECKLIST.md`**: Pre-release security audit checklist covering credential protection, file encoding, input validation, and more
 
 ### Bug Fixes (13 items)
 
@@ -770,8 +778,8 @@
 - **Filter log redirection**: `-include`/`-exclude` skip/exclude messages now written to `logs/filter.log` instead of polluting terminal output, keeping reports clean for both humans and AI
 
 ### Documentation
-- `docs/ARCHITECTURE.md`: Project vision as Database Context Compiler, added Security section (password leak prevention as top priority)
-- `docs/ALGORITHMS.md`: Full algorithm reference with compatibility matrices and fallback mechanisms
+- `docs/system-architecture/ARCHITECTURE.md`: Project vision as Database Context Compiler, added Security section (password leak prevention as top priority)
+- `docs/system-architecture/ALGORITHMS.md`: Full algorithm reference with compatibility matrices and fallback mechanisms
 - `docs/TEST_METHODOLOGY_v0.0.4.md`, `docs/TEST_REPORT_v0.0.4.md`: Layered test methodology and report (83+ cases, with actual shell execution output)
 - README new "Usage Scenarios" chapter (AI Agent / Human / 9 per-DB examples)
 - `MEMORY.md` new version performance comparison section (mandatory for each release)

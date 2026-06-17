@@ -273,4 +273,4 @@ bash dbexplain-skill/scripts/install-skill.sh --verify
 
 ---
 
-> 各数据库专项手册见 [`docs/`](../README.md#文档索引) 目录。安全检查清单见 [`docs/SECURITY_CHECKLIST.md`](SECURITY_CHECKLIST.md)。
+> 各数据库专项手册见 [`docs/`](../README.md#文档索引) 目录。安全检查清单见 [`docs/SECURITY_CHECKLIST.md`](../security-policies/SECURITY_CHECKLIST.md)。

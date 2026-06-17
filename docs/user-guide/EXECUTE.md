@@ -75,7 +75,7 @@ goroutine 2: execute -label my-db "SELECT ..."  → CONCURRENT_LIMIT
 
 ### 4. 连接器能力检查
 
-所有 14 种数据库连接器均实现 `query.Queryable` 接口，通过 Go 接口类型断言确认：
+所有 16 种数据库连接器均实现 `query.Queryable` 接口，通过 Go 接口类型断言确认：
 
 ```go
 q, ok := c.(query.Queryable)
@@ -299,21 +299,23 @@ else:
 
 | 数据库 | Auto LIMIT 1000 | 校验路径 | 超时机制 | 详细文档 |
 |--------|:---:|---------|---------|---------|
-| MySQL | ✅ | sqlguard | `SET SESSION max_execution_time` | [MYSQL.md](MYSQL.md) |
-| PostgreSQL | ✅ | sqlguard | `SET statement_timeout` | [POSTGRESQL.md](POSTGRESQL.md) |
-| GaussDB | ✅ | sqlguard | `SET statement_timeout` | [GAUSSDB.md](GAUSSDB.md) |
-| SQLite | ✅ | sqlguard | context 超时 | [SQLITE.md](SQLITE.md) |
-| ClickHouse | ✅ | sqlguard | `SETTINGS max_execution_time` + HTTP 超时 | [CLICKHOUSE.md](CLICKHOUSE.md) |
+| MySQL | ✅ | sqlguard | `SET SESSION max_execution_time` | [MYSQL.md](../databases/relational/MYSQL.md) |
+| PostgreSQL | ✅ | sqlguard | `SET statement_timeout` | [POSTGRESQL.md](../databases/relational/POSTGRESQL.md) |
+| GaussDB | ✅ | sqlguard | `SET statement_timeout` | [GAUSSDB.md](../databases/relational/GAUSSDB.md) |
+| SQLite | ✅ | sqlguard | context 超时 | [SQLITE.md](../databases/relational/SQLITE.md) |
+| ClickHouse | ✅ | sqlguard | `SETTINGS max_execution_time` + HTTP 超时 | [CLICKHOUSE.md](../databases/analytical/CLICKHOUSE.md) |
 | DuckDB | ✅ | sqlguard | context 超时 | [DUCKDB.md](databases/relational/DUCKDB.md) |
-| Elasticsearch | ✅ | sqlguard | HTTP 请求超时 | [ELASTICSEARCH.md](ELASTICSEARCH.md) |
-| Redis | ❌ | 内部 30+ 命令白名单 | go-redis context | [REDIS.md](REDIS.md) |
-| MongoDB | ❌ | 内部 find/aggregate 白名单 | driver context + `--limit` | [MONGO.md](MONGO.md) |
-| Qdrant | ❌ | 内部 scroll/count 白名单 | gRPC context | [QDRANT.md](QDRANT.md) |
+| Oracle | ✅ | sqlguard | context 超时 | [ORACLE.md](../databases/relational/ORACLE.md) |
+| Hive | ✅ | sqlguard | context 超时 + HiveServer2 超时 | [HIVE.md](../databases/analytical/HIVE.md) |
+| Elasticsearch | ✅ | sqlguard | HTTP 请求超时 | [ELASTICSEARCH.md](../databases/nosql/ELASTICSEARCH.md) |
+| Redis | ❌ | 内部 30+ 命令白名单 | go-redis context | [REDIS.md](../databases/nosql/REDIS.md) |
+| MongoDB | ❌ | 内部 find/aggregate 白名单 | driver context + `--limit` | [MONGO.md](../databases/nosql/MONGO.md) |
+| Qdrant | ❌ | 内部 scroll/count 白名单 | gRPC context | [QDRANT.md](../databases/nosql/QDRANT.md) |
 | Prometheus | ❌ | CheckNative 策略引擎 + PromQL 内部校验 | context 超时 | [prometheus.md](databases/prometheus.md) |
-| CSV/TSV | ❌ | 无（文件只读） | — | [FILE_PROCESSING.md](FILE_PROCESSING.md) |
-| XLSX | ❌ | 无（文件只读） | — | [FILE_PROCESSING.md](FILE_PROCESSING.md) |
+| CSV/TSV | ❌ | 无（文件只读） | — | [FILE_PROCESSING.md](../file-sources/FILE_PROCESSING.md) |
+| XLSX | ❌ | 无（文件只读） | — | [FILE_PROCESSING.md](../file-sources/FILE_PROCESSING.md) |
 
-> **SQL 数据库**（上表前 7 种）通过 `capabilities.FromProvider().Has(CapSQL)` 路由到 `sqlguard.Validate()` 进行动词白名单校验，并自动注入 `LIMIT 1000`。
+> **SQL 数据库**（上表前 9 种）通过 `capabilities.FromProvider().Has(CapSQL)` 路由到 `sqlguard.Validate()` 进行动词白名单校验，并自动注入 `LIMIT 1000`。
 > **非 SQL 数据库**（上表后 4 种）跳过 sqlguard，由各连接器内部实现只读白名单。Prometheus 走 CheckNative 策略引擎进行 PromQL 校验。
 > **文件数据源**（CSV/TSV/XLSX）绕过 sqlguard——文件本身只读，支持完整 SELECT 子集（WHERE/GROUP BY/JOIN/聚合/窗口函数等），但仍受策略引擎约束（`DENY_TABLES`、`MASK_COLUMNS`）。
 

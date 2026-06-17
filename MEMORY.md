@@ -20,7 +20,7 @@
 
 | 需求 | 路径 |
 |------|------|
-| **文档-代码映射（权威）** | **`docs/CODE_MAP.md`** |
+| **文档-代码映射（权威）** | **`docs/system-architecture/CODE_MAP.md`** |
 | 入口 | `src/cmd/dbexplain/main.go` |
 | 查询执行 | `src/cmd/dbexplain/execute.go` |
 | DSN 解析 | `src/internal/dsn/dsn.go` |
@@ -42,11 +42,11 @@
 | CHANGELOG（英文） | `CHANGELOG_EN.md` |
 | 测试文档 | `docs/test/README.md`（20 个文件全覆盖） |
 | 项目宪法 | `CONSTITUTION.md` |
-| 架构愿景 | `docs/ARCHITECTURE.md` |
-| 算法文档 | `docs/ALGORITHMS.md` |
-| 安全检查手册 | `docs/SECURITY_CHECKLIST.md` |
-| 策略引擎 | `docs/POLICY.md` |
-| 只读查询执行 | `docs/EXECUTE.md` |
+| 架构愿景 | `docs/system-architecture/ARCHITECTURE.md` |
+| 算法文档 | `docs/system-architecture/ALGORITHMS.md` |
+| 安全检查手册 | `docs/security-policies/SECURITY_CHECKLIST.md` |
+| 策略引擎 | `docs/security-policies/POLICY.md` |
+| 只读查询执行 | `docs/user-guide/EXECUTE.md` |
 | 加密/解密 | `src/internal/crypto/crypto.go` |
 | Issue 追踪 | `issues.json` |
 
@@ -83,7 +83,6 @@ scheme://[user[:pass]@]host[:port][/dbname][?label=别名&其他参数]
 | 参数 | 类型 | 默认 | 说明 |
 |------|------|------|------|
 | `-dsn` | repeatable | — | 直接指定 DSN，可多次使用 |
-| `-env` | bool | false | 从配置文件加载 DSN（搜索: .env.dbexplain → .env.dbexplain.enc → ~/.config/dbexplain/.env.dbexplain → ~/.config/dbexplain/.env.dbexplain.enc → .env；DBPROBE_ENV_FILE 可选覆盖） |
 | `-config` | string | "" | JSON 文件路径，内含 DSN 数组 |
 | `-include` | string | "" | 逗号分隔的 kind/label，只采集匹配项 |
 | `-exclude` | string | "" | 逗号分隔的 kind/label，排除匹配项 |
@@ -98,6 +97,10 @@ scheme://[user[:pass]@]host[:port][/dbname][?label=别名&其他参数]
 | `--language` | string | zh | 手册语言（zh/en） |
 | `--filter` | string | "" | 过滤手册输出（忽略大小写，配合 --manual） |
 | `--version` | bool | false | 输出版本号并退出 |
+| `collect` | subcommand | — | 显式 Schema 采集（等价于顶层 flag 模式，额外支持 `--conn`/`--sample`/`--table`/`--tables`） |
+| `execute` | subcommand | — | 只读查询执行 |
+| `check` | subcommand | — | 配置验证+连通性检查 |
+| `repl` | subcommand | — | 交互式 REPL 模式 |
 | `encrypt` | subcommand | — | 使用机器指纹加密配置文件 |
 
 ## 消费方
@@ -163,7 +166,7 @@ scheme://[user[:pass]@]host[:port][/dbname][?label=别名&其他参数]
 - Agent **禁止**查看、读取、编辑 `.env` 文件
 - 密码通过 `DSN.Redacted()` 自动脱敏显示
 - 工具仅执行只读操作，详见 CONSTITUTION.md
-- **发布前必须执行**: `docs/SECURITY_CHECKLIST.md` 全部检查项
+- **发布前必须执行**: `docs/security-policies/SECURITY_CHECKLIST.md` 全部检查项
 - **配置加密 (v0.0.6)**: `dbexplain encrypt` 使用机器指纹加密配置文件，加密后仅能在同一台机器上解密。`-env` 模式自动发现并解密 `.enc` 文件（无需手动设置环境变量）。密码增强模式通过 `~/.config/dbexplain/.encryption_key` 文件提供解密密钥（`APP_ENCRYPTION_KEY` 环境变量作为可选覆盖）。
 
 ## 版本性能对比（每次发版必做）
@@ -215,7 +218,7 @@ wc -c /tmp/perf-prev-1.json /tmp/perf-curr-1.json
 
 ## 架构路线图
 
-详见 `docs/ARCHITECTURE.md`。概要：
+详见 `docs/system-architecture/ARCHITECTURE.md`。概要：
 
 | Phase | 状态 | 目标 |
 |-------|------|------|

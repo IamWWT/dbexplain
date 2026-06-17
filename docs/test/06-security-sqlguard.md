@@ -11,8 +11,8 @@ cd src
 BIN="../release/dbexplain"
 ```
 
-> **配置优先级**：运行 `-env` 前确保 CWD 中有 `.env.dbexplain` 或设置 `DBPROBE_ENV_FILE=.env`。
-> 详见 [README.md](README.md#配置优先级说明) 和 [docs/CONFIG_SEARCH.md](../CONFIG_SEARCH.md)。
+> **配置优先级**：确保 CWD 中有 `.env.dbexplain` 或设置 `DBPROBE_ENV_FILE`。
+> 详见 [README.md](README.md#配置优先级说明) 和 [docs/CONFIG_SEARCH.md](../setup-guide/CONFIG_SEARCH.md)。
 
 ## 6.1 读操作允许
 
@@ -108,4 +108,66 @@ $BIN execute --db 1 ""
 
 $BIN execute --db 1 "   "
 # 预期: READ_ONLY_VIOLATION: empty query
+```
+
+## 6.8 CTE 写检测加固 (v0.1.7+)
+
+验证 CTE（WITH）查询中写操作检测的完备性。
+
+### 6.8.1 CTE 体写操作拦截
+
+CTE 定义体中包含 INSERT/UPDATE/DELETE 应被拒绝。
+
+```bash
+# CTE 体中 INSERT ... RETURNING
+$BIN execute -dsn "sqlite:///:memory:?label=test" "WITH ins AS (INSERT INTO t VALUES(1) RETURNING id) SELECT * FROM ins"
+# 预期: READ_ONLY_VIOLATION: WITH CTE contains write operation
+
+# CTE 体中 DELETE ... RETURNING
+$BIN execute -dsn "sqlite:///:memory:?label=test" "WITH del AS (DELETE FROM orders WHERE id=1 RETURNING id) SELECT * FROM del"
+# 预期: READ_ONLY_VIOLATION: WITH CTE contains write operation
+
+# CTE 体中 UPDATE ... RETURNING
+$BIN execute -dsn "sqlite:///:memory:?label=test" "WITH upd AS (UPDATE users SET status='banned' RETURNING id) SELECT * FROM upd"
+# 预期: READ_ONLY_VIOLATION: WITH CTE contains write operation
+
+# 多个 CTE，其中一个含写操作
+$BIN execute -dsn "sqlite:///:memory:?label=test" "WITH a AS (INSERT INTO t VALUES(1)), b AS (SELECT 1) SELECT * FROM b"
+# 预期: READ_ONLY_VIOLATION: WITH CTE contains write operation
+```
+
+### 6.8.2 CTE + 主查询写操作拦截
+
+WITH 定义后主查询为 INSERT/UPDATE/DELETE 应被拒绝。
+
+```bash
+$BIN execute -dsn "sqlite:///:memory:?label=test" "WITH x AS (SELECT 1) INSERT INTO y VALUES (1)"
+# 预期: READ_ONLY_VIOLATION: WITH CTE contains write operation
+
+$BIN execute -dsn "sqlite:///:memory:?label=test" "WITH x AS (SELECT 1), y AS (SELECT 2) DELETE FROM z"
+# 预期: READ_ONLY_VIOLATION: WITH CTE contains write operation
+```
+
+### 6.8.3 合法 WITH 查询不被拦截
+
+```bash
+$BIN execute -dsn "sqlite:///:memory:?label=test" "WITH cte AS (SELECT 1 AS n) SELECT * FROM cte"
+# 预期: 正常返回结果，n=1
+
+$BIN execute -dsn "sqlite:///:memory:?label=test" "WITH a AS (SELECT 1 AS x), b AS (SELECT 2 AS y) SELECT * FROM a JOIN b"
+# 预期: 正常返回结果
+```
+
+### 6.8.4 单元测试验证
+
+```bash
+cd src && go test -tags full ./internal/sqlguard/ -v -run TestValidate_RejectedWriteOps
+# 预期: PASS — 37 测试用例全部通过（含 CTE 体写 + 主查询写）
+```
+
+### 6.8.5 AutoLimit 不受影响
+
+```bash
+$BIN execute -dsn "sqlite:///:memory:?label=test" --human "WITH cte AS (SELECT 1 AS n) SELECT * FROM cte"
+# 预期: 正常返回，自动追加 LIMIT 1000
 ```

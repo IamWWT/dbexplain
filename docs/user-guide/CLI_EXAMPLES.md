@@ -1,6 +1,6 @@
 # dbexplain CLI 查询案例库
 
-> 所有查询均已在本环境（v0.1.7, 16 DSN 条目）跑通验证。`--human` 用于可读表格输出，不加则为 JSON（供 AI Agent 消费）。
+> 所有查询均已在本环境（v0.1.8, 16 DSN 条目）跑通验证。`--human` 用于可读表格输出，不加则为 JSON（供 AI Agent 消费）。
 > `--human` 可放在查询语句之前或之后：`dbexplain execute --db 1 --human "SELECT 1"` 与 `dbexplain execute --db 1 "SELECT 1" --human` 等价。
 
 ---
@@ -175,7 +175,7 @@ dbexplain execute -dsn "csv:///tmp/dbexplain-test/users.csv?label=csv-users" "SE
 dbexplain execute -dsn "csv:///tmp/dbexplain-test/users.csv?label=csv-users" "SELECT * LIMIT 1 OFFSET 1" --human
 ```
 
-> CSV/TSV/XLSX 由内置 SQL 引擎驱动，支持 WHERE / GROUP BY / JOIN / 聚合函数 / ORDER BY / 窗口函数等完整语法。详见 [`sql-syntax.md`](../dbexplain-skill/references/sql-syntax.md) 和 [`FILE_PROCESSING.md`](FILE_PROCESSING.md)。
+> CSV/TSV/XLSX 由内置 SQL 引擎驱动，支持 WHERE / GROUP BY / JOIN / 聚合函数 / ORDER BY / 窗口函数等完整语法。详见 [`sql-syntax.md`](../dbexplain-skill/references/sql-syntax.md) 和 [`FILE_PROCESSING.md`](../file-sources/FILE_PROCESSING.md)。
 
 ---
 
@@ -334,7 +334,7 @@ dbexplain execute --dsn 'prometheus://192.168.0.127:9440?label=prom' --human "up
 # → ACCESS_DENIED: metric "up" is not allowed for query（如果已配置 DENY_TABLES）
 ```
 
-> Prometheus 走 CheckNative 验证路径（非 sqlguard），支持三层安全策略 + MASK_COLUMNS。Layer 1 在 DSL 编译层 pre-check metric name。详见 [`docs/POLICY.md`](POLICY.md)。
+> Prometheus 走 CheckNative 验证路径（非 sqlguard），支持三层安全策略 + MASK_COLUMNS。Layer 1 在 DSL 编译层 pre-check metric name。详见 [`docs/POLICY.md`](../security-policies/POLICY.md)。
 
 ---
 
@@ -506,7 +506,7 @@ dbexplain execute --db 1 --human "SELECT id, name FROM users"
 
 ## 13. REPL 交互模式 — 全数据源切换与查询实录
 
-> 以下为实际环境验证结果（v0.1.4，17 个 DSN 条目，13 种数据源类型）。
+> 以下为实际环境验证结果（v0.1.8，16 个 DSN 条目，16 种数据源类型）。
 
 ### 13.1 启动与帮助
 
@@ -789,11 +789,11 @@ dbexplain[aiops-mysql]> .dsn openim-redis
 Switched to: openim-redis
 ```
 
-> 完整 REPL 文档见 [`docs/REPL.md`](REPL.md)。已知限制详情及绕过方案见 REPL.md 已知限制章节。
+> 完整 REPL 文档见 [`docs/REPL.md`](../user-guide/REPL.md)。已知限制详情及绕过方案见 REPL.md 已知限制章节。
 
 ---
 
-## 26. v0.1.7 新特性：Prometheus meta 表 `rows` 输出
+## 14. Prometheus meta 表 `rows` 输出
 
 ```bash
 # JSON 输出中 _labels 和 _metrics 表携带 rows 字段
@@ -853,7 +853,7 @@ promethe my-prom  prometheus   _metrics           metric, type...      644
 
 ---
 
-## 27. v0.1.7 新特性：CTE 写操作检测（通用 SQL 安全）
+## 15. CTE 写操作检测（通用 SQL 安全）
 
 ```bash
 # 复杂 CTE 写操作：多 CTE + INSERT（拦截）
@@ -957,7 +957,7 @@ READ_ONLY_VIOLATION: write operation "INSERT" is not allowed
 
 ---
 
-## 28. v0.1.7 新特性：MongoDB `$facet` 写操作检测
+## 16. MongoDB `$facet` 写操作检测
 
 ```bash
 # $facet 嵌套子管道中的 $out 现能被正确检测（JSON 原生格式）
@@ -994,7 +994,7 @@ READ_ONLY_VIOLATION: write stage "$out" is not allowed in aggregation pipeline
 
 ---
 
-## 15. Schema 采集：--table / --tables 参数
+## 17. Schema 采集：--table / --tables 参数
 
 ```bash
 # 精简表格列表（只显示名称/引擎/行数/大小/注释，不输出列详情）

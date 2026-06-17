@@ -58,7 +58,7 @@ Core philosophy: **deterministic facts only — LLMs consume structured IR exter
 
 ![dbexplain Architecture](docs/assets/DBEXPLAIN-ARCH.png)
 
-> Full module mapping at [`docs/CODE_MAP.md`](docs/CODE_MAP.md).
+> Full module mapping at [`docs/system-architecture/CODE_MAP.md`](docs/system-architecture/CODE_MAP.md).
 
 ---
 
@@ -281,14 +281,14 @@ EOF
 
 | Scenario | Doc |
 |----------|-----|
-| Quick start guide (5 min) | [`docs/USAGE_GUIDE.md`](docs/USAGE_GUIDE.md) |
-| Query examples (20+ with REPL/DSL/federated) | [`docs/CLI_EXAMPLES.md`](docs/CLI_EXAMPLES.md) |
-| Deployment (source/binary/Skill) | [`docs/DEPLOY.md`](docs/DEPLOY.md) |
+| Quick start guide (5 min) | [`docs/user-guide/USAGE_GUIDE.md`](docs/user-guide/USAGE_GUIDE.md) |
+| Query examples (20+ with REPL/DSL/federated) | [`docs/user-guide/CLI_EXAMPLES.md`](docs/user-guide/CLI_EXAMPLES.md) |
+| Deployment (source/binary/Skill) | [`docs/setup-guide/DEPLOY.md`](docs/setup-guide/DEPLOY.md) |
 | Troubleshooting guide | [`dbexplain-skill/references/troubleshooting.md`](dbexplain-skill/references/troubleshooting.md) |
-| Security policy config | [`docs/POLICY.md`](docs/POLICY.md) |
-| Config file search rules | [`docs/CONFIG_SEARCH.md`](docs/CONFIG_SEARCH.md) |
+| Security policy config | [`docs/security-policies/POLICY.md`](docs/security-policies/POLICY.md) |
+| Config file search rules | [`docs/setup-guide/CONFIG_SEARCH.md`](docs/setup-guide/CONFIG_SEARCH.md) |
 | SQL syntax reference (file query engine) | [`dbexplain-skill/references/sql-syntax.md`](dbexplain-skill/references/sql-syntax.md) |
-| Code module mapping | [`docs/CODE_MAP.md`](docs/CODE_MAP.md) |
+| Code module mapping | [`docs/system-architecture/CODE_MAP.md`](docs/system-architecture/CODE_MAP.md) |
 | Database usage manuals (one per source) | [`docs/databases/`](docs/databases/) |
 | Test reports (166+ items) | [`docs/test/`](docs/test/) |
 

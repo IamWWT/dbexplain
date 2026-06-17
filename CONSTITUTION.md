@@ -152,12 +152,12 @@
 
 ## 构建与发布
 
-见 [docs/DEPLOY.md](docs/DEPLOY.md) — 构建方式、产物目录、部署方式、发布流程在该文档中完整维护。
+见 [docs/setup-guide/DEPLOY.md](docs/setup-guide/DEPLOY.md) — 构建方式、产物目录、部署方式、发布流程在该文档中完整维护。
 
 宪法层面仅约束：
 - **单二进制交付**：无动态依赖、无外部进程、`CGO_ENABLED=0`
 - **版本号**：遵循 semver，版本一致性子命令 `--version` 和 CHANGELOG.md 对齐
-- **无 CI/CD**：手动构建发布，发布前必须执行 `docs/SECURITY_CHECKLIST.md` 所有检查项
+- **无 CI/CD**：手动构建发布，发布前必须执行 `docs/security-policies/SECURITY_CHECKLIST.md` 所有检查项
 
 ---
 

@@ -2,7 +2,7 @@
 
 > 验证配置文件格式、DSN 语法正确性、数据库连通性。
 
-> **v0.1.7 变更**: `--env` 默认值改为 `true`，无参数运行时自动加载 `.env.dbexplain`。显式 `--env=false --dsn xxx` 可跳过。
+> **v0.1.8 变更**: `-env` 参数已移除，始终自动加载配置文件。
 
 ---
 
@@ -120,18 +120,6 @@ cd /tmp && ../src/dbexplain check 2>&1 | grep -c "auto-env-test"
 # 预期: 1（DSN 列表中包含 auto-env-test）
 
 rm -f /tmp/.env-check-test
-```
-
-```bash
-$BIN check --dsn 'redis://:pass@localhost:6379/0?label=good' \
-           --dsn 'bad-dsn' \
-           --dsn 'mysql://u:p@localhost:1/x?label=fail-mysql' \
-           --timeout 3s
-# 预期:
-#   good     — Syntax ✅ OK,  Connect ✅ OK 或 ❌
-#   bad-dsn  — Syntax ❌ FAIL, Connect ⏭ skipped
-#   fail-mysql — Syntax ✅ OK, Connect ❌ FAIL
-# 退出码: 1（有失败项）
 ```
 
 ---

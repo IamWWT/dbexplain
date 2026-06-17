@@ -249,7 +249,7 @@
       "closed": "2026-05-20",
       "priority": "low",
       "category": "improvement",
-      "description": "工具功能分散在不同模块：字段推断在 schema/、风险诊断内嵌在连接器（如 Redis 大 key 检测在 redis.go）、聚类分析在 analyze/、渲染在 render/。已拆分为具体可执行的 Phase 1/2 任务：ISSUE-028（统一诊断层）覆盖诊断抽离，ISSUE-030（Importance Ranking）覆盖确定性评分系统。详见 docs/ARCHITECTURE.md。",
+      "description": "工具功能分散在不同模块：字段推断在 schema/、风险诊断内嵌在连接器（如 Redis 大 key 检测在 redis.go）、聚类分析在 analyze/、渲染在 render/。已拆分为具体可执行的 Phase 1/2 任务：ISSUE-028（统一诊断层）覆盖诊断抽离，ISSUE-030（Importance Ranking）覆盖确定性评分系统。详见 docs/system-architecture/ARCHITECTURE.md。",
       "file": "src/internal/analyze/, src/internal/connector/redis.go",
       "created": "2026-05-20"
     },
@@ -314,7 +314,7 @@
       "closed": "2026-05-20",
       "priority": "medium",
       "category": "feature",
-      "description": "实现多层上下文输出：summary.json（核心表、最大表、高连接表、热表）、topology.json（子图、孤立表、环路）、diagnostics.json（缺主键、未索引FK、Redis无TTL）、retrieval_chunks/（单表上下文 Markdown 文件，供 Agent retrieval 使用）。详见 docs/ARCHITECTURE.md §5。已产出 src/internal/context/compress.go。",
+      "description": "实现多层上下文输出：summary.json（核心表、最大表、高连接表、热表）、topology.json（子图、孤立表、环路）、diagnostics.json（缺主键、未索引FK、Redis无TTL）、retrieval_chunks/（单表上下文 Markdown 文件，供 Agent retrieval 使用）。详见 docs/system-architecture/ARCHITECTURE.md §5。已产出 src/internal/context/compress.go。",
       "file": "src/internal/context/compress.go",
       "created": "2026-05-20"
     },
@@ -325,7 +325,7 @@
       "closed": "2026-05-20",
       "priority": "medium",
       "category": "feature",
-      "description": "实现确定性重要性评分算法，不依赖 AI。维度：图出入度、FK 被引次数、行数、索引密度。输出 importance_score (0-1) 及各因子分解。用于 Agent context window 优先加载。详见 docs/ARCHITECTURE.md §5。已产出 src/internal/analyze/ranking.go。",
+      "description": "实现确定性重要性评分算法，不依赖 AI。维度：图出入度、FK 被引次数、行数、索引密度。输出 importance_score (0-1) 及各因子分解。用于 Agent context window 优先加载。详见 docs/system-architecture/ARCHITECTURE.md §5。已产出 src/internal/analyze/ranking.go。",
       "file": "src/internal/analyze/ranking.go",
       "created": "2026-05-20"
     },
@@ -336,7 +336,7 @@
       "closed": "2026-05-20",
       "priority": "medium",
       "category": "feature",
-      "description": "实现增量扫描支持。表指纹（列名+类型 hash、索引定义 hash、FK 定义 hash）、元数据版本、last_scan_at 时间戳。两次扫描相同指纹时跳过。解决企业库全量扫描不可行问题。详见 docs/ARCHITECTURE.md §6。已产出 src/internal/cache/cache.go。",
+      "description": "实现增量扫描支持。表指纹（列名+类型 hash、索引定义 hash、FK 定义 hash）、元数据版本、last_scan_at 时间戳。两次扫描相同指纹时跳过。解决企业库全量扫描不可行问题。详见 docs/system-architecture/ARCHITECTURE.md §6。已产出 src/internal/cache/cache.go。",
       "file": "src/internal/cache/cache.go",
       "created": "2026-05-20"
     },
@@ -657,7 +657,7 @@
       "closed": "2026-05-26",
       "priority": "critical",
       "category": "feature",
-      "description": "新增 execute 子命令用于安全执行只读查询。sqlguard 包（SQL 只读校验、多语句检测、自动 LIMIT 注入）、query 包（Queryable 接口 + 查询结果类型 + QueryLock 并发控制）、9 个 connector 全部实现 ExecQuery——SQL 类（MySQL/PG/GaussDB/SQLite/ClickHouse）走 sqlguard + database/sql，ES 走 _sql REST 端点，Redis 30+ 命令白名单，MongoDB find/aggregate JSON，Qdrant scroll/count JSON。详见 docs/EXECUTE.md。后续：--human 表格输出（ISSUE-062）、CLI 案例库（ISSUE-063）。",
+      "description": "新增 execute 子命令用于安全执行只读查询。sqlguard 包（SQL 只读校验、多语句检测、自动 LIMIT 注入）、query 包（Queryable 接口 + 查询结果类型 + QueryLock 并发控制）、9 个 connector 全部实现 ExecQuery——SQL 类（MySQL/PG/GaussDB/SQLite/ClickHouse）走 sqlguard + database/sql，ES 走 _sql REST 端点，Redis 30+ 命令白名单，MongoDB find/aggregate JSON，Qdrant scroll/count JSON。详见 docs/user-guide/EXECUTE.md。后续：--human 表格输出（ISSUE-062）、CLI 案例库（ISSUE-063）。",
       "file": "src/internal/sqlguard/, src/internal/query/, src/internal/connector/mysql.go, src/internal/connector/postgres.go, src/internal/connector/sqlite.go, src/internal/connector/clickhouse.go, src/internal/connector/query.go, src/cmd/dbexplain/execute.go",
       "created": "2026-05-26"
     },
@@ -694,8 +694,8 @@
       "closed": "2026-05-26",
       "priority": "medium",
       "category": "docs",
-      "description": "文档更新：(1) 新建 docs/CLI_EXAMPLES.md — 7 数据源 13 条实测查询命令，全部经本环境验证通过；(2) 9 份 DB 文档补全 execute 章节（GAUSSDB.md/SQLITE.md/QDRANT.md 新建，6 份已有文档新增 execute 小节）；(3) EXECUTE.md 新增 9-DB 执行行为速览索引表；(4) README.md/README_EN.md 重构——DSN 格式前置、使用方式拆分 Schema采集/只读查询/列出数据库/参考手册四个子节、截图归入 execute 小节；(5) CHANGELOG 中英双语新增 --human + CLI_EXAMPLES 条目；(6) RELEASE_WECHAT_v0.0.7.md 新增 --human 输出示例和 CLI_EXAMPLES 链接。",
-      "file": "docs/CLI_EXAMPLES.md, docs/databases/relational/GAUSSDB.md, docs/databases/relational/SQLITE.md, docs/databases/nosql/QDRANT.md, docs/EXECUTE.md, docs/databases/relational/MYSQL.md, docs/databases/relational/POSTGRESQL.md, docs/databases/analytical/CLICKHOUSE.md, docs/databases/nosql/REDIS.md, docs/databases/nosql/MONGO.md, docs/databases/nosql/ELASTICSEARCH.md, README.md, README_EN.md, CHANGELOG.md, CHANGELOG_EN.md, docs/RELEASE_WECHAT_v0.0.7.md",
+      "description": "文档更新：(1) 新建 docs/user-guide/CLI_EXAMPLES.md — 7 数据源 13 条实测查询命令，全部经本环境验证通过；(2) 9 份 DB 文档补全 execute 章节（GAUSSDB.md/SQLITE.md/QDRANT.md 新建，6 份已有文档新增 execute 小节）；(3) EXECUTE.md 新增 9-DB 执行行为速览索引表；(4) README.md/README_EN.md 重构——DSN 格式前置、使用方式拆分 Schema采集/只读查询/列出数据库/参考手册四个子节、截图归入 execute 小节；(5) CHANGELOG 中英双语新增 --human + CLI_EXAMPLES 条目；(6) RELEASE_WECHAT_v0.0.7.md 新增 --human 输出示例和 CLI_EXAMPLES 链接。",
+      "file": "docs/user-guide/CLI_EXAMPLES.md, docs/databases/relational/GAUSSDB.md, docs/databases/relational/SQLITE.md, docs/databases/nosql/QDRANT.md, docs/user-guide/EXECUTE.md, docs/databases/relational/MYSQL.md, docs/databases/relational/POSTGRESQL.md, docs/databases/analytical/CLICKHOUSE.md, docs/databases/nosql/REDIS.md, docs/databases/nosql/MONGO.md, docs/databases/nosql/ELASTICSEARCH.md, README.md, README_EN.md, CHANGELOG.md, CHANGELOG_EN.md, docs/RELEASE_WECHAT_v0.0.7.md",
       "created": "2026-05-26"
     },
     {
@@ -757,7 +757,7 @@
       "status": "open",
       "priority": "medium",
       "category": "feature",
-      "description": "当前 DSL 模式每条查询只能引用一个数据源（`handleDSLExecute()` 限制 `len(kinds) > 1` 报错退出），无法实现 `@dsl-mysql.users JOIN @dsl-pg.orders` 这样的跨源查询。\n\n实现路径：利用文件查询引擎作为联邦合并层。文件查询引擎的 `filequery.Execute(sql, header, rows, extras, maxRows)` 已接受任意 `[][]string` 数据作为 `extras`，hash join/union/aggregation/window 全部已实现。\n\n改动范围：\n1. `execute.go` `handleDSLExecute()` — 移除 `len(kinds) > 1` 阻断逻辑\n2. 新增数据物化层 — 对每个 `@label` 源执行数据检索（SQL 源走 SELECT *，文件源直接加载），结果统一转为 `[][]string`\n3. 调用 `filequery.Execute()` 做最终合并 — 主表数据作为 header+rows，其他源作为 extras\n\n已有基础：\n- `dsl/binder.go` — 多源绑定 ✅\n- `filequery/executor.go` — hash join/union/aggregation/window ✅\n- `queryutil.ResolveJoinSources()` — 数据加载 ✅\n\n限制：全内存操作（不适合单表百万行级）、无分布式事务、仅字符串类型。\n详见 docs/RELEASE_WECHAT_v0.1.1.md §一 的限制说明。",
+      "description": "当前 DSL 模式每条查询只能引用一个数据源（`handleDSLExecute()` 限制 `len(kinds) > 1` 报错退出），无法实现 `@dsl-mysql.users JOIN @dsl-pg.orders` 这样的跨源查询。\n\n实现路径：利用文件查询引擎作为联邦合并层。文件查询引擎的 `filequery.Execute(sql, header, rows, extras, maxRows)` 已接受任意 `[][]string` 数据作为 `extras`，hash join/union/aggregation/window 全部已实现。\n\n改动范围：\n1. `execute.go` `handleDSLExecute()` — 移除 `len(kinds) > 1` 阻断逻辑\n2. 新增数据物化层 — 对每个 `@label` 源执行数据检索（SQL 源走 SELECT *，文件源直接加载），结果统一转为 `[][]string`\n3. 调用 `filequery.Execute()` 做最终合并 — 主表数据作为 header+rows，其他源作为 extras\n\n已有基础：\n- `dsl/binder.go` — 多源绑定 ✅\n- `filequery/executor.go` — hash join/union/aggregation/window ✅\n- `queryutil.ResolveJoinSources()` — 数据加载 ✅\n\n限制：全内存操作（不适合单表百万行级）、无分布式事务、仅字符串类型。\n详见 docs/release-notes/RELEASE_WECHAT_v0.1.1.md §一 的限制说明。",
       "file": "src/cmd/dbexplain/execute.go, src/internal/dsl/",
       "created": "2026-06-02",
       "labels": ["v0.1.2", "feature"]
@@ -802,7 +802,7 @@
       "priority": "medium",
       "category": "debt",
       "description": "当前 SECURITY_CHECKLIST.md §6 的发布前检查项以安全和构建为主，缺少发布完整性检查。\n\n需补充的标准（更新 SECURITY_CHECKLIST.md §6）：\n1. **版本一致性** — version.go / build.sh ldflags / CHANGELOG 版本号三者一致\n2. **CHANGELOG 完整性** — 确认所有 closed issue 在 CHANGELOG 中有对应条目\n3. **issues.json 有效性** — `python3 -m json.tool` 验证合法\n4. **二进制 smoke test** — `--version` 输出版本正确 + 基本查询可用\n5. **release/ 产物完整性** — 5 平台二进制均存在，`file` 命令校验架构正确\n6. **文档 stale 引用** — grep 检查 docs/ 中无已删除文件的引用链接\n\n不做的：不涉及 CI/CD 自动化，仅完善人工检查标准。",
-      "file": "docs/SECURITY_CHECKLIST.md",
+      "file": "docs/security-policies/SECURITY_CHECKLIST.md",
       "created": "2026-06-02",
       "labels": ["v0.1.2", "debt"]
     },

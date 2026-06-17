@@ -58,7 +58,7 @@
 
 ![dbexplain Architecture](docs/assets/DBEXPLAIN-ARCH.png)
 
-> 完整模块映射见 [`docs/CODE_MAP.md`](docs/CODE_MAP.md)。
+> 完整模块映射见 [`docs/system-architecture/CODE_MAP.md`](docs/system-architecture/CODE_MAP.md)。
 
 ---
 
@@ -275,14 +275,14 @@ EOF
 
 | 场景 | 文档 |
 |------|------|
-| 傻瓜用法手册（5 分钟上手） | [`docs/USAGE_GUIDE.md`](docs/USAGE_GUIDE.md) |
-| 查询案例（20+ 示例，含 REPL/DSL/联邦） | [`docs/CLI_EXAMPLES.md`](docs/CLI_EXAMPLES.md) |
-| 部署安装（源码/二进制/Skill） | [`docs/DEPLOY.md`](docs/DEPLOY.md) |
+| 傻瓜用法手册（5 分钟上手） | [`docs/user-guide/USAGE_GUIDE.md`](docs/user-guide/USAGE_GUIDE.md) |
+| 查询案例（20+ 示例，含 REPL/DSL/联邦） | [`docs/user-guide/CLI_EXAMPLES.md`](docs/user-guide/CLI_EXAMPLES.md) |
+| 部署安装（源码/二进制/Skill） | [`docs/setup-guide/DEPLOY.md`](docs/setup-guide/DEPLOY.md) |
 | 排障指南 | [`dbexplain-skill/references/troubleshooting.md`](dbexplain-skill/references/troubleshooting.md) |
-| 安全策略配置 | [`docs/POLICY.md`](docs/POLICY.md) |
-| 配置文件搜索规则 | [`docs/CONFIG_SEARCH.md`](docs/CONFIG_SEARCH.md) |
+| 安全策略配置 | [`docs/security-policies/POLICY.md`](docs/security-policies/POLICY.md) |
+| 配置文件搜索规则 | [`docs/setup-guide/CONFIG_SEARCH.md`](docs/setup-guide/CONFIG_SEARCH.md) |
 | SQL 语法参考（文件查询引擎） | [`dbexplain-skill/references/sql-syntax.md`](dbexplain-skill/references/sql-syntax.md) |
-| 代码模块映射 | [`docs/CODE_MAP.md`](docs/CODE_MAP.md) |
+| 代码模块映射 | [`docs/system-architecture/CODE_MAP.md`](docs/system-architecture/CODE_MAP.md) |
 | 数据库使用手册（每数据源独立文档） | [`docs/databases/`](docs/databases/) |
 | 测试报告（166+ 项） | [`docs/test/`](docs/test/) |
 

@@ -30,6 +30,12 @@ set -e
 RELEASE_DIR="../release"
 mkdir -p "$RELEASE_DIR"
 
+# ── Auto-clean old artifacts ──────────────────────────────
+echo "[release] Cleaning old binaries and tarballs from $RELEASE_DIR..."
+rm -f "$RELEASE_DIR"/dbexplain-*
+# Also clean any leftover temp files from interrupted runs
+rm -rf "$RELEASE_DIR"/tmp*
+
 echo ""
 echo "╔══════════════════════════════════════════════════════════╗"
 echo "║           dbexplain Release Build                       ║"
@@ -236,3 +242,12 @@ for f in "$RELEASE_DIR"/dbexplain-*.tar.gz; do
 done
 echo "  Total: $(numfmt --to=iec-i --suffix=B "$total_tar" 2>/dev/null || echo "$total_tar bytes")"
 echo ""
+
+# ──────────────────────────────────────────────────────────────
+#  Cleanup: remove raw binaries, keep only tarballs
+# ──────────────────────────────────────────────────────────────
+echo "[release] Cleaning up raw binaries..."
+for f in "$RELEASE_DIR"/dbexplain-*-std "$RELEASE_DIR"/dbexplain-*-std.exe "$RELEASE_DIR"/dbexplain-*-duckdb; do
+  [ -f "$f" ] && rm -v "$f"
+done
+echo "[release] Done — only .tar.gz files remain in $RELEASE_DIR"

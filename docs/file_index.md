@@ -5,27 +5,27 @@
 
 ---
 
-## 一、核心架构与设计
+## 一、系统设计文档
 
 | 文件 | 说明 |
 |------|------|
-| [`ARCHITECTURE.md`](ARCHITECTURE.md) | 整体架构设计：6 层架构、CapSQL 体系、IR 编译管道、安全架构 |
-| [`ALGORITHMS.md`](ALGORITHMS.md) | 核心算法说明：Schema 采集、外键发现、健康评分、增量检测、Schema Diff |
-| [`CODE_MAP.md`](CODE_MAP.md) | 文档-代码索引：模块↔文件映射、能力矩阵、文档↔源码交叉引用、CLI→处理器、测试覆盖图、常见问题 |
-| [`POLICY.md`](POLICY.md) | 策略引擎：DENY_TABLES/DENY_COLUMNS/MASK_COLUMNS 配置规则 |
-| [`CONFIG_SEARCH.md`](CONFIG_SEARCH.md) | 配置文件搜索路径与优先级：`findConfigFile()` 自动发现机制；`dbexplain encrypt` 加密保护凭证 |
+| [`ARCHITECTURE.md`](system-architecture/ARCHITECTURE.md) | 整体架构设计：6 层架构、CapSQL 体系、IR 编译管道、安全架构 |
+| [`ALGORITHMS.md`](system-architecture/ALGORITHMS.md) | 核心算法说明：Schema 采集、外键发现、健康评分、增量检测、Schema Diff |
+| [`CODE_MAP.md`](system-architecture/CODE_MAP.md) | 文档-代码索引：模块↔文件映射、能力矩阵、文档↔源码交叉引用、CLI→处理器、测试覆盖图、常见问题 |
+| [`POLICY.md`](security-policies/POLICY.md) | 策略引擎：DENY_TABLES/DENY_COLUMNS/MASK_COLUMNS 配置规则 |
+| [`CONFIG_SEARCH.md`](setup-guide/CONFIG_SEARCH.md) | 配置文件搜索路径与优先级：`findConfigFile()` 自动发现机制；`dbexplain encrypt` 加密保护凭证 |
 
-## 二、部署与使用
+## 二、部署安装与配置搜索
 
 | 文件 | 说明 |
 |------|------|
-| [`USAGE_GUIDE.md`](USAGE_GUIDE.md) | 全场景傻瓜用法手册：14 种数据源从安装到查询 |
-| [`CLI_EXAMPLES.md`](CLI_EXAMPLES.md) | CLI 使用示例集合 |
-| [`EXECUTE.md`](EXECUTE.md) | execute 子命令详解（只读查询） |
-| [`REPL.md`](REPL.md) | REPL 交互模式：启动方式、内命令、自动行为、已知限制（ES 暂不支持等） |
+| [`USAGE_GUIDE.md`](user-guide/USAGE_GUIDE.md) | 全场景傻瓜用法手册：16 种数据源从安装到查询 |
+| [`CLI_EXAMPLES.md`](user-guide/CLI_EXAMPLES.md) | CLI 使用示例集合 |
+| [`EXECUTE.md`](user-guide/EXECUTE.md) | execute 子命令详解（只读查询） |
+| [`REPL.md`](user-guide/REPL.md) | REPL 交互模式：启动方式、内命令、自动行为、已知限制（ES 暂不支持等） |
 | [`file-sources/FILE_PROCESSING.md`](file-sources/FILE_PROCESSING.md) | 文件查询引擎：CSV/XLSX 处理说明 |
-| [`DEPLOY.md`](DEPLOY.md) | 部署说明：build.sh 编译模式、产物清单、平台支持 |
-| [`PASSWORD_SPECIAL_CHARS.md`](PASSWORD_SPECIAL_CHARS.md) | DSN 密码特殊字符兼容性指南：转义映射表、`#` 自动转义说明、各数据源风险等级 |
+| [`DEPLOY.md`](setup-guide/DEPLOY.md) | 部署说明：build.sh 编译模式、产物清单、平台支持 |
+| [`PASSWORD_SPECIAL_CHARS.md`](security-policies/PASSWORD_SPECIAL_CHARS.md) | DSN 密码特殊字符兼容性指南：转义映射表、`#` 自动转义说明、各数据源风险等级 |
 
 ## 三、数据源专属文档（按类别分目录）
 
@@ -35,6 +35,7 @@
 | | [`databases/relational/POSTGRESQL.md`](databases/relational/POSTGRESQL.md) | PostgreSQL |
 | | [`databases/relational/SQLITE.md`](databases/relational/SQLITE.md) | SQLite |
 | | [`databases/relational/DUCKDB.md`](databases/relational/DUCKDB.md) | DuckDB（可选构建，需 `-tags duckdb`） |
+| | [`databases/relational/DUCKDB_IMPL.md`](databases/relational/DUCKDB_IMPL.md) | DuckDB 实现边界（CGO 异常、安全模型、限制） |
 | | [`databases/relational/GAUSSDB.md`](databases/relational/GAUSSDB.md) | GaussDB（实现手册） |
 | | [`databases/gaussdb.md`](databases/gaussdb.md) | GaussDB 兼容性指南（Oracle 模式） |
 | | [`databases/relational/COMPATIBILITY_GAUSSDB_TDSQL.md`](databases/relational/COMPATIBILITY_GAUSSDB_TDSQL.md) | TDSQL 兼容性说明 |
@@ -47,12 +48,13 @@
 | **向量型** | [`databases/nosql/QDRANT.md`](databases/nosql/QDRANT.md) | Qdrant |
 | **时序型** | [`databases/prometheus.md`](databases/prometheus.md) | Prometheus |
 
-## 四、安全与检查
+## 四、安全策略与检查
 
 | 文件 | 说明 |
 |------|------|
-| [`SECURITY_CHECKLIST.md`](SECURITY_CHECKLIST.md) | **安全检查手册**（发布前必读）：8 章覆盖凭证保护、文件编码、输入验证、安全传输、运行时安全、发布前快速检查（§6）、配置加密检查、新增安全问题流程 |
-| [`SKILL_AUTHORING.md`](SKILL_AUTHORING.md) | SKILL.md 编写规范：Karpathy 上下文工程理念、YAML frontmatter、内容结构、文件大小约束、eval-first 迭代流程 |
+| [`SECURITY_CHECKLIST.md`](security-policies/SECURITY_CHECKLIST.md) | **安全检查手册**（发布前必读）：8 章覆盖凭证保护、文件编码、输入验证、安全传输、运行时安全、发布前快速检查（§6）、配置加密检查、新增安全问题流程 |
+| [`REVIEW_STANDARD.md`](contribution-guide/REVIEW_STANDARD.md) | 代码审查标准：变更规模、评审人约定、Checklist、Revert 流程、紧急发布规则 |
+| [`SKILL_AUTHORING.md`](contribution-guide/SKILL_AUTHORING.md) | SKILL.md 编写规范：Karpathy 上下文工程理念、YAML frontmatter、内容结构、文件大小约束、eval-first 迭代流程 |
 
 ## 五、运维
 
@@ -66,48 +68,56 @@
 |------|------|
 | [`test/README.md`](test/README.md) | 测试索引与运行方法 |
 | [`test/01-environment.md`](test/01-environment.md) | 测试环境准备与构建模式 |
-| [`test/02-schema-collection.md`](test/02-schema-collection.md) | Schema 采集测试 |
+| [`test/02-schema-collection.md`](test/02-schema-collection.md) | Schema 采集测试（含性能优化 §2.7） |
 | [`test/03-execute-sql.md`](test/03-execute-sql.md) | SQL 执行测试 |
 | [`test/04-execute-nosql.md`](test/04-execute-nosql.md) | NoSQL 执行测试 |
 | [`test/05-file-processing.md`](test/05-file-processing.md) | 文件处理测试 |
-| [`test/06-security-sqlguard.md`](test/06-security-sqlguard.md) | SQL 安全防护测试 |
+| [`test/06-security-sqlguard.md`](test/06-security-sqlguard.md) | SQL 安全防护测试（含 CTE 写检测 §6.8） |
 | [`test/07-policy-engine.md`](test/07-policy-engine.md) | 策略引擎测试 |
 | [`test/08-concurrent-limit.md`](test/08-concurrent-limit.md) | 并发限制测试 |
-| [`test/09-cli-help.md`](test/09-cli-help.md) | CLI 帮助测试 |
+| [`test/09-cli-help.md`](test/09-cli-help.md) | CLI 帮助测试（含 encrypt/collect 功能测试） |
 | [`test/10-regression.md`](test/10-regression.md) | 回归测试 |
 | [`test/11-end-to-end.md`](test/11-end-to-end.md) | 端到端集成测试 |
 | [`test/12-capability-routing.md`](test/12-capability-routing.md) | 能力路由测试 |
-| [`test/13-file-query-engine.md`](test/13-file-query-engine.md) | 文件查询引擎测试 |
+| [`test/13-file-query-engine.md`](test/13-file-query-engine.md) | 文件查询引擎 QA 测试（JOIN/HAVING/UNION/子查询） |
 | [`test/14-schema-diff.md`](test/14-schema-diff.md) | Schema Diff 测试 |
 | [`test/15-window-functions.md`](test/15-window-functions.md) | 窗口函数测试 |
 | [`test/16-duckdb.md`](test/16-duckdb.md) | DuckDB 连接器测试 |
 | [`test/17-metrics.md`](test/17-metrics.md) | 采集指标收集与 Prometheus 输出测试 |
 | [`test/18-prometheus.md`](test/18-prometheus.md) | Prometheus 连接器测试（含 meta rows T29/T30） |
 | [`test/19-oracle-hive.md`](test/19-oracle-hive.md) | Oracle + Hive 连接器测试 |
-| [`test/20-cte-write-detection.md`](test/20-cte-write-detection.md) | CTE 写检测加固测试 |
+| [`test/20-cte-write-detection.md`](test/20-cte-write-detection.md) | CTE 写检测加固测试 — **已合并到 06 §6.8** |
 | [`test/21-check-command.md`](test/21-check-command.md) | check 子命令测试（配置验证+连通性） |
-| [`test/22-performance-optimization.md`](test/22-performance-optimization.md) | Schema 采集性能优化测试 |
+| [`test/22-performance-optimization.md`](test/22-performance-optimization.md) | Schema 采集性能优化测试 — **已合并到 02 §2.7** |
 | [`test/23-password-special-chars.md`](test/23-password-special-chars.md) | DSN 密码特殊字符兼容性测试 |
 | [`test/24-config-search-priority.md`](test/24-config-search-priority.md) | 配置文件搜索 7 级优先级实测（v0.1.8+） |
+| [`test/25-gaussdb.md`](test/25-gaussdb.md) | GaussDB 连接器测试（Oracle 兼容模式） |
 | [`test/RESULTS.md`](test/RESULTS.md) | 全量测试结果汇总 |
+| [`test/test-runner.sh`](test/test-runner.sh) | 闭环验证脚本（L0-L8 + E2E 自动测试） |
 
 ## 七、资产文件
 
 | 文件 | 说明 |
 |------|------|
-| [`assets/architecture.drawio`](assets/architecture.drawio) + `.png` | 架构图源文件与导出 |
-| [`assets/deployment.drawio`](assets/deployment.drawio) + `.png` | 部署图源文件与导出 |
-| [`assets/skill-interaction.drawio`](assets/skill-interaction.drawio) + `.png` | 技能交互图源文件与导出 |
+| [`assets/architecture.drawio`](assets/architecture.drawio) / [`assets/architecture.drawio.png`](assets/architecture.drawio.png) | 架构图源文件与导出 |
+| [`assets/deployment.drawio`](assets/deployment.drawio) / [`assets/deployment.drawio.png`](assets/deployment.drawio.png) | 部署图源文件与导出 |
+| [`assets/skill-interaction.drawio`](assets/skill-interaction.drawio) / [`assets/skill-interaction.drawio.png`](assets/skill-interaction.drawio.png) | 技能交互图源文件与导出 |
 | [`assets/nl2sql_architecture_decision.svg`](assets/nl2sql_architecture_decision.svg) | NL2SQL 架构决策图 |
 | [`assets/install-offline-*.png`](assets/install-offline-1.png) | 离线安装截图 |
+| [`assets/install-offline-verify-1.png`](assets/install-offline-verify-1.png) | 离线安装验证截图 |
+| [`assets/install-offline-verify-2.png`](assets/install-offline-verify-2.png) | 离线安装验证截图 |
+| [`assets/DBEXPLAIN-AIAGENT.png`](assets/DBEXPLAIN-AIAGENT.png) | AI Agent 架构图 |
+| [`assets/DBEXPLAIN-ARCH.png`](assets/DBEXPLAIN-ARCH.png) | 架构图变体 |
+| [`assets/promtheus-mysql-dsl-1.png`](assets/promtheus-mysql-dsl-1.png) | Prometheus + MySQL DSL 联邦查询图 |
+| [`assets/promtheus-mysql-dsl-2.png`](assets/promtheus-mysql-dsl-2.png) | Prometheus + MySQL DSL 联邦查询图 |
 | [`assets/usages.png`](assets/usages.png) | 使用概览图 |
 
 ## 八、其他
 
 | 文件 | 说明 |
 |------|------|
-| [`RELEASE_WECHAT_v0.1.7.md`](RELEASE_WECHAT_v0.1.7.md) | v0.1.7 公众号发布文案（Prometheus meta 表 rows + CTE 写检测加固 + GaussDB Oracle 兼容） |
-| [`dbexplain_wechat_article.html`](dbexplain_wechat_article.html) | 微信公众号文章 HTML |
+| [`RELEASE_WECHAT_v0.1.7.md`](release-notes/RELEASE_WECHAT_v0.1.7.md) | v0.1.7 公众号发布文案（Prometheus meta 表 rows + CTE 写检测加固 + GaussDB Oracle 兼容） |
+| [`dbexplain_wechat_article.html`](release-notes/dbexplain_wechat_article.html) | 微信公众号文章 HTML |
 
 ---
 

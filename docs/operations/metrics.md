@@ -115,4 +115,4 @@ Note: all metrics are **gauge** type (one-shot CLI semantics). `rate()` / `incre
 
 Metrics are collected in `main.go`'s collection goroutines (both `main()` and `handleCollect()`), aggregated in `src/internal/metrics/collect.go`, embedded in `analyze.Result.Metrics`, and serialized in `render.jsonResult.Metrics`.
 
-Metrics are **not** collected for query execution (`dbexplain execute`) — that is scoped for a future release (v0.1.5+).
+Metrics are **not** collected for query execution (`dbexplain execute`) — that is scoped for a future release (TBD).

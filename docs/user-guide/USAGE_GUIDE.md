@@ -11,15 +11,15 @@
 1. **看数据库结构** —— 连上数据库，自动列出所有表、字段、索引、外键
 2. **查数据** —— 安全地执行查询（只能查，不能改）
 
-一个工具搞定 **15 种数据源**：MySQL / PostgreSQL / GaussDB / ClickHouse / SQLite / DuckDB / Redis / Elasticsearch / MongoDB / Qdrant / Prometheus / CSV / TSV / Excel。
+一个工具搞定 **16 种数据源**：MySQL / PostgreSQL / GaussDB / ClickHouse / SQLite / DuckDB / Redis / Elasticsearch / MongoDB / Qdrant / Prometheus / CSV / TSV / Excel / Oracle / Hive。
 
-> 本文档覆盖全部数据源的全部使用场景。需要更详细的例子见 [`CLI_EXAMPLES.md`](CLI_EXAMPLES.md)。
+> 本文档覆盖全部数据源的全部使用场景。需要更详细的例子见 [`CLI_EXAMPLES.md`](../user-guide/CLI_EXAMPLES.md)。
 
 ---
 
 ## 第一步：安装
 
-下载一个文件，放到电脑上就能用。详细安装（含脚本、AI Skill 集成）见 [`DEPLOY.md`](DEPLOY.md)。
+下载一个文件，放到电脑上就能用。详细安装（含脚本、AI Skill 集成）见 [`DEPLOY.md`](../setup-guide/DEPLOY.md)。
 
 ### Linux
 
@@ -179,7 +179,7 @@ dbexplain execute --db 1 --timeout 60 --limit 500 "SELECT * FROM logs" --human
 ```
 
 > **REPL 模式说明：**
-> - 支持所有 15 种数据源：SQL（MySQL/PG/ClickHouse/SQLite/DuckDB 等）、NoSQL（Redis/ES/Mongo/Qdrant）、时序（Prometheus）、文件（CSV/TSV/Excel）
+> - 支持所有 16 种数据源：SQL（MySQL/PG/ClickHouse/SQLite/DuckDB/Oracle/Hive 等）、NoSQL（Redis/ES/Mongo/Qdrant）、时序（Prometheus）、文件（CSV/TSV/Excel）
 > - 支持 DSL 模式（`@label.table` 语法），包括单源查询和联邦跨源 JOIN
 > - 配合自动加载启动后，可用 `.conn <label>` 在已配置的多个数据源之间切换
 > - 跨源 JOIN/UNION（联邦查询）直接在 REPL 内使用 DSL 语法
@@ -467,7 +467,7 @@ parse error
 
 | 如果你想... | 去看 |
 |------------|------|
-| 看更多真实查询例子（含实际返回数据） | [`docs/CLI_EXAMPLES.md`](CLI_EXAMPLES.md) |
-| 部署到服务器或集成 AI Skill | [`docs/DEPLOY.md`](DEPLOY.md) |
-| 设置安全策略（禁止查某些表/列） | [`docs/POLICY.md`](POLICY.md) |
+| 看更多真实查询例子（含实际返回数据） | [`docs/CLI_EXAMPLES.md`](../user-guide/CLI_EXAMPLES.md) |
+| 部署到服务器或集成 AI Skill | [`docs/DEPLOY.md`](../setup-guide/DEPLOY.md) |
+| 设置安全策略（禁止查某些表/列） | [`docs/POLICY.md`](../security-policies/POLICY.md) |
 | 了解全部命令行参数 | [`README.md`](../README.md) |

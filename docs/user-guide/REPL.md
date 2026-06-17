@@ -147,6 +147,10 @@ REPL 在没有 DSN 配置时进入 `(disconnected)` 状态，通过 `.connect <d
 | Elasticsearch | `{"query":{"match_all":{}}}` | ✅ 支持（_search 端点） |
 | Qdrant | `{"scroll":"collection_name"}` | ✅ 通过 |
 
+### 时序数据源
+
+| 数据源 | 查询 | 结果 |
+|--------|------|------|
 | Prometheus | `up == 1` / `count(up)` / PromQL 即时查询 | ✅ 通过（DSL 模式） |
 
 ### 文件数据源
@@ -161,7 +165,7 @@ REPL 在没有 DSN 配置时进入 `(disconnected)` 状态，通过 `.connect <d
 
 ## 完整输出示例
 
-见 [`CLI_EXAMPLES.md`](CLI_EXAMPLES.md) — REPL 章节，包含 17+ DSN 条目的完整切换和查询记录。
+见 [`CLI_EXAMPLES.md`](../user-guide/CLI_EXAMPLES.md) — REPL 章节，包含 17+ DSN 条目的完整切换和查询记录。
 
 ---
 

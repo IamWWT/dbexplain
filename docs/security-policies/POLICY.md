@@ -1,7 +1,7 @@
 # dbexplain 安全策略引擎 (Policy)
 
 > 细粒度访问控制系统，为 `dbexplain execute` 提供表级、列级、语句级拒绝策略。
-> 支持全部 14 种数据源（11 种数据库 + CSV/TSV/XLSX 文件），通过 `.env` 文件统一配置。
+> 支持全部 16 种数据源（12 种数据库 + CSV/TSV/XLSX 文件 + Oracle/Hive），通过 `.env` 文件统一配置。
 
 ---
 
@@ -304,6 +304,8 @@ MASK_COLUMNS=ssn=*** dbexplain execute --label mongo \
 | GaussDB | ✅ | ✅ 表 | ✅ | ✅ | SQL 语法提取 |
 | SQLite | ✅ | ✅ 表 | ✅ | ✅ | SQL 语法提取 |
 | ClickHouse | ✅ | ✅ 表 | ✅ | ✅ | SQL 语法提取 |
+| Oracle | ✅ | ✅ 表 | ✅ | ✅ | SQL 语法提取 |
+| Hive | ✅ | ✅ 表 | ✅ | ✅ | SQL 语法提取 |
 | Elasticsearch | ✅ | ✅ 表 | ✅ | ✅ | SQL 语法提取（`_sql` 端点） |
 | MongoDB | ✅ | ✅ 集合 | ✅ (v0.1.0+) | ✅ | JSON `find`/`aggregate` 字段 |
 | Qdrant | ✅ | ✅ 集合 | ✅ (v0.1.0+) | ✅ | JSON `scroll`/`count` 字段 |

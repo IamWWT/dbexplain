@@ -5,6 +5,7 @@ package connector
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
@@ -108,6 +109,46 @@ func TestQuoteOracle(t *testing.T) {
 			}
 		})
 	}
+}
+
+func FuzzQuoteOracle(f *testing.F) {
+	seeds := []string{
+		"HR",
+		`ta"ble`,
+		"employees",
+		"",
+		"lowercase",
+		`"double""quote"`,
+	}
+	for _, s := range seeds {
+		f.Add(s)
+	}
+	f.Fuzz(func(t *testing.T, s string) {
+		quoted := quoteOracle(s)
+		if len(quoted) < 2 || quoted[0] != '"' || quoted[len(quoted)-1] != '"' {
+			t.Errorf("quoteOracle(%q) = %q, missing double-quote delimiters", s, quoted)
+		}
+		inner := quoted[1 : len(quoted)-1]
+		// Every double-quote run inside must be even-length (all are escaped pairs)
+		if hasOddDelimRun(inner, '"') {
+			t.Errorf("quoteOracle(%q) = %q, odd-length double-quote run inside", s, quoted)
+		}
+		if back := unquoteOracle(quoted); back != s {
+			t.Errorf("roundtrip: quoteOracle(%q) = %q, unquote -> %q", s, quoted, back)
+		}
+	})
+}
+
+// unquoteOracle strips Oracle double-quote quoting: "a""b" → a"b
+func unquoteOracle(s string) string {
+	if len(s) < 2 || s[0] != '"' || s[len(s)-1] != '"' {
+		return s
+	}
+	inner := s[1 : len(s)-1]
+	if !strings.Contains(inner, `"`) {
+		return inner
+	}
+	return strings.ReplaceAll(inner, `""`, `"`)
 }
 
 // ── go-sqlmock based tests ──

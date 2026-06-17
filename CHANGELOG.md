@@ -11,6 +11,14 @@
 - **迁移**: 移除所有命令调用中的 `-env` 参数。工具已默认自动加载 `.env.dbexplain`，无需任何额外参数。
 - **ISSUE-098**: 重构任务追踪。
 
+### 📄 SKILL 文档全面升级 — 场景驱动编写
+
+- **`docs/contribution-guide/SKILL_AUTHORING.md` 新增"场景驱动编写"章节**：定义场景三要素（用户说→AI做→验证）、P0/P1/P2 分级原则（按用户使用频率控制内容优先级）、常见场景模板、内容组织检查清单。解决原规范只讲"怎么写"不讲"按用户场景组织"的问题。
+- **`dbexplain-skill/SKILL_ZH.md` / `SKILL_EN.md` 按 P0/P1/P2 重组 §4 决策表**：P0 场景（数据库巡检/表结构/连通性）放最前，P1（查询/统计/拓扑）中间，P2（Diff/联邦/文件分析）靠后。新增场景：数据库巡检、NL→SQL（"帮我查上个月订单量"）、数据质量检查、Schema Diff。触发词从 11 个扩展至 16 个。
+- **连通性检查从 §8 注意事项提升为 §5.3 独立工作流步骤**：作为 P0 场景先于 Schema 采集执行，附 verify 检查点和降级路径。同步删除 §6/§8 中重复的 `check`/`list` 引用。
+- **新增 §5.8 Schema Diff**：`diff --cache` 命令与"和上周比改了啥"场景映射。
+- **全文节号对齐**：collect/execute/DSL/文件查询依次为 5.4/5.5/5.6/5.7，所有交叉引用同步更新。
+
 ## v0.1.7 (2026-06-16) — Prometheus Meta 表行输出 + CTE 写检测加固 + GaussDB Oracle 兼容模式适配
 
 ### ✨ Prometheus meta 表行输出
@@ -50,7 +58,7 @@
 ### 📄 文档
 
 - **`docs/test/21-check-command.md`**: 新增 check 子命令 11 项测试用例。
-- **`docs/CODE_MAP.md`**: 新增 `dbexplain check` → `internal/check/handler.go` 映射。
+- **`docs/system-architecture/CODE_MAP.md`**: 新增 `dbexplain check` → `internal/check/handler.go` 映射。
 - **`docs/file_index.md`**: 新增 `test/21-check-command.md` 条目。
 - **`docs/test/RESULTS.md`**: 更新 v0.1.7 测试结果。
 - **`.env.dbexplain.example`**: 补充 GaussDB DSN 配置示例。
@@ -167,7 +175,7 @@
 - **新增** `docs/databases/relational/ORACLE.md`（Oracle 数据源使用手册）
 - **新增** `docs/databases/analytical/HIVE.md`（Hive 数据源使用手册）
 - **README 中英同步**：数据源计数 13 → 15，连接器层新增 Oracle(关系型)/Hive(分析型)
-- **`docs/CODE_MAP.md`**: 新增 Oracle/Hive 模块映射 [+2 行]
+- **`docs/system-architecture/CODE_MAP.md`**: 新增 Oracle/Hive 模块映射 [+2 行]
 - **`docs/file_index.md`**: 新增 ORACLE.md / HIVE.md
 
 ## v0.1.4 (2026-06-04) — Prometheus 时序数据库连接器 + 采集指标收集
@@ -193,7 +201,7 @@
 - **README 中英同步**：数据源计数 12 → 13，能力矩阵新增时序型 Prometheus 行(Collect/REPL/PromQL)
 - **README 架构重构**: 双语言新增架构层次描述（5 层 ASCII 图 + 层级说明表格）。二维表化能力全景映射矩阵、核心能力、输出格式、安全防护、二进制变体、CLI 常用参数、文档导航。更新 ES REPL 标记为✅，Prometheus DSL 脚注改为支持联邦。
 - **docs/file_index.md**：新增 prometheus.md 到§三时序型类别
-- **docs/CODE_MAP.md**：模块映射新增 Prometheus 连接器 + CapPromQL 能力矩阵列 + 文档交叉引用
+- **docs/system-architecture/CODE_MAP.md**：模块映射新增 Prometheus 连接器 + CapPromQL 能力矩阵列 + 文档交叉引用
 - **CLI_EXAMPLES.md**: 新增第 11 章 Prometheus 执行示例（execute/DSL/REPL/安全检查），更新第 13 章 REPL 输出和数据源表格
 - **docs/test/README.md**：测试总览更新（17 数据源/153 测试项/L8 Prometheus）
 - **docs/test/RESULTS.md**：v0.1.4 测试结果，153/153 测试项通过（100%）
@@ -325,12 +333,12 @@
 - **发布前检查标准补充** (ISSUE-073): SECURITY_CHECKLIST.md §6 追加版本一致性、CHANGELOG 完整性、issues.json 有效性、二进制冒烟测试、产物完整性、文档陈旧引用检查
 - **`docs/test/01-environment.md` 大幅扩展**: 新增 §1.9 构建模式因素影响分析（编译时间/体积/功能/UPX/安全/场景推荐/安全验证/结论），实际实测数据
 - **`docs/test/RESULTS.md` 构建优化段**: 更新 5 种标签组合实测体积、全景 Tag→Kind→DSN scheme 映射、安全验证表
-- **`docs/DEPLOY.md` build.sh 表格**: 模式说明更新为明确的 GOOS/GOARCH 列表
-- **`docs/SKILL_AUTHORING.md` 全面优化**: 融入 Karpathy 上下文工程理念 — 新增上下文经济/可验证性原则、元数据入口强调块、description 写作公式、输入定义章节、失败处理规则、渐进披露指南、eval-first 迭代流程、完整示例模板
+- **`docs/setup-guide/DEPLOY.md` build.sh 表格**: 模式说明更新为明确的 GOOS/GOARCH 列表
+- **`docs/contribution-guide/SKILL_AUTHORING.md` 全面优化**: 融入 Karpathy 上下文工程理念 — 新增上下文经济/可验证性原则、元数据入口强调块、description 写作公式、输入定义章节、失败处理规则、渐进披露指南、eval-first 迭代流程、完整示例模板
 - **SKILL_ZH.md / SKILL_EN.md 重构**: 330→197 行（符合 200 行上限）。移除 SQL 语法表/错误处理表（引用 references/），新增输入定义/失败处理规则，精简 DSL/增量检测/参数表等冗余内容
 - **README 能力全景映射矩阵**: "支持的数据源"表替换为 5 列能力模块（Schema采集/SQL查询/REPL/DSL联邦/文件引擎）× 11 数据源的能力矩阵，一图览全局
 - **`docs/test/RESULTS.md` 整理**: 合并 v0.1.0/v0.1.1/重复 v0.1.2 三个冗余章节为单一 v0.1.2 报告，新增"本次闭环验证修复"清单
-- **`docs/REPL.md` 更新**: 移除 ClickHouse 分号限制（已修复），ES 限制补充详细绕过方案 (SQL via `_sql`/collect)
+- **`docs/user-guide/REPL.md` 更新**: 移除 ClickHouse 分号限制（已修复），ES 限制补充详细绕过方案 (SQL via `_sql`/collect)
 - **`docs/test/09-cli-help.md` 扩展**: 新增 ClickHouse 分号和 ES JSON 测试用例
 - **REPL .list/.databases 命令** (ISSUE-074): 新增 REPL 内 `list`/`.databases` 命令，显示所有已配置数据源的序号、label、kind 及当前连接标记
 - **CONSTITUTION.md 审查更新**: 核心交付物修正（去除未实现的 IR Product 概念）；Principle 3 区分 Collect/Query 阶段并更新 MongoDB 描述；构建与发布章节精简为 DEPLOY.md 引用
@@ -357,7 +365,7 @@
 
 ### 文档
 - **README 中英文分拆**: README.md 改为指向 README_ZH.md 的符号链接，新增 `README_EN.md`，中英文独立维护。新增文档导航表格，精简内容聚焦核心能力
-- **新增 `docs/USAGE_GUIDE.md`**: 全场景傻瓜用法手册，覆盖全部 11 种数据源从安装到查询的完整流程，三平台操作说明
+- **新增 `docs/user-guide/USAGE_GUIDE.md`**: 全场景傻瓜用法手册，覆盖全部 11 种数据源从安装到查询的完整流程，三平台操作说明
 - **过期内容修正**: CLI_EXAMPLES.md CSV 章节修正（文件引擎已支持完整 SQL）；sql-syntax.md/troubleshooting.md 窗口函数标记更新为 ✅ 已支持
 - **docs/test/ 清理**: 移除过期 PNG 截图文件
 
@@ -408,9 +416,9 @@
 
 ### 文档对齐 (Phase D1-D5)
 - **24+ .md 文件与 v0.1.0 代码对齐**: 版本号、PostgreSQL schema 范围、Qdrant TLS/execute、Redis readOps 白名单、数据源计数、`--manual` 弃用引用
-- **`docs/ALGORITHMS.md`**: 新增 `vector`/`file` 能力；更新版本状态表
-- **`docs/ARCHITECTURE.md`**: `--manual` 替换为 `all`/`<dbtype>`；更新目录结构
-- **`docs/POLICY.md`**: 新增排障参考表（4 种常见问题）
+- **`docs/system-architecture/ALGORITHMS.md`**: 新增 `vector`/`file` 能力；更新版本状态表
+- **`docs/system-architecture/ARCHITECTURE.md`**: `--manual` 替换为 `all`/`<dbtype>`；更新目录结构
+- **`docs/security-policies/POLICY.md`**: 新增排障参考表（4 种常见问题）
 - **`README.md` / `README_EN.md`**: 精简约 62%（541→207 / 540→194 行），详细内容引导至 docs/
 - **`issues.json`**: 合并 ISSUE-062.md 内容为 ISSUE-064；解决编号冲突
 
@@ -534,7 +542,7 @@
 - **9 种数据库全覆盖**: SQL 类（MySQL/PostgreSQL/GaussDB/SQLite/ClickHouse/Elasticsearch）支持全部三层策略；MongoDB/Qdrant 支持语句+集合级；Redis 支持语句+Key 级（含通配符匹配）
 - **全局+按 DSN 配置**: `DENY_TABLES`/`DENY_COLUMNS`/`DENY_STATEMENTS` 支持全局配置和 `DB<n>_` 前缀按 DSN 追加
 - **列值屏蔽**: `MASK_COLUMNS` 执行后替换敏感列值（如 `password_hash=***`），替代硬阻断。支持通配符匹配，所有数据库通用
-- **专用文档**: 新建 `docs/POLICY.md`，按 9 种数据库逐一说明禁用规则和配置方式
+- **专用文档**: 新建 `docs/security-policies/POLICY.md`，按 9 种数据库逐一说明禁用规则和配置方式
 - **单元测试**: 39 测试用例（Load/CheckSQL/CheckNative/Extract 全覆盖）+ 10+ 安全绕过回归用例
 
 ### 凭据保护
@@ -561,9 +569,9 @@
 - **Malformed glob 告警**: `policy.go` 中 `globMatch()` 和 `filepath.Match()` 错误忽略处增加 `log.Printf` 警告输出，便于发现配置错误
 
 ### 文档更新
-- `docs/POLICY.md`: 安全策略引擎完整文档（新建）
-- `docs/EXECUTE.md`: 安全架构章节补充策略防绕过、输出安全说明
-- `docs/SECURITY_CHECKLIST.md`: 新增 10+ 安全检查项（凭据保护/输入验证/运行时安全/传输安全）
+- `docs/security-policies/POLICY.md`: 安全策略引擎完整文档（新建）
+- `docs/user-guide/EXECUTE.md`: 安全架构章节补充策略防绕过、输出安全说明
+- `docs/security-policies/SECURITY_CHECKLIST.md`: 新增 10+ 安全检查项（凭据保护/输入验证/运行时安全/传输安全）
 - `docs/CLICKHOUSE.md`: 认证方式更新（URL 参数 → 请求头）
 - `docs/ELASTICSEARCH.md`: TLS 描述更新（硬编码跳过 → `?tls-skip-verify=true` 参数化）
 - `src/execute_test.go`: 新增 13 个测试用例（sanitizeCell/formatHuman 全覆盖）
@@ -614,9 +622,9 @@
   - Qdrant: JSON 格式 `{"scroll":"collection_name","limit":100}` / `{"count":"collection_name"}`
 - **查询路由机制**: `isSQLKind()` 根据 DSN 类型决定校验路径，SQL 类走 sqlguard，非 SQL 类各连接器内部白名单验证
 - **双超时保护**: 应用层 context 超时 + 数据库层语句超时（MySQL `max_execution_time` / PG `statement_timeout` / CH `max_execution_time`）
-- **安全文档**: 新建 `docs/EXECUTE.md`，全面记录安全架构、输出格式、使用示例和 CONSTITUTION 合规情况
+- **安全文档**: 新建 `docs/user-guide/EXECUTE.md`，全面记录安全架构、输出格式、使用示例和 CONSTITUTION 合规情况
 - **`--human` 表格输出**: execute 新增 `--human` 参数，查询结果以 ASCII 表格渲染（类 mysql/pg CLI 风格），替代默认 JSON。NULL 值清晰标注，自动列宽对齐。9 种数据库通用
-- **CLI 案例库**: 新建 `docs/CLI_EXAMPLES.md`，覆盖 7 个有数据的数据源共 13 条可执行查询，全部经本环境实测验证
+- **CLI 案例库**: 新建 `docs/user-guide/CLI_EXAMPLES.md`，覆盖 7 个有数据的数据源共 13 条可执行查询，全部经本环境实测验证
 
 ### 安全增强
 - **Redacted() 凭证脱敏修复**: URL 编码密码（如 `%23`）不再泄露；用户名和密码同时脱敏为 `{dbuser}:{dbpassword}` 占位符，替代原来的 `user:***` 格式
@@ -652,8 +660,8 @@
 - `README.md` / `README_EN.md`: 新增"加密配置文件"章节，包含完整使用示例
 - `--manual` 手册新增加密子命令完整文档（中英双语）
 - `-h` 帮助新增"加密"参数组
-- `docs/SECURITY_CHECKLIST.md`: 新增"配置加密检查"章节
-- `docs/ARCHITECTURE.md`: 新增"配置加密架构"章节
+- `docs/security-policies/SECURITY_CHECKLIST.md`: 新增"配置加密检查"章节
+- `docs/system-architecture/ARCHITECTURE.md`: 新增"配置加密架构"章节
 - `.gitignore`: 新增 `*.enc` 排除规则
 
 ### CLI 子命令层级重构
@@ -698,7 +706,7 @@
 
 ### 文档
 - `--manual` 手册更新：添加配置搜索优先级章节、`--log-dir` 参数、所有 `./dbexplain` 改为 `dbexplain`
-- **新增 `docs/SECURITY_CHECKLIST.md`**：发布前安全检查手册，涵盖凭证保护、文件编码、输入验证等 7 大类检查项
+- **新增 `docs/security-policies/SECURITY_CHECKLIST.md`**：发布前安全检查手册，涵盖凭证保护、文件编码、输入验证等 7 大类检查项
 
 ### Bug 修复 (13 项)
 
@@ -770,8 +778,8 @@
 - **过滤日志重定向**: `-include`/`-exclude` 的跳过/排除消息写入 `logs/filter.log`，不再污染终端输出，保持报告干净可读（人和 AI 均适用）
 
 ### 文档
-- `docs/ARCHITECTURE.md`: Database Context Compiler 架构愿景，新增安全性章节（密码防泄漏为第一要义）
-- `docs/ALGORITHMS.md`: 完整算法参考，含兼容性矩阵和兜底机制
+- `docs/system-architecture/ARCHITECTURE.md`: Database Context Compiler 架构愿景，新增安全性章节（密码防泄漏为第一要义）
+- `docs/system-architecture/ALGORITHMS.md`: 完整算法参考，含兼容性矩阵和兜底机制
 - `docs/TEST_METHODOLOGY_v0.0.4.md`, `docs/TEST_REPORT_v0.0.4.md`: 分层测试方法论与实测报告（83+ 用例，含真实 shell 执行输出）
 - README 新增"使用场景"章节（AI Agent 用法 / 人类用法 / 9 种数据库示例）
 - `MEMORY.md` 新增版本性能对比章节（每次发版必做）

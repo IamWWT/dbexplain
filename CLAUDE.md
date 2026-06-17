@@ -160,7 +160,7 @@ defer func() {
 - 测试: `go build -tags full; go test -tags full ./...`
 
 ### 发布前检查
-参见 `docs/SECURITY_CHECKLIST.md` §6 — 25+ 项（构建/测试/版本一致性/CHANGELOG 完整性/二进制冒烟/文档陈旧引用/安全）
+参见 `docs/security-policies/SECURITY_CHECKLIST.md` §6 — 25+ 项（构建/测试/版本一致性/CHANGELOG 完整性/二进制冒烟/文档陈旧引用/安全）
 
 ## 文档义务
 - CODE_MAP.md 随文件增删改同步更新

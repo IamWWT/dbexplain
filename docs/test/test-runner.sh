@@ -73,15 +73,15 @@ UNIT=$(go test ./... -count=1 2>&1) && pass "All unit tests pass" || {
 # L3: CLI Help (global binary)
 # ════════════════════════════════════════════════════════════
 echo ""; echo "─── L3: CLI Help ───"
-check_grep "--version" "v0.1.7"                         $BIN --version
+check_grep "--version" "v0.1.8"                         $BIN --version
 check_grep "-h help" "csv\|tsv\|xlsx"                    $BIN -h 2>&1
 check_grep "all manual" "dbexplain"                      env PAGER="" $BIN all 2>&1
 check_grep "manual EN" "Usage\|NAME"                     env PAGER="" $BIN all --language en 2>&1
 check_grep "manual --filter" "Redis\|redis"              env PAGER="" $BIN all --filter redis 2>&1
-for db in mysql postgres clickhouse sqlite redis mongodb elasticsearch qdrant csv tsv xlsx oracle hive; do
-  check_grep "$db (v0.1.7)" "v0.1.7" $BIN "$db" 2>&1; done
+for db in mysql postgres gaussdb clickhouse sqlite redis mongodb elasticsearch qdrant csv tsv xlsx oracle hive; do
+  check_grep "$db (v0.1.8)" "v0.1.8" $BIN "$db" 2>&1; done
 for alias in pg postgresql ch sqlite3 es; do
-  check_grep "$alias (v0.1.7)" "v0.1.7" $BIN "$alias" 2>&1; done
+  check_grep "$alias (v0.1.8)" "v0.1.8" $BIN "$alias" 2>&1; done
 for cmd in execute list encrypt collect repl; do
   check_grep "$cmd -h" "Usage" $BIN "$cmd" -h 2>&1; done
 

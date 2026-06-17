@@ -86,10 +86,15 @@ cd src && $BIN diff --cache /tmp/e2e.cache --list-versions
 | L8 | 能力架构 | CapSQL 路由、PostgreSQL 多 Schema、策略引擎增强、JSON 包装格式 | [12-capability-routing.md](12-capability-routing.md) |
 | L8 | DuckDB 连接器 | DuckDB 采集/查询/安全/DSL/构建隔离 | [16-duckdb.md](16-duckdb.md) |
 | L8 | 采集指标收集 | Prometheus 文本输出/JSON嵌入/向后兼容 | [17-metrics.md](17-metrics.md) |
-| L8 | Prometheus 连接器 | Prometheus targets/labels/metrics 采集 + PromQL 查询 | [18-prometheus.md](18-prometheus.md) |
-| L8 | Prometheus 连接器 | Prometheus targets/labels/metrics 采集 + PromQL 查询 | [18-prometheus.md](18-prometheus.md) |
+| L8 | Prometheus 连接器 | Prometheus meta 表采集 + PromQL 查询 + DSL promql() | [18-prometheus.md](18-prometheus.md) |
 | L8 | Oracle + Hive 连接器 | 编译/DSN 解析/CLI 手册/选择性构建/回归确认 | [19-oracle-hive.md](19-oracle-hive.md) |
-| L5 | CTE 写检测加固 | WITH + 主查询写操作拦截 + CTE 体写检测 | [20-cte-write-detection.md](20-cte-write-detection.md) |
+| L8 | GaussDB 连接器 | DSN 解析/CLI 手册/Schema 采集/Oracle 兼容模式 | [25-gaussdb.md](25-gaussdb.md) |
+| L5 | 配置检查 | DSN 语法/连通性/凭证安全/超时/混合结果 | [21-check-command.md](21-check-command.md) |
+| L5 | 密码特殊字符 | 24 特殊字符 × 10 scheme 的 ParseDSN/Redacted/SanitizeErr 审计 | [23-password-special-chars.md](23-password-special-chars.md) |
+| — | 配置文件搜索 | 7 级搜索优先级实测 | [24-config-search-priority.md](24-config-search-priority.md) |
+| — | Schema Diff | 字段级变更追踪、快照存储、CLI 子命令、多版本基线 | [14-schema-diff.md](14-schema-diff.md) |
+| — | 窗口函数 | 文件查询引擎窗口函数 Phase 1-4 | [15-window-functions.md](15-window-functions.md) |
+| — | 文件查询引擎 QA | 文件查询引擎高级 SQL 能力（JOIN/HAVING/UNION/子查询） | [13-file-query-engine.md](13-file-query-engine.md) |
 
 ## 测试概览
 
@@ -113,6 +118,7 @@ cd src && $BIN diff --cache /tmp/e2e.cache --list-versions
 优先级 4: ~/.config/dbexplain/.env.dbexplain
 优先级 5: ~/.config/dbexplain/.env.dbexplain.enc
 优先级 6: CWD/.env
+优先级 7: CWD/.env.enc
 ```
 
 ### 常见场景与应对
@@ -164,7 +170,7 @@ dbexplain execute -dsn 'csv:///tmp/test.csv?label=test' "SELECT *"
 
 ## 最新测试结果
 
-完整测试结果报告见 [RESULTS.md](RESULTS.md)。v0.1.7 测试结果: **全部通过**，含 Prometheus meta 表 rows 2/2 + CTE 写检测 2/2。
+完整测试结果报告见 [RESULTS.md](RESULTS.md)。v0.1.8 测试结果: **全部通过**，含 -env 移除回归测试 + 配置文件搜索 7 级优先级实测 + 密码特殊字符审计。
 
 ## 快速导航
 
@@ -182,11 +188,17 @@ dbexplain execute -dsn 'csv:///tmp/test.csv?label=test' "SELECT *"
 10-regression.md     # 回归测试
 11-end-to-end.md     # 全量集成
 12-capability-routing.md  # 能力架构
+13-file-query-engine.md   # 文件查询引擎 QA
+14-schema-diff.md    # Schema Diff
+15-window-functions.md    # 窗口函数
 16-duckdb.md           # DuckDB 连接器
 17-metrics.md          # 采集指标
 18-prometheus.md       # Prometheus 连接器
 19-oracle-hive.md      # Oracle + Hive 连接器
-20-cte-write-detection.md # CTE 写检测加固
+21-check-command.md    # check 子命令
+23-password-special-chars.md # 密码特殊字符
+24-config-search-priority.md # 配置文件搜索
+25-gaussdb.md          # GaussDB 连接器
 ```
 
 ## 测试充分性评估
