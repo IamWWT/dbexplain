@@ -469,7 +469,7 @@ func collectPGDB(ctx context.Context, db *sql.DB, dbName, redactedDSN string) (*
 	// Assign batch results + sample rows
 	for i, t := range tables {
 		schemaName, baseName := parsePGTableName(t.Name)
-		Logf(ctx, "[%s] 采集表 %d/%d: %s", dbName, i+1, total, t.Name)
+		Logf(ctx, "[%s] collecting table %d/%d: %s", dbName, i+1, total, t.Name)
 
 		// Assign pre-fetched columns, indexes, FKs
 		if cd := colMap[t.Name]; cd != nil {
@@ -549,7 +549,8 @@ func fetchPGSampleRow(ctx context.Context, db *sql.DB, schemaName, table string)
 	}
 	values := make([]interface{}, len(columns))
 	for i := range values {
-		values[i] = new(interface{})
+		var v interface{}
+		values[i] = &v
 	}
 	if err := rows.Scan(values...); err != nil {
 		return nil, err
@@ -585,8 +586,14 @@ func buildPGDSN(d *dsn.DSN) string {
 	if sslmode == "" {
 		sslmode = "disable"
 	}
+	// Quote and escape password for lib/pq key=value format.
+	// Single-quoted values support \' and \\ escape sequences,
+	// protecting against special chars like spaces, quotes, and backslashes.
+	password := strings.ReplaceAll(d.Password, `\`, `\\`)
+	password = strings.ReplaceAll(password, `'`, `\'`)
+	password = `'` + password + `'`
 	return fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s connect_timeout=5",
-		host, port, d.User, d.Password, dbname, sslmode)
+		host, port, d.User, password, dbname, sslmode)
 }
 
 // ExecQuery implements query.Queryable for PostgreSQL and GaussDB.

@@ -1,6 +1,6 @@
 # dbexplain 排障指南
 
-> 适用于 `dbexplain -env` 采集和 `dbexplain execute` 查询。如遇 exit code ≠ 0，按此文档诊断。
+> 适用于 `dbexplain` 采集和 `dbexplain execute` 查询。如遇 exit code ≠ 0，按此文档诊断。
 
 ---
 
@@ -148,7 +148,7 @@ Schema "xxx" not found
 
 **修正**：
 - 确认数据库名正确（大小写敏感）
-- 先用 `dbexplain list -env` 确认可用数据库列表
+- 先用 `dbexplain list` 确认可用数据库列表
 - MongoDB DSN 必须包含数据库名和 `authSource` 参数
 
 ### 1.8 连接器未初始化
@@ -199,11 +199,11 @@ QUERY_ERROR: csv query error: parse error: ...
 
 ```bash
 # 外层双引号 + SQL 内单引号（推荐含中文/特殊字符时）
-dbexplain execute -env --label my_data \
+dbexplain execute --label my_data \
   "SELECT * FROM t WHERE col = 'value'" --human
 
 # 外层单引号 + SQL 内双引号
-dbexplain execute -env --label my_data \
+dbexplain execute --label my_data \
   'SELECT * FROM t WHERE col = "value"' --human
 ```
 
@@ -224,7 +224,7 @@ table "xxx" not found
 #### 表名从哪来
 
 ```
-dbexplain -env 输出：
+dbexplain 输出：
   DB1 → my_data  → csv:///...sales_data.csv
          ↑label    ↑文件名 = sales_data
 
@@ -241,7 +241,7 @@ dbexplain -env 输出：
 # Schema 采集后会列出 mapping，如：
 # DB1 → my_data  → csv:///...sales_data.csv
 #                    ↑最后一段 .csv 前的部分就是表名
-dbexplain -env
+dbexplain
 ```
 
 **规则**：文件名（不含 `.csv` / `.tsv` / `.xlsx`）才是 SQL 中的表名。`--label` 只是用来选择数据源的参数。
@@ -261,10 +261,10 @@ ERROR: 2 DSNs matched — use --label to select one:
 
 **修复**：输出中已列出可用 label，直接选取所需：
 ```bash
-dbexplain execute -env --label sales_data 'SELECT *' --limit 5 --human
+dbexplain execute --label sales_data 'SELECT *' --limit 5 --human
 ```
 
-如果仍不确定，先运行 `dbexplain -env` 查看完整 mapping。
+如果仍不确定，先运行 `dbexplain` 查看完整 mapping。
 
 ---
 

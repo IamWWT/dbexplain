@@ -9,7 +9,7 @@
 
 1. **读者是 AI** — 所有内容面向大语言模型优化，不是给人看的文档。使用清晰、直接、可执行的指令。
 2. **上下文经济** — 上下文窗口是稀缺公共资源。只包含 AI **不知道**或**难以推断**的领域知识，不重复通用常识。每多一条指令，就多一分忽略关键指令的风险。
-3. **可执行优先** — 每条命令都应是可直接复制运行的完整语句（如 `dbexplain -env --context ./ctx`），不含 `<占位符>` 或"根据情况调整"。
+3. **可执行优先** — 每条命令都应是可直接复制运行的完整语句（如 `dbexplain --context ./ctx`），不含 `<占位符>` 或"根据情况调整"。
 4. **越具体越好** — 不写模棱两可的空话。提供的信息越精确，AI 表现越像老手。
 5. **可验证性** — 技能应附带测试用例（evals）。没有评估，就无法判断修改效果。
 
@@ -129,13 +129,13 @@ AI 必须遵守的行为约束。建议 3-7 条，复杂技能可适度增加，
 
 ```
 ### 步骤 1：Schema 采集
-dbexplain -env --context ./ctx
+dbexplain --context ./ctx
 
 ### 步骤 2：数据预览
-dbexplain execute -env --label <label> 'SELECT *' --limit 5 --human
+dbexplain execute --label <label> 'SELECT *' --limit 5 --human
 
 ### 步骤 3：业务分析
-dbexplain execute -env --label <label> 'SELECT col, AVG(val) FROM t GROUP BY col' --human
+dbexplain execute --label <label> 'SELECT col, AVG(val) FROM t GROUP BY col' --human
 ```
 
 ### 5. 业务知识 / 领域知识（可选但强烈推荐）
@@ -260,12 +260,12 @@ tags: [database, sql, csv]
 
 ### 4.1 Schema 采集
 ```bash
-dbexplain -env --context ./ctx
+dbexplain --context ./ctx
 ```
 
 ### 4.2 执行查询
 ```bash
-dbexplain execute -env --label <label> 'SELECT COUNT(*) FROM t' --human
+dbexplain execute --label <label> 'SELECT COUNT(*) FROM t' --human
 ```
 
 完整语法见 `references/sql-syntax.md`，排障见 `references/troubleshooting.md`。

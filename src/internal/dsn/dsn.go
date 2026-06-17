@@ -29,7 +29,7 @@ type DSN struct {
 func ParseDSN(raw string) (*DSN, error) {
 	// Pre-escape # in userinfo — Go url.Parse treats bare # as URL fragment.
 	// Without this, passwords containing # (e.g. "pwd#123") break parsing.
-	raw = escapeUserinfoHash(raw)
+	raw = escapeUserinfo(raw)
 	u, err := url.Parse(raw)
 	if err != nil {
 		return nil, fmt.Errorf("invalid DSN: %w", err)
@@ -228,25 +228,74 @@ func (d *DSN) DSNParam(key string) string {
 	return ""
 }
 
-// escapeUserinfoHash escapes bare # to %23 in the userinfo portion
-// (between :// and last @) of a DSN URL. Go's url.Parse treats # as a
-// fragment delimiter, which breaks passwords containing #.
-func escapeUserinfoHash(raw string) string {
-	// Find :// as scheme separator
+// escapeUserinfo encodes bare unsafe characters in the userinfo portion
+// (between :// and last @) of a DSN URL using percent-encoding.
+// Go's url.Parse rejects bare #, space, /, ?, [, ], and other chars in
+// userinfo. Preserves existing %XX sequences (pre-encoded values) to
+// avoid double-encoding. Uses %20 for spaces (RFC 3986), not +.
+func escapeUserinfo(raw string) string {
 	afterScheme := strings.Index(raw, "://")
 	if afterScheme < 0 {
 		return raw
 	}
 	start := afterScheme + 3
-	// Find the last @ (userinfo ends at last @ before host)
+	// lastAt is the index of @ — raw[lastAt:] keeps the @ separator
 	lastAt := strings.LastIndex(raw, "@")
 	if lastAt < 0 || lastAt <= start {
 		return raw
 	}
 	userinfo := raw[start:lastAt]
-	if !strings.Contains(userinfo, "#") {
+	if !hasBareUnsafeChar(userinfo) {
 		return raw
 	}
-	escaped := strings.ReplaceAll(userinfo, "#", "%23")
-	return raw[:start] + escaped + raw[lastAt:]
+	var buf strings.Builder
+	buf.Grow(len(userinfo) + 10)
+	for i := 0; i < len(userinfo); i++ {
+		c := userinfo[i]
+		// Preserve existing percent-encoded sequences
+		if c == '%' && i+2 < len(userinfo) && isHex(userinfo[i+1]) && isHex(userinfo[i+2]) {
+			buf.WriteString(userinfo[i : i+3])
+			i += 2
+			continue
+		}
+		if isUserinfoSafe(c) {
+			buf.WriteByte(c)
+		} else {
+			fmt.Fprintf(&buf, "%%%02X", c)
+		}
+	}
+	return raw[:start] + buf.String() + raw[lastAt:]
+}
+
+// isUserinfoSafe reports whether c is valid in a URL userinfo component
+// per RFC 3986: unreserved (ALPHA / DIGIT / - . _ ~), sub-delims, and :.
+func isUserinfoSafe(c byte) bool {
+	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') ||
+		c == '-' || c == '.' || c == '_' || c == '~' ||
+		c == '!' || c == '$' || c == '&' || c == '\'' || c == '(' || c == ')' ||
+		c == '*' || c == '+' || c == ',' || c == ';' || c == '=' || c == ':' ||
+		c == '@' // @ is safe inside userinfo (it's the delimiter, but may appear in embedded user:password cases)
+}
+
+func isHex(c byte) bool {
+	return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')
+}
+
+// hasBareUnsafeChar returns true if the string contains any character that
+// is unsafe for URL userinfo AND is not part of an existing %XX sequence.
+func hasBareUnsafeChar(s string) bool {
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c == '%' {
+			if i+2 < len(s) && isHex(s[i+1]) && isHex(s[i+2]) {
+				i += 2 // skip valid %XX
+				continue
+			}
+			return true // bare % not followed by hex
+		}
+		if !isUserinfoSafe(c) {
+			return true
+		}
+	}
+	return false
 }

@@ -50,7 +50,7 @@
 
 | 层级 | 职责 | 关键组件 |
 |------|------|---------|
-| **CLI 命令层** | 用户交互入口，子命令分发 | `cmd/dbexplain/` — `main.go`、`execute.go`、`repl.go`、`collect.go`、`diff.go` |
+| **CLI 命令层** | 用户交互入口，子命令分发 | `cmd/dbexplain/` — `main.go`、`execute.go`、`repl.go`、`encode.go` |
 | **查询执行层** | 三路径查询：直接/DSL/联邦 | `executor/`、`dsl/`（DSL 编译器）、`connector/filequery/`（文件 SQL 引擎） |
 | **安全防护层** | AST 只读校验 + LIMIT 注入 + 策略拒绝 | `sqlguard/`、`policy/`、`query/`（并发锁） |
 | **连接器层** | 15 种数据源统一接口 | `connector/` — 每数据源独立文件，`init()` 自注册到全局 registry |
@@ -101,11 +101,11 @@
 
 | 格式 | 命令 | 用途 |
 |------|------|------|
-| **JSON** | `dbexplain -env --json` | 机器消费的结构化数据 |
-| **Human** | `dbexplain -env --human` | 人类可读渲染结果 |
-| **增量缓存** | `dbexplain -env --cache /tmp/cache.json` | 仅 Schema 变化时重新采集 |
-| **AI 上下文** | `dbexplain -env --context /tmp/ctx.md` | LLM 可直接消费的上下文文件 |
-| **采集指标** | `dbexplain -env --metrics` | Prometheus 文本格式输出到 stderr |
+| **JSON** | `dbexplain --json` | 机器消费的结构化数据 |
+| **Human** | `dbexplain --human` | 人类可读渲染结果 |
+| **增量缓存** | `dbexplain --cache /tmp/cache.json` | 仅 Schema 变化时重新采集 |
+| **AI 上下文** | `dbexplain --context /tmp/ctx.md` | LLM 可直接消费的上下文文件 |
+| **采集指标** | `dbexplain --metrics` | Prometheus 文本格式输出到 stderr |
 
 ### 只读查询执行 — 三路径架构
 
@@ -123,21 +123,21 @@ sqlguard(AST 只读校验) → 策略引擎(DENY/MASK) → AutoLimit(LIMIT 1000)
 
 ```bash
 # 直接执行
-dbexplain execute -env --db 1 "SELECT COUNT(*) FROM orders"
-dbexplain execute -env --label redis "PING"
+dbexplain execute --db 1 "SELECT COUNT(*) FROM orders"
+dbexplain execute --label redis "PING"
 
 # DSL 模式
-dbexplain execute -env --dsl "SELECT * FROM @my-mysql.users LIMIT 10" --human
+dbexplain execute --dsl "SELECT * FROM @my-mysql.users LIMIT 10" --human
 
 # 联邦查询
-dbexplain execute -env --dsl "SELECT * FROM @ops-csv.data UNION ALL SELECT * FROM @xlsx.Sheet1" --human
+dbexplain execute --dsl "SELECT * FROM @ops-csv.data UNION ALL SELECT * FROM @xlsx.Sheet1" --human
 ```
 
 ### REPL 交互式查询
 
 | 特性 | 说明 |
 |------|------|
-| **启动** | `dbexplain repl -env`（从配置加载）或 `--dsn` 直连 |
+| **启动** | `dbexplain repl`（从配置加载）或 `--dsn` 直连 |
 | **无配置启动** | 空 DSN 进入 `(disconnected)` 状态，`.connect <dsn>` 动态接入 |
 | **命令** | `.conn`/`.dsn` 切换数据源、`.list` 列出全部、`.help`/`.exit`/`.quit` |
 | **安全** | 同受 sqlguard + 策略引擎保护，写操作全部拒绝 |
@@ -235,14 +235,14 @@ dbexplain diff --cache schema.json --since v1.0 --human
 
 | 场景 | 命令 |
 |------|------|
-| Schema 采集 | `dbexplain -env / -dsn <url> / --json / --human / -o <file>` |
-| 查询执行 | `dbexplain execute -env --db <N> / --label <name> / --dsl / --human` |
-| REPL 交互 | `dbexplain repl -env` / `dbexplain repl --dsn <url>` / `.connect <dsn>` |
-| 联邦查询 | `dbexplain execute -env --dsl "SELECT * FROM @a.t JOIN @b.t ON ..." --human` |
+| Schema 采集 | `dbexplain / -dsn <url> / --json / --human / -o <file>` |
+| 查询执行 | `dbexplain execute --db <N> / --label <name> / --dsl / --human` |
+| REPL 交互 | `dbexplain repl` / `dbexplain repl --dsn <url>` / `.connect <dsn>` |
+| 联邦查询 | `dbexplain execute --dsl "SELECT * FROM @a.t JOIN @b.t ON ..." --human` |
 | 文件查询 | `dbexplain execute -dsn "csv://file.csv" "SELECT ..."` |
 | Schema 对比 | `dbexplain diff --cache <file> --since <ver>` |
-| 查看 DSN | `dbexplain list`（自动加载 -env） |
-| 采集指标 | `dbexplain -env --metrics`（Prometheus 格式到 stderr） |
+| 查看 DSN | `dbexplain list`（自动加载配置） |
+| 采集指标 | `dbexplain --metrics`（Prometheus 格式到 stderr） |
 | 加密配置 | `dbexplain encrypt`（自动搜索 .env.dbexplain，输出 .enc） |
 | 参考手册 | `dbexplain mysql` / `dbexplain oracle` / `dbexplain hive` / `dbexplain all` |
 
@@ -264,7 +264,7 @@ DB2=redis://:pass@127.0.0.1:6379/0?label=my-redis
 EOF
 
 # 3. 验证
-./release/dbexplain -env                          # Schema 采集
+./release/dbexplain                          # Schema 采集
 ./release/dbexplain execute --db 1 "SELECT 1" --human  # 查询
 ./release/dbexplain --version                     # 版本
 ```

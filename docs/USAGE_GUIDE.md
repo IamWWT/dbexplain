@@ -11,7 +11,7 @@
 1. **看数据库结构** —— 连上数据库，自动列出所有表、字段、索引、外键
 2. **查数据** —— 安全地执行查询（只能查，不能改）
 
-一个工具搞定 **14 种数据源**：MySQL / PostgreSQL / GaussDB / ClickHouse / SQLite / DuckDB / Redis / Elasticsearch / MongoDB / Qdrant / Prometheus / CSV / TSV / Excel。
+一个工具搞定 **15 种数据源**：MySQL / PostgreSQL / GaussDB / ClickHouse / SQLite / DuckDB / Redis / Elasticsearch / MongoDB / Qdrant / Prometheus / CSV / TSV / Excel。
 
 > 本文档覆盖全部数据源的全部使用场景。需要更详细的例子见 [`CLI_EXAMPLES.md`](CLI_EXAMPLES.md)。
 
@@ -76,7 +76,7 @@ copy dbexplain-v0.1.7-windows-amd64-std-upx\dbexplain-windows-amd64-std.exe dbex
 
 **Windows：** 文件放在 `%USERPROFILE%\.config\dbexplain\.env.dbexplain`
 
-### 全部 14 种数据源的配置写法
+### 全部 15 种数据源的配置写法
 
 把下面"你的情况"对应的那行复制到配置文件里，改掉地址/密码即可：
 
@@ -84,20 +84,27 @@ copy dbexplain-v0.1.7-windows-amd64-std-upx\dbexplain-windows-amd64-std.exe dbex
 |---------|----------------------|
 | **MySQL** | `DB1=mysql://用户:密码@127.0.0.1:3306/库名?label=my-mysql` |
 | **PostgreSQL** | `DB2=postgres://用户:密码@127.0.0.1:5432/库名?label=my-pg` |
-| **GaussDB** | `DB3=gaussdb://用户:密码@127.0.0.1:5432/库名?label=my-gauss` |
+| **GaussDB** | `DB3=gaussdb://用户:密码@127.0.0.1:5432/库名?label=my-gauss`（Oracle 兼容模式加 `?oracleCompatible=true`） |
 | **ClickHouse** | `DB4=clickhouse://用户:密码@127.0.0.1:8123/库名?label=my-ch` |
 | **SQLite** | `DB5=sqlite:////tmp/数据库文件.db?label=my-sqlite` |
+| **Redis** | `DB6=redis://用户:密码@127.0.0.1:6379?label=my-redis` |
+| **MongoDB** | `DB7=mongodb://用户:密码@127.0.0.1:27017/库名?label=my-mongo` |
+| **Elasticsearch** | `DB8=elasticsearch://用户:密码@127.0.0.1:9200?label=my-es` |
+| **Qdrant** | `DB9=qdrant://用户:密码@127.0.0.1:6333?label=my-qdrant` |
+| **CSV 文件** | `DB10=csv:///home/你的路径/数据文件.csv?label=my-csv` |
+| **Excel 文件** | `DB11=xlsx:///home/你的路径/数据文件.xlsx?label=my-xlsx` |
 | **DuckDB** | `DB12=duckdb:///tmp/分析.db?label=my-duckdb`（可选，需 `-tags duckdb` 构建） |
 | **Prometheus** | `DB13=prometheus://用户:密码@127.0.0.1:9090?label=my-prom` |
 | **TSV 文件** | `DB14=tsv:///home/你的路径/数据文件.tsv?label=my-tsv` |
-| **Excel 文件** | `DB11=xlsx:///home/你的路径/数据文件.xlsx?label=my-xlsx` |
+| **Oracle** | `DB15=oracle://用户:密码@127.0.0.1:1521/服务名?label=my-oracle` |
+| **Hive** | `DB16=hive://用户:密码@127.0.0.1:10000/库名?label=my-hive` |
 
 > **密码含特殊字符**（`@` `:` `#` 等）需要编码：`@` → `%40`，`:` → `%3A`，`#` → `%23`
 
 配置好之后，运行下面命令看是否生效：
 
 ```bash
-dbexplain list -env
+dbexplain list
 # 会列出你配的所有数据库，密码自动隐藏显示
 ```
 
@@ -107,10 +114,10 @@ dbexplain list -env
 
 ```bash
 # 采集所有数据库的结构
-dbexplain -env --human
+dbexplain --human
 
 # 或用显式子命令（v0.1.2+）
-dbexplain collect -env --human
+dbexplain collect --human
 ```
 
 输出示例：
@@ -127,14 +134,16 @@ DB1: my-mysql (mysql://...)
 **各种输出方式：**
 
 ```bash
-dbexplain -env                     # 终端格式（默认）
-dbexplain -env --human             # 带标记的人类可读格式（推荐）
-dbexplain -env --json              # JSON 格式（给程序/AI 用）
-dbexplain -env --json -o 文件.json # 保存到文件
-dbexplain -env --include my-mysql  # 只看某个数据库
-dbexplain -env --context ./ctx     # 导出 AI 可直接用的上下文文件
-dbexplain -env --tables            # 精简表格列表模式（仅 SQL 数据源，只显示名称/引擎/行数/大小/注释）
-dbexplain -env --table users       # 只采集指定表的 schema（仅 SQL 数据源，connector 级 SQL 过滤）
+dbexplain                     # 终端格式（默认）
+dbexplain --human             # 带标记的人类可读格式（推荐）
+dbexplain --json              # JSON 格式（给程序/AI 用）
+dbexplain --json -o 文件.json # 保存到文件
+dbexplain --include my-mysql  # 只看某个数据库
+dbexplain --context ./ctx     # 导出 AI 可直接用的上下文文件
+dbexplain --tables            # 精简表格列表模式（仅 SQL 数据源，只显示名称/引擎/行数/大小/注释）
+dbexplain --table users       # 只采集指定表的 schema（仅 SQL 数据源，connector 级 SQL 过滤）
+dbexplain --sample            # 采集样本行用于注释推断（默认关闭）
+dbexplain --skip-opstats      # 跳过 MySQL performance_schema op_stats 采集
 ```
 
 ---
@@ -143,36 +152,36 @@ dbexplain -env --table users       # 只采集指定表的 schema（仅 SQL 数�
 
 > 所有查询都经过安全保护：只能查不能改、没写 LIMIT 的自动加 LIMIT 1000、密码自动隐藏。
 
-### 查 SQL 数据库（MySQL / PostgreSQL / GaussDB / ClickHouse / SQLite / Elasticsearch）
+### 查 SQL 数据库（MySQL / PostgreSQL / GaussDB / ClickHouse / SQLite / Elasticsearch / Oracle / Hive）
 
 ```bash
 # 按编号查
-dbexplain execute -env --db 1 "SELECT * FROM users LIMIT 10" --human
+dbexplain execute --db 1 "SELECT * FROM users LIMIT 10" --human
 
 # 按标签查
-dbexplain execute -env --label my-pg "SELECT COUNT(*) FROM orders" --human
+dbexplain execute --label my-pg "SELECT COUNT(*) FROM orders" --human
 
 # 直接 DSN 查（不需要配置文件）
 dbexplain execute -dsn "sqlite:////tmp/test.db" "SELECT * FROM t" --human
 
 # 看查询计划
-dbexplain execute -env --db 1 --explain "SELECT * FROM users WHERE id = 1" --human
+dbexplain execute --db 1 --explain "SELECT * FROM users WHERE id = 1" --human
 
 # 交互式 REPL 模式（v0.1.2+，持续查询不退出）
 dbexplain repl --dsn "sqlite:////tmp/test.db"
 
 # 也可以加载配置文件，用 .conn 在多个数据源间切换
-dbexplain repl -env
+dbexplain repl
 dbexplain repl --dsn "mysql://root:pass@127.0.0.1:3306/mydb"
 
 # 自定义超时（默认 30 秒）和行数（默认 1000）
-dbexplain execute -env --db 1 --timeout 60 --limit 500 "SELECT * FROM logs" --human
+dbexplain execute --db 1 --timeout 60 --limit 500 "SELECT * FROM logs" --human
 ```
 
 > **REPL 模式说明：**
-> - 支持所有 14 种数据源：SQL（MySQL/PG/ClickHouse/SQLite/DuckDB 等）、NoSQL（Redis/ES/Mongo/Qdrant）、时序（Prometheus）、文件（CSV/TSV/Excel）
+> - 支持所有 15 种数据源：SQL（MySQL/PG/ClickHouse/SQLite/DuckDB 等）、NoSQL（Redis/ES/Mongo/Qdrant）、时序（Prometheus）、文件（CSV/TSV/Excel）
 > - 支持 DSL 模式（`@label.table` 语法），包括单源查询和联邦跨源 JOIN
-> - 配合 `-env` 启动后，可用 `.conn <label>` 在已配置的多个数据源之间切换
+> - 配合自动加载启动后，可用 `.conn <label>` 在已配置的多个数据源之间切换
 > - 跨源 JOIN/UNION（联邦查询）直接在 REPL 内使用 DSL 语法
 ```
 
@@ -181,10 +190,10 @@ dbexplain execute -env --db 1 --timeout 60 --limit 500 "SELECT * FROM logs" --hu
 Redis 直接输原生命令：
 
 ```bash
-dbexplain execute -env --label my-redis "SCAN 0 MATCH user:* COUNT 10" --human
-dbexplain execute -env --label my-redis "GET user:1001" --human
-dbexplain execute -env --label my-redis "HGETALL session:abc123" --human
-dbexplain execute -env --label my-redis "PING" --human
+dbexplain execute --label my-redis "SCAN 0 MATCH user:* COUNT 10" --human
+dbexplain execute --label my-redis "GET user:1001" --human
+dbexplain execute --label my-redis "HGETALL session:abc123" --human
+dbexplain execute --label my-redis "PING" --human
 ```
 
 支持 30+ 只读命令：GET, HGET, HGETALL, SCAN, TYPE, LLEN, SMEMBERS, ZRANGE 等。写命令（SET, DEL 等）会被拦截。
@@ -195,10 +204,10 @@ MongoDB 用 JSON 格式查：
 
 ```bash
 # 查集合里的数据
-dbexplain execute -env --label my-mongo '{"find":"users","filter":{"status":"active"},"limit":5}' --human
+dbexplain execute --label my-mongo '{"find":"users","filter":{"status":"active"},"limit":5}' --human
 
 # 聚合查询
-dbexplain execute -env --label my-mongo '{"aggregate":"orders","pipeline":[{"$match":{"status":"done"}}]}' --human
+dbexplain execute --label my-mongo '{"aggregate":"orders","pipeline":[{"$match":{"status":"done"}}]}' --human
 ```
 
 支持 `find` 和 `aggregate` 两种操作。
@@ -207,10 +216,36 @@ dbexplain execute -env --label my-mongo '{"aggregate":"orders","pipeline":[{"$ma
 
 ```bash
 # 遍历集合
-dbexplain execute -env --label my-qdrant '{"scroll":"runbooks","limit":20}' --human
+dbexplain execute --label my-qdrant '{"scroll":"runbooks","limit":20}' --human
 
 # 统计数量
-dbexplain execute -env --label my-qdrant '{"count":"runbooks"}' --human
+dbexplain execute --label my-qdrant '{"count":"runbooks"}' --human
+```
+
+### 查 Oracle
+
+Oracle 用标准 SQL 查，和 MySQL 用法一样：
+
+```bash
+# 查数据
+dbexplain execute --label my-oracle "SELECT * FROM users WHERE ROWNUM <= 10" --human
+
+# 查表结构
+dbexplain execute --label my-oracle "SELECT COLUMN_NAME, DATA_TYPE, NULLABLE FROM ALL_TAB_COLUMNS WHERE TABLE_NAME = 'USERS'" --human
+```
+
+> Oracle 12c+ 支持 FETCH FIRST 语法：`SELECT * FROM users FETCH FIRST 10 ROWS ONLY`。
+
+### 查 Hive
+
+Hive 用 HiveQL（类 SQL），用法同标准 SQL：
+
+```bash
+# 查数据
+dbexplain execute --label my-hive "SELECT * FROM orders LIMIT 10" --human
+
+# 分组统计
+dbexplain execute --label my-hive "SELECT status, COUNT(*) AS cnt FROM orders GROUP BY status" --human
 ```
 
 ### 查 Prometheus（时序数据库）
@@ -236,17 +271,39 @@ dbexplain execute "up{job='node'}" --label my-prom --human
 ```bash
 # DSL 编译为 PromQL
 dbexplain execute --dsl "SELECT * FROM @my-prom.up WHERE job='node'" --label my-prom --human
+
+# SELECT 列投影 + GROUP BY 聚合（编译为 PromQL by()）
+dbexplain execute --dsl "SELECT job, COUNT(*) AS cnt FROM @my-prom.up GROUP BY job" --human
+
+# ORDER BY / LIMIT / OFFSET（Go 层后处理）
+dbexplain execute --dsl "SELECT instance, value FROM @my-prom.up ORDER BY value DESC LIMIT 5" --human
 ```
+
+**原始 PromQL 透传**（v0.1.6+，绕过 DSL 编译，直接执行任意 PromQL）：
+
+```bash
+# 任意 PromQL 表达式，包括多指标二元运算
+dbexplain execute --dsl "SELECT * FROM @my-prom.promql(avg(rate(http_requests_total[5m])) by (job))" --human
+
+# PromQL 函数 + 范围向量
+dbexplain execute --dsl "SELECT * FROM @my-prom.promql(histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, job)))" --human
+
+# promql() 也支持联邦 JOIN（物化为表后再关联）
+dbexplain execute --dsl "SELECT p.job, p.value, i.owner
+  FROM @my-prom.promql(up == 1) p JOIN @aiops-mysql.iplist i ON p.instance = i.hostip" --human
+```
+
+> `promql()` 是原始透传模式：PromQL 表达式原样发送给 Prometheus，不支持 WHERE/GROUP BY——过滤和聚合在表达式内联。ORDER BY/LIMIT/OFFSET 在 Go 层后处理。
 
 **联邦查询**（Prometheus + MySQL 跨源 JOIN）：
 
 ```bash
 # Prometheus 指标关联 MySQL 表
-dbexplain execute -env --dsl "SELECT p.instance, p.hostip, p.job, p.value, i.product, i.subproduct
+dbexplain execute --dsl "SELECT p.instance, p.hostip, p.job, p.value, i.product, i.subproduct
   FROM @my-prom.up p JOIN @aiops-mysql.iplist i ON p.hostip = i.hostip" --human
 
 # 或 + 文件数据
-dbexplain execute -env --dsl "SELECT p.*, c.region
+dbexplain execute --dsl "SELECT p.*, c.region
   FROM @my-prom.up p JOIN @my-csv.nodes c ON p.hostip = c.ip" --human
 ```
 
@@ -257,8 +314,8 @@ dbexplain execute -env --dsl "SELECT p.*, c.region
 DSL 模式让你用 `@标签名.表名` 统一引用任意数据源，不用记 `--db` 编号：
 
 ```bash
-dbexplain execute -env --dsl "SELECT * FROM @my-mysql.users LIMIT 10" --human
-dbexplain execute -env --dsl "SELECT * FROM @my-pg.orders WHERE status = 'active'" --human
+dbexplain execute --dsl "SELECT * FROM @my-mysql.users LIMIT 10" --human
+dbexplain execute --dsl "SELECT * FROM @my-pg.orders WHERE status = 'active'" --human
 ```
 
 > v0.1.2 起 DSL 模式支持跨源 JOIN/UNION（联邦查询），可用 `@label1.t1 JOIN @label2.t2` 关联不同数据库。支持的联邦数据源：SQL 数据库 + Prometheus（PromQL 物化）+ 文件（CSV/XLSX）。暂不支持 Redis / Mongo / Qdrant / ES 原生数据源，这些用前面的原生命令方式查。
@@ -271,18 +328,18 @@ dbexplain execute -env --dsl "SELECT * FROM @my-pg.orders WHERE status = 'active
 
 ```bash
 # 查全部数据
-dbexplain execute -env --label my-csv "SELECT * FROM 文件名(不含.csv后缀)" --human
+dbexplain execute --label my-csv "SELECT * FROM 文件名(不含.csv后缀)" --human
 
 # 条件过滤
-dbexplain execute -env --label my-csv "SELECT * FROM sales WHERE amount > 1000" --human
+dbexplain execute --label my-csv "SELECT * FROM sales WHERE amount > 1000" --human
 
 # 分组统计
-dbexplain execute -env --label my-csv \
+dbexplain execute --label my-csv \
   "SELECT region, COUNT(*) AS cnt, AVG(amount) AS avg_amount
    FROM sales GROUP BY region ORDER BY cnt DESC" --human
 
 # 多个文件 JOIN（跨文件关联）
-dbexplain execute -env --label my-csv \
+dbexplain execute --label my-csv \
   "SELECT s.*, o.dept_name FROM sales s JOIN org o ON s.dept_id = o.dept_id" --human
 ```
 
@@ -324,13 +381,19 @@ dbexplain execute -env --label my-csv \
 
 ```bash
 # 1. 先保存一个版本
-dbexplain -env --cache /tmp/schema.cache --json -o /tmp/v1.json --version-label v1.0
+dbexplain --cache /tmp/schema.cache --json -o /tmp/v1.json --version-label v1.0
 
 # 2. 过段时间再采一次
-dbexplain -env --cache /tmp/schema.cache --json -o /tmp/v2.json --version-label v2.0
+dbexplain --cache /tmp/schema.cache --json -o /tmp/v2.json --version-label v2.0
 
-# 3. 对比差异
+# 3. 查看所有已保存版本
+dbexplain diff --cache /tmp/schema.cache --list-versions
+
+# 4. 对比差异
 dbexplain diff --cache /tmp/schema.cache --since v1.0 --human
+
+# 输出到文件
+dbexplain diff --cache /tmp/schema.cache --since v1.0 --json -o /tmp/diff.json
 ```
 
 会检测：新增/删除/修改了哪些表、字段（类型/可空/默认值/注释/主键）、索引、外键。
@@ -341,10 +404,12 @@ dbexplain diff --cache /tmp/schema.cache --since v1.0 --human
 
 | 你想干嘛 | 命令 |
 |---------|------|
-| 查看已配置的数据库列表 | `dbexplain list -env` |
+| 查看已配置的数据库列表 | `dbexplain list` |
+| 验证配置 + 连通性检测 | `dbexplain check`（逐源测试连接，含超时保护） |
 | 加密配置文件（防密码泄露） | `dbexplain encrypt`（自动搜索 .env.dbexplain，输出 .enc） |
 | 查看帮助手册 | `dbexplain all` |
 | 只看某个数据库的帮助 | `dbexplain mysql` / `dbexplain redis` / ... |
+| 控制 SQL 日志最大长度 | `dbexplain --sql-log-max-len 512`（默认 256，防密码泄露） |
 
 ---
 

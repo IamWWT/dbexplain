@@ -17,7 +17,7 @@ trigger:
 
 `dbexplain` is a Go binary CLI installed to system PATH. Two independent modes:
 
-- **Schema Collection** (`dbexplain -env`): inspects table structures/field types/comments/cross-DB foreign keys/health score, outputs `instances[]` + `refs[]` (JSON)
+- **Schema Collection** (`dbexplain` auto-load): inspects table structures/field types/comments/cross-DB foreign keys/health score, outputs `instances[]` + `refs[]` (JSON)
 - **Read-Only Query** (`dbexplain execute`): runs read-only SELECT on SQL/file/Mongo/Redis datasources after collection, outputs `columns[]` + `rows[]`
 
 Also supports: incremental change detection (`--cache`), DSL mode (`--dsl`), config encryption (`encrypt`), help manual (`dbexplain all`).
@@ -64,10 +64,10 @@ Ask the user: do you already have a `.env` config file?
 
 ```bash
 # Collect all
-dbexplain -env
+dbexplain
 
 # Output AI context directory (recommended)
-dbexplain -env --context ./ctx
+dbexplain --context ./ctx
 ```
 
 `--context ./ctx` generated files:
@@ -89,13 +89,13 @@ Collect schema first to understand field meanings, then query to verify data. Ag
 
 ```bash
 # SQL databases
-dbexplain execute -env --label mysql 'SELECT COUNT(*) FROM orders' --human
+dbexplain execute --label mysql 'SELECT COUNT(*) FROM orders' --human
 
 # MongoDB (JSON format)
-dbexplain execute -env --label mongo '{"find":"users","filter":{"age":{"$gt":18}}}' --human
+dbexplain execute --label mongo '{"find":"users","filter":{"age":{"$gt":18}}}' --human
 
 # Redis (native commands)
-dbexplain execute -env --label redis 'GET user:1001' --human
+dbexplain execute --label redis 'GET user:1001' --human
 ```
 
 Auto LIMIT 1000. Explicitly rejects DROP/INSERT/UPDATE/DELETE.
@@ -105,7 +105,7 @@ Auto LIMIT 1000. Explicitly rejects DROP/INSERT/UPDATE/DELETE.
 `--dsl` enables DSL mode with `@label.table` syntax:
 
 ```bash
-dbexplain execute -env --dsl --label mysql 'SELECT * FROM @mysql.users WHERE status = "active"'
+dbexplain execute --dsl --label mysql 'SELECT * FROM @mysql.users WHERE status = "active"'
 ```
 
 Fully deterministic compilation pipeline. See `dbexplain all --filter dsl` for details.
@@ -116,14 +116,14 @@ CSV/XLSX files support a full SELECT subset. **Full syntax** at [`references/sql
 
 ```bash
 # Data preview (preview only — never use as analysis source)
-dbexplain execute -env --label my_data 'SELECT *' --limit 5 --human
+dbexplain execute --label my_data 'SELECT *' --limit 5 --human
 
 # Aggregate analysis
-dbexplain execute -env --label my_data \
+dbexplain execute --label my_data \
   'SELECT department, AVG(rate) AS avg_rate FROM data GROUP BY department ORDER BY avg_rate DESC' --human
 
 # Cross-file JOIN
-dbexplain execute -env --label my_data \
+dbexplain execute --label my_data \
   'SELECT o.branch_name, AVG(t.rate) FROM data t JOIN org o ON t.dept_id = o.dept_id GROUP BY o.branch_name' --human
 ```
 

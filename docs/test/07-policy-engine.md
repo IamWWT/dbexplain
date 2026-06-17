@@ -18,49 +18,49 @@ BIN="../release/dbexplain"
 
 ```bash
 # sqlguard 先拦截（不需要策略）
-$BIN execute -env --db 1 'DROP TABLE users'
+$BIN execute --db 1 'DROP TABLE users'
 # → READ_ONLY_VIOLATION
 
 # 策略层额外拦截
-DENY_STATEMENTS="DROP TABLE" $BIN execute -env --db 1 'SELECT 1'
+DENY_STATEMENTS="DROP TABLE" $BIN execute --db 1 'SELECT 1'
 # → 正常返回（不匹配策略）
 
-DENY_STATEMENTS="FLUSHALL" $BIN execute -env --db 7 'FLUSHALL'
+DENY_STATEMENTS="FLUSHALL" $BIN execute --db 7 'FLUSHALL'
 # → ACCESS_DENIED: query matches denied statement pattern
 ```
 
 ## 7.2 SQL 表级拒绝
 
 ```bash
-DENY_TABLES=iplist $BIN execute -env --db 1 'SELECT * FROM testdb.iplist'
+DENY_TABLES=iplist $BIN execute --db 1 'SELECT * FROM testdb.iplist'
 # → ACCESS_DENIED: table "iplist" is not allowed for query
 ```
 
 ## 7.3 SQL 列级拒绝
 
 ```bash
-DENY_COLUMNS=testdb.iplist.hostip $BIN execute -env --db 1 'SELECT testdb.iplist.hostip FROM testdb.iplist'
+DENY_COLUMNS=testdb.iplist.hostip $BIN execute --db 1 'SELECT testdb.iplist.hostip FROM testdb.iplist'
 # → ACCESS_DENIED: column "testdb.iplist.hostip" is not allowed for query
 ```
 
 ## 7.4 MongoDB 集合级拒绝
 
 ```bash
-DENY_TABLES=user $BIN execute -env --db 9 '{"find":"user","filter":{},"limit":1}'
+DENY_TABLES=user $BIN execute --db 9 '{"find":"user","filter":{},"limit":1}'
 # → ACCESS_DENIED: table "user" is not allowed for query
 ```
 
 ## 7.5 Redis Key 级拒绝
 
 ```bash
-DENY_TABLES="CONVERSATION:*" $BIN execute -env --db 7 'GET CONVERSATION:abc123'
+DENY_TABLES="CONVERSATION:*" $BIN execute --db 7 'GET CONVERSATION:abc123'
 # → ACCESS_DENIED: table "CONVERSATION:*" is not allowed for query
 ```
 
 ## 7.6 Qdrant 集合级拒绝
 
 ```bash
-DENY_TABLES=runbooks $BIN execute -env --db 4 '{"count":"runbooks"}'
+DENY_TABLES=runbooks $BIN execute --db 4 '{"count":"runbooks"}'
 # → ACCESS_DENIED: table "runbooks" is not allowed for query
 ```
 
@@ -68,14 +68,14 @@ DENY_TABLES=runbooks $BIN execute -env --db 4 '{"count":"runbooks"}'
 
 ```bash
 # 无策略时正常
-$BIN execute -env --db 1 --human "SELECT 1 AS test_val"
+$BIN execute --db 1 --human "SELECT 1 AS test_val"
 # → 正常返回
 ```
 
 ## 7.8 MASK_COLUMNS 列值屏蔽
 
 ```bash
-MASK_COLUMNS=hostip=*** $BIN execute -env --db 1 --human "SELECT hostip, device_type FROM testdb.iplist LIMIT 3"
+MASK_COLUMNS=hostip=*** $BIN execute --db 1 --human "SELECT hostip, device_type FROM testdb.iplist LIMIT 3"
 # → hostip 显示 ***，device_type 保持原值
 ```
 
@@ -90,7 +90,7 @@ sqlguard.Validate() → policy.CheckSQL/CheckNative() → AutoLimit() → ExecQu
 
 ```bash
 # sqlguard 放行但策略拒绝
-DENY_TABLES=iplist $BIN execute -env --db 1 'SELECT 1 FROM testdb.iplist'
+DENY_TABLES=iplist $BIN execute --db 1 'SELECT 1 FROM testdb.iplist'
 # → ACCESS_DENIED（非 READ_ONLY_VIOLATION）
 ```
 
@@ -98,15 +98,15 @@ DENY_TABLES=iplist $BIN execute -env --db 1 'SELECT 1 FROM testdb.iplist'
 
 ```bash
 # 反引号包裹表名
-DENY_TABLES=iplist $BIN execute -env --db 1 'SELECT * FROM `testdb`.`iplist`'
+DENY_TABLES=iplist $BIN execute --db 1 'SELECT * FROM `testdb`.`iplist`'
 # → ACCESS_DENIED（归一化后匹配）
 
 # 注释绕过
-DENY_TABLES=iplist $BIN execute -env --db 1 'SELECT * FROM testdb.-- comment\niplist'
+DENY_TABLES=iplist $BIN execute --db 1 'SELECT * FROM testdb.-- comment\niplist'
 # → ACCESS_DENIED（注释剥离后匹配）
 
 # 多余空白
-DENY_STATEMENTS="DROP TABLE" $BIN execute -env --db 1 'DROP  TABLE  users'
+DENY_STATEMENTS="DROP TABLE" $BIN execute --db 1 'DROP  TABLE  users'
 # → ACCESS_DENIED（空白归一化后匹配）
 ```
 
@@ -114,7 +114,7 @@ DENY_STATEMENTS="DROP TABLE" $BIN execute -env --db 1 'DROP  TABLE  users'
 
 ```bash
 # DSL 模式应加载数据源级 DENY_TABLES
-DB1_DENY_TABLES=iplist $BIN execute -env --dsl "SELECT * FROM @aiops-mysql.testdb.iplist LIMIT 1"
+DB1_DENY_TABLES=iplist $BIN execute --dsl "SELECT * FROM @aiops-mysql.testdb.iplist LIMIT 1"
 # → ACCESS_DENIED: table "iplist" is not allowed for query
 ```
 
@@ -122,6 +122,6 @@ DB1_DENY_TABLES=iplist $BIN execute -env --dsl "SELECT * FROM @aiops-mysql.testd
 
 ```bash
 # $out 在聚合管道中被拒绝
-$BIN execute -env --db 9 '{"aggregate":"user","pipeline":[{"$out":"malicious"}]}'
+$BIN execute --db 9 '{"aggregate":"user","pipeline":[{"$out":"malicious"}]}'
 # → READ_ONLY_VIOLATION: write stage "$out" is not allowed in aggregation pipeline
 ```

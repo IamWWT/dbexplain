@@ -105,22 +105,22 @@ wb.save('/tmp/test_stream.xlsx')
 rm -f /tmp/test_stream.xlsx
 ```
 
-### 6. dbexplain check --env 默认 true
+### 6. dbexplain check 自动加载配置文件
 
 ```bash
 # 创建临时 .env.dbexplain
 echo 'DB1=sqlite:///:memory:?label=test' > /tmp/.env.dbexplain
 
-# 在临时目录下运行 check（无 --env）
+# 在临时目录下运行 check（自动加载）
 cd /tmp && ../src/dbexplain check
 # 预期: 自动加载 /tmp/.env.dbexplain，显示 DSN count: 1，Syntax OK ✅
 
-# 验证 --env=false --dsn 显式跳过
-cd /tmp && ../src/dbexplain check --env=false -dsn 'sqlite:///:memory:?label=test2'
-# 预期: 仅显示 --dsn 指定的 DSN，不加载 .env
-
 rm -f /tmp/.env.dbexplain
 ```
+
+<!--
+旧版 `--env=false` 测试已移除（v0.1.8 彻底移除 -env 参数）
+-->
 
 ### 7. inferRefs name index 不退化
 
@@ -141,5 +141,5 @@ go test -tags full ./internal/analyze/ -v -count=1
 | 3 | --skip-opstats flag 定义显示 | 可编译/help 显示 |
 | 4 | CSV 流式读取 | 结果正确 |
 | 5 | XLSX 流式读取 | 结果正确 |
-| 6 | check --env 默认 true 加载 | 自动发现 |
+| 6 | check 自动加载配置 | 自动发现 |
 | 7 | inferRefs name index | 编译不退化 |

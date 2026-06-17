@@ -1,9 +1,9 @@
-# 测试结果报告 v0.1.7
+# 测试结果报告 v0.1.8
 
-> 执行日期: 2026-06-16 (v0.1.7 闭环验证)
+> 执行日期: 2026-06-17 (v0.1.8 闭环验证)
 > 测试环境: Linux x86-64 (amd64), Go 1.26.1
 > 数据源: 16 个 (mysql, clickhouse, sqlite×2, qdrant, es, postgres, redis×2, mongodb, xlsx×2, csv×2, tsv, prometheus)
-> 二进制: dbexplain-linux-amd64-std (v0.1.7, full tags, CGO_ENABLED=0)
+> 二进制: dbexplain-linux-amd64-std (v0.1.8, full tags, CGO_ENABLED=0)
 > DuckDB 版（-duckdb, CGO_ENABLED=1）未在本轮测试（未安装 aarch64-linux-gnu-gcc 交叉工具链）
 
 ---
@@ -50,8 +50,21 @@
 | — | **v0.1.7 select+channel 超时防护** | **PASS** | 3/3 | collect/check/execute 三处子 goroutine+select 模式，lib/pq 不可靠时保底 |
 | — | **v0.1.7 check 进度日志** | **PASS** | 2/2 | per-DSN 进度写入 dbexplain.log / 原始表格输出不变 |
 | — | **v0.1.7 连接阶段耗时日志** | **PASS** | 2/2 | [连接] 前置日志 / [连接成功]/[连接失败] 耗时统计 |
+| — | **v0.1.7 密码特殊字符兼容性** | **PASS** | ~960/~960 | [23-password-special-chars.md](23-password-special-chars.md) 10 scheme × 22-24 chars × 4 维度, 20 字符预期解析失败, 18 字符全维度通过 |
 
 **总计: 全部通过。**
+
+---
+
+## 新增 v0.1.8 验证项
+
+| 特性 | 状态 | 验证方式 |
+|------|------|---------|
+| **--verbose flag (ISSUE-096)** | **PASS** | GaussDB `[DEBUG]` 日志改为 `Debugf()`，仅在 `--verbose` 时输出。`go vet ./...` + `go build -tags full` + 全量单元测试通过 |
+| **P1: escapeUserinfo 自动编码** | **PASS** | `escapeUserinfoHash()` → `escapeUserinfo()`：所有不安全字符自动百分号编码，保留已有 `%XX` 避免双编码。~960 密码字符测试全通过 |
+| **P2: MySQL NewConfig 传密码** | **PASS** | `buildMySQLDSN()` → `openMySQL()`：使用 `mysql.NewConfig` + `NewConnector` + `sql.OpenDB`，密码直接传给结构体字段 |
+| **P3: PG DSN 密码引号保护** | **PASS** | `buildPGDSN()` 密码加单引号包裹，`\` → `\\`，`'` → `\'` 转义 |
+| **`-env` 参数彻底移除 (ISSUE-098)** | **PASS** | 源码 7 文件 + 38 文档文件全部删除 `-env` 引用。编译/vet/单元测试/选择性编译/CLI冒烟全部通过。`$BIN -env` → `flag provided but not defined`。68/71 test-runner.sh 通过（3 个预存别名问题）。自动加载 `.env.dbexplain` 正常：14 instances 检测、execute --db 2 执行、check 无参数验证全部通过。 |
 
 ---
 

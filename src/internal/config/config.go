@@ -411,7 +411,7 @@ To get started, create a configuration file:
   3. Run again:
 
      dbexplain list          # list configured databases
-     dbexplain -env          # collect schemas from all databases
+     dbexplain               # collect schemas from all databases
 
 `)
 }

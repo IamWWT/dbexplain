@@ -25,7 +25,6 @@ import (
 
 func handleREPL(args []string) {
 	fs := flag.NewFlagSet("repl", flag.ExitOnError)
-	envMode := fs.Bool("env", false, "Load config from .env file")
 	configFile := fs.String("config", "", "JSON config file")
 	dsnFlag := fs.String("dsn", "", "Direct DSN connection string")
 	limit := fs.Int("limit", 1000, "Max rows to return")
@@ -36,15 +35,9 @@ func handleREPL(args []string) {
 	var allEntries []config.DSNEntry
 
 	hasExplicitSource := *configFile != "" || *dsnFlag != ""
-	shouldLoadEnv := *envMode || !hasExplicitSource
-
-	if shouldLoadEnv {
+	if !hasExplicitSource {
 		configPath := config.FindConfigFile()
 		if configPath == "" {
-			if *envMode {
-				fmt.Fprintln(os.Stderr, "ERROR: no config file found")
-				os.Exit(1)
-			}
 			config.PrintNoConfigFound()
 			os.Exit(1)
 		}
@@ -53,7 +46,7 @@ func handleREPL(args []string) {
 			fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
 			os.Exit(1)
 		}
-		if len(envEntries) == 0 && !*envMode {
+		if len(envEntries) == 0 {
 			config.PrintEmptyConfigFound(configPath)
 			os.Exit(1)
 		}
@@ -232,7 +225,7 @@ func replLoop(scanner *bufio.Scanner, currentEntry config.DSNEntry, currentLabel
 
 		// Check disconnected state before query execution
 		if disconnected {
-			fmt.Println("Not connected. Use .connect <dsn-url> to connect, or use -env flag to pre-load connections.")
+			fmt.Println("Not connected. Use .connect <dsn-url> to connect, or configure .env.dbexplain to pre-load connections.")
 			continue
 		}
 
@@ -654,7 +647,7 @@ DSL syntax: @label.table references supported (single-source & federated cross-s
   Prometheus PromQL via DSL: SELECT * FROM @label.metric [WHERE label="val"]
 Commands:
   .connect <dsn>  Connect to a new data source by DSN URL
-  .conn <label>   Switch to another data source by label (load with -env)
+  .conn <label>   Switch to another data source by label (from .env.dbexplain)
   .dsn <label>    Alias for .conn
   .list           List all configured databases
   .databases      Alias for .list
@@ -670,8 +663,7 @@ DSL Examples:
 
 Examples:
   dbexplain repl --dsn "sqlite:////tmp/test.db"
-  dbexplain repl -env
-  dbexplain repl -env --limit 5000 --timeout 60
+  dbexplain repl --limit 5000 --timeout 60
 `)
 }
 

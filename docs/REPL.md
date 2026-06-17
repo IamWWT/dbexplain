@@ -9,7 +9,7 @@
 ### 从 .env 配置加载
 
 ```bash
-dbexplain repl -env
+dbexplain repl
 ```
 
 自动发现 `.env.dbexplain` 配置文件，加载全部 DSN 条目，默认使用第一个作为初始连接。
@@ -23,7 +23,7 @@ dbexplain repl --dsn 'mysql://user:pass@host:3306/mydb?label=prod'
 ### 自定义参数
 
 ```bash
-dbexplain repl -env --limit 5000 --timeout 60
+dbexplain repl --limit 5000 --timeout 60
 ```
 
 | 参数 | 默认值 | 说明 |
@@ -37,8 +37,8 @@ dbexplain repl -env --limit 5000 --timeout 60
 
 | 命令 | 说明 |
 |------|------|
-| `.connect <dsn>` | 通过 DSN URL 连接新数据源（无需 `-env` 预加载），如 `.connect mysql://user:pass@host:3306/db?label=mydb` |
-| `.conn <label>` | 按 label 切换数据源（在 `-env` 加载的全部条目中按 label 精确查找） |
+| `.connect <dsn>` | 通过 DSN URL 连接新数据源（无需预加载），如 `.connect mysql://user:pass@host:3306/db?label=mydb` |
+| `.conn <label>` | 按 label 切换数据源（在自动加载的全部条目中按 label 精确查找） |
 | `.dsn <label>` | `.conn` 的别名，行为完全相同 |
 | `.list` / `.databases` | 列出所有已配置的数据源（序号、label、DSN 密码脱敏、kind、当前连接标记） |
 | `.help` | 显示帮助信息、支持的数据源类型、不支持的功能 |
@@ -120,7 +120,7 @@ MySQL 驱动在 `SET max_execution_time` 后强制单连接（`SetMaxOpenConns(1
 
 ### 3. 无配置启动
 
-REPL 在没有 DSN 配置时进入 `(disconnected)` 状态，通过 `.connect <dsn-url>` 命令动态连接数据源。`.connect` 添加的 DSN 也会被 `.list` 列出，并支持后续的 `.conn` 切换。也可以通过 `-env` 预加载配置后使用 `.conn` 切换。
+REPL 在没有 DSN 配置时进入 `(disconnected)` 状态，通过 `.connect <dsn-url>` 命令动态连接数据源。`.connect` 添加的 DSN 也会被 `.list` 列出，并支持后续的 `.conn` 切换。也可以通过自动加载配置后使用 `.conn` 切换。
 
 ---
 

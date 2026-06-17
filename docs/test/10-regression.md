@@ -25,11 +25,11 @@ cd /tmp/build-prev/src && go build -ldflags="-s -w" -o /tmp/dbexplain-prev .
 cd -
 
 # 构建当前版本
-cd src && go build -ldflags="-s -w -X github.com/IamWWT/dbexplain/internal/version.Version=v0.1.5" -o /tmp/dbexplain-curr .
+cd src && go build -ldflags="-s -w -X github.com/IamWWT/dbexplain/internal/version.Version=v0.1.7" -o /tmp/dbexplain-curr .
 
 # 对比
-/tmp/dbexplain-prev -env -timeout 30s --json > /tmp/prev.json 2>/dev/null
-/tmp/dbexplain-curr -env -timeout 30s --json > /tmp/curr.json 2>/dev/null
+/tmp/dbexplain-prev -timeout 30s --json > /tmp/prev.json 2>/dev/null
+/tmp/dbexplain-curr -timeout 30s --json > /tmp/curr.json 2>/dev/null
 
 # 清理
 git worktree remove --force /tmp/build-prev
@@ -38,7 +38,7 @@ git worktree remove --force /tmp/build-prev
 ## 10.1 全量 Schema 采集回归
 
 ```bash
-$BIN -env -timeout 30s 2>&1
+$BIN -timeout 30s 2>&1
 # 预期: 全部 15 个 DSN 采集成功，总耗时 < 60s
 ```
 
@@ -89,7 +89,7 @@ git ls-files | grep -c "\.enc$"
 
 ```bash
 # 全量采集耗时（15 DSN）
-time $BIN -env -timeout 60s --json 2>/dev/null > /dev/null
+time $BIN -timeout 60s --json 2>/dev/null > /dev/null
 ```
 
 ### 性能基线

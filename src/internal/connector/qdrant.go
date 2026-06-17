@@ -73,7 +73,7 @@ func (qdrantConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instanc
 	database := &schema.Database{Name: "default"}
 	total := len(collections)
 	for i, collName := range collections {
-		Logf(ctx, "[qdrant] 采集集合 %d/%d: %s", i+1, total, collName)
+		Logf(ctx, "[qdrant] collecting collection %d/%d: %s", i+1, total, collName)
 		t := &schema.Table{
 			Name:    collName,
 			Comment: "vector collection",

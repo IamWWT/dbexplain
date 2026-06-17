@@ -25,7 +25,7 @@ xlsx:///文件绝对路径?label=别名
 
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
-| `label` | (自动) | 数据源别名，`-env` 模式下通过 `--label` 匹配 |
+| `label` | (自动) | 数据源别名，自动加载时通过 `--label` 匹配 |
 | `encoding` | `utf-8` | 文件编码。指定 `gbk`/`gb2312`/`gb18030` 时自动转码 |
 | `delimiter` | `,` (csv) / `\t` (tsv) | 自定义分隔符。支持 `tab`、`pipe`、`semicolon`、URL 编码值 |
 
@@ -177,7 +177,7 @@ dbexplain execute -dsn 'xlsx:///tmp/report.xlsx?label=report' \
   'SELECT s1.*, s2.name FROM Sheet1 s1 JOIN Sheet2 s2 ON s1.id = s2.id' --human
 
 # 跨文件 LEFT JOIN（两个 DSN）
-dbexplain execute -env --label touch_data \
+dbexplain execute --label touch_data \
   'SELECT t.*, o.name FROM data t LEFT JOIN org o ON t.org_id = o.id' --human
 ```
 
@@ -241,7 +241,7 @@ dbexplain xlsx
                           ExecQuery() → *query.QueryResult
 ```
 
-- **Schema 采集**: 通过 `-env`/`-dsn` 加载，与数据库 DSN 完全对等
+- **Schema 采集**: 通过 `-dsn` 加载，与数据库 DSN 完全对等
 - **Execute 查询**: 通过 `dbexplain execute` 入口，专用分支 `handleFileExecute()` 跳过 sqlguard（SELECT * 只读），但受 Policy 引擎约束（`DENY_TABLES`、`MASK_COLUMNS`）
 - **json / --human**: 输出格式与数据库查询完全一致；`--human` 可放在查询语句之前或之后
 

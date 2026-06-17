@@ -84,7 +84,7 @@ cd src && bash build.sh minimal mysql,postgres --upx && echo "upx-force: OK"  # 
 
 ```bash
 ../release/dbexplain-linux-amd64 --version
-# 预期: dbexplain v0.1.5
+# 预期: dbexplain v0.1.7
 ```
 
 ## 1.6 安全审计 — 敏感文件不被 Git 追踪
@@ -116,7 +116,7 @@ bash -n dbexplain-skill/scripts/uninstall-skill.sh && echo "uninstall-skill OK"
 
 ```bash
 ./dbexplain --version
-# 预期: dbexplain v0.1.5
+# 预期: dbexplain v0.1.7
 ```
 
 ## 1.9 构建模式因素影响分析
@@ -243,15 +243,15 @@ upx -t ../release/dbexplain-linux-amd64
 # ── 运行时独立验证 ────────────────────────────────────────
 # 确认二进制不依赖任何外部文件
 ../release/dbexplain-linux-amd64 --version
-# 预期: "dbexplain v0.1.5"
+# 预期: "dbexplain v0.1.7"
 
 # 在隔离环境运行 (无 PATH 依赖)
 env -i HOME=/nonexistent PATH=/usr/bin:/bin \
   ../release/dbexplain-linux-amd64 --version
-# 预期: "dbexplain v0.1.5" (无额外依赖)
+# 预期: "dbexplain v0.1.7" (无额外依赖)
 ```
 
-**验证结果 (v0.1.5, Linux amd64)**:
+**验证结果 (v0.1.7, Linux amd64)**:
 
 | 检查项 | 命令 | 预期 | 结果 |
 |--------|------|------|------|
@@ -259,8 +259,8 @@ env -i HOME=/nonexistent PATH=/usr/bin:/bin \
 | 动态引用 | `ldd` | 无 `=> /` 动态加载 | PASS |
 | 动态符号 | `nm -D` | 空 (无动态符号) | PASS |
 | UPX 完整性 | `upx -t` | `Passed 1 format test` | PASS |
-| 版本输出 | `--version` | `v0.1.5` | PASS |
-| 隔离运行 | `env -i PATH=... --version` | `v0.1.5` | PASS |
+| 版本输出 | `--version` | `v0.1.7` | PASS |
+| 隔离运行 | `env -i PATH=... --version` | `v0.1.7` | PASS |
 
 **UPX 零运行时依赖确认**: UPX 在构建时将解压 stub 附加到二进制的末尾。运行时，stub 将原始程序解压到内存然后跳转到入口点。此过程完全在进程内完成，不调用外部程序或加载动态库。因此，UPX 压缩后的二进制是**完全自包含的**。
 

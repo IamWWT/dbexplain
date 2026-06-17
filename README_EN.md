@@ -50,7 +50,7 @@ Core philosophy: **deterministic facts only — LLMs consume structured IR exter
 
 | Layer | Responsibility | Key Components |
 |-------|---------------|----------------|
-| **CLI Command Layer** | User interaction, subcommand dispatch | `cmd/dbexplain/` — `main.go`, `execute.go`, `repl.go`, `collect.go`, `diff.go` |
+| **CLI Command Layer** | User interaction, subcommand dispatch | `cmd/dbexplain/` — `main.go`, `execute.go`, `repl.go`, `encode.go` |
 | **Query Execution Layer** | Three-path: Direct / DSL / Federated | `executor/`, `dsl/` (DSL compiler), `connector/filequery/` (file SQL engine) |
 | **Security Layer** | AST read-only validation + LIMIT injection + policy deny | `sqlguard/`, `policy/`, `query/` (concurrency lock) |
 | **Connector Layer** | Unified interface for 15 data sources | `connector/` — one file per source, `init()` auto-registers to global registry |
@@ -104,11 +104,11 @@ Extract table structures, columns, indexes, foreign keys, row counts, partition 
 
 | Format | Command | Use Case |
 |--------|---------|----------|
-| **JSON** | `dbexplain -env --json` | Machine-consumable structured data |
-| **Human** | `dbexplain -env --human` | Human-readable rendered output |
-| **Delta Cache** | `dbexplain -env --cache /tmp/cache.json` | Re-collect only on schema change |
-| **AI Context** | `dbexplain -env --context /tmp/ctx.md` | LLM-ready context file |
-| **Metrics** | `dbexplain -env --metrics` | Prometheus text format to stderr |
+| **JSON** | `dbexplain --json` | Machine-consumable structured data |
+| **Human** | `dbexplain --human` | Human-readable rendered output |
+| **Delta Cache** | `dbexplain --cache /tmp/cache.json` | Re-collect only on schema change |
+| **AI Context** | `dbexplain --context /tmp/ctx.md` | LLM-ready context file |
+| **Metrics** | `dbexplain --metrics` | Prometheus text format to stderr |
 
 ### Read-Only Query Execution — Three-Path Architecture
 
@@ -126,21 +126,21 @@ sqlguard(AST read-only) → Policy Engine(DENY/MASK) → AutoLimit(LIMIT 1000)
 
 ```bash
 # Direct execution
-dbexplain execute -env --db 1 "SELECT COUNT(*) FROM orders"
-dbexplain execute -env --label redis "PING"
+dbexplain execute --db 1 "SELECT COUNT(*) FROM orders"
+dbexplain execute --label redis "PING"
 
 # DSL mode
-dbexplain execute -env --dsl "SELECT * FROM @my-mysql.users LIMIT 10" --human
+dbexplain execute --dsl "SELECT * FROM @my-mysql.users LIMIT 10" --human
 
 # Federated query
-dbexplain execute -env --dsl "SELECT * FROM @ops-csv.data UNION ALL SELECT * FROM @xlsx.Sheet1" --human
+dbexplain execute --dsl "SELECT * FROM @ops-csv.data UNION ALL SELECT * FROM @xlsx.Sheet1" --human
 ```
 
 ### REPL Interactive Query
 
 | Feature | Description |
 |---------|-------------|
-| **Startup** | `dbexplain repl -env` (from config) or `--dsn` direct connect |
+| **Startup** | `dbexplain repl` (from config) or `--dsn` direct connect |
 | **No-Config Start** | Empty DSN enters `(disconnected)` state, `.connect <dsn>` dynamically attaches |
 | **Commands** | `.conn`/`.dsn` switch source, `.list` list all, `.help`/`.exit`/`.quit` |
 | **Security** | Same sqlguard + policy engine protection, all writes rejected |
@@ -241,14 +241,14 @@ Non-SQL databases have their own command allow-lists or native query validators.
 
 | Scenario | Command |
 |----------|---------|
-| Schema collection | `dbexplain -env / -dsn <url> / --json / --human / -o <file>` |
-| Query execution | `dbexplain execute -env --db <N> / --label <name> / --dsl / --human` |
-| REPL interactive | `dbexplain repl -env` / `dbexplain repl --dsn <url>` / `.connect <dsn>` |
-| Federated query | `dbexplain execute -env --dsl "SELECT * FROM @a.t JOIN @b.t ON ..." --human` |
+| Schema collection | `dbexplain / -dsn <url> / --json / --human / -o <file>` |
+| Query execution | `dbexplain execute --db <N> / --label <name> / --dsl / --human` |
+| REPL interactive | `dbexplain repl` / `dbexplain repl --dsn <url>` / `.connect <dsn>` |
+| Federated query | `dbexplain execute --dsl "SELECT * FROM @a.t JOIN @b.t ON ..." --human` |
 | File query | `dbexplain execute -dsn "csv://file.csv" "SELECT ..."` |
 | Schema diff | `dbexplain diff --cache <file> --since <ver>` |
-| List DSNs | `dbexplain list` (auto-loads -env) |
-| Collection metrics | `dbexplain -env --metrics` (Prometheus format to stderr) |
+| List DSNs | `dbexplain list` (auto-loads config) |
+| Collection metrics | `dbexplain --metrics` (Prometheus format to stderr) |
 | Encrypt config | `dbexplain encrypt` (auto-finds .env.dbexplain, outputs .enc) |
 | Reference manual | `dbexplain mysql` / `dbexplain oracle` / `dbexplain hive` / `dbexplain all` |
 
@@ -270,7 +270,7 @@ DB2=redis://:pass@127.0.0.1:6379/0?label=my-redis
 EOF
 
 # 3. Verify
-./release/dbexplain -env                          # Schema collection
+./release/dbexplain                          # Schema collection
 ./release/dbexplain execute --db 1 "SELECT 1" --human  # Query test
 ./release/dbexplain --version                     # Version check
 ```

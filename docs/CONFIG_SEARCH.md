@@ -6,7 +6,7 @@
 
 ## 搜索优先级
 
-`-env` 模式下，`findConfigFile()` 按以下顺序搜索配置文件，返回**第一个存在**的文件：
+自动加载模式下，`findConfigFile()` 按以下顺序搜索配置文件，返回**第一个存在**的文件：
 
 | 优先级 | 路径 | 说明 |
 |--------|------|------|
@@ -37,15 +37,15 @@ CWD 是你**敲命令时所在的目录**，与二进制放在哪里无关：
 ```bash
 # 全局安装，从项目目录运行
 cd ~/projects/myapp
-dbexplain -env              # 搜索 ~/projects/myapp/.env
+dbexplain              # 搜索 ~/projects/myapp/.env
 
 # 相对路径二进制，从项目目录运行
 cd ~/projects/myapp
-./release/dbexplain-linux-amd64 -env   # 同样搜索 ~/projects/myapp/.env
+./release/dbexplain-linux-amd64        # 同样搜索 ~/projects/myapp/.env
 
 # 绝对路径二进制，从项目目录运行
 cd ~/projects/myapp
-/usr/local/bin/dbexplain -env          # 同样搜索 ~/projects/myapp/.env
+/usr/local/bin/dbexplain          # 同样搜索 ~/projects/myapp/.env
 ```
 
 **三个命令结果完全一致**，因为 CWD 相同。
@@ -66,8 +66,8 @@ filepath.Join(homeDir, ".config", "dbexplain", ".env.dbexplain")
 
 ```bash
 export DBPROBE_ENV_FILE=/etc/dbexplain/config.env
-dbexplain -env              # 读取 /etc/dbexplain/config.env
-../release/dbexplain -env   # 同样读取 /etc/dbexplain/config.env
+dbexplain              # 读取 /etc/dbexplain/config.env
+../release/dbexplain   # 同样读取 /etc/dbexplain/config.env
 ```
 
 ---
@@ -85,10 +85,10 @@ dbexplain -env              # 读取 /etc/dbexplain/config.env
 
 ```bash
 cd /home/user/data
-dbexplain -env    # 搜索 /home/user/data/.env，而非 /usr/local/bin/.env
+dbexplain    # 搜索 /home/user/data/.env，而非 /usr/local/bin/.env
 ```
 
-### Q: `schema` 采集模式（`dbexplain -env`）和 `execute` 模式（`dbexplain execute -env`）的搜索路径一样吗？
+### Q: `schema` 采集模式（`dbexplain`）和 `execute` 模式（`dbexplain execute`）的搜索路径一样吗？
 
 **完全一样**。两种模式调用同一个 `findConfigFile()` 函数，走同一套搜索逻辑。
 

@@ -107,7 +107,7 @@ func (esConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instance, e
 			continue
 		}
 		count++
-		Logf(ctx, "[es] 采集索引 %d/%d: %s", count, total, indexName)
+		Logf(ctx, "[es] collecting index %d/%d: %s", count, total, indexName)
 		t := &schema.Table{
 			Name:   indexName,
 			Engine: "elasticsearch",

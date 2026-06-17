@@ -21,28 +21,28 @@ v0.1.0 用 `capabilities.FromProvider().Has(CapSQL)` 替代了 `isSQLKind()` swi
 # SQL 数据源（CapSQL=true）：走 sqlguard → AutoLimit → CheckSQL 链路
 # 写操作应被 sqlguard 拦截
 echo "=== MySQL (SQL) ==="
-$BIN execute -env --db 1 "DROP TABLE test" 2>&1 | head -1
+$BIN execute --db 1 "DROP TABLE test" 2>&1 | head -1
 # → READ_ONLY_VIOLATION
 
 echo "=== PostgreSQL (SQL) ==="
-$BIN execute -env --db 6 "DROP TABLE test" 2>&1 | head -1
+$BIN execute --db 6 "DROP TABLE test" 2>&1 | head -1
 # → READ_ONLY_VIOLATION
 
 echo "=== ClickHouse (SQL) ==="
-$BIN execute -env --db 2 "DROP TABLE test" 2>&1 | head -1
+$BIN execute --db 2 "DROP TABLE test" 2>&1 | head -1
 # → READ_ONLY_VIOLATION
 
 # 非 SQL 数据源（CapSQL=false）：跳过 sqlguard，走 CheckNative
 echo "=== Redis (non-SQL) ==="
-$BIN execute -env --db 7 "FLUSHALL" 2>&1 | head -1
+$BIN execute --db 7 "FLUSHALL" 2>&1 | head -1
 # → ACCESS_DENIED（策略引擎拦截，非 sqlguard）
 
 echo "=== MongoDB (non-SQL) ==="
-$BIN execute -env --db 9 '{"drop":"test"}' 2>&1 | head -1
+$BIN execute --db 9 '{"drop":"test"}' 2>&1 | head -1
 # → ACCESS_DENIED（策略引擎拦截，非 READ_ONLY_VIOLATION）
 
 echo "=== Qdrant (non-SQL) ==="
-$BIN execute -env --db 4 '{"delete":"runbooks"}' 2>&1 | head -1
+$BIN execute --db 4 '{"delete":"runbooks"}' 2>&1 | head -1
 # → ACCESS_DENIED（策略引擎拦截）
 
 # 文件数据源（CapFile=true）：跳过 sqlguard，仍受策略引擎约束
@@ -58,7 +58,7 @@ v0.1.0 Schema 采集 JSON 输出使用 `{"instances": [...]}` 顶级包装。
 
 ```bash
 echo "=== JSON wrapper structure ==="
-$BIN -env --label aiops-mysql --json 2>/dev/null | python3 -c "
+$BIN --label aiops-mysql --json 2>/dev/null | python3 -c "
 import json, sys
 d = json.load(sys.stdin)
 # 验证顶级结构
@@ -90,7 +90,7 @@ v0.1.0 采集所有非系统 schema（public + 自定义），不再仅限于 pu
 
 ```bash
 echo "=== PostgreSQL schemas ==="
-$BIN -env --label video-pg --json 2>/dev/null | python3 -c "
+$BIN --label video-pg --json 2>/dev/null | python3 -c "
 import json, sys
 d = json.load(sys.stdin)
 inst = d.get('instances', [d])[0]
@@ -165,7 +165,7 @@ $BIN execute -dsn "csv:///tmp/dbexplain-test/users.csv?label=csv-users" "SELECT 
 
 ```bash
 echo "=== Capability consistency ==="
-$BIN -env -timeout 30s --json 2>/dev/null | python3 -c "
+$BIN -timeout 30s --json 2>/dev/null | python3 -c "
 import json, sys
 d = json.load(sys.stdin)
 insts = d.get('instances', [])

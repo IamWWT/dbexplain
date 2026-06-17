@@ -33,7 +33,6 @@ var queryLock = query.NewQueryLock()
 
 func handleExecute(args []string) {
 	fs := flag.NewFlagSet("execute", flag.ExitOnError)
-	envMode := fs.Bool("env", false, "Load config from .env file and match by --label/--db")
 	label := fs.String("label", "", "Match DSN by label")
 	dbIndex := fs.Int("db", 0, "Match DSN by DB<N> index (1-based)")
 	dsnFlag := fs.String("dsn", "", "Direct DSN connection string")
@@ -62,8 +61,6 @@ func handleExecute(args []string) {
 			*human = true
 		case "--explain":
 			*explain = true
-		case "--env":
-			*envMode = true
 		case "--dsl":
 			*dslMode = true
 		case "--label":
@@ -121,22 +118,16 @@ func handleExecute(args []string) {
 	sqlArg := fs.Arg(0)
 	if sqlArg == "" {
 		fmt.Fprintln(os.Stderr, "ERROR: missing SQL query — usage: dbexplain execute [flags] <SQL>")
-		fmt.Fprintln(os.Stderr, "  Flags (any position): --label, --db, --explain, --human, --env, --dsl, --limit, --timeout, --dsn, --config")
+		fmt.Fprintln(os.Stderr, "  Flags (any position): --label, --db, --explain, --human, --dsl, --limit, --timeout, --dsn, --config")
 		os.Exit(1)
 	}
 
 	// Resolve DSNs — gather ALL entries before label filter (needed for JOIN source resolution)
 	var allEntries []config.DSNEntry
 	hasExplicitSource := *configFile != "" || *dsnFlag != ""
-	shouldLoadEnv := *envMode || !hasExplicitSource
-
-	if shouldLoadEnv {
+	if !hasExplicitSource {
 		configPath := config.FindConfigFile()
 		if configPath == "" {
-			if *envMode {
-				fmt.Fprintln(os.Stderr, "ERROR: no config file found")
-				os.Exit(1)
-			}
 			config.PrintNoConfigFound()
 			os.Exit(1)
 		}
@@ -145,7 +136,7 @@ func handleExecute(args []string) {
 			fmt.Fprintf(os.Stderr, "ERROR: load config %s: %v\n", configPath, config.SanitizeErr(err))
 			os.Exit(1)
 		}
-		if len(envEntries) == 0 && !*envMode {
+		if len(envEntries) == 0 {
 			config.PrintEmptyConfigFound(configPath)
 			os.Exit(1)
 		}

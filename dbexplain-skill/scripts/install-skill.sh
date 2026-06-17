@@ -635,11 +635,11 @@ main() {
       echo -e "  ${BOLD}Next steps:${NC}"
       echo -e "    1. Create config: cp .env.dbexplain.example ~/.config/dbexplain/.env.dbexplain"
       echo -e "       Then edit ~/.config/dbexplain/.env.dbexplain with your real DB credentials."
-      echo -e "    2. List configured DBs: dbexplain list -env"
+      echo -e "    2. List configured DBs: dbexplain list"
       echo -e "    3. Encrypt config (recommended):"
       echo -e "         dbexplain encrypt ~/.config/dbexplain/.env.dbexplain"
       echo -e "         rm ~/.config/dbexplain/.env.dbexplain"
-      echo -e "         dbexplain -env"
+      echo -e "         dbexplain"
       echo -e "    4. Verify —— ${BOLD}bash install-skill.sh --verify${NC}"
       echo ""
       ;;

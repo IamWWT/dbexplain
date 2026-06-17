@@ -159,13 +159,13 @@ Windows 用户将配置文件放在 `%USERPROFILE%\.config\dbexplain\.env.dbexpl
 运行验证：
 
 ```bash
-dbexplain -env          # 终端格式化报告
+dbexplain          # 终端格式化报告
 dbexplain --version     # 查看版本
-dbexplain list -env     # 列出已配置数据库
+dbexplain list     # 列出已配置数据库
 ```
 
 > ![终端运行示例](assets/usages.png)
-> *图：dbexplain 运行效果（-env / all 等子命令输出）*
+> *图：dbexplain 运行效果（all 等子命令输出）*
 
 ### 加密配置文件
 
@@ -179,7 +179,7 @@ dbexplain encrypt
 dbexplain encrypt --password
 
 # 加密后直接运行（自动发现并解密 .enc 文件）
-dbexplain -env
+dbexplain
 ```
 
 ---
@@ -239,7 +239,7 @@ bash dbexplain-skill/scripts/uninstall-skill.sh --all     # 移除全部
 
 ```bash
 dbexplain --version
-dbexplain list -env
+dbexplain list
 dbexplain all
 ```
 

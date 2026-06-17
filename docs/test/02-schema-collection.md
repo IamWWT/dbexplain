@@ -18,7 +18,7 @@ BIN="../release/dbexplain"
 ## 2.1 全量 Schema 采集 (JSON)
 
 ```bash
-$BIN -env -timeout 30s --json 2>/dev/null | python3 -c "
+$BIN -timeout 30s --json 2>/dev/null | python3 -c "
 import json, sys
 data = json.load(sys.stdin)
 instances = data.get('instances', data if isinstance(data, list) else [data])
@@ -39,14 +39,14 @@ for d in instances:
 ## 2.2 全量 Schema 采集 (Human)
 
 ```bash
-$BIN -env -timeout 30s --human 2>/dev/null | head -50
+$BIN -timeout 30s --human 2>/dev/null | head -50
 ```
 
 ## 2.3 按类型过滤
 
 ```bash
 # 仅 SQL 数据库
-$BIN -env -include mysql,postgres,clickhouse,sqlite,elasticsearch --json 2>/dev/null | python3 -c "
+$BIN -include mysql,postgres,clickhouse,sqlite,elasticsearch --json 2>/dev/null | python3 -c "
 import json,sys; data=json.load(sys.stdin)
 instances = data.get('instances', data if isinstance(data, list) else [data])
 print(f'SQL DBs: {len(instances)}')
@@ -55,7 +55,7 @@ print(f'SQL DBs: {len(instances)}')
 
 ```bash
 # 仅 NoSQL
-$BIN -env -include redis,mongodb,qdrant --json 2>/dev/null | python3 -c "
+$BIN -include redis,mongodb,qdrant --json 2>/dev/null | python3 -c "
 import json,sys; data=json.load(sys.stdin)
 instances = data.get('instances', data if isinstance(data, list) else [data])
 print(f'NoSQL DBs: {len(instances)}')
@@ -64,7 +64,7 @@ print(f'NoSQL DBs: {len(instances)}')
 
 ```bash
 # 仅文件
-$BIN -env -include csv,tsv,xlsx --json 2>/dev/null | python3 -c "
+$BIN -include csv,tsv,xlsx --json 2>/dev/null | python3 -c "
 import json,sys; data=json.load(sys.stdin)
 instances = data.get('instances', data if isinstance(data, list) else [data])
 print(f'Files: {len(instances)}')
@@ -74,7 +74,7 @@ print(f'Files: {len(instances)}')
 ## 2.4 按 label 过滤
 
 ```bash
-$BIN -env --label aiops-mysql --json 2>/dev/null | python3 -c "
+$BIN --label aiops-mysql --json 2>/dev/null | python3 -c "
 import json,sys; d=json.load(sys.stdin)
 inst = d.get('instances', [d])[0]
 print(f'kind={inst.get(\"kind\")} label={inst.get(\"label\")} dbs={len(inst.get(\"databases\",[]))}')
@@ -84,7 +84,7 @@ print(f'kind={inst.get(\"kind\")} label={inst.get(\"label\")} dbs={len(inst.get(
 ## 2.5 JSON 结构验证
 
 ```bash
-$BIN -env --label aiops-mysql --json 2>/dev/null | python3 -c "
+$BIN --label aiops-mysql --json 2>/dev/null | python3 -c "
 import json, sys
 d = json.load(sys.stdin)
 # v0.1.0: top-level envelope with instances wrapper
@@ -114,7 +114,7 @@ print('All required fields present ✓')
 # SQL 数据库
 for label in aiops-mysql aiops-clickhouse intentapparatus-sqlite aiops-es video-pg veinmap-sqlite; do
   echo "=== $label ==="
-  $BIN -env --label "$label" --json 2>/dev/null | python3 -c "
+  $BIN --label "$label" --json 2>/dev/null | python3 -c "
 import json,sys; d=json.load(sys.stdin)
 inst = d.get('instances', [d])[0]
 tables = sum(len(db.get('tables',[])) for db in inst.get('databases',[]))
@@ -127,7 +127,7 @@ done
 # NoSQL 数据库
 for label in aiops-qdrant openim-redis video-redis openim-mongo; do
   echo "=== $label ==="
-  $BIN -env --label "$label" --json 2>/dev/null | python3 -c "
+  $BIN --label "$label" --json 2>/dev/null | python3 -c "
 import json,sys; d=json.load(sys.stdin)
 inst = d.get('instances', [d])[0]
 tables = sum(len(db.get('tables',[])) for db in inst.get('databases',[]))
@@ -140,7 +140,7 @@ done
 # 文件数据源
 for label in tsf-xlsx tdmq-xlsx ops-data-csv test-data-csv tsv-test-data; do
   echo "=== $label ==="
-  $BIN -env --label "$label" --json 2>/dev/null | python3 -c "
+  $BIN --label "$label" --json 2>/dev/null | python3 -c "
 import json,sys; d=json.load(sys.stdin)
 inst = d.get('instances', [d])[0]
 tables = sum(len(db.get('tables',[])) for db in inst.get('databases',[]))

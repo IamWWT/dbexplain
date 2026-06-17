@@ -16,6 +16,10 @@ import (
 // Default is 5000 characters. Override via --sql-log-max-len flag.
 var MaxSQLLogLen = 5000
 
+// Verbose controls whether [DEBUG] level logs are written to dbexplain.log.
+// Default is false. Override via --verbose flag.
+var Verbose bool
+
 // TruncateSQL truncates sql to MaxSQLLogLen characters for safe logging.
 // Returns the original string if within limit, or truncated with "...(truncated)" suffix.
 // This is about text length (characters), NOT row count — see query.QueryResult.Truncated for row truncation.
@@ -43,6 +47,14 @@ func Logf(ctx context.Context, format string, args ...interface{}) {
 		logger.Printf(format, args...)
 	} else {
 		log.Printf(format, args...)
+	}
+}
+
+// Debugf logs a [DEBUG] level message only when Verbose is true.
+// Use this for detailed diagnostic info that is too noisy for normal operation.
+func Debugf(ctx context.Context, format string, args ...interface{}) {
+	if Verbose {
+		Logf(ctx, format, args...)
 	}
 }
 
@@ -109,7 +121,7 @@ type Connector interface {
 	Capabilities() []capabilities.Capability
 }
 
-// Collect 主入口，解析 DSN、获取连接器并安全调用
+// Collect is the main entry point: parse DSN, get connector, call safely.
 func Collect(ctx context.Context, rawDSN string) (*schema.Instance, error) {
 	d, err := dsn.ParseDSN(rawDSN)
 	if err != nil {
@@ -119,14 +131,14 @@ func Collect(ctx context.Context, rawDSN string) (*schema.Instance, error) {
 	if err != nil {
 		return nil, err
 	}
-	Logf(ctx, "[连接] %s ...", d.Redacted())
+	Logf(ctx, "[connect] %s ...", d.Redacted())
 	start := time.Now()
 	inst, err := CollectSafe(ctx, c, d)
 	elapsed := time.Since(start)
 	if err != nil {
-		Logf(ctx, "[连接失败] %s 耗时 %v: %v", d.Redacted(), elapsed, err)
+		Logf(ctx, "[connect fail] %s (%v): %v", d.Redacted(), elapsed, err)
 	} else {
-		Logf(ctx, "[连接成功] %s 耗时 %v", d.Redacted(), elapsed)
+		Logf(ctx, "[connect ok] %s (%v)", d.Redacted(), elapsed)
 	}
 	return inst, err
 }

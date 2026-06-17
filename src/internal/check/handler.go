@@ -27,7 +27,6 @@ func Handle(args []string) {
 		return nil
 	})
 	configFile := fs.String("config", "", "JSON config file path")
-	useEnv := fs.Bool("env", true, "Load from .env config file (default: auto-detect)")
 	timeout := fs.Duration("timeout", 10*time.Second, "Per-DSN connection timeout")
 	sample := fs.Bool("sample", false, "enable sample row fetching for comment inference (default: off)")
 	labelFilter := fs.String("label", "", "filter by label")
@@ -37,11 +36,9 @@ func Handle(args []string) {
 	var entries []config.DSNEntry
 	configPath := ""
 
-	// Load from .env if no explicit source given, or --env is set
+	// Auto-load from .env if no explicit source given
 	hasExplicitSource := len(dsnFlags) > 0 || *configFile != ""
-	shouldLoadEnv := *useEnv || !hasExplicitSource
-
-	if shouldLoadEnv {
+	if !hasExplicitSource {
 		configPath = config.FindConfigFile()
 		if configPath == "" {
 			fmt.Fprintf(os.Stderr, "ERROR: no config file found.\n")
@@ -84,7 +81,7 @@ func Handle(args []string) {
 	}
 
 	if len(entries) == 0 {
-		fmt.Fprintln(os.Stderr, "ERROR: no DSNs found. Use --env, --dsn, or --config.")
+		fmt.Fprintln(os.Stderr, "ERROR: no DSNs found. Use --dsn or --config.")
 		os.Exit(1)
 	}
 

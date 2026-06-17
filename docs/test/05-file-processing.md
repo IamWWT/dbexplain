@@ -35,13 +35,13 @@ $BIN execute -dsn "csv:///tmp/dbexplain-test/users.csv?label=csv-users" "SELECT 
 ## 5.4 CSV — 环境变量 DSN
 
 ```bash
-$BIN execute -env --db 13 "SELECT *" --human
+$BIN execute --db 13 "SELECT *" --human
 ```
 
 ## 5.5 CSV — 大文件采样
 
 ```bash
-$BIN execute -env --db 14 "SELECT * LIMIT 5" --human
+$BIN execute --db 14 "SELECT * LIMIT 5" --human
 ```
 
 ## 5.6 TSV — Schema 采集
@@ -59,19 +59,19 @@ $BIN execute -dsn "tsv:///tmp/dbexplain-test/data.tsv?label=tsv-test" "SELECT *"
 ## 5.8 TSV — 环境变量 DSN
 
 ```bash
-$BIN execute -env --db 15 "SELECT *" --human
+$BIN execute --db 15 "SELECT *" --human
 ```
 
 ## 5.9 XLSX — Schema 采集
 
 ```bash
-$BIN execute -env --label tsf-xlsx "SELECT * LIMIT 5" --human
+$BIN execute --label tsf-xlsx "SELECT * LIMIT 5" --human
 ```
 
 ## 5.10 XLSX — 多 Sheet 验证
 
 ```bash
-$BIN -env --label tsf-xlsx --json 2>/dev/null | python3 -c "
+$BIN --label tsf-xlsx --json 2>/dev/null | python3 -c "
 import json,sys; d=json.load(sys.stdin)
 tables = d.get('databases',[{}])[0].get('tables',[])
 for t in tables:
@@ -82,13 +82,13 @@ for t in tables:
 ## 5.11 XLSX — 另一文件
 
 ```bash
-$BIN execute -env --label tdmq-xlsx "SELECT * LIMIT 3" --human
+$BIN execute --label tdmq-xlsx "SELECT * LIMIT 3" --human
 ```
 
 ## 5.12 文件 — 不支持的查询拒绝 (v0.1.0+)
 
 ```bash
-$BIN execute -env --db 13 "DROP TABLE users"
+$BIN execute --db 13 "DROP TABLE users"
 # 预期: QUERY_ERROR (文件引擎只读，不接受 SELECT 以外的 SQL)
 ```
 
@@ -96,20 +96,20 @@ $BIN execute -env --db 13 "DROP TABLE users"
 
 ```bash
 # 使用包含数据的 CSV 测试 WHERE
-$BIN execute -env --label tsf-xlsx "SELECT * FROM xlsx WHERE name LIKE '%测试%' LIMIT 3" --human
+$BIN execute --label tsf-xlsx "SELECT * FROM xlsx WHERE name LIKE '%测试%' LIMIT 3" --human
 ```
 
 ## 5.14 文件查询引擎 (v0.1.0+) — GROUP BY + 聚合
 
 ```bash
 # GROUP BY + 聚合函数
-$BIN execute -env --label tsf-xlsx "SELECT name, COUNT(*) AS cnt FROM xlsx GROUP BY name LIMIT 5" --human
+$BIN execute --label tsf-xlsx "SELECT name, COUNT(*) AS cnt FROM xlsx GROUP BY name LIMIT 5" --human
 ```
 
 ## 5.15 文件查询引擎 (v0.1.0+) — ORDER BY + LIMIT
 
 ```bash
-$BIN execute -env --label tsf-xlsx "SELECT * FROM xlsx ORDER BY name DESC LIMIT 3" --human
+$BIN execute --label tsf-xlsx "SELECT * FROM xlsx ORDER BY name DESC LIMIT 3" --human
 ```
 
 > **注意**: v0.1.0+ 文件查询引擎支持完整的 SELECT 子集（WHERE/GROUP BY/ORDER BY/JOIN/聚合/表达式/CAST/ABS），不再限于 SELECT *。

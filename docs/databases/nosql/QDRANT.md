@@ -148,10 +148,10 @@ skip qdrant://...: qdrant ping: rpc error: code = Unavailable desc = connection 
 **示例**：
 ```bash
 # 获取集合的点数
-dbexplain execute -env --label qdrant-test '{"count":"documents"}'
+dbexplain execute --label qdrant-test '{"count":"documents"}'
 
 # 获取指定集合的点数（通过 GetCollectionInfo）
-dbexplain execute -env --label qdrant-test '{"scroll":"documents","limit":20}'
+dbexplain execute --label qdrant-test '{"scroll":"documents","limit":20}'
 ```
 
 ### execute 安全机制

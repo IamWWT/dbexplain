@@ -111,7 +111,7 @@ func collectCHDB(ctx context.Context, cli *chHTTP, dbName, redactedDSN string) (
 	}
 	total := len(tables)
 	for i, t := range tables {
-		Logf(ctx, "[%s] 采集表 %d/%d: %s", dbName, i+1, total, t.Name)
+		Logf(ctx, "[%s] collecting table %d/%d: %s", dbName, i+1, total, t.Name)
 		fillCHTable(ctx, cli, dbName, t, redactedDSN)
 		database.Tables = append(database.Tables, t)
 	}

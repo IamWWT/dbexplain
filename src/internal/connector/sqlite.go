@@ -82,7 +82,7 @@ func (sqliteConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instanc
 
 	total := len(tableNames)
 	for i, tn := range tableNames {
-		Logf(ctx, "[sqlite] 采集表 %d/%d: %s", i+1, total, tn)
+		Logf(ctx, "[sqlite] collecting table %d/%d: %s", i+1, total, tn)
 		t := &schema.Table{Name: tn}
 		fillSQLiteTable(ctx, db, t, d.Redacted())
 		database.Tables = append(database.Tables, t)
@@ -250,7 +250,8 @@ func fetchSQLiteSampleRow(ctx context.Context, db *sql.DB, table string) (map[st
 	}
 	values := make([]interface{}, len(columns))
 	for i := range values {
-		values[i] = new(interface{})
+		var v interface{}
+		values[i] = &v
 	}
 	if err := rows.Scan(values...); err != nil {
 		return nil, err

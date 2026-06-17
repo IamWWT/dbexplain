@@ -7,9 +7,9 @@
 
 ## 设计目标
 
-`execute` 子命令为 AI Agent 提供了一种**受沙箱保护**的只读 SQL 执行能力。与 schema 采集模式（`-env` / `-dsn`）不同：
+`execute` 子命令为 AI Agent 提供了一种**受沙箱保护**的只读 SQL 执行能力。与 schema 采集模式（`-dsn`）不同：
 
-| 维度 | Schema 采集 (`-env`) | 查询执行 (`execute`) |
+| 维度 | Schema 采集 (自动加载) | 查询执行 (`execute`) |
 |------|---------------------|---------------------|
 | 输出格式 | Instance/Table/Column 元数据树 | 数据表 (columns + rows) |
 | 数据内容 | 表结构（列名、类型、索引、FK） | 查询结果（用户数据行） |
@@ -100,7 +100,7 @@ if !ok {
 
 ### 5. DSN 凭据保护
 
-- DSN 通过 `-env`、`-config`、`-dsn` 加载，复用现有的 `findConfigFile()` + `loadEnvFile()` 路径
+- DSN 通过 `-config`、`-dsn` 加载，复用现有的 `findConfigFile()` + `loadEnvFile()` 路径
 - 加密文件（`.env.dbexplain.enc`）同样支持
 - DSN 密码在错误消息中自动脱敏（`Redacted()`）
 - 查询结果 JSON **不包含**任何连接信息或凭据
@@ -207,20 +207,20 @@ dbexplain execute -dsn 'sqlite:///path/to/db?label=local' \
   'SELECT * FROM users WHERE active = 1'
 
 # 通过 .env 文件的 label 匹配
-dbexplain execute -env --label aiops-mysql \
+dbexplain execute --label aiops-mysql \
   'SELECT COUNT(*) FROM orders WHERE created_at > NOW() - INTERVAL 7 DAY'
 
 # 通过 DB 编号匹配（DB1, DB2, ...）
-dbexplain execute -env --db 1 \
+dbexplain execute --db 1 \
   'SHOW INDEX FROM users'
 
 # 自定义超时和行数
-dbexplain execute -env --label my-pg \
+dbexplain execute --label my-pg \
   --timeout 60 --limit 500 \
   'SELECT * FROM events WHERE event_type = "error"'
 
 # EXPLAIN 查询计划
-dbexplain execute -env --label my-pg --explain \
+dbexplain execute --label my-pg --explain \
   'SELECT * FROM orders WHERE user_id = 42'
 ```
 
@@ -228,24 +228,24 @@ dbexplain execute -env --label my-pg --explain \
 
 ```bash
 # Elasticsearch (标准 SQL，通过 _sql 端点)
-dbexplain execute -env --label es-test 'SHOW TABLES'
-dbexplain execute -env --label es-test \
+dbexplain execute --label es-test 'SHOW TABLES'
+dbexplain execute --label es-test \
   'SELECT * FROM my-index WHERE status = "active" LIMIT 50'
 
 # MongoDB (JSON 原生查询)
-dbexplain execute -env --label mongo-test \
+dbexplain execute --label mongo-test \
   '{"find":"users","filter":{"active":true},"limit":100}'
-dbexplain execute -env --label mongo-test \
+dbexplain execute --label mongo-test \
   '{"aggregate":"orders","pipeline":[{"$match":{"status":"done"}},{"$group":{"_id":"$user","total":{"$sum":"$amount"}}}]}'
 
 # Redis (原生命令)
-dbexplain execute -env --label redis-test 'GET user:1001'
-dbexplain execute -env --label redis-test 'HGETALL session:abc123'
-dbexplain execute -env --label redis-test 'SCAN 0 MATCH user:* COUNT 100'
+dbexplain execute --label redis-test 'GET user:1001'
+dbexplain execute --label redis-test 'HGETALL session:abc123'
+dbexplain execute --label redis-test 'SCAN 0 MATCH user:* COUNT 100'
 
 # Qdrant (JSON 向量数据库查询)
-dbexplain execute -env --label qdrant-test '{"count":"documents"}'
-dbexplain execute -env --label qdrant-test '{"scroll":"documents","limit":20}'
+dbexplain execute --label qdrant-test '{"count":"documents"}'
+dbexplain execute --label qdrant-test '{"scroll":"documents","limit":20}'
 ```
 
 ### AI Agent 集成示例
@@ -255,7 +255,7 @@ import subprocess, json
 
 # Agent 校验假设
 result = subprocess.run([
-    "dbexplain", "execute", "-env", "--label", "aiops-mysql",
+    "dbexplain", "execute", "--label", "aiops-mysql",
     "SELECT user_id, COUNT(*) as cnt FROM orders GROUP BY user_id ORDER BY cnt DESC LIMIT 10"
 ], capture_output=True, text=True)
 
@@ -270,8 +270,8 @@ else:
 
 > **`--human` 位置说明**：可放在查询语句之前或之后，两种写法等价。例如：
 > ```bash
-> dbexplain execute -env --db 1 --human "SELECT * FROM users LIMIT 5"
-> dbexplain execute -env --db 1 "SELECT * FROM users LIMIT 5" --human
+> dbexplain execute --db 1 --human "SELECT * FROM users LIMIT 5"
+> dbexplain execute --db 1 "SELECT * FROM users LIMIT 5" --human
 > ```
 
 ## 安全设计要点

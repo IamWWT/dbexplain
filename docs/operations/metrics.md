@@ -26,7 +26,7 @@ Each DSN collection produces a metric snapshot with:
 Metrics are included in the standard JSON output under a top-level `"metrics"` field:
 
 ```bash
-dbexplain -env --json
+dbexplain --json
 ```
 
 ```json
@@ -64,9 +64,9 @@ This is backward-compatible — existing consumers ignore unknown fields.
 Use `--metrics` to output Prometheus-compatible text format to **stderr**:
 
 ```bash
-dbexplain -env --metrics
-dbexplain -env --json --human --metrics   # stdout=JSON, stderr=Prometheus
-dbexplain collect -env --metrics          # also works with collect subcommand
+dbexplain --metrics
+dbexplain --json --human --metrics   # stdout=JSON, stderr=Prometheus
+dbexplain collect --metrics          # also works with collect subcommand
 ```
 
 Stdout remains pure (JSON or human-readable text). Prometheus text always goes to stderr.
@@ -98,7 +98,7 @@ dbexplain_collect_tables_total_all 42
 ### Pipeline to Prometheus Pushgateway
 
 ```bash
-dbexplain -env --metrics | curl -X POST --data-binary @- \
+dbexplain --metrics | curl -X POST --data-binary @- \
   http://prometheus-pushgateway:9091/metrics/job/dbexplain
 ```
 

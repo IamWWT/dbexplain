@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	_ "github.com/go-sql-driver/mysql"
+	mysql "github.com/go-sql-driver/mysql"
 	"github.com/IamWWT/dbexplain/internal/capabilities"
 	"github.com/IamWWT/dbexplain/internal/dsn"
 	"github.com/IamWWT/dbexplain/internal/query"
@@ -34,8 +34,7 @@ func (mysqlConnector) Capabilities() []capabilities.Capability {
 }
 
 func (mysqlConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instance, error) {
-	connStr := buildMySQLDSN(d)
-	db, err := sql.Open("mysql", connStr)
+	db, err := openMySQL(d)
 	if err != nil {
 		return nil, schema.NewDBError(d.Redacted(), "", "", "open", err)
 	}
@@ -169,7 +168,6 @@ func collectMySQLDB(ctx context.Context, db *sql.DB, dbName, redactedDSN string)
 				t.Comment = comment
 				tables = append(tables, &t)
 			}
-			rows.Close()
 			if err := rows.Err(); err != nil {
 				log.Printf("[mysql] rows iteration: %v", err)
 			}
@@ -199,7 +197,6 @@ func collectMySQLDB(ctx context.Context, db *sql.DB, dbName, redactedDSN string)
 			}
 			tables = append(tables, t)
 		}
-		rows.Close()
 		if err := rows.Err(); err != nil {
 			log.Printf("[mysql] rows iteration: %v", err)
 		}
@@ -397,6 +394,7 @@ func collectMySQLDB(ctx context.Context, db *sql.DB, dbName, redactedDSN string)
 			WHERE object_schema=?`+opTfClause+`
 			GROUP BY object_name`, append([]any{dbName}, tfArgs...)...)
 		if err == nil {
+			defer oRows.Close()
 			for oRows.Next() {
 				var tbl string
 				var read, write int64
@@ -414,12 +412,11 @@ func collectMySQLDB(ctx context.Context, db *sql.DB, dbName, redactedDSN string)
 		} else {
 			Logf(ctx, "[mysql] batch opstats unavailable: %v", err)
 		}
-		oRows.Close()
 	}
 
 	// Assign batch results + sample rows
 	for i, t := range tables {
-		Logf(ctx, "[%s] 采集表 %d/%d: %s", dbName, i+1, total, t.Name)
+		Logf(ctx, "[%s] collecting table %d/%d: %s", dbName, i+1, total, t.Name)
 
 		// Assign pre-fetched columns
 		if cd := colMap[t.Name]; cd != nil {
@@ -463,31 +460,6 @@ func collectMySQLDB(ctx context.Context, db *sql.DB, dbName, redactedDSN string)
 	return database, nil
 }
 
-// collectMySQLOpStats 从 performance_schema 采集表级 IO 统计。
-// 如果 performance_schema 不可用（如 TDSQL 分布式版本或关闭了该功能），静默跳过。
-func collectMySQLOpStats(ctx context.Context, db *sql.DB, dbName string, t *schema.Table) {
-	Logf(ctx, "[mysql] [collect] %s", `
-		SELECT COALESCE(SUM(count_read), 0),
-		       COALESCE(SUM(count_write), 0)
-		FROM performance_schema.table_io_waits_summary_by_table
-		WHERE object_schema = ? AND object_name = ?`)
-	row := db.QueryRowContext(ctx, `
-		SELECT COALESCE(SUM(count_read), 0),
-		       COALESCE(SUM(count_write), 0)
-		FROM performance_schema.table_io_waits_summary_by_table
-		WHERE object_schema = ? AND object_name = ?`, dbName, t.Name)
-
-	var countRead, countWrite int64
-	if err := row.Scan(&countRead, &countWrite); err != nil {
-		Logf(ctx, "[mysql] performance_schema unavailable for %s.%s, skipping op stats", dbName, t.Name)
-		return
-	}
-	t.OpStats = &schema.OpStats{
-		SeqScan: countRead + countWrite, // MySQL 不区分 seq/index scan
-		NtupIns: countWrite,
-	}
-}
-
 // fetchMySQLSampleRow 获取表的第一行数据，返回 map[column]value
 func fetchMySQLSampleRow(ctx context.Context, db *sql.DB, dbName, table string) (map[string]string, error) {
 	query := fmt.Sprintf("SELECT * FROM %s.%s LIMIT 1", quoteMySQL(dbName), quoteMySQL(table))
@@ -497,6 +469,9 @@ func fetchMySQLSampleRow(ctx context.Context, db *sql.DB, dbName, table string) 
 	}
 	defer rows.Close()
 	if !rows.Next() {
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
 		return nil, fmt.Errorf("no rows")
 	}
 	columns, err := rows.Columns()
@@ -505,7 +480,8 @@ func fetchMySQLSampleRow(ctx context.Context, db *sql.DB, dbName, table string) 
 	}
 	values := make([]interface{}, len(columns))
 	for i := range values {
-		values[i] = new(interface{})
+		var v interface{}
+		values[i] = &v
 	}
 	if err := rows.Scan(values...); err != nil {
 		return nil, err
@@ -524,7 +500,7 @@ func fetchMySQLSampleRow(ctx context.Context, db *sql.DB, dbName, table string) 
 	return result, nil
 }
 
-func buildMySQLDSN(d *dsn.DSN) string {
+func openMySQL(d *dsn.DSN) (*sql.DB, error) {
 	host := d.Host
 	if host == "" {
 		host = "127.0.0.1"
@@ -533,19 +509,24 @@ func buildMySQLDSN(d *dsn.DSN) string {
 	if port == "" {
 		port = "3306"
 	}
-	auth := ""
-	if d.User != "" {
-		auth = d.User
-		if d.Password != "" {
-			auth += ":" + d.Password
-		}
-		auth += "@"
+
+	cfg := mysql.NewConfig()
+	cfg.User = d.User
+	cfg.Passwd = d.Password
+	cfg.Net = "tcp"
+	cfg.Addr = host + ":" + port
+	cfg.DBName = d.DBName
+	cfg.Params = map[string]string{
+		"charset":   "utf8mb4",
+		"parseTime": "true",
 	}
-	db := ""
-	if d.DBName != "" {
-		db = "/" + d.DBName
+	cfg.Timeout = 5 * time.Second
+
+	connector, err := mysql.NewConnector(cfg)
+	if err != nil {
+		return nil, err
 	}
-	return fmt.Sprintf("%stcp(%s:%s)%s?charset=utf8mb4&parseTime=true&timeout=5s", auth, host, port, db)
+	return sql.OpenDB(connector), nil
 }
 
 func quoteMySQL(name string) string {
@@ -554,8 +535,7 @@ func quoteMySQL(name string) string {
 
 // ExecQuery implements query.Queryable for MySQL.
 func (mysqlConnector) ExecQuery(ctx context.Context, opts query.ExecuteOpts) (*query.QueryResult, error) {
-	connStr := buildMySQLDSN(opts.DSN)
-	db, err := sql.Open("mysql", connStr)
+	db, err := openMySQL(opts.DSN)
 	if err != nil {
 		return nil, fmt.Errorf("mysql open: %w", err)
 	}

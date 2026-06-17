@@ -18,11 +18,11 @@ BIN="../release/dbexplain"
 
 ```bash
 # 在后台启动慢查询
-$BIN execute -env --db 6 --timeout 60 "SELECT pg_sleep(10)" &
+$BIN execute --db 6 --timeout 60 "SELECT pg_sleep(10)" &
 sleep 1
 
 # 同时发起第二个查询
-$BIN execute -env --db 6 "SELECT 1"
+$BIN execute --db 6 "SELECT 1"
 # 预期: CONCURRENT_LIMIT: a query is already running for label "video-pg"
 
 # 等待后台完成
@@ -33,8 +33,8 @@ wait
 
 ```bash
 # 同时查询不同数据库
-$BIN execute -env --db 1 --timeout 60 "SELECT 1" &
-$BIN execute -env --db 6 --timeout 60 "SELECT 1" &
+$BIN execute --db 1 --timeout 60 "SELECT 1" &
+$BIN execute --db 6 --timeout 60 "SELECT 1" &
 # 两者都应成功（不同 label 不互斥）
 wait
 ```

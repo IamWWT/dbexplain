@@ -17,7 +17,7 @@ trigger:
 
 `dbexplain` 是一个 Go 二进制 CLI，已安装到系统 PATH。两种独立模式：
 
-- **Schema 采集**（`dbexplain -env`）：探查表结构/字段类型/注释/跨库外键/健康评分，输出 `instances[]` + `refs[]`（JSON）
+- **Schema 采集**（`dbexplain` 自动加载）：探查表结构/字段类型/注释/跨库外键/健康评分，输出 `instances[]` + `refs[]`（JSON）
 - **只读查询**（`dbexplain execute`）：采集后在 SQL/文件/Mongo/Redis 等数据源上执行只读 SELECT，输出 `columns[]` + `rows[]`
 
 还支持：增量变更检测（`--cache`）、DSL 模式（`--dsl`）、配置加密（`encrypt`）、帮助手册（`dbexplain all`）。
@@ -64,10 +64,10 @@ dbexplain all --filter execute       # 按关键字过滤帮助
 
 ```bash
 # 采集全部
-dbexplain -env
+dbexplain
 
 # 输出 AI 上下文目录（推荐）
-dbexplain -env --context ./ctx
+dbexplain --context ./ctx
 ```
 
 `--context ./ctx` 生成的文件：
@@ -89,13 +89,13 @@ dbexplain -env --context ./ctx
 
 ```bash
 # SQL 数据库
-dbexplain execute -env --label mysql 'SELECT COUNT(*) FROM orders' --human
+dbexplain execute --label mysql 'SELECT COUNT(*) FROM orders' --human
 
 # MongoDB（JSON 格式）
-dbexplain execute -env --label mongo '{"find":"users","filter":{"age":{"$gt":18}}}' --human
+dbexplain execute --label mongo '{"find":"users","filter":{"age":{"$gt":18}}}' --human
 
 # Redis（原生命令）
-dbexplain execute -env --label redis 'GET user:1001' --human
+dbexplain execute --label redis 'GET user:1001' --human
 ```
 
 自动 LIMIT 1000。明确拒绝 DROP/INSERT/UPDATE/DELETE。
@@ -105,7 +105,7 @@ dbexplain execute -env --label redis 'GET user:1001' --human
 `--dsl` 启用 DSL 模式，使用 `@label.table` 语法引用数据源：
 
 ```bash
-dbexplain execute -env --dsl --label mysql 'SELECT * FROM @mysql.users WHERE status = "active"'
+dbexplain execute --dsl --label mysql 'SELECT * FROM @mysql.users WHERE status = "active"'
 ```
 
 DSL 编译流程：预处理 → AST 解析 → 符号绑定 → 后端路由，全程确定性。详见 `dbexplain all --filter dsl`。
@@ -116,14 +116,14 @@ CSV/XLSX 文件支持完整 SELECT 子集。**完整语法**见 [`references/sql
 
 ```bash
 # 数据预览（仅预览，不作为分析结论来源）
-dbexplain execute -env --label my_data 'SELECT *' --limit 5 --human
+dbexplain execute --label my_data 'SELECT *' --limit 5 --human
 
 # 聚合分析
-dbexplain execute -env --label my_data \
+dbexplain execute --label my_data \
   'SELECT department, AVG(rate) AS avg_rate FROM data GROUP BY department ORDER BY avg_rate DESC' --human
 
 # 跨文件 JOIN
-dbexplain execute -env --label my_data \
+dbexplain execute --label my_data \
   'SELECT o.branch_name, AVG(t.rate) FROM data t JOIN org o ON t.dept_id = o.dept_id GROUP BY o.branch_name' --human
 ```
 

@@ -204,7 +204,8 @@ func fetchHiveSampleRow(ctx context.Context, db *sql.DB, dbName, table string) (
 	}
 	values := make([]interface{}, len(columns))
 	for i := range values {
-		values[i] = new(interface{})
+		var v interface{}
+		values[i] = &v
 	}
 	if err := rows.Scan(values...); err != nil {
 		return nil, err

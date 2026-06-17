@@ -197,10 +197,10 @@ Prometheus DSL 的设计目标不是"用 SQL 完整表达 PromQL"，而是**在 
 
 ```bash
 # DSL 模式：SELECT + WHERE 编译为 PromQL
-dbexplain execute -env --dsl "SELECT * FROM @my-prom.up WHERE job='node'" --human
+dbexplain execute --dsl "SELECT * FROM @my-prom.up WHERE job='node'" --human
 
 # 支持标签过滤（编译为 PromQL label matchers）
-dbexplain execute -env --dsl "SELECT * FROM @my-prom.node_load1 WHERE instance='192.168.0.1:9100'" --human
+dbexplain execute --dsl "SELECT * FROM @my-prom.node_load1 WHERE instance='192.168.0.1:9100'" --human
 ```
 
 DSL 模式会通过 IR 编译将 SQL AST 转为 PromQL。
@@ -211,11 +211,11 @@ DSL 支持 `SELECT 列名` 而非仅 `SELECT *`，结果仅返回指定列：
 
 ```bash
 # 选择特定列
-dbexplain execute -env --dsl --human \
+dbexplain execute --dsl --human \
   'SELECT instance, mode, value FROM @my-prom.node_cpu_seconds_total WHERE mode="system" ORDER BY value DESC LIMIT 5'
 
 # 列别名
-dbexplain execute -env --dsl --human \
+dbexplain execute --dsl --human \
   'SELECT instance AS host, value AS val FROM @my-prom.up ORDER BY val DESC LIMIT 3'
 ```
 
@@ -225,15 +225,15 @@ dbexplain execute -env --dsl --human \
 
 ```bash
 # ORDER BY value 升序
-dbexplain execute -env --dsl --human \
+dbexplain execute --dsl --human \
   'SELECT * FROM @my-prom.node_cpu_seconds_total WHERE mode="system" ORDER BY value'
 
 # ORDER BY value DESC + LIMIT
-dbexplain execute -env --dsl --human \
+dbexplain execute --dsl --human \
   'SELECT * FROM @my-prom.node_cpu_seconds_total WHERE mode="system" ORDER BY value DESC LIMIT 5'
 
 # 多列排序 + OFFSET
-dbexplain execute -env --dsl --human \
+dbexplain execute --dsl --human \
   'SELECT * FROM @my-prom.node_cpu_seconds_total ORDER BY product, value DESC LIMIT 10 OFFSET 5'
 ```
 
@@ -245,11 +245,11 @@ DSL 支持 GROUP BY + 聚合函数，编译为 PromQL 聚合表达式：
 
 ```bash
 # COUNT 聚合
-dbexplain execute -env --dsl --human \
+dbexplain execute --dsl --human \
   'SELECT job, count(value) FROM @my-prom.up GROUP BY job'
 
 # AVG 聚合 + ORDER BY
-dbexplain execute -env --dsl --human \
+dbexplain execute --dsl --human \
   'SELECT mode, avg(value) FROM @my-prom.node_cpu_seconds_total GROUP BY mode ORDER BY avg(value) DESC LIMIT 5'
 ```
 
@@ -312,11 +312,11 @@ dbexplain execute -dsn 'prometheus://192.168.0.127:9440?label=my-prom' \
 
 ```bash
 # Prometheus 指标 + MySQL 表 JOIN（匹配 host 地址）
-dbexplain execute -env --dsl "SELECT p.__name__, p.job, p.instance, p.value, i.product, i.subproduct
+dbexplain execute --dsl "SELECT p.__name__, p.job, p.instance, p.value, i.product, i.subproduct
   FROM @my-prom.up p JOIN @aiops-mysql.iplist i ON p.hostip = i.hostip" --human
 
 # Prometheus + 文件 JOIN
-dbexplain execute -env --dsl "SELECT p.*, c.region
+dbexplain execute --dsl "SELECT p.*, c.region
   FROM @my-prom.up p JOIN @my-csv.nodes c ON p.hostip = c.ip" --human
 ```
 
@@ -326,21 +326,21 @@ dbexplain execute -env --dsl "SELECT p.*, c.region
 
 ```bash
 # promql() topk + MySQL JOIN：CPU 使用率 Top10 + 产品信息
-dbexplain execute -env --dsl '
+dbexplain execute --dsl '
   SELECT p.instance, p.value, i.product, i.subproduct
   FROM @my-prom.promql(topk(10, rate(node_cpu_seconds_total[5m]))) p
   JOIN @aiops-mysql.iplist i ON p.hostip = i.hostip
   ORDER BY p.value DESC' --human
 
 # promql() 多指标 + MySQL JOIN：CPU 系统占用 > 5% 的主机及其产品线
-dbexplain execute -env --dsl '
+dbexplain execute --dsl '
   SELECT p.instance, p.value, i.product, i.subproduct
   FROM @my-prom.promql(rate(node_cpu_seconds_total{mode="system"}[5m]) / rate(node_cpu_seconds_total[5m]) * 100 > 5) p
   JOIN @aiops-mysql.iplist i ON p.hostip = i.hostip
   ORDER BY p.value DESC LIMIT 10' --human
 
 # promql() + 普通 Prometheus 指标 + MySQL 三源联邦：CPU 系统占用率 + up 状态 + 产品线
-dbexplain execute -env --dsl '
+dbexplain execute --dsl '
   SELECT p.instance, p.value AS cpu_system_pct, u.value AS up_status, i.product
   FROM @my-prom.promql(rate(node_cpu_seconds_total{mode="system"}[5m]) / rate(node_cpu_seconds_total[5m]) * 100) p
   JOIN @my-prom.up u ON p.instance = u.instance AND u.value = 1

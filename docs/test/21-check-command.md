@@ -107,21 +107,17 @@ $BIN check --dsn 'redis://:pass@localhost:6379/0?label=good' \
 # 退出码: 1（有失败项）
 ```
 
-## 21.11 --env 默认 true 自动加载（v0.1.7）
+## 21.11 自动加载配置文件（v0.1.8+）
 
-验证 `dbexplain check` 不传 `--env` 时自动加载 `.env.dbexplain`。
+验证 `dbexplain check` 自动加载 `.env.dbexplain`（无需传参）。
 
 ```bash
 # 创建临时 .env 文件
 echo 'DBTEST=sqlite:///:memory:?label=auto-env-test' > /tmp/.env-check-test
 
-# 在临时目录运行 check（无 --env 参数）
+# 在临时目录运行 check（自动加载配置文件）
 cd /tmp && ../src/dbexplain check 2>&1 | grep -c "auto-env-test"
 # 预期: 1（DSN 列表中包含 auto-env-test）
-
-# 验证 --env=false 可跳过自动加载
-cd /tmp && ../src/dbexplain check --env=false --dsn 'sqlite:///:memory:?label=explicit-only' 2>&1 | grep -c "auto-env-test"
-# 预期: 0（只显示显式指定的 DSN，不加载 .env）
 
 rm -f /tmp/.env-check-test
 ```

@@ -1,7 +1,7 @@
 # docs/ 文件索引
 
 > 本文档索引 `docs/` 下所有文件，方便快速定位。
-> 更新时间：v0.1.6 (2026-06-12)
+> 更新时间：v0.1.7 (2026-06-17)
 
 ---
 
@@ -25,6 +25,7 @@
 | [`REPL.md`](REPL.md) | REPL 交互模式：启动方式、内命令、自动行为、已知限制（ES 暂不支持等） |
 | [`file-sources/FILE_PROCESSING.md`](file-sources/FILE_PROCESSING.md) | 文件查询引擎：CSV/XLSX 处理说明 |
 | [`DEPLOY.md`](DEPLOY.md) | 部署说明：build.sh 编译模式、产物清单、平台支持 |
+| [`PASSWORD_SPECIAL_CHARS.md`](PASSWORD_SPECIAL_CHARS.md) | DSN 密码特殊字符兼容性指南：转义映射表、`#` 自动转义说明、各数据源风险等级 |
 
 ## 三、数据源专属文档（按类别分目录）
 
@@ -85,6 +86,8 @@
 | [`test/19-oracle-hive.md`](test/19-oracle-hive.md) | Oracle + Hive 连接器测试 |
 | [`test/20-cte-write-detection.md`](test/20-cte-write-detection.md) | CTE 写检测加固测试 |
 | [`test/21-check-command.md`](test/21-check-command.md) | check 子命令测试（配置验证+连通性） |
+| [`test/22-performance-optimization.md`](test/22-performance-optimization.md) | Schema 采集性能优化测试 |
+| [`test/23-password-special-chars.md`](test/23-password-special-chars.md) | DSN 密码特殊字符兼容性测试 |
 | [`test/RESULTS.md`](test/RESULTS.md) | 全量测试结果汇总 |
 
 ## 七、资产文件
@@ -102,8 +105,6 @@
 
 | 文件 | 说明 |
 |------|------|
-| [`RELEASE_WECHAT_v0.1.2.md`](RELEASE_WECHAT_v0.1.2.md) | v0.1.2 公众号发布文案 |
-| [`RELEASE_WECHAT_v0.1.6.md`](RELEASE_WECHAT_v0.1.6.md) | v0.1.6 公众号发布文案（Bug Bash：全局代码审计修复） |
 | [`RELEASE_WECHAT_v0.1.7.md`](RELEASE_WECHAT_v0.1.7.md) | v0.1.7 公众号发布文案（Prometheus meta 表 rows + CTE 写检测加固 + GaussDB Oracle 兼容） |
 | [`dbexplain_wechat_article.html`](dbexplain_wechat_article.html) | 微信公众号文章 HTML |
 

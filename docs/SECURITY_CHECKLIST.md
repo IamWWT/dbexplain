@@ -145,7 +145,7 @@
 [ ] grep -r "e\.raw" src/        # 确认无原始 DSN 输出
 [ ] grep -r "log.*Printf.*%s.*err" src/  # 确认错误消息经过脱敏
 [ ] grep -r "\.env" src/ --include="*.go" | grep -v test | grep -v example  # 检查引用
-[ ] 以 UTF-8 BOM 编码的 .env.dbexplain 测试 -env 正常加载
+[ ] 以 UTF-8 BOM 编码的 .env.dbexplain 测试自动加载正常
 [ ] 文档陈旧引用检查: grep 在 docs/ 中查找已删除文件路径的引用
 [ ] 文档版本一致性: grep -rn "v0\.[01]\.[01]" docs/test/*.md 确认测试预期均更新为本版本
 [ ] 脚本版本一致性: grep "\$VERSION\s*=" dbexplain-skill/scripts/*.{sh,ps1} 确认版本号最新
@@ -183,7 +183,7 @@
 - [ ] **机器指纹确定性** — 同一台机器多次运行 `MachineID()` 返回相同值
 - [ ] **跨机器验证** — 不同机器上加密的文件无法解密（指纹不匹配）
 - [ ] **密码模式** — `--password` 加密的文件在无 `APP_ENCRYPTION_KEY` 且无 `~/.config/dbexplain/.encryption_key` 时解密失败
-- [ ] **自动解密** — `dbexplain -env` 自动发现 `~/.config/dbexplain/.env.dbexplain.enc` 并解密加载配置（无需环境变量）
+- [ ] **自动解密** — `dbexplain` 自动发现 `~/.config/dbexplain/.env.dbexplain.enc` 并解密加载配置（无需环境变量）
 - [ ] **文件权限** — 加密输出文件权限为 `0600`
 - [ ] **密码输入安全** — 密码输入无回显，确认密码流程正确
 - [ ] **BOM 兼容** — 带 BOM 的 `.env` 文件加密后解密内容正确（BOM 在加密前已剥离）

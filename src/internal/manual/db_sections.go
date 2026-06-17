@@ -1097,7 +1097,7 @@ func printManualPrometheus(p func(string, string) string) {
     示例:
       dbexplain execute -dsn 'prometheus://192.168.0.1:9090?label=prom' \\
         --dsl --human 'SELECT * FROM @prom.up'
-      dbexplain execute -env --label prom --dsl --human \\
+      dbexplain execute --label prom --dsl --human \\
         'SELECT * FROM @prom.node_cpu_seconds_total WHERE job="node"'
 `, `
 
@@ -1137,7 +1137,7 @@ func printManualPrometheus(p func(string, string) string) {
     Examples:
       dbexplain execute -dsn 'prometheus://192.168.0.1:9090?label=prom' \\
         --dsl --human 'SELECT * FROM @prom.up'
-      dbexplain execute -env --label prom --dsl --human \\
+      dbexplain execute --label prom --dsl --human \\
         'SELECT * FROM @prom.node_cpu_seconds_total WHERE job="node"'
 `))
 }

@@ -370,7 +370,8 @@ func fetchOracleSampleRow(ctx context.Context, db *sql.DB, owner, table string) 
 	}
 	values := make([]interface{}, len(columns))
 	for i := range values {
-		values[i] = new(interface{})
+		var v interface{}
+		values[i] = &v
 	}
 	if err := rows.Scan(values...); err != nil {
 		return nil, err
@@ -528,7 +529,8 @@ func oracleExplain(ctx context.Context, db *sql.DB, explainSQL string) (*query.Q
 	for planRows.Next() {
 		scanArgs := make([]interface{}, len(colNames))
 		for i := range scanArgs {
-			scanArgs[i] = new(interface{})
+			var v interface{}
+		scanArgs[i] = &v
 		}
 		if err := planRows.Scan(scanArgs...); err != nil {
 			continue

@@ -83,7 +83,7 @@ func (mongoConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instance
 	database := &schema.Database{Name: d.DBName}
 	total := len(collections)
 	for i, collName := range collections {
-		Logf(ctx, "[mongo] 采集集合 %d/%d: %s", i+1, total, collName)
+		Logf(ctx, "[mongo] collecting collection %d/%d: %s", i+1, total, collName)
 		table := collectMongoCollectionMeta(ctx, db, collName)
 		database.Tables = append(database.Tables, table)
 	}

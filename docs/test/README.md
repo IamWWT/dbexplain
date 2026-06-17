@@ -33,8 +33,8 @@ cd src
 BIN="../release/dbexplain"
 
 # === 执行测试 ===
-$BIN -env --json ...
-$BIN execute -env --db 1 "SELECT 1" --human
+$BIN --json ...
+$BIN execute --db 1 "SELECT 1" --human
 ```
 
 ### 注意事项
@@ -42,7 +42,7 @@ $BIN execute -env --db 1 "SELECT 1" --human
 | 场景 | 说明 |
 |------|------|
 | 需要 `.env.dbexplain` 的测试 | 确保 `src/` 下有 `.env.dbexplain`（优先级 2，击败全局加密配置） |
-| 无需外部数据库的测试 | 使用 DSN 直连（`-dsn "csv:///..."`），不依赖 `-env` |
+| 无需外部数据库的测试 | 使用 DSN 直连（`-dsn "csv:///..."`），不依赖配置文件自动加载 |
 | 测试文件引用 | 从 `src/` 出发，项目根目录路径加 `../` 前缀（如 `../testdata/qa/.env.qa-touch-csv`） |
 | 已安装系统级二进制 | 若 `dbexplain` 已在 PATH 中，可直接使用 `dbexplain` 代替 `$BIN` |
 | 仅编译检查（无需执行） | 使用 `go build ./...`（见 [01-environment.md](01-environment.md)） |
@@ -59,13 +59,13 @@ cd src && go build -tags "full" -o ../release/dbexplain ./cmd/dbexplain
 cd src && go test ./... -count=1
 
 # 3. Schema 采集（17 DSN 条目）
-cd src && $BIN -env --json | python3 -c "import json,sys;d=json.load(sys.stdin);print(f'{len(d[\"instances\"])} instances')"
+cd src && $BIN --json | python3 -c "import json,sys;d=json.load(sys.stdin);print(f'{len(d[\"instances\"])} instances')"
 
 # 4. 查询执行（抽样验证）
-cd src && $BIN execute -env --db 1 "SELECT 1" --human
+cd src && $BIN execute --db 1 "SELECT 1" --human
 
 # 5. Schema Diff 验证（如有 cache 需要）
-cd src && $BIN -env --cache /tmp/e2e.cache --json -o /tmp/e2e.json
+cd src && $BIN --cache /tmp/e2e.cache --json -o /tmp/e2e.json
 cd src && $BIN diff --cache /tmp/e2e.cache --list-versions
 ```
 
@@ -104,7 +104,7 @@ cd src && $BIN diff --cache /tmp/e2e.cache --list-versions
 
 > 详细搜索机制见 [docs/CONFIG_SEARCH.md](../CONFIG_SEARCH.md)。
 
-`-env` 模式按以下顺序查找配置文件（命中即停）：
+自动加载按以下顺序查找配置文件（命中即停）：
 
 ```
 优先级 1: $DBPROBE_ENV_FILE 环境变量
@@ -120,14 +120,14 @@ cd src && $BIN diff --cache /tmp/e2e.cache --list-versions
 **场景一：全局有加密配置，本地测试用明文 `.env`**
 
 本机 `~/.config/dbexplain/.env.dbexplain.enc` 优先级（5）高于 `CWD/.env`（6），
-导致从 `src/` 运行 `-env` 时全局配置抢先匹配，本地 `.env` 不被读取。
+导致从 `src/` 运行时全局配置抢先匹配，本地 `.env` 不被读取。
 
 **解决方案（三选一）：**
 
 | 方法 | 命令 | 优先级 | 适用场景 |
 |------|------|--------|---------|
 | 创建 `.env.dbexplain` | `cp .env .env.dbexplain` | 2（最高） | 开发测试，一劳永逸 |
-| 环境变量覆盖 | `DBPROBE_ENV_FILE=.env dbexplain -env` | 1（最高） | 临时切换，无需改文件 |
+| 环境变量覆盖 | `DBPROBE_ENV_FILE=.env dbexplain` | 1（最高） | 临时切换，无需改文件 |
 | 重命名全局配置 | `mv ~/.config/dbexplain/.env.dbexplain.enc ~/.config/dbexplain/.env.dbexplain.enc.bak` | — | 彻底禁用全局，影响所有项目 |
 
 **推荐开发测试方式：**
@@ -137,27 +137,27 @@ cd src
 
 # 方案 A：创建 .env.dbexplain（优先级 2，击败全局加密配置）
 cp .env .env.dbexplain
-dbexplain -env                    # 命中 .env.dbexplain ✓
-dbexplain execute -env --db 1 "SELECT 1"  # 同上 ✓
+dbexplain                    # 命中 .env.dbexplain ✓
+dbexplain execute --db 1 "SELECT 1"  # 同上 ✓
 
 # 方案 B：环境变量覆盖（不产生新文件）
-DBPROBE_ENV_FILE=.env dbexplain -env                    # 显式指定 ✓
-DBPROBE_ENV_FILE=.env dbexplain execute -env --db 1 "SELECT 1"  # ✓
+DBPROBE_ENV_FILE=.env dbexplain                    # 显式指定 ✓
+DBPROBE_ENV_FILE=.env dbexplain execute --db 1 "SELECT 1"  # ✓
 ```
 
 **场景二：多项目切换，每个项目有独立配置**
 
 ```bash
 # 每个项目目录下放 .env.dbexplain，自动命中（优先级 2）
-cd ~/project-a && dbexplain -env   # 用 project-a 的配置
-cd ~/project-b && dbexplain -env   # 用 project-b 的配置
+cd ~/project-a && dbexplain   # 用 project-a 的配置
+cd ~/project-b && dbexplain   # 用 project-b 的配置
 # 互不干扰，无需环境变量
 ```
 
 **场景三：专门测试某个 DSN**
 
 ```bash
-# 直接 -dsn 绕过文件搜索，完全不依赖 -env
+# 直接 -dsn 绕过文件搜索，完全不依赖配置文件自动加载
 dbexplain -dsn 'csv:///tmp/test.csv?label=test'
 dbexplain execute -dsn 'csv:///tmp/test.csv?label=test' "SELECT *"
 ```

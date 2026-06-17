@@ -32,14 +32,6 @@ import (
 	"github.com/IamWWT/dbexplain/internal/schema"
 )
 
-func preScanLanguage() string {
-	for i := 0; i < len(os.Args); i++ {
-		if os.Args[i] == "--language" && i+1 < len(os.Args) {
-			return os.Args[i+1]
-		}
-	}
-	return "zh"
-}
 
 // preScanSQLLogMaxLen scans os.Args for --sql-log-max-len before any FlagSet.Parse.
 // This allows it to work as a global flag across all subcommands (collect, execute, repl, check, etc.).
@@ -55,6 +47,17 @@ func preScanSQLLogMaxLen() {
 	}
 }
 
+// preScanVerbose scans os.Args for --verbose before any FlagSet.Parse.
+// Sets connector.Verbose = true so [DEBUG] logs are written to dbexplain.log.
+func preScanVerbose() {
+	for _, a := range os.Args {
+		if a == "--verbose" {
+			connector.Verbose = true
+			return
+		}
+	}
+}
+
 func hasHelpFlag() bool {
 	for _, a := range os.Args[1:] {
 		if a == "-h" || a == "--help" {
@@ -64,9 +67,141 @@ func hasHelpFlag() bool {
 	return false
 }
 
+// metricSnapshot carries collection metrics from goroutines to the collector via channel.
+type metricSnapshot struct {
+	label     string
+	kind      string
+	success   bool
+	duration  time.Duration
+	numDBs    int
+	numTables int
+	errMsg    string
+}
+
+// collectParams holds shared parameters for collectInstance.
+type collectParams struct {
+	metricCh      chan metricSnapshot
+	mu            *sync.Mutex
+	instances     *[]*schema.Instance
+	sample        bool
+	skipOpstats   bool
+	tableFilter   string
+	perDSNTimeout time.Duration
+	ctx           context.Context
+	wg            *sync.WaitGroup
+	sem           chan struct{}
+}
+
+// collectInstance runs collection for a single DSN inside a goroutine.
+// Handles DSN parsing, label resolution, context setup, timeout guard, metric reporting,
+// and mutex-protected result append — shared by the default collect and "dbexplain collect".
+func collectInstance(rawDSN string, idx int, p collectParams) {
+	defer p.wg.Done()
+	defer func() { <-p.sem }()
+
+	parsed, err := dsn.ParseDSN(rawDSN)
+	if err != nil {
+		log.Printf("invalid DSN: %v", config.SanitizeErr(err))
+		return
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("PANIC: collect %s: %v", parsed.Redacted(), r)
+		}
+	}()
+	label := parsed.Label
+	if label == "" {
+		label = fmt.Sprintf("db_%d", idx)
+	}
+	logger := log.New(log.Writer(), fmt.Sprintf("[label=%s] [kind=%s] ", label, parsed.Kind), log.LstdFlags)
+	collectCtx := connector.WithLogger(p.ctx, logger)
+	if p.sample {
+		collectCtx = connector.WithSample(collectCtx)
+	}
+	if p.skipOpstats {
+		collectCtx = connector.WithSkipOpstats(collectCtx)
+	}
+	if p.tableFilter != "" {
+		collectCtx = connector.WithTableFilter(collectCtx, []string{p.tableFilter})
+	}
+	collectCtx, cancel := context.WithTimeout(collectCtx, p.perDSNTimeout)
+	defer cancel()
+
+	logger.Printf("[采集中] %s", label)
+	start := time.Now()
+
+	// Run collection in sub-goroutine with timeout guard.
+	// lib/pq context cancellation is unreliable when the server is unresponsive
+	// (GaussDB Oracle compat mode is known to hang). A select+channel pattern
+	// ensures we don't hang forever — the sub-goroutine may leak but the
+	// process continues.
+	type collectOutcome struct {
+		inst *schema.Instance
+		err  error
+	}
+	outcome := make(chan collectOutcome, 1)
+	go func() {
+		subInst, subErr := connector.Collect(collectCtx, rawDSN)
+		outcome <- collectOutcome{subInst, subErr}
+	}()
+
+	var (
+		inst       *schema.Instance
+		collectErr error
+		elapsed    time.Duration
+	)
+	timeTimer := time.NewTimer(p.perDSNTimeout)
+	select {
+	case res := <-outcome:
+		inst = res.inst
+		collectErr = res.err
+		elapsed = time.Since(start)
+		timeTimer.Stop()
+	case <-timeTimer.C:
+		elapsed = time.Since(start)
+		logger.Printf("[采集超时] %s (超过 %v) — 连接/认证/查询任一阶段卡住，已跳过，不影响其他 label", label, p.perDSNTimeout)
+		p.metricCh <- metricSnapshot{label, parsed.Kind, false, elapsed, 0, 0, "timeout: collect hung"}
+		return
+	}
+
+	if collectErr != nil {
+		p.metricCh <- metricSnapshot{label, parsed.Kind, false, elapsed, 0, 0, config.SanitizeErr(collectErr).Error()}
+		logger.Printf("skip %s: %v", parsed.Redacted(), config.SanitizeErr(collectErr))
+		return
+	}
+
+	nTables := totalTables(inst)
+	nDBs := len(inst.Databases)
+	p.metricCh <- metricSnapshot{label, parsed.Kind, true, elapsed, nDBs, nTables, ""}
+
+	p.mu.Lock()
+	*p.instances = append(*p.instances, inst)
+	p.mu.Unlock()
+
+	logger.Printf("[完成] %s (%d 表) 耗时 %v", label, nTables, elapsed)
+}
+
+// buildKindCaps builds a kind→capabilities.Set map from collected instances.
+func buildKindCaps(instances []*schema.Instance) map[string]*capabilities.Set {
+	kindCaps := make(map[string]*capabilities.Set)
+	for _, inst := range instances {
+		if _, ok := kindCaps[inst.Kind]; ok {
+			continue
+		}
+		c, err := connector.GetConnector(inst.Kind)
+		if err != nil {
+			kindCaps[inst.Kind] = capabilities.NewSet()
+		} else {
+			kindCaps[inst.Kind] = capabilities.FromProvider(c)
+		}
+	}
+	return kindCaps
+}
+
 func main() {
 	// Pre-scan global flags before any FlagSet.Parse
 	preScanSQLLogMaxLen()
+	preScanVerbose()
 
 	// Intercept subcommands BEFORE flag.Parse
 	if len(os.Args) > 1 {
@@ -113,9 +248,6 @@ func main() {
 		return
 	}
 
-	userLang := preScanLanguage()
-
-	// Intercept -h/--help before flag.Parse for localized output
 	if hasHelpFlag() {
 		manual.PrintHelp()
 		return
@@ -125,7 +257,6 @@ func main() {
 	var dsnFlags []string
 	flag.Func("dsn", "...", func(s string) error { dsnFlags = append(dsnFlags, s); return nil })
 	configFile := flag.String("config", "", "JSON config file with array of DSNs")
-	useEnv := flag.Bool("env", false, "use .env file (prefix DB1=, DB2=...)")
 	includeFilter := flag.String("include", "", "comma-separated kinds/labels/env-keys to include (e.g. mysql,redis or DB1,DB3)")
 	labelFilter := flag.String("label", "", "filter by label (alias for -include)")
 	excludeFilter := flag.String("exclude", "", "comma-separated kinds/labels/env-keys to exclude (e.g. mongodb,qdrant or DB5)")
@@ -139,9 +270,6 @@ func main() {
 	perDSNTimeout := flag.Duration("timeout", 20*time.Second, "per-DSN collect timeout")
 	maxConcurrent := flag.Int("conn", 10, "max concurrent connections for schema collection")
 	showVersion := flag.Bool("version", false, "print version and exit")
-	showManual := flag.Bool("manual", false, "print comprehensive manual and exit")
-	language := flag.String("language", userLang, "manual language: zh (Chinese) or en (English)")
-	filterFlag := flag.String("filter", "", "filter --manual output by keyword (case-insensitive)")
 	metricsFlag := flag.Bool("metrics", false, "output collection metrics in Prometheus text format (to stderr)")
 	sample := flag.Bool("sample", false, "enable sample row fetching for comment inference (default: off)")
 	skipOpstats := flag.Bool("skip-opstats", false, "skip MySQL performance_schema op stats")
@@ -166,11 +294,6 @@ func main() {
 		fmt.Println("dbexplain", version.Version)
 		return
 	}
-	if *showManual {
-		fmt.Fprintln(os.Stderr, "Note: --manual is deprecated, use: dbexplain all")
-		manual.PrintManual(*language, *filterFlag)
-		return
-	}
 
 	var entries []config.DSNEntry
 	for _, raw := range dsnFlags {
@@ -178,14 +301,9 @@ func main() {
 	}
 
 	hasExplicitSource := len(dsnFlags) > 0 || *configFile != ""
-	shouldLoadEnv := *useEnv || !hasExplicitSource
-
-	if shouldLoadEnv {
+	if !hasExplicitSource {
 		configPath := config.FindConfigFile()
 		if configPath == "" {
-			if *useEnv {
-				log.Fatal("no config file found. Create .env.dbexplain (or .env.dbexplain.enc) in " + config.ConfigDirDisplay() + " or current directory.")
-			}
 			config.PrintNoConfigFound()
 			os.Exit(1)
 		}
@@ -193,7 +311,7 @@ func main() {
 		if err != nil {
 			log.Printf("warning: load config %s: %v", configPath, config.SanitizeErr(err))
 		} else {
-			if len(envEntries) == 0 && !*useEnv {
+			if len(envEntries) == 0 {
 				config.PrintEmptyConfigFound(configPath)
 				os.Exit(1)
 			}
@@ -218,11 +336,11 @@ func main() {
 	// Filter DSNs
 	entries = config.FilterDSNs(entries, *includeFilter, *excludeFilter, logDir)
 	if len(entries) == 0 {
-		log.Fatal("no DSNs provided (or all filtered out). Use -dsn, -env, or -config")
+		log.Fatal("no DSNs provided (or all filtered out). Use -dsn or -config")
 	}
 
-	// Print DSN mapping summary when loaded from .env
-	if *useEnv && !*jsonOut {
+	// Print DSN mapping summary
+	if len(entries) > 0 && !*jsonOut {
 		config.PrintDSNMapping(entries)
 	}
 
@@ -249,110 +367,27 @@ func main() {
 
 	// Metrics channel — goroutines send metrics instead of calling metricsCollector.Record
 	// (which blocks with sync.Mutex in goroutine scheduling contexts when lib/pq is hung).
-	type metricSnapshot struct {
-		label     string
-		kind      string
-		success   bool
-		duration  time.Duration
-		numDBs    int
-		numTables int
-		errMsg    string
-	}
 	metricCh := make(chan metricSnapshot, len(dsns))
 
 	// Semaphore to limit concurrent connections
 	sem := make(chan struct{}, *maxConcurrent)
 
 	for i, rawDSN := range dsns {
-		i := i
-		rawDSN := rawDSN
+		p := collectParams{
+			metricCh:      metricCh,
+			mu:            &mu,
+			instances:     &instances,
+			sample:        *sample,
+			skipOpstats:   *skipOpstats,
+			tableFilter:   *tableName,
+			perDSNTimeout: *perDSNTimeout,
+			ctx:           ctx,
+			wg:            &wg,
+			sem:           sem,
+		}
 		wg.Add(1)
-		sem <- struct{}{} // acquire (blocks if at capacity)
-		go func() {
-			defer wg.Done()
-			defer func() { <-sem }() // release
-			parsed, err := dsn.ParseDSN(rawDSN)
-			if err != nil {
-				log.Printf("invalid DSN: %v", config.SanitizeErr(err))
-				return
-			}
-			defer func() {
-				if r := recover(); r != nil {
-					log.Printf("PANIC: collect %s: %v", parsed.Redacted(), r)
-				}
-			}()
-			label := parsed.Label
-			if label == "" {
-				label = fmt.Sprintf("db_%d", i)
-			}
-			// All goroutine logs go to the shared dbexplain.log with instance prefix.
-			logger := log.New(log.Writer(), fmt.Sprintf("[label=%s] [kind=%s] ", label, parsed.Kind), log.LstdFlags)
-			collectCtx := connector.WithLogger(ctx, logger)
-			if *sample {
-				collectCtx = connector.WithSample(collectCtx)
-			}
-			if *skipOpstats {
-				collectCtx = connector.WithSkipOpstats(collectCtx)
-			}
-			if *tableName != "" {
-				collectCtx = connector.WithTableFilter(collectCtx, []string{*tableName})
-			}
-			collectCtx, cancel := context.WithTimeout(collectCtx, *perDSNTimeout)
-			defer cancel()
-
-			logger.Printf("[采集中] %s", label)
-			start := time.Now()
-
-			// Run collection in sub-goroutine with timeout guard.
-			// lib/pq context cancellation is unreliable when the server is unresponsive
-			// (GaussDB Oracle compat mode is known to hang). A select+channel pattern
-			// ensures we don't hang forever — the sub-goroutine may leak but the
-			// process continues.
-			type collectOutcome struct {
-				inst *schema.Instance
-				err  error
-			}
-			outcome := make(chan collectOutcome, 1)
-			go func() {
-				subInst, subErr := connector.Collect(collectCtx, rawDSN)
-				outcome <- collectOutcome{subInst, subErr}
-			}()
-
-			var (
-				inst    *schema.Instance
-				elapsed time.Duration
-			)
-			// Use time.NewTimer for reliable timeout (see handler.go for rationale).
-			timeTimer := time.NewTimer(*perDSNTimeout)
-			select {
-			case res := <-outcome:
-				inst = res.inst
-				err = res.err // err 来自外层 parsed,err:=ParseDSN()—已判空，可安全复用
-				elapsed = time.Since(start)
-				timeTimer.Stop()
-			case <-timeTimer.C:
-				elapsed = time.Since(start)
-				logger.Printf("[采集超时] %s (超过 %v) — 连接/认证/查询任一阶段卡住，已跳过，不影响其他 label", label, *perDSNTimeout)
-				metricCh <- metricSnapshot{label, parsed.Kind, false, elapsed, 0, 0, "timeout: collect hung"}
-				return
-			}
-
-			if err != nil {
-				metricCh <- metricSnapshot{label, parsed.Kind, false, elapsed, 0, 0, config.SanitizeErr(err).Error()}
-				logger.Printf("skip %s: %v", parsed.Redacted(), err)
-				return
-			}
-
-			nTables := totalTables(inst)
-			nDBs := len(inst.Databases)
-			metricCh <- metricSnapshot{label, parsed.Kind, true, elapsed, nDBs, nTables, ""}
-
-			mu.Lock()
-			instances = append(instances, inst)
-			mu.Unlock()
-
-			logger.Printf("[完成] %s (%d 表) 耗时 %v", label, nTables, elapsed)
-		}()
+		sem <- struct{}{}
+		go collectInstance(rawDSN, i, p)
 	}
 
 	wg.Wait()
@@ -367,19 +402,7 @@ func main() {
 		log.Printf("[collect-summary] 全部采集完成，总耗时 %v", time.Since(startAll))
 	}
 
-	// Build capability map by database kind
-	kindCaps := make(map[string]*capabilities.Set)
-	for _, inst := range instances {
-		if _, ok := kindCaps[inst.Kind]; ok {
-			continue
-		}
-		c, err := connector.GetConnector(inst.Kind)
-		if err != nil {
-			kindCaps[inst.Kind] = capabilities.NewSet()
-		} else {
-			kindCaps[inst.Kind] = capabilities.FromProvider(c)
-		}
-	}
+	kindCaps := buildKindCaps(instances)
 
 	universe := &schema.Universe{Instances: instances}
 	result := analyze.Analyze(universe, kindCaps)
@@ -629,7 +652,6 @@ func handleCollect(args []string) {
 	var dsnFlags []string
 	fs.Func("dsn", "...", func(s string) error { dsnFlags = append(dsnFlags, s); return nil })
 	configFile := fs.String("config", "", "JSON config file with array of DSNs")
-	useEnv := fs.Bool("env", false, "use .env file (prefix DB1=, DB2=...)")
 	includeFilter := fs.String("include", "", "comma-separated kinds/labels/env-keys to include")
 	labelFilter := fs.String("label", "", "filter by label (alias for -include)")
 	excludeFilter := fs.String("exclude", "", "comma-separated kinds/labels/env-keys to exclude")
@@ -668,14 +690,9 @@ func handleCollect(args []string) {
 	}
 
 	hasExplicitSource := len(dsnFlags) > 0 || *configFile != ""
-	shouldLoadEnv := *useEnv || !hasExplicitSource
-
-	if shouldLoadEnv {
+	if !hasExplicitSource {
 		configPath := config.FindConfigFile()
 		if configPath == "" {
-			if *useEnv {
-				log.Fatal("no config file found. Create .env.dbexplain (or .env.dbexplain.enc) in " + config.ConfigDirDisplay() + " or current directory.")
-			}
 			config.PrintNoConfigFound()
 			os.Exit(1)
 		}
@@ -683,7 +700,7 @@ func handleCollect(args []string) {
 		if err != nil {
 			log.Printf("warning: load config %s: %v", configPath, config.SanitizeErr(err))
 		} else {
-			if len(envEntries) == 0 && !*useEnv {
+			if len(envEntries) == 0 {
 				config.PrintEmptyConfigFound(configPath)
 				os.Exit(1)
 			}
@@ -706,10 +723,10 @@ func handleCollect(args []string) {
 
 	entries = config.FilterDSNs(entries, *includeFilter, *excludeFilter, logDir)
 	if len(entries) == 0 {
-		log.Fatal("no DSNs provided (or all filtered out). Use -dsn, -env, or -config")
+		log.Fatal("no DSNs provided (or all filtered out). Use -dsn or -config")
 	}
 
-	if *useEnv && !*jsonOut {
+	if len(entries) > 0 && !*jsonOut {
 		config.PrintDSNMapping(entries)
 	}
 
@@ -734,109 +751,26 @@ func handleCollect(args []string) {
 
 	// Metrics channel — goroutines send metrics instead of calling metricsCollector.Record
 	// (which blocks with sync.Mutex on Go 1.26 in certain goroutine scheduling contexts).
-	type metricSnapshot struct {
-		label     string
-		kind      string
-		success   bool
-		duration  time.Duration
-		numDBs    int
-		numTables int
-		errMsg    string
-	}
 	metricCh := make(chan metricSnapshot, len(dsns))
 
 	sem := make(chan struct{}, *maxConcurrent)
 
 	for i, rawDSN := range dsns {
-		i := i
-		rawDSN := rawDSN
+		p := collectParams{
+			metricCh:      metricCh,
+			mu:            &mu,
+			instances:     &instances,
+			sample:        *sample,
+			skipOpstats:   *skipOpstats,
+			tableFilter:   *hcTableName,
+			perDSNTimeout: *perDSNTimeout,
+			ctx:           ctx,
+			wg:            &wg,
+			sem:           sem,
+		}
 		wg.Add(1)
 		sem <- struct{}{}
-		go func() {
-			defer wg.Done()
-			defer func() { <-sem }()
-			parsed, err := dsn.ParseDSN(rawDSN)
-			if err != nil {
-				log.Printf("invalid DSN: %v", config.SanitizeErr(err))
-				return
-			}
-			defer func() {
-				if r := recover(); r != nil {
-					log.Printf("PANIC: collect %s: %v", parsed.Redacted(), r)
-				}
-			}()
-			label := parsed.Label
-			if label == "" {
-				label = fmt.Sprintf("db_%d", i)
-			}
-			// All goroutine logs go to the shared dbexplain.log with instance prefix.
-			logger := log.New(log.Writer(), fmt.Sprintf("[label=%s] [kind=%s] ", label, parsed.Kind), log.LstdFlags)
-			collectCtx := connector.WithLogger(ctx, logger)
-			if *sample {
-				collectCtx = connector.WithSample(collectCtx)
-			}
-			if *skipOpstats {
-				collectCtx = connector.WithSkipOpstats(collectCtx)
-			}
-			if *hcTableName != "" {
-				collectCtx = connector.WithTableFilter(collectCtx, []string{*hcTableName})
-			}
-			collectCtx, cancel := context.WithTimeout(collectCtx, *perDSNTimeout)
-			defer cancel()
-
-			logger.Printf("[采集中] %s", label)
-			start := time.Now()
-
-			// Run collection in sub-goroutine with timeout guard.
-			// lib/pq context cancellation is unreliable when the server is unresponsive
-			// (GaussDB Oracle compat mode is known to hang). A select+channel pattern
-			// ensures we don't hang forever — the sub-goroutine may leak but the
-			// process continues.
-			type collectOutcome struct {
-				inst *schema.Instance
-				err  error
-			}
-			outcome := make(chan collectOutcome, 1)
-			go func() {
-				subInst, subErr := connector.Collect(collectCtx, rawDSN)
-				outcome <- collectOutcome{subInst, subErr}
-			}()
-
-			var (
-				inst    *schema.Instance
-				elapsed time.Duration
-			)
-			// Use time.NewTimer for reliable timeout (see handler.go for rationale).
-			timeTimer := time.NewTimer(*perDSNTimeout)
-			select {
-			case res := <-outcome:
-				inst = res.inst
-				err = res.err // err 来自外层 parsed,err:=ParseDSN()—已判空，可安全复用
-				elapsed = time.Since(start)
-				timeTimer.Stop()
-			case <-timeTimer.C:
-				elapsed = time.Since(start)
-				logger.Printf("[采集超时] %s (超过 %v) — 连接/认证/查询任一阶段卡住，已跳过，不影响其他 label", label, *perDSNTimeout)
-				metricCh <- metricSnapshot{label, parsed.Kind, false, elapsed, 0, 0, "timeout: collect hung"}
-				return
-			}
-
-			if err != nil {
-				metricCh <- metricSnapshot{label, parsed.Kind, false, elapsed, 0, 0, config.SanitizeErr(err).Error()}
-				logger.Printf("skip %s: %v", parsed.Redacted(), err)
-				return
-			}
-
-			nTables := totalTables(inst)
-			nDBs := len(inst.Databases)
-			metricCh <- metricSnapshot{label, parsed.Kind, true, elapsed, nDBs, nTables, ""}
-
-			mu.Lock()
-			instances = append(instances, inst)
-			mu.Unlock()
-
-			logger.Printf("[完成] %s (%d 表) 耗时 %v", label, nTables, elapsed)
-		}()
+		go collectInstance(rawDSN, i, p)
 	}
 
 	wg.Wait()
@@ -851,18 +785,7 @@ func handleCollect(args []string) {
 		log.Printf("[collect-summary] 全部采集完成，总耗时 %v", time.Since(startAll))
 	}
 
-	kindCaps := make(map[string]*capabilities.Set)
-	for _, inst := range instances {
-		if _, ok := kindCaps[inst.Kind]; ok {
-			continue
-		}
-		c, err := connector.GetConnector(inst.Kind)
-		if err != nil {
-			kindCaps[inst.Kind] = capabilities.NewSet()
-		} else {
-			kindCaps[inst.Kind] = capabilities.FromProvider(c)
-		}
-	}
+	kindCaps := buildKindCaps(instances)
 
 	universe := &schema.Universe{Instances: instances}
 	result := analyze.Analyze(universe, kindCaps)

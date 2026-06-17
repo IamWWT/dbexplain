@@ -90,10 +90,10 @@ dbexplain execute --dsn "duckdb:///tmp/analytics.db?label=my-duckdb" \
 
 ```bash
 # 通过 label 引用
-dbexplain execute -env --dsl "SELECT * FROM @my-duckdb.users LIMIT 5" --human
+dbexplain execute --dsl "SELECT * FROM @my-duckdb.users LIMIT 5" --human
 
 # 联邦查询：DuckDB JOIN PostgreSQL
-dbexplain execute -env --dsl \
+dbexplain execute --dsl \
   "SELECT u.name, o.amount
    FROM @my-duckdb.users u
    JOIN @my-pg.orders o ON u.id = o.user_id

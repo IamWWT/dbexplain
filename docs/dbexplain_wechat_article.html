@@ -554,7 +554,7 @@ No. EnvKey Label              Kind       Host:Port             Syntax  Connect
 1   DB1   my-mysql            mysql      192.168.1.100:3306   ✅ OK   ✅ OK 42ms
 2   DB2   my-prom             prometheus 192.168.0.127:9090   ✅ OK   ✅ OK 156ms</pre>
 
-<p>支持 <code>--dsn</code>、<code>--config</code>、<code>--timeout</code>、<code>--label</code> 参数，密码自动脱敏，退出码反映失败项。v0.1.7 将 <code>--env</code> 默认值改为 <code>true</code>，无需显式传参即可自动加载配置。</p>
+<p>支持 <code>--dsn</code>、<code>--config</code>、<code>--timeout</code>、<code>--label</code> 参数，密码自动脱敏，退出码反映失败项。从 v0.1.8 起已彻底移除 <code>--env</code> 参数，始终自动加载配置文件。</p>
 
 <div class="divider">安全加固</div>
 

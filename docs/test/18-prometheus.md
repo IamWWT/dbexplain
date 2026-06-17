@@ -108,7 +108,7 @@ $BIN execute -dsn 'prometheus://192.168.0.127:9440?label=my-prom' 'DROP TABLE up
 ### T10: 向后兼容
 
 ```bash
-$BIN -env --json
+$BIN --json
 ```
 
 验证:
@@ -116,10 +116,10 @@ $BIN -env --json
 - prometheus DSN (DB16) 新增且在 instances 列表中
 - 所有 16 DSN metrics 全部 success
 
-### T11: -env 模式下 Prometheus 采集
+### T11: 自动加载下 Prometheus 采集
 
 ```bash
-$BIN -env --include my-prom --json
+$BIN --include my-prom --json
 ```
 
 验证:
@@ -194,7 +194,7 @@ $BIN execute -dsn 'prometheus://192.168.0.127:9440?label=my-prom' \
 ### T17: DSL 联邦 — Prometheus + MySQL JOIN
 
 ```bash
-$BIN execute -env --dsl "
+$BIN execute --dsl "
   SELECT p.instance, p.hostip, p.job, p.value, i.product, i.subproduct
   FROM @my-prom.up p
   JOIN @aiops-mysql.iplist i ON p.hostip = i.hostip
@@ -311,7 +311,7 @@ $BIN execute -dsn 'prometheus://192.168.0.127:9440?label=my-prom' \
 ### T27: DSL 联邦 — promql() + MySQL JOIN
 
 ```bash
-$BIN execute -env --dsl "
+$BIN execute --dsl "
   SELECT p.instance, p.value, i.product, i.subproduct
   FROM @my-prom.promql(topk(10, rate(node_cpu_seconds_total[5m]))) p
   JOIN @aiops-mysql.iplist i ON p.hostip = i.hostip
@@ -327,7 +327,7 @@ $BIN execute -env --dsl "
 ### T28: DSL 联邦 — promql() + 普通 Prometheus 指标 + MySQL 三源 JOIN
 
 ```bash
-$BIN execute -env --dsl "
+$BIN execute --dsl "
   SELECT p.instance, p.value AS cpu_system_pct, u.value AS up_status, i.product
   FROM @my-prom.promql(rate(node_cpu_seconds_total{mode=\"system\"}[5m]) / rate(node_cpu_seconds_total[5m]) * 100) p
   JOIN @my-prom.up u ON p.instance = u.instance AND u.value = 1
@@ -345,7 +345,7 @@ $BIN execute -env --dsl "
 ### T18: DSL 联邦 — ORDER BY + LIMIT
 
 ```bash
-$BIN execute -env --dsl "
+$BIN execute --dsl "
   SELECT p.instance, p.hostip, p.value, i.product
   FROM @my-prom.up p
   JOIN @aiops-mysql.iplist i ON p.hostip = i.hostip
@@ -420,7 +420,7 @@ for inst in data.get('instances', []):
 | T8 | JSON 输出格式 | **PASS** | 合法 JSON ✓ |
 | T9 | 安全策略兼容 | **PASS** | 原生命令校验 ✓ |
 | T10 | 向后兼容 | **PASS** | 16/16 成功 ✓ |
-| T11 | -env 过滤采集 | **PASS** | 单实例过滤 ✓ |
+| T11 | 自动加载过滤采集 | **PASS** | 单实例过滤 ✓ |
 | T12 | REPL 非 DSL PromQL | **PASS** | 3 rows, clean exit ✓ |
 | T13 | REPL DSL 模式 | **PASS** | DSL→PromQL 编译正确 ✓ |
 | T14 | DSL 单源 ORDER BY | **PASS** | — |

@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.1.8 (2026-06-17) — `-env` Flag Completely Removed (Breaking Change)
+
+### 💥 Breaking: `-env` Flag Removed
+
+- **`-env` flag removed from all subcommands**: The `-env` flag was already partially redundant — `shouldLoadEnv := *useEnv || !hasExplicitSource` already auto-loaded `.env.dbexplain` when no `-dsn`/`-config` was specified. Now auto-loading is the only behavior path.
+- **`--env=false` no longer supported**: `dbexplain check --env=false` (the only way to skip .env auto-loading) is no longer available. Use `-dsn` to specify DSNs directly when needed.
+- **Affected commands**: `dbexplain`, `collect`, `execute`, `repl`, `list`, `check`, `encrypt`, `diff`
+- **Scope**: 7 source files + 38 documentation files (~200 `-env` references removed)
+- **Migration**: Remove `-env` from all command invocations. The tool now auto-loads `.env.dbexplain` by default with no extra flags needed.
+- **ISSUE-098**: Refactoring task tracking.
+
 ## v0.1.7 (2026-06-16) — Prometheus Meta Table Rows + CTE Write Detection Hardening + GaussDB Oracle-Compatible Mode Adaptation
 
 ### ✨ Prometheus Meta Table Rows

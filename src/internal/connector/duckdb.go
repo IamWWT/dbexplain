@@ -125,7 +125,7 @@ func (duckdbConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instanc
 
 	total := len(tableNames)
 	for i, tn := range tableNames {
-		Logf(ctx, "[duckdb] 采集表 %d/%d: %s", i+1, total, tn)
+		Logf(ctx, "[duckdb] collecting table %d/%d: %s", i+1, total, tn)
 		t, err := collectDuckDBTable(ctx, db, tn, d.Redacted())
 		if err != nil {
 			Logf(ctx, "[duckdb] skip table %s: %v", tn, err)
@@ -313,7 +313,8 @@ func fetchDuckDBSampleRow(ctx context.Context, db *sql.DB, table string) (map[st
 	}
 	values := make([]interface{}, len(columns))
 	for i := range values {
-		values[i] = new(interface{})
+		var v interface{}
+		values[i] = &v
 	}
 	if err := rows.Scan(values...); err != nil {
 		return nil, err

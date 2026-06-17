@@ -136,7 +136,7 @@ INPUT ──→ COLLECT ──→ ANALYZE ──→ OUTPUT
 | `dbexplain execute` | `cmd/dbexplain/execute.go` → `handleExecute()` | 只读查询执行（原生 SQL + `--dsl` DSL 模式） |
 | `dbexplain repl` | `cmd/dbexplain/repl.go` → `handleREPL()` | 交互式 REPL 查询模式 |
 | `dbexplain collect` | `cmd/dbexplain/main.go` → `handleCollect()` | 显式 Schema 采集子命令 |
-| `dbexplain diff` | `cmd/dbexplain/diff.go` → `handleDiff()` | Schema 变更对比 |
+| `dbexplain diff` | `cmd/dbexplain/main.go` → `handleDiff()` | Schema 变更对比 |
 | `dbexplain list` | `internal/list/handler.go` → `handleList()` | 列出已配置 DSN |
 | `dbexplain check` | `internal/check/handler.go` → `Handle()` | 配置验证+连通性检测 |
 | `dbexplain all` | `internal/manual/` → `handleManual()` | 全部参考手册 |
@@ -168,6 +168,11 @@ INPUT ──→ COLLECT ──→ ANALYZE ──→ OUTPUT
 | `docs/test/16-duckdb.md` | DuckDB 连接器 20 项 | `connector/duckdb.go` |
 | `docs/test/17-metrics.md` | 采集指标收集 5 项 | `metrics/collect.go` |
 | `docs/test/18-prometheus.md` | Prometheus 连接器 11 项 | `connector/prometheus.go`, `dsl/` |
+| `docs/test/19-oracle-hive.md` | Oracle + Hive 连接器 | `connector/oracle.go`, `connector/hive.go` |
+| `docs/test/20-cte-write-detection.md` | CTE 写检测加固 | `sqlguard/sqlguard.go` |
+| `docs/test/21-check-command.md` | check 子命令 | `internal/check/handler.go` |
+| `docs/test/22-performance-optimization.md` | Schema 采集性能优化 | `connector/postgres.go`, `connector/mysql.go`, `connector/csv.go` |
+| `docs/test/23-password-special-chars.md` | DSN 密码特殊字符 | `internal/dsn/dsn.go` |
 
 ---
 
@@ -184,7 +189,7 @@ INPUT ──→ COLLECT ──→ ANALYZE ──→ OUTPUT
 | 版本号未更新 | `CHANGELOG.md` | `main.go:33`, `build.sh:25` |
 | 构建失败 | `DEPLOY.md` | `build.sh` |
 | `--human` 不生效 | `README.md` → execute | `cmd/dbexplain/execute.go:38-42` (fs.Args 扫描) |
-| `-env` 找不到配置 | `CONFIG_SEARCH.md` | `cmd/dbexplain/main.go` → `findConfigFile()` |
+| 找不到配置（自动加载） | `CONFIG_SEARCH.md` | `cmd/dbexplain/main.go` → `findConfigFile()` |
 | 加密文件无法解密 | `CONFIG_SEARCH.md` | `crypto/crypto.go`, `fingerprint*.go` |
 | 日志找不到 | `README.md` → `--log-dir` | `cmd/dbexplain/main.go` → `resolveLogDir()` |
 | Issue/修复记录 | `issues.json` | 对应版本的 `CHANGELOG.md` |

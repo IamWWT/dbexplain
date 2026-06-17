@@ -14,7 +14,6 @@ import (
 // Handle processes the list subcommand.
 func Handle(args []string) {
 	fs := flag.NewFlagSet("list", flag.ExitOnError)
-	envMode := fs.Bool("env", true, "Load from .env config file")
 	dsnFlag := fs.String("dsn", "", "Direct DSN string (repeatable)")
 	configFile := fs.String("config", "", "JSON config file path")
 	fs.Parse(args)
@@ -32,7 +31,7 @@ func Handle(args []string) {
 		entries = append(entries, config.DSNEntry{Raw: *dsnFlag})
 	}
 
-	if *envMode && *configFile == "" && *dsnFlag == "" {
+	if *configFile == "" && *dsnFlag == "" {
 		configPath = config.FindConfigFile()
 		if configPath == "" {
 			fmt.Fprintln(os.Stderr, "  no config file found. Create .env.dbexplain (or .env.dbexplain.enc) in",
@@ -53,7 +52,7 @@ func Handle(args []string) {
 	}
 
 	if len(entries) == 0 {
-		fmt.Fprintln(os.Stderr, "  no DSNs found. Use -env, -dsn, or -config.")
+		fmt.Fprintln(os.Stderr, "  no DSNs found. Use -dsn or -config.")
 		if configPath != "" {
 			fmt.Fprintf(os.Stderr, "  Config file %s has no active DSN connections.\n", config.DescribeConfigSource(configPath))
 			fmt.Fprintf(os.Stderr, "  Edit this file to add your connections, or copy the template from\n")

@@ -111,10 +111,10 @@ func Handle(args []string) {
 
 	if password != "" {
 		fmt.Fprintf(os.Stderr, "Encrypted with machine fingerprint + password: %s\n", dstPath)
-		fmt.Fprintf(os.Stderr, "Save your password to %s.encryption_key before running dbexplain -env.\n", config.ConfigDirDisplay())
+		fmt.Fprintf(os.Stderr, "Save your password to %s.encryption_key before running dbexplain.\n", config.ConfigDirDisplay())
 	} else {
 		fmt.Fprintf(os.Stderr, "Encrypted with machine fingerprint: %s\n", dstPath)
 		fmt.Fprintf(os.Stderr, "File can only be decrypted on this machine.\n")
 	}
-	fmt.Fprintf(os.Stderr, "Place this file in %s (or CWD) and run: dbexplain -env\n", config.ConfigDirDisplay())
+	fmt.Fprintf(os.Stderr, "Place this file in %s (or CWD) and run: dbexplain\n", config.ConfigDirDisplay())
 }

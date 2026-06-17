@@ -76,17 +76,17 @@ DB2_MASK_COLUMNS=email=REDACTED,phone=HIDDEN
 
 ```bash
 # 拦截
-dbexplain execute -env --db 1 "SELECT * FROM user_credentials"
+dbexplain execute --db 1 "SELECT * FROM user_credentials"
 # → ACCESS_DENIED: table "user_credentials" is not allowed for query
 
-dbexplain execute -env --db 1 "SELECT users.password_hash FROM users"
+dbexplain execute --db 1 "SELECT users.password_hash FROM users"
 # → ACCESS_DENIED: column "users.password_hash" is not allowed for query
 
-dbexplain execute -env --db 1 "DROP TABLE users"
+dbexplain execute --db 1 "DROP TABLE users"
 # → ACCESS_DENIED: query matches denied statement pattern "DROP TABLE"
 
 # 放行
-dbexplain execute -env --db 1 "SELECT id, name FROM users"
+dbexplain execute --db 1 "SELECT id, name FROM users"
 # → 正常返回数据
 ```
 
@@ -102,14 +102,14 @@ dbexplain execute -env --db 1 "SELECT id, name FROM users"
 
 ```bash
 # 拦截
-dbexplain execute -env --label video-pg "SELECT * FROM employees"
+dbexplain execute --label video-pg "SELECT * FROM employees"
 # → ACCESS_DENIED: table "employees" is not allowed for query
 
-dbexplain execute -env --label video-pg "SELECT employees.salary FROM employees"
+dbexplain execute --label video-pg "SELECT employees.salary FROM employees"
 # → ACCESS_DENIED: column "employees.salary" is not allowed for query
 
 # 放行
-dbexplain execute -env --label video-pg "SELECT id, name FROM public.cameras"
+dbexplain execute --label video-pg "SELECT id, name FROM public.cameras"
 # → 正常返回数据
 ```
 
@@ -131,11 +131,11 @@ dbexplain execute -env --label video-pg "SELECT id, name FROM public.cameras"
 
 ```bash
 # 拦截
-dbexplain execute -env --label aiops-sqlite "SELECT * FROM audit_log"
+dbexplain execute --label aiops-sqlite "SELECT * FROM audit_log"
 # → ACCESS_DENIED: table "audit_log" is not allowed for query
 
 # 放行
-dbexplain execute -env --label aiops-sqlite "SELECT name FROM sqlite_master"
+dbexplain execute --label aiops-sqlite "SELECT name FROM sqlite_master"
 # → 正常返回
 ```
 
@@ -151,7 +151,7 @@ dbexplain execute -env --label aiops-sqlite "SELECT name FROM sqlite_master"
 
 ```bash
 # 拦截
-dbexplain execute -env --db 2 "SELECT * FROM ai_obs.otel_traces"
+dbexplain execute --db 2 "SELECT * FROM ai_obs.otel_traces"
 # → ACCESS_DENIED: table "otel_traces" is not allowed for query
 ```
 
@@ -169,7 +169,7 @@ Elasticsearch 通过 `_sql` REST 端点使用标准 SQL，因此走 SQL 校验�
 
 ```bash
 # 拦截
-dbexplain execute -env --label es-test "SELECT * FROM runbooks"
+dbexplain execute --label es-test "SELECT * FROM runbooks"
 # → ACCESS_DENIED: table "runbooks" is not allowed for query
 ```
 
@@ -185,15 +185,15 @@ dbexplain execute -env --label es-test "SELECT * FROM runbooks"
 
 ```bash
 # 拦截（集合级别）
-dbexplain execute -env --label mongo-test '{"find":"system.users","filter":{}}'
+dbexplain execute --label mongo-test '{"find":"system.users","filter":{}}'
 # → ACCESS_DENIED: table "system.users" is not allowed for query
 
 # 拦截（语句级别）
-dbexplain execute -env --label mongo-test '{"aggregate":"system.profile","pipeline":[]}'
+dbexplain execute --label mongo-test '{"aggregate":"system.profile","pipeline":[]}'
 # → ACCESS_DENIED: table "system.profile" is not allowed for query
 
 # 放行
-dbexplain execute -env --label mongo-test '{"find":"user","filter":{},"limit":5}'
+dbexplain execute --label mongo-test '{"find":"user","filter":{},"limit":5}'
 # → 正常返回数据
 ```
 
@@ -209,11 +209,11 @@ dbexplain execute -env --label mongo-test '{"find":"user","filter":{},"limit":5}
 
 ```bash
 # 拦截（集合级别）
-dbexplain execute -env --label qdrant-test '{"scroll":"internal_docs","limit":10}'
+dbexplain execute --label qdrant-test '{"scroll":"internal_docs","limit":10}'
 # → ACCESS_DENIED: table "internal_docs" is not allowed for query
 
 # 放行
-dbexplain execute -env --label qdrant-test '{"count":"public_collection"}'
+dbexplain execute --label qdrant-test '{"count":"public_collection"}'
 # → 正常返回
 ```
 
@@ -236,23 +236,23 @@ dbexplain execute -env --label qdrant-test '{"count":"public_collection"}'
 
 ```bash
 # 拦截（key 级别 - 通配符）
-dbexplain execute -env --label openim-redis 'GET CONVERSATION:test123'
+dbexplain execute --label openim-redis 'GET CONVERSATION:test123'
 # → ACCESS_DENIED: table "CONVERSATION:*" is not allowed for query
 
 # 拦截（key 级别 - 精确匹配）
-dbexplain execute -env --label openim-redis 'GET secret_key'
+dbexplain execute --label openim-redis 'GET secret_key'
 # → ACCESS_DENIED: table "secret_key" is not allowed for query
 
 # 拦截（语句级别）
-dbexplain execute -env --label openim-redis 'FLUSHALL'
+dbexplain execute --label openim-redis 'FLUSHALL'
 # → ACCESS_DENIED: query matches denied statement pattern "FLUSHALL"
 
 # 放行（key 不在禁用列表）
-dbexplain execute -env --label openim-redis 'GET user:1001'
+dbexplain execute --label openim-redis 'GET user:1001'
 # → 正常返回
 
 # 放行（无 key 命令）
-dbexplain execute -env --label openim-redis 'PING'
+dbexplain execute --label openim-redis 'PING'
 # → PONG
 ```
 
@@ -283,14 +283,14 @@ dbexplain execute -env --label openim-redis 'PING'
 
 ```bash
 # 屏蔽（值被替换，查询正常返回）
-MASK_COLUMNS=password_hash=*** dbexplain execute -env --label mysql \
+MASK_COLUMNS=password_hash=*** dbexplain execute --label mysql \
   'SELECT id, name, password_hash FROM users LIMIT 3'
 # → id | name    | password_hash
 #     1  | Alice   | ***
 #     2  | Bob     | ***
 
 # 与非 SQL 数据库同样生效
-MASK_COLUMNS=ssn=*** dbexplain execute -env --label mongo \
+MASK_COLUMNS=ssn=*** dbexplain execute --label mongo \
   '{"find":"users","filter":{},"limit":2}'
 # → _id   | ssn  | name
 #     abc  | ***  | Alice

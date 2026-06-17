@@ -277,10 +277,10 @@ func classifySource(kind string) SourceType {
 
 ```bash
 # DuckDB 数据源 DSL 查询
-dbexplain execute -env --label my-duckdb --dsl "SELECT * FROM @my-duckdb.users LIMIT 5" --human
+dbexplain execute --label my-duckdb --dsl "SELECT * FROM @my-duckdb.users LIMIT 5" --human
 
 # DSL 联邦查询（DuckDB ↔ MySQL）
-dbexplain execute -env --dsl "
+dbexplain execute --dsl "
   SELECT * FROM @duck-db.sales
   JOIN @mysql-db.users ON sales.user_id = users.id
 " --human

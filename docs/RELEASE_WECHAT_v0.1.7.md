@@ -260,7 +260,7 @@ dbexplain -dsn 'prometheus://your-host:9090?label=prom' --json \
 dbexplain -dsn 'gaussdb://user:pass@host:25308/db?label=gauss-db&sslmode=disable' --human
 
 # 3. 联邦查询：Prometheus + MySQL + 文件
-dbexplain execute -env --dsl "
+dbexplain execute --dsl "
   SELECT p.instance, p.value, i.product, c.region
   FROM @my-prom.up p
   JOIN @aiops-mysql.iplist i ON p.hostip = i.hostip
@@ -268,7 +268,7 @@ dbexplain execute -env --dsl "
 " --human
 
 # 4. 检查配置连通性
-dbexplain check -env
+dbexplain check
 ```
 
 ---

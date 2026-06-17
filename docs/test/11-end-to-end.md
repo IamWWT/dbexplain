@@ -17,7 +17,7 @@ BIN="../release/dbexplain"
 ## 11.1 全部数据源 Schema 采集
 
 ```bash
-$BIN -env -timeout 60s --json 2>/dev/null | python3 -c "
+$BIN -timeout 60s --json 2>/dev/null | python3 -c "
 import json, sys
 data = json.load(sys.stdin)
 if isinstance(data, list):
@@ -52,31 +52,31 @@ Total data sources collected: 17
 
 ```bash
 # SQL 数据库
-echo "=== MySQL ===" && $BIN execute -env --db 1 "SELECT 1" --human 2>/dev/null
-echo "=== PostgreSQL ===" && $BIN execute -env --db 6 "SELECT 1" --human 2>/dev/null
-echo "=== ClickHouse ===" && $BIN execute -env --db 2 "SELECT 1" --human 2>/dev/null
-echo "=== SQLite (rules) ===" && $BIN execute -env --db 3 "SELECT 1" --human 2>/dev/null
-echo "=== SQLite (veinmap) ===" && $BIN execute -env --db 10 "SELECT 1" --human 2>/dev/null
-echo "=== Elasticsearch ===" && $BIN execute -env --db 5 "SHOW TABLES" --human 2>/dev/null
+echo "=== MySQL ===" && $BIN execute --db 1 "SELECT 1" --human 2>/dev/null
+echo "=== PostgreSQL ===" && $BIN execute --db 6 "SELECT 1" --human 2>/dev/null
+echo "=== ClickHouse ===" && $BIN execute --db 2 "SELECT 1" --human 2>/dev/null
+echo "=== SQLite (rules) ===" && $BIN execute --db 3 "SELECT 1" --human 2>/dev/null
+echo "=== SQLite (veinmap) ===" && $BIN execute --db 10 "SELECT 1" --human 2>/dev/null
+echo "=== Elasticsearch ===" && $BIN execute --db 5 "SHOW TABLES" --human 2>/dev/null
 
 # NoSQL 数据库
-echo "=== Redis (openim) ===" && $BIN execute -env --db 7 "PING" --human 2>/dev/null
-echo "=== Redis (video) ===" && $BIN execute -env --db 8 "PING" --human 2>/dev/null
-echo "=== MongoDB ===" && $BIN execute -env --db 9 '{"count":"system.users"}' --human 2>/dev/null
-echo "=== Qdrant ===" && $BIN execute -env --db 4 '{"count":"runbooks"}' --human 2>/dev/null
+echo "=== Redis (openim) ===" && $BIN execute --db 7 "PING" --human 2>/dev/null
+echo "=== Redis (video) ===" && $BIN execute --db 8 "PING" --human 2>/dev/null
+echo "=== MongoDB ===" && $BIN execute --db 9 '{"count":"system.users"}' --human 2>/dev/null
+echo "=== Qdrant ===" && $BIN execute --db 4 '{"count":"runbooks"}' --human 2>/dev/null
 
 # 文件处理
-echo "=== CSV (ops-data) ===" && $BIN execute -env --db 13 "SELECT * LIMIT 3" --human 2>/dev/null
-echo "=== CSV (test-data) ===" && $BIN execute -env --db 14 "SELECT * LIMIT 3" --human 2>/dev/null
-echo "=== TSV ===" && $BIN execute -env --db 15 "SELECT * LIMIT 3" --human 2>/dev/null
-echo "=== XLSX (TSF) ===" && $BIN execute -env --label tsf-xlsx "SELECT * LIMIT 3" --human 2>/dev/null
-echo "=== XLSX (TDMQ) ===" && $BIN execute -env --label tdmq-xlsx "SELECT * LIMIT 3" --human 2>/dev/null
+echo "=== CSV (ops-data) ===" && $BIN execute --db 13 "SELECT * LIMIT 3" --human 2>/dev/null
+echo "=== CSV (test-data) ===" && $BIN execute --db 14 "SELECT * LIMIT 3" --human 2>/dev/null
+echo "=== TSV ===" && $BIN execute --db 15 "SELECT * LIMIT 3" --human 2>/dev/null
+echo "=== XLSX (TSF) ===" && $BIN execute --label tsf-xlsx "SELECT * LIMIT 3" --human 2>/dev/null
+echo "=== XLSX (TDMQ) ===" && $BIN execute --label tdmq-xlsx "SELECT * LIMIT 3" --human 2>/dev/null
 ```
 
 ## 11.3 Schema JSON 结构验证
 
 ```bash
-$BIN -env --label aiops-mysql --json 2>/dev/null | python3 -c "
+$BIN --label aiops-mysql --json 2>/dev/null | python3 -c "
 import json, sys
 d = json.load(sys.stdin)
 insts = d.get('instances', [d])
@@ -100,7 +100,7 @@ print('All required fields present ✓')
 ## 11.4 Execute JSON 结构验证
 
 ```bash
-$BIN execute -env --db 1 "SELECT 1 AS n, 'hello' AS s" 2>/dev/null | python3 -c "
+$BIN execute --db 1 "SELECT 1 AS n, 'hello' AS s" 2>/dev/null | python3 -c "
 import json, sys
 d = json.load(sys.stdin)
 required = ['columns', 'rows', 'row_count', 'execution_time', 'truncated']
@@ -118,7 +118,7 @@ print('Execute JSON structure OK ✓')
 ## 11.5 汇总报告
 
 ```bash
-echo "=== dbexplain v0.1.5 集成测试报告 ==="
+echo "=== dbexplain v0.1.7 集成测试报告 ==="
 echo "日期: $(date '+%Y-%m-%d %H:%M')"
 echo "Go 版本: $(go version)"
 echo ""
@@ -130,7 +130,7 @@ echo "--- 单元测试 ---"
 go test ./... -count=1 2>&1 | grep -E '^(ok|FAIL|---)' | head -20
 echo ""
 echo "--- Schema 采集 ---"
-$BIN -env -timeout 30s --json 2>/dev/null | python3 -c "
+$BIN -timeout 30s --json 2>/dev/null | python3 -c "
 import json,sys
 data = json.load(sys.stdin)
 if isinstance(data, list):
@@ -144,13 +144,13 @@ echo ""
 echo "--- 版本 ---"
 $BIN --version
 echo ""
-echo "--- v0.1.5 新增功能验证 ---"
+echo "--- v0.1.7 新增功能验证 ---"
 echo "--- collect 子命令 ---"
-$BIN collect -env --human 2>&1 | head -5
+$BIN collect --human 2>&1 | head -5
 echo ""
 echo "--- REPL 模式 ---"
 echo "SELECT 1;" | $BIN repl --dsn "sqlite:////tmp/test.db?label=test" 2>&1 | head -5
 echo ""
 echo "--- --explain 格式化 ---"
-$BIN execute -env --db 1 --explain "SELECT 1" --human 2>&1 | head -3
+$BIN execute --db 1 --explain "SELECT 1" --human 2>&1 | head -3
 ```

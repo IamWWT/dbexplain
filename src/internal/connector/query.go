@@ -57,7 +57,8 @@ func executeSQLQuery(ctx context.Context, db *sql.DB, sqlStr string, maxRows int
 		// Create scan targets
 		scanArgs := make([]interface{}, len(colNames))
 		for i := range scanArgs {
-			scanArgs[i] = new(interface{})
+			var v interface{}
+			scanArgs[i] = &v
 		}
 
 		if err := rows.Scan(scanArgs...); err != nil {

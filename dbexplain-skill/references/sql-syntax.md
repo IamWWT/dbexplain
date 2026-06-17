@@ -12,7 +12,7 @@
 >
 > **bash 中写 SQL 字符串**：用双引号包裹整个 SQL，SQL 内部用单引号：
 > ```bash
-> dbexplain execute -env --label my_data "SELECT * FROM t WHERE col = 'value'" --human
+> dbexplain execute --label my_data "SELECT * FROM t WHERE col = 'value'" --human
 > ```
 
 ---

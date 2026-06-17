@@ -89,7 +89,7 @@ After install:
 
   Quick test:  dbexplain --version
   Edit config: nano ${CONFIG_DIR}/.env.dbexplain
-  Run:         dbexplain -env
+  Run:         dbexplain
 EOF
 }
 
@@ -577,14 +577,14 @@ print_success() {
     echo "  Config : ${ENV_FILE}"
     echo ""
     echo "  Quick test : dbexplain --version"
-    echo "  List DBs  : dbexplain list -env"
+    echo "  List DBs  : dbexplain list"
     echo "  Edit config: nano ${ENV_FILE}"
-    echo "  Run        : dbexplain -env"
+    echo "  Run        : dbexplain"
     echo ""
     echo "  Secure your config (recommended):"
     echo "    dbexplain encrypt ${ENV_FILE}"
     echo "    rm ${ENV_FILE}"
-    echo "    dbexplain -env"
+    echo "    dbexplain"
     echo ""
     echo "  Full manual: dbexplain all"
 

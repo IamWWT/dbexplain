@@ -1,14 +1,14 @@
 # dbexplain CLI 查询案例库
 
 > 所有查询均已在本环境（v0.1.7, 16 DSN 条目）跑通验证。`--human` 用于可读表格输出，不加则为 JSON（供 AI Agent 消费）。
-> `--human` 可放在查询语句之前或之后：`dbexplain execute -env --db 1 --human "SELECT 1"` 与 `dbexplain execute -env --db 1 "SELECT 1" --human` 等价。
+> `--human` 可放在查询语句之前或之后：`dbexplain execute --db 1 --human "SELECT 1"` 与 `dbexplain execute --db 1 "SELECT 1" --human` 等价。
 
 ---
 
 ## 1. MySQL — IP 清单查询
 
 ```bash
-dbexplain execute -env --db 1 --human \
+dbexplain execute --db 1 --human \
   "SELECT hostip, device_type, datacenter, owner
    FROM testdb.iplist
    WHERE product = 'wtaiops' AND isreg = 1;"
@@ -25,7 +25,7 @@ dbexplain execute -env --db 1 --human \
 
 ```bash
 # 注意：schema 为 public，非 videomon
-dbexplain execute -env --db 6 --human \
+dbexplain execute --db 6 --human \
   "SELECT a.event_time, a.event_type, a.severity,
           c.name AS camera_name, c.location
    FROM public.abnormal_events a
@@ -41,7 +41,7 @@ dbexplain execute -env --db 6 --human \
 ## 3. SQLite — 规则命中率统计
 
 ```bash
-dbexplain execute -env --db 3 --human \
+dbexplain execute --db 3 --human \
   "SELECT r.rule_id, r.type, r.analytics_pattern,
           COUNT(h.id) AS hit_count,
           ROUND(AVG(h.confidence), 2) AS avg_confidence,
@@ -60,7 +60,7 @@ dbexplain execute -env --db 3 --human \
 
 ```bash
 # 按 ServiceName 聚合 otel traces
-dbexplain execute -env --db 2 --human \
+dbexplain execute --db 2 --human \
   "SELECT ServiceName,
           count() AS spans,
           min(Duration)/1000000 AS min_ms,
@@ -74,7 +74,7 @@ dbexplain execute -env --db 2 --human \
 
 ```bash
 # 查看已注册 tool 列表
-dbexplain execute -env --db 2 --human \
+dbexplain execute --db 2 --human \
   "SELECT tool_name, server_name, risk_level, status, usage_count
    FROM ai_obs.tool_registry
    ORDER BY usage_count DESC
@@ -89,14 +89,14 @@ dbexplain execute -env --db 2 --human \
 
 ```bash
 # 列出所有 runbook
-dbexplain execute -env --db 5 --human \
+dbexplain execute --db 5 --human \
   "SELECT title, severity, category, ingested_at
    FROM runbooks
    ORDER BY ingested_at DESC
    LIMIT 10"
 
 # 按严重度筛选
-dbexplain execute -env --db 5 --human \
+dbexplain execute --db 5 --human \
   "SELECT title, severity, symptoms
    FROM runbooks
    WHERE severity = 'critical'
@@ -112,11 +112,11 @@ dbexplain execute -env --db 5 --human \
 
 ```bash
 # 最新注册用户
-dbexplain execute -env --db 9 --human \
+dbexplain execute --db 9 --human \
   '{"find":"user","filter":{},"sort":{"create_time":-1},"limit":5}'
 
 # 管理员账号
-dbexplain execute -env --db 9 --human \
+dbexplain execute --db 9 --human \
   '{"find":"user","filter":{"app_manger_level":{"$gte":3}},"sort":{"create_time":-1},"limit":5}'
 ```
 
@@ -129,15 +129,15 @@ dbexplain execute -env --db 9 --human \
 
 ```bash
 # 扫描 key（OpenIM 会话相关）
-dbexplain execute -env --db 7 --human \
+dbexplain execute --db 7 --human \
   "SCAN 0 MATCH CONVERSATION:* COUNT 10"
 
 # 检查 key 类型
-dbexplain execute -env --db 7 --human \
+dbexplain execute --db 7 --human \
   "TYPE CONVERSATION:6571689284:sg_3177718841"
 
 # 获取 hash 数据
-dbexplain execute -env --db 7 --human \
+dbexplain execute --db 7 --human \
   "HGETALL CONVERSATION:6571689284:sg_3177718841"
 ```
 
@@ -150,11 +150,11 @@ dbexplain execute -env --db 7 --human \
 
 ```bash
 # scroll 遍历 Qdrant 数据
-dbexplain execute -env --db 4 --human \
+dbexplain execute --db 4 --human \
   '{"scroll":"runbooks","limit":20}'
 
 # count 统计（480 points）
-dbexplain execute -env --db 4 --human \
+dbexplain execute --db 4 --human \
   '{"count":"runbooks"}'
 ```
 
@@ -187,7 +187,7 @@ Schema Diff 支持多版本基线管理和字段级变更检测。
 
 ```bash
 # 采集所有数据库并保存为版本基线
-dbexplain -env --cache /tmp/schema.cache --json -o /tmp/v1.json --version-label v1.0
+dbexplain --cache /tmp/schema.cache --json -o /tmp/v1.json --version-label v1.0
 
 # 列出已保存版本
 dbexplain diff --cache /tmp/schema.cache --list-versions
@@ -198,7 +198,7 @@ dbexplain diff --cache /tmp/schema.cache --list-versions
 
 ```bash
 # 再次采集（同数据库，数据可能已变化）
-dbexplain -env --cache /tmp/schema.cache --json -o /tmp/v2.json --version-label v2.0
+dbexplain --cache /tmp/schema.cache --json -o /tmp/v2.json --version-label v2.0
 
 # 跨版本对比（显示新增/删除/变化的表及字段级差异）
 dbexplain diff --cache /tmp/schema.cache --since v1.0 --human
@@ -409,7 +409,7 @@ dbexplain execute --dsn 'prometheus://192.168.0.127:9440?label=prom' \
 ### 示例 4: REPL 模式联邦查询
 
 ```bash
-$ dbexplain repl -env
+$ dbexplain repl
 dbexplain[aiops-mysql]> .conn prom
 Switched to: prom
 
@@ -455,20 +455,20 @@ MASK_COLUMNS=password_hash=***,card_number=****,email=REDACTED
 
 ```bash
 # 策略会拦截对禁用表的访问
-dbexplain execute -env --db 1 "SELECT * FROM sensitive_data"
+dbexplain execute --db 1 "SELECT * FROM sensitive_data"
 # → ACCESS_DENIED: table "sensitive_data" is not allowed for query
 
 # 策略会拦截对禁用列的访问
-dbexplain execute -env --db 1 "SELECT users.password_hash FROM users"
+dbexplain execute --db 1 "SELECT users.password_hash FROM users"
 # → ACCESS_DENIED: column "users.password_hash" is not allowed for query
 
 # 列值屏蔽：查询正常执行，但敏感列值被替换（硬阻断优先于屏蔽）
-MASK_COLUMNS=hostip=*** dbexplain execute -env --db 1 --human \
+MASK_COLUMNS=hostip=*** dbexplain execute --db 1 --human \
   "SELECT hostip, device_type FROM testdb.iplist LIMIT 3"
 # → hostip 列显示 ***，device_type 保持原值
 
 # 屏蔽对所有数据库生效（含 MongoDB 等非 SQL）
-MASK_COLUMNS=user_id=*** dbexplain execute -env --db 9 --human \
+MASK_COLUMNS=user_id=*** dbexplain execute --db 9 --human \
   '{"find":"user","filter":{},"limit":3}'
 # → user_id 列显示 ***
 
@@ -494,12 +494,12 @@ dbexplain[prom]> SELECT * FROM @prom.up WHERE job="prometheus"
 1 row(s) in set (12µs)
 
 # 支持通配符和 table. 前缀
-MASK_COLUMNS=testdb.iplist.hostip=REDACTED dbexplain execute -env --db 1 --human \
+MASK_COLUMNS=testdb.iplist.hostip=REDACTED dbexplain execute --db 1 --human \
   "SELECT hostip, device_type FROM testdb.iplist LIMIT 2"
 # → hostip 列显示 REDACTED
 
 # 正常查询不受影响
-dbexplain execute -env --db 1 --human "SELECT id, name FROM users"
+dbexplain execute --db 1 --human "SELECT id, name FROM users"
 ```
 
 ---
@@ -511,7 +511,7 @@ dbexplain execute -env --db 1 --human "SELECT id, name FROM users"
 ### 13.1 启动与帮助
 
 ```bash
-$ dbexplain repl -env
+$ dbexplain repl
 dbexplain REPL (connected: aiops-mysql)
 Type .help for commands, .exit to quit
 
@@ -525,7 +525,7 @@ DSL syntax: @label.table references supported (single-source & federated cross-s
 
 Commands:
   .connect <dsn>  Connect to a new data source by DSN URL
-  .conn <label>   Switch to another data source by label (load with -env)
+  .conn <label>   Switch to another data source by label (from .env.dbexplain)
   .dsn <label>    Alias for .conn
   .list           List all configured databases
   .databases      Alias for .list

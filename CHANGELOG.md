@@ -1,5 +1,16 @@
 # 变更日志
 
+## v0.1.8 (2026-06-17) — `-env` 参数彻底移除（Breaking Change）
+
+### 💥 Breaking: `-env` 参数彻底移除
+
+- **`-env` 参数从所有子命令中移除**：`-env` 标志已无实际用途——核心逻辑 `shouldLoadEnv := *useEnv || !hasExplicitSource` 使得没有 `-dsn`/`-config` 时已自动加载 `.env.dbexplain`。现在自动加载是唯一行为路径。
+- **不再支持 `--env=false`**：`dbexplain check --env=false`（跳过 .env 加载的唯一方式）不再可用。需要仅使用指定 DSN 时，请用 `-dsn` 替代。
+- **受影响命令**: `dbexplain`、`collect`、`execute`、`repl`、`list`、`check`、`encrypt`、`diff`
+- **影响范围**: 源码 7 文件 + 38 文档文件（~200 处 `-env` 引用全部清除）
+- **迁移**: 移除所有命令调用中的 `-env` 参数。工具已默认自动加载 `.env.dbexplain`，无需任何额外参数。
+- **ISSUE-098**: 重构任务追踪。
+
 ## v0.1.7 (2026-06-16) — Prometheus Meta 表行输出 + CTE 写检测加固 + GaussDB Oracle 兼容模式适配
 
 ### ✨ Prometheus meta 表行输出

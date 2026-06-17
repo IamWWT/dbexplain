@@ -45,10 +45,10 @@ func (gaussdbConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instan
 
 	pingCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	Logf(ctx, "[DEBUG] gaussdb ping start: %s", d.Redacted())
+	Debugf(ctx, "[DEBUG] gaussdb ping start: %s", d.Redacted())
 	pingStart := time.Now()
 	pingErr := db.PingContext(pingCtx)
-	Logf(ctx, "[DEBUG] gaussdb ping end: %s elapsed=%v err=%v", d.Redacted(), time.Since(pingStart), pingErr)
+	Debugf(ctx, "[DEBUG] gaussdb ping end: %s elapsed=%v err=%v", d.Redacted(), time.Since(pingStart), pingErr)
 	if pingErr != nil {
 		return nil, schema.NewDBError(d.Redacted(), "", "", "ping", pingErr)
 	}

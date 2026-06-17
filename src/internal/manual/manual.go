@@ -102,7 +102,7 @@ func PrintHelp() {
 
 	fmt.Fprint(out, p(
 		"Flags (dbexplain [flags]):\n"+
-			"  -dsn, -env, -config                 Input sources\n"+
+			"  -dsn, -config                       Input sources\n"+
 			"  -include, -exclude, -label          Filter by type/label/key\n"+
 			"  -json, --human, -o <file>     Output format\n"+
 			"  --context <dir>, --cache <f>  AI context / delta scan\n"+
@@ -113,7 +113,7 @@ func PrintHelp() {
 			"  --sample                     Fetch sample rows for comment inference (default: off)\n"+
 			"  --skip-opstats                Skip MySQL performance_schema op stats\n\n",
 		"Flags (dbexplain [flags]):\n"+
-			"  -dsn, -env, -config                 Input sources\n"+
+			"  -dsn, -config                       Input sources\n"+
 			"  -include, -exclude, -label          Filter by type/label/key\n"+
 			"  -json, --human, -o <file>     Output format\n"+
 			"  --context <dir>, --cache <f>  AI context / delta scan\n"+
@@ -127,18 +127,18 @@ func PrintHelp() {
 
 	fmt.Fprint(out, p(
 		"Examples:\n"+
-			"  dbexplain -env                    Scan all databases from config\n"+
+			"  dbexplain                         Scan all databases from config\n"+
 			"  dbexplain list                    List configured databases (DB index → label)\n"+
-			"  dbexplain execute -env --db 1     Run SQL query on first database\n"+
+			"  dbexplain execute --db 1          Run SQL query on first database\n"+
 			"    'SELECT COUNT(*) FROM users'\n"+
 			"  dbexplain encrypt config.env      Encrypt config file\n"+
 			"  dbexplain mysql                   MySQL reference manual\n"+
 			"  dbexplain all                     Full reference manual\n"+
 			"  dbexplain all --filter redis      Search manual by keyword\n\n",
 		"Examples:\n"+
-			"  dbexplain -env                    Scan all databases from config\n"+
+			"  dbexplain                         Scan all databases from config\n"+
 			"  dbexplain list                    List configured databases (DB index → label)\n"+
-			"  dbexplain execute -env --db 1     Run SQL query on first database\n"+
+			"  dbexplain execute --db 1          Run SQL query on first database\n"+
 			"    'SELECT COUNT(*) FROM users'\n"+
 			"  dbexplain encrypt config.env      Encrypt config file\n"+
 			"  dbexplain mysql                   MySQL reference manual\n"+
@@ -350,7 +350,6 @@ NAME
 
 SYNOPSIS
     dbexplain -dsn '<scheme>://[user:pass@]host[:port][/db][?params]'
-    dbexplain -env
     dbexplain -config dbs.json
     dbexplain -dsn '...' -json -o report.json
 
@@ -366,7 +365,6 @@ NAME
 
 SYNOPSIS
     dbexplain -dsn '<scheme>://[user:pass@]host[:port][/db][?params]'
-    dbexplain -env
     dbexplain -config dbs.json
     dbexplain -dsn '...' -json -o report.json
 
@@ -392,7 +390,7 @@ DESCRIPTION
       sslmode=<mode>      PostgreSQL SSL: disable/require/verify-ca/verify-full
       authSource=<db>     MongoDB 认证数据库名
 
-    配置文件搜索优先级 (-env 模式):
+    配置文件搜索优先级 (自动加载):
       1. DBPROBE_ENV_FILE 环境变量指定路径（可选覆盖）
       2. 当前目录 .env.dbexplain（明文）
       3. 当前目录 .env.dbexplain.enc（加密，自动解密）
@@ -418,7 +416,7 @@ DESCRIPTION
       sslmode=<mode>      PostgreSQL SSL: disable/require/verify-ca/verify-full
       authSource=<db>     MongoDB authentication database name
 
-    Config file search order (-env mode):
+    Config file search order (auto-load):
       1. DBPROBE_ENV_FILE environment variable (optional override)
       2. .env.dbexplain in current directory (plaintext)
       3. .env.dbexplain.enc in current directory (encrypted, auto-decrypt)
@@ -437,7 +435,6 @@ DESCRIPTION
 
     -dsn <string>         数据库连接串，可重复多次指定多个库
     -config <file>        从 JSON 文件读取 DSN 列表 (数组格式)
-    -env                  从配置文件加载 DSN (格式: DB<n>=<DSN>, 搜索优先级见 DSN 格式章节)
     -include <filter>     仅包含匹配的 DSN (按类型/label/env编号, 逗号分隔)
     -exclude <filter>     排除匹配的 DSN (格式同 -include)
     -label <name>         按 label 过滤 (等效于 -include)
@@ -461,7 +458,6 @@ DESCRIPTION
 
     -dsn <string>         Database connection string, repeatable for multiple databases
     -config <file>        Read DSN list from JSON file (array format)
-    -env                  Load DSNs from config file (format: DB<n>=<DSN>, search order see DSN FORMAT)
     -include <filter>     Only include matching DSNs (by kind/label/env-key, comma-sep)
     -exclude <filter>     Exclude matching DSNs (same format as -include)
     -label <name>         Filter by label (alias for -include)
@@ -647,10 +643,9 @@ DESCRIPTION
     子命令:
       dbexplain collect [flags]
 
-    显式执行 Schema 采集，与顶层 dbexplain -env 等效但通过子命令调用。
+    显式执行 Schema 采集，与顶层 dbexplain 等效但通过子命令调用。
 
     参数:
-      -env                      从配置文件加载 DSN
       -dsn <string>             直接指定连接串
       -config <file>            JSON 配置文件
       -include/-exclude         按 DB 类型/标签过滤
@@ -662,21 +657,19 @@ DESCRIPTION
       -o <file>                 输出到文件
 
     示例:
-      dbexplain collect -env                        # 从 .env 采集全部
-      dbexplain collect -env --include mysql,redis   # 仅采集 MySQL 和 Redis
-      dbexplain collect -env --context ./ctx         # 输出 AI 上下文目录
-      dbexplain collect -env --cache ./cache.json    # 启用增量变更检测
+      dbexplain collect                            # 从 .env 采集全部
+      dbexplain collect --include mysql,redis       # 仅采集 MySQL 和 Redis
+      dbexplain collect --context ./ctx             # 输出 AI 上下文目录
+      dbexplain collect --cache ./cache.json        # 启用增量变更检测
 
 ─── EXPLICIT SCHEMA COLLECTION ────────────────────────────────
 
     Subcommand:
       dbexplain collect [flags]
 
-    Explicit schema collection, equivalent to dbexplain -env but called
-    as a subcommand.
+    Explicit schema collection.
 
     Flags:
-      -env                      Load DSNs from config file
       -dsn <string>             Direct DSN string
       -config <file>            JSON config file
       -include/-exclude         Filter by kind/label
@@ -688,10 +681,10 @@ DESCRIPTION
       -o <file>                 Output to file
 
     Examples:
-      dbexplain collect -env                        # Collect all from .env
-      dbexplain collect -env --include mysql,redis   # Collect MySQL and Redis only
-      dbexplain collect -env --context ./ctx         # AI context output
-      dbexplain collect -env --cache ./cache.json    # Enable delta detection
+      dbexplain collect                            # Collect all from .env
+      dbexplain collect --include mysql,redis       # Collect MySQL and Redis only
+      dbexplain collect --context ./ctx             # AI context output
+      dbexplain collect --cache ./cache.json        # Enable delta detection
 
 ─── Schema 差异对比 ──────────────────────────────────────────
 
@@ -759,7 +752,6 @@ DESCRIPTION
     语法编译生成（SELECT * FROM @label.metric [WHERE label="val"]）。
 
     参数:
-      -env                      从配置文件加载 DSN
       -dsn <string>             直接指定连接串
       -config <file>            JSON 配置文件
       --label <name>            按 label 匹配 DSN
@@ -772,8 +764,8 @@ DESCRIPTION
       Ctrl+D                    退出 REPL
 
     示例:
-      dbexplain repl -env --label mysql
-      dbexplain repl -env --dsl --label mysql
+      dbexplain repl --label mysql
+      dbexplain repl --dsl --label mysql
       dbexplain repl -dsn 'mysql://user:pass@host:3306/mydb'
 
 ─── REPL INTERACTIVE MODE ─────────────────────────────────────
@@ -786,7 +778,6 @@ DESCRIPTION
     (SELECT * FROM @label.metric [WHERE label="val"]).
 
     Flags:
-      -env                      Load DSNs from config file
       -dsn <string>             Direct DSN string
       -config <file>            JSON config file
       --label <name>            Match DSN by label
@@ -799,8 +790,8 @@ DESCRIPTION
       Ctrl+D                    Exit REPL
 
     Examples:
-      dbexplain repl -env --label mysql
-      dbexplain repl -env --dsl --label mysql
+      dbexplain repl --label mysql
+      dbexplain repl --dsl --label mysql
       dbexplain repl -dsn 'mysql://user:pass@host:3306/mydb'
 
 ─── 只读查询执行 ──────────────────────────────────────────────
@@ -812,7 +803,6 @@ DESCRIPTION
     输出格式与 schema 采集 (instances/refs) 完全分离 (columns/rows)。
 
     参数:
-      -env                      从配置文件加载 DSN
       -dsn <string>             直接指定连接串
       -config <file>            JSON 配置文件
       --label <name>            按 label 匹配 DSN
@@ -823,23 +813,23 @@ DESCRIPTION
       --dsl                     使用 DSL 模式（支持 @label.table 语法，SQL/PromQL/文件统一入口）
 
     SQL 查询 (MySQL/PG/GaussDB/SQLite/ClickHouse/ES/Oracle/Hive):
-      dbexplain execute -env --label shop-db 'SELECT COUNT(*) FROM orders'
-      dbexplain execute -env --db 1 --explain 'SELECT * FROM users WHERE id=1'
-      dbexplain execute -env --label es 'SHOW TABLES'
+      dbexplain execute --label shop-db 'SELECT COUNT(*) FROM orders'
+      dbexplain execute --db 1 --explain 'SELECT * FROM users WHERE id=1'
+      dbexplain execute --label es 'SHOW TABLES'
 
     DSL 查询（统一语法，支持所有数据源）:
-      dbexplain execute -env --label mydb --dsl 'SELECT * FROM @mydb.users WHERE id > 10'
-      dbexplain execute -env --label csv-data --dsl 'SELECT col1, col2 FROM @csv-data.data'
+      dbexplain execute --label mydb --dsl 'SELECT * FROM @mydb.users WHERE id > 10'
+      dbexplain execute --label csv-data --dsl 'SELECT col1, col2 FROM @csv-data.data'
 
     DSL 查询 PromQL（SQL 语法编译为 PromQL）:
-      dbexplain execute -env --label prom --dsl 'SELECT * FROM @prom.up WHERE job="node"'
-      dbexplain execute -env --label prom --dsl 'SELECT * FROM @prom.node_cpu_seconds_total'
+      dbexplain execute --label prom --dsl 'SELECT * FROM @prom.up WHERE job="node"'
+      dbexplain execute --label prom --dsl 'SELECT * FROM @prom.node_cpu_seconds_total'
 
     非 SQL 原生查询:
-      dbexplain execute -env --label mongo '{"find":"users","filter":{},"limit":10}'
-      dbexplain execute -env --label redis 'GET user:1001'
-      dbexplain execute -env --label qdrant '{"count":"documents"}'
-      dbexplain execute -env --label prom --dsl 'SELECT * FROM @prom.up'
+      dbexplain execute --label mongo '{"find":"users","filter":{},"limit":10}'
+      dbexplain execute --label redis 'GET user:1001'
+      dbexplain execute --label qdrant '{"count":"documents"}'
+      dbexplain execute --label prom --dsl 'SELECT * FROM @prom.up'
 
     安全保护:
       • SQL 三层校验 — 动词白名单 + 多语句检测 + 自动 LIMIT
@@ -856,11 +846,9 @@ DESCRIPTION
     Subcommand:
       dbexplain collect [flags]
 
-    Explicit schema collection, equivalent to dbexplain -env but called
-    as a subcommand.
+    Explicit schema collection.
 
     Flags:
-      -env                      Load DSNs from config file
       -dsn <string>             Direct DSN string
       -config <file>            JSON config file
       -include/-exclude         Filter by kind/label
@@ -872,10 +860,10 @@ DESCRIPTION
       -o <file>                 Output to file
 
     Examples:
-      dbexplain collect -env                        # Collect all from .env
-      dbexplain collect -env --include mysql,redis   # Collect MySQL and Redis only
-      dbexplain collect -env --context ./ctx         # AI context output
-      dbexplain collect -env --cache ./cache.json    # Enable delta detection
+      dbexplain collect                            # Collect all from .env
+      dbexplain collect --include mysql,redis       # Collect MySQL and Redis only
+      dbexplain collect --context ./ctx             # AI context output
+      dbexplain collect --cache ./cache.json        # Enable delta detection
 
 ─── SCHEMA DIFF ───────────────────────────────────────────────
 
@@ -915,7 +903,6 @@ DESCRIPTION
     (SELECT * FROM @label.metric [WHERE label="val"]).
 
     Flags:
-      -env                      Load DSNs from config file
       -dsn <string>             Direct DSN string
       -config <file>            JSON config file
       --label <name>            Match DSN by label
@@ -928,8 +915,8 @@ DESCRIPTION
       Ctrl+D                    Exit REPL
 
     Examples:
-      dbexplain repl -env --label mysql
-      dbexplain repl -env --dsl --label mysql
+      dbexplain repl --label mysql
+      dbexplain repl --dsl --label mysql
       dbexplain repl -dsn 'mysql://user:pass@host:3306/mydb'
 
 ─── READ-ONLY QUERY EXECUTION ─────────────────────────────────
@@ -941,7 +928,6 @@ DESCRIPTION
     Output format is fully separated from schema collection (columns/rows vs instances/refs).
 
     Flags:
-      -env                      Load DSNs from config file
       -dsn <string>             Direct DSN connection string
       -config <file>            JSON config file
       --label <name>            Match DSN by label
@@ -952,23 +938,23 @@ DESCRIPTION
       --dsl                     Enable DSL mode (supports @label.table syntax, unified SQL/PromQL/file entry)
 
     SQL queries (MySQL/PG/GaussDB/SQLite/ClickHouse/ES/Oracle/Hive):
-      dbexplain execute -env --label shop-db 'SELECT COUNT(*) FROM orders'
-      dbexplain execute -env --db 1 --explain 'SELECT * FROM users WHERE id=1'
-      dbexplain execute -env --label es 'SHOW TABLES'
+      dbexplain execute --label shop-db 'SELECT COUNT(*) FROM orders'
+      dbexplain execute --db 1 --explain 'SELECT * FROM users WHERE id=1'
+      dbexplain execute --label es 'SHOW TABLES'
 
     DSL queries (unified syntax, all datasources):
-      dbexplain execute -env --label mydb --dsl 'SELECT * FROM @mydb.users WHERE id > 10'
-      dbexplain execute -env --label csv-data --dsl 'SELECT col1, col2 FROM @csv-data.data'
+      dbexplain execute --label mydb --dsl 'SELECT * FROM @mydb.users WHERE id > 10'
+      dbexplain execute --label csv-data --dsl 'SELECT col1, col2 FROM @csv-data.data'
 
     DSL PromQL queries (SQL syntax compiled to PromQL):
-      dbexplain execute -env --label prom --dsl 'SELECT * FROM @prom.up WHERE job="node"'
-      dbexplain execute -env --label prom --dsl 'SELECT * FROM @prom.node_cpu_seconds_total'
+      dbexplain execute --label prom --dsl 'SELECT * FROM @prom.up WHERE job="node"'
+      dbexplain execute --label prom --dsl 'SELECT * FROM @prom.node_cpu_seconds_total'
 
     Non-SQL native queries:
-      dbexplain execute -env --label mongo '{"find":"users","filter":{},"limit":10}'
-      dbexplain execute -env --label redis 'GET user:1001'
-      dbexplain execute -env --label qdrant '{"count":"documents"}'
-      dbexplain execute -env --label prom --dsl 'SELECT * FROM @prom.up'
+      dbexplain execute --label mongo '{"find":"users","filter":{},"limit":10}'
+      dbexplain execute --label redis 'GET user:1001'
+      dbexplain execute --label qdrant '{"count":"documents"}'
+      dbexplain execute --label prom --dsl 'SELECT * FROM @prom.up'
 
     Security:
       • SQL triple-layer check — verb whitelist + multi-statement detect + auto LIMIT
@@ -1009,7 +995,7 @@ DESCRIPTION
 
     使用加密文件（无需环境变量，自动发现 .enc 文件）：
       # 直接运行，工具自动搜索并解密
-      dbexplain -env
+      dbexplain
 
       # 如果使用了 --password 加密，将密码写入密钥文件：
       echo "your-password" > ~/.config/dbexplain/.encryption_key
@@ -1066,7 +1052,7 @@ DESCRIPTION
 
     Using encrypted files (no env vars needed — auto-discovery):
       # Just run, the tool auto-searches and decrypts
-      dbexplain -env
+      dbexplain
 
       # If encrypted with --password, save password to key file:
       echo "your-password" > ~/.config/dbexplain/.encryption_key
