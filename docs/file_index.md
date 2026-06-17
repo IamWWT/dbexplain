@@ -1,7 +1,7 @@
 # docs/ 文件索引
 
 > 本文档索引 `docs/` 下所有文件，方便快速定位。
-> 更新时间：v0.1.7 (2026-06-17)
+> 更新时间：v0.1.8 (2026-06-17)
 
 ---
 
@@ -88,6 +88,7 @@
 | [`test/21-check-command.md`](test/21-check-command.md) | check 子命令测试（配置验证+连通性） |
 | [`test/22-performance-optimization.md`](test/22-performance-optimization.md) | Schema 采集性能优化测试 |
 | [`test/23-password-special-chars.md`](test/23-password-special-chars.md) | DSN 密码特殊字符兼容性测试 |
+| [`test/24-config-search-priority.md`](test/24-config-search-priority.md) | 配置文件搜索 7 级优先级实测（v0.1.8+） |
 | [`test/RESULTS.md`](test/RESULTS.md) | 全量测试结果汇总 |
 
 ## 七、资产文件

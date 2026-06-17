@@ -64,7 +64,8 @@
 | **P1: escapeUserinfo 自动编码** | **PASS** | `escapeUserinfoHash()` → `escapeUserinfo()`：所有不安全字符自动百分号编码，保留已有 `%XX` 避免双编码。~960 密码字符测试全通过 |
 | **P2: MySQL NewConfig 传密码** | **PASS** | `buildMySQLDSN()` → `openMySQL()`：使用 `mysql.NewConfig` + `NewConnector` + `sql.OpenDB`，密码直接传给结构体字段 |
 | **P3: PG DSN 密码引号保护** | **PASS** | `buildPGDSN()` 密码加单引号包裹，`\` → `\\`，`'` → `\'` 转义 |
-| **`-env` 参数彻底移除 (ISSUE-098)** | **PASS** | 源码 7 文件 + 38 文档文件全部删除 `-env` 引用。编译/vet/单元测试/选择性编译/CLI冒烟全部通过。`$BIN -env` → `flag provided but not defined`。68/71 test-runner.sh 通过（3 个预存别名问题）。自动加载 `.env.dbexplain` 正常：14 instances 检测、execute --db 2 执行、check 无参数验证全部通过。 |
+| **`-env` 参数彻底移除 (ISSUE-098)** | **PASS** | 源码 7 文件 + 38 文档文件全部删除 `-env` 引用。编译/vet/单元测试/选择性编译/CLI冒烟全部通过。`$BIN -env` → `flag provided but not defined`。69/69 test-runner.sh 通过。自动加载 `.env.dbexplain` 正常：14 instances 检测、execute/check 无参数验证全部通过。 |
+| **配置文件搜索 7 级优先级 (ISSUE-098)** | **PASS** | [24-config-search-priority.md](24-config-search-priority.md) 8/8：L1-DBPROBE_ENV_FILE、L2-.env.dbexplain(CWD)、L4-~/.config/dbexplain、L6-.env legacy 逐级独立通过；L2>L4、L1>L2、L4>L5 三级覆盖胜出验证通过；无配置友好兜底通过 |
 
 ---
 
