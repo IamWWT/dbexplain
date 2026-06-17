@@ -1017,4 +1017,66 @@ dbexplain collect --label my-gs --table users --tables
 
 ---
 
-*案例库持续更新中。v0.1.7 新增：`--table`/`--tables` 收集参数、Prometheus meta 表 `rows` 输出（`_labels`/`_metrics` JSON 带全量数据）、CTE 写操作检测（WITH + INSERT/UPDATE/DELETE 拦截）、MongoDB `$facet` 子管道写操作检测。全部查询已通过 --human 实测验证。*
+---
+
+## 18. 日志落盘验证（execute 统一 `dbexplain.log`）
+
+> v0.1.8 起 execute 所有子路径（单 DSN / DSL SQL / DSL PromQL / DSL Federated）统一写入 `dbexplain.log`，不再创建 `<label>.log` 独立文件。
+
+```bash
+# 0. 预备：清空日志目录
+sudo rm -f /var/log/dbexplain/*.log
+ls /var/log/dbexplain/
+# 预期: 空
+
+# 1. check
+dbexplain check --label aiops-mysql
+ls -la /var/log/dbexplain/
+# 预期: 只有 dbexplain.log（无 aiops-mysql.log）
+cat /var/log/dbexplain/dbexplain.log
+# 预期: 包含 [check] 日志行
+
+# 2. collect
+sudo rm -f /var/log/dbexplain/*.log
+dbexplain collect --label aiops-mysql --timeout 10s
+ls /var/log/dbexplain/
+# 预期: dbexplain.log（+ filter.log 如果用 --include/--exclude）
+
+# 3. execute 单 DSN
+sudo rm -f /var/log/dbexplain/*.log
+dbexplain execute --label veinmap-sqlite \
+  'SELECT name FROM sqlite_master WHERE type="table"' --human
+ls /var/log/dbexplain/
+# 预期: 只有 dbexplain.log（无 veinmap-sqlite.log）
+cat /var/log/dbexplain/dbexplain.log
+# 预期: 包含 [sqlite] [execute] 日志行
+
+# 4. execute --dsl（SQL 源）
+sudo rm -f /var/log/dbexplain/*.log
+dbexplain execute --dsl --label veinmap-sqlite \
+  'SELECT * FROM @veinmap-sqlite.sqlite_master' --human
+ls /var/log/dbexplain/
+# 预期: 只有 dbexplain.log
+
+# 5. execute --dsl（PromQL 源）
+sudo rm -f /var/log/dbexplain/*.log
+dbexplain execute --dsl --label my-prom \
+  'SELECT * FROM @my-prom.up' --human --limit 3
+ls /var/log/dbexplain/
+# 预期: 只有 dbexplain.log（无 my-prom.log）
+
+# 6. DSL 联邦（文件源，无日志路径）
+sudo rm -f /var/log/dbexplain/*.log
+dbexplain execute --dsl --label ops-data-csv \
+  'SELECT * FROM @ops-data-csv.ops_data' --human --limit 3
+ls /var/log/dbexplain/
+# 预期: 空（dslExecFile 不使用 logger）
+
+# 7. filter.log 回归
+sudo rm -f /var/log/dbexplain/*.log
+dbexplain collect --include mysql --timeout 10s
+ls /var/log/dbexplain/
+# 预期: dbexplain.log + filter.log（FilterDSNs 不变）
+```
+
+*案例库持续更新中。v0.1.8 新增：execute 日志统一 `dbexplain.log`、日志落盘验证全命令。*

@@ -19,6 +19,10 @@
 - **New §5.8 Schema Diff**: `dbexplain diff --cache` command mapped to "what changed" user scenario.
 - **Full section renumbering**: collect/execute/DSL/file query → 5.4/5.5/5.6/5.7, all cross-references updated.
 
+### 🔧 Execute Logs Unified to `dbexplain.log`
+
+- **All execute sub-paths now write to `dbexplain.log`**: 5 locations (`handleExecute`, `dslExecSQL`, `dslExecPromQL`, `dslExecFederated` SQL materialization, `dslExecFederated` PromQL materialization) previously created separate `<label>.log` files. All now write to the shared `dbexplain.log`, reducing log file clutter in `/var/log/dbexplain/`.
+
 ## v0.1.7 (2026-06-16) — Prometheus Meta Table Rows + CTE Write Detection Hardening + GaussDB Oracle-Compatible Mode Adaptation
 
 ### ✨ Prometheus Meta Table Rows

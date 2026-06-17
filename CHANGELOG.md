@@ -19,6 +19,10 @@
 - **新增 §5.8 Schema Diff**：`diff --cache` 命令与"和上周比改了啥"场景映射。
 - **全文节号对齐**：collect/execute/DSL/文件查询依次为 5.4/5.5/5.6/5.7，所有交叉引用同步更新。
 
+### 🔧 execute 日志统一为 `dbexplain.log`
+
+- **`execute.go` 所有子路径统一写 `dbexplain.log`**：`handleExecute`、`dslExecSQL`、`dslExecPromQL`、`dslExecFederated`（SQL 物化 + PromQL 物化）5 处此前各自创建 `<label>.log` 独立文件，现全部统一写入 `dbexplain.log`。减少 `/var/log/dbexplain/` 目录下零散日志文件。
+
 ## v0.1.7 (2026-06-16) — Prometheus Meta 表行输出 + CTE 写检测加固 + GaussDB Oracle 兼容模式适配
 
 ### ✨ Prometheus meta 表行输出

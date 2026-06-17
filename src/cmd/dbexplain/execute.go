@@ -210,8 +210,7 @@ func handleExecute(args []string) {
 	execCtx := context.Background()
 	logDir := config.ResolveLogDir(*logDirFlag)
 	if parsed.Label != "" {
-		logFileName := filepath.Join(logDir, parsed.Label+".log")
-		logFile, err := os.OpenFile(logFileName, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+		logFile, err := os.OpenFile(filepath.Join(logDir, "dbexplain.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 		if err == nil {
 			defer logFile.Close()
 			execCtx = connector.WithLogger(execCtx, log.New(logFile, "", log.LstdFlags))
@@ -327,7 +326,7 @@ func dslExecSQL(dslQuery *dsl.DSLQuery, bound *dsl.BoundQuery, human bool, limit
 
 	execCtx := context.Background()
 	if parsed.Label != "" {
-		if lf, err := os.OpenFile(filepath.Join(logDir, parsed.Label+".log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644); err == nil {
+		if lf, err := os.OpenFile(filepath.Join(logDir, "dbexplain.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644); err == nil {
 			defer lf.Close()
 			execCtx = connector.WithLogger(execCtx, log.New(lf, "", log.LstdFlags))
 		}
@@ -447,7 +446,7 @@ func dslExecPromQL(dslQuery *dsl.DSLQuery, bound *dsl.BoundQuery, human bool, li
 	// Execute through non-SQL pipeline (IsSQL=false → bypasses sqlguard)
 	execCtx := context.Background()
 	if parsed.Label != "" {
-		if lf, err := os.OpenFile(filepath.Join(logDir, parsed.Label+".log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644); err == nil {
+		if lf, err := os.OpenFile(filepath.Join(logDir, "dbexplain.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644); err == nil {
 			defer lf.Close()
 			execCtx = connector.WithLogger(execCtx, log.New(lf, "", log.LstdFlags))
 		}
@@ -620,7 +619,7 @@ func dslExecFederated(dslQuery *dsl.DSLQuery, bound *dsl.BoundQuery, allEntries 
 			policies := policy.Load(envKeyForLabel(bs.DSN.Label, allEntries))
 			fedCtx := context.Background()
 			if bs.DSN.Label != "" {
-				if lf, err := os.OpenFile(filepath.Join(logDir, bs.DSN.Label+".log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644); err == nil {
+				if lf, err := os.OpenFile(filepath.Join(logDir, "dbexplain.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644); err == nil {
 					defer lf.Close()
 					fedCtx = connector.WithLogger(fedCtx, log.New(lf, "", log.LstdFlags))
 				}
@@ -720,7 +719,7 @@ func dslExecFederated(dslQuery *dsl.DSLQuery, bound *dsl.BoundQuery, allEntries 
 				policies := policy.Load(envKeyForLabel(bs.DSN.Label, allEntries))
 				fedCtx := context.Background()
 				if bs.DSN.Label != "" {
-					if lf, err := os.OpenFile(filepath.Join(logDir, bs.DSN.Label+".log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644); err == nil {
+					if lf, err := os.OpenFile(filepath.Join(logDir, "dbexplain.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644); err == nil {
 						defer lf.Close()
 						fedCtx = connector.WithLogger(fedCtx, log.New(lf, "", log.LstdFlags))
 					}
