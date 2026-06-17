@@ -384,7 +384,7 @@ DESCRIPTION
       scheme://[用户:密码@]主机[:端口][/库名][?param1=val1&param2=val2]
 
     DSN 参数速查:
-      label=<别名>        实例别名，决定日志文件名 <label>.log
+      label=<别名>        实例别名，用于 --label 选择数据源
       cluster=true        Redis 集群模式 (自动扫描所有分片)
       tls=true            ES / Redis 启用 TLS 加密
       sslmode=<mode>      PostgreSQL SSL: disable/require/verify-ca/verify-full
@@ -410,7 +410,7 @@ DESCRIPTION
       scheme://[user:password@]host[:port][/dbname][?param1=val1&param2=val2]
 
     DSN parameters:
-      label=<name>        Instance alias, determines log file name <label>.log
+      label=<name>        Instance alias for --label selection
       cluster=true        Redis cluster mode (auto-scan all shards)
       tls=true            ES / Redis enable TLS encryption
       sslmode=<mode>      PostgreSQL SSL: disable/require/verify-ca/verify-full
