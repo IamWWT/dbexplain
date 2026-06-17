@@ -58,15 +58,6 @@ func preScanVerbose() {
 	}
 }
 
-func hasHelpFlag() bool {
-	for _, a := range os.Args[1:] {
-		if a == "-h" || a == "--help" {
-			return true
-		}
-	}
-	return false
-}
-
 // metricSnapshot carries collection metrics from goroutines to the collector via channel.
 type metricSnapshot struct {
 	label     string
@@ -239,264 +230,22 @@ func main() {
 		case "repl":
 			handleREPL(os.Args[2:])
 			return
+		case "version":
+			fmt.Println("dbexplain", version.Version)
+			return
 		}
 	}
 
-	// No subcommand and no flags: show help instead of silently entering collection
-	if len(os.Args) == 1 {
-		manual.PrintHelp()
-		return
-	}
-
-	if hasHelpFlag() {
-		manual.PrintHelp()
-		return
-	}
-	flag.Usage = func() { manual.PrintHelp() }
-
-	var dsnFlags []string
-	flag.Func("dsn", "...", func(s string) error { dsnFlags = append(dsnFlags, s); return nil })
-	configFile := flag.String("config", "", "JSON config file with array of DSNs")
-	includeFilter := flag.String("include", "", "comma-separated kinds/labels/env-keys to include (e.g. mysql,redis or DB1,DB3)")
-	labelFilter := flag.String("label", "", "filter by label (alias for -include)")
-	excludeFilter := flag.String("exclude", "", "comma-separated kinds/labels/env-keys to exclude (e.g. mongodb,qdrant or DB5)")
-	jsonOut := flag.Bool("json", false, "output JSON")
-	humanOut := flag.Bool("human", false, "human-friendly output with context markers and visual separators")
-	contextDir := flag.String("context", "", "write AI context files to directory (summary.json, topology.json, diagnostics.json, chunks/)")
-	cacheFile := flag.String("cache", "", "fingerprint cache file for delta scan (.json)")
-	versionLabel := flag.String("version-label", "", "label for this cache version (auto: v{timestamp})")
-	outputFile := flag.String("o", "", "write output to file")
-	logDirFlag := flag.String("log-dir", "/var/log/dbexplain", "directory for log files (filter.log, <label>.log)")
-	perDSNTimeout := flag.Duration("timeout", 20*time.Second, "per-DSN collect timeout")
-	maxConcurrent := flag.Int("conn", 10, "max concurrent connections for schema collection")
-	showVersion := flag.Bool("version", false, "print version and exit")
-	metricsFlag := flag.Bool("metrics", false, "output collection metrics in Prometheus text format (to stderr)")
-	sample := flag.Bool("sample", false, "enable sample row fetching for comment inference (default: off)")
-	skipOpstats := flag.Bool("skip-opstats", false, "skip MySQL performance_schema op stats")
-	tableName := flag.String("table", "", "only collect the specified table schema (SQL data sources only)")
-	tablesOnly := flag.Bool("tables", false, "compact table list mode (name, engine, row count)")
-	flag.Parse()
-
-	if *tableName != "" && *tablesOnly {
-		log.Fatal("--table and --tables are mutually exclusive")
-	}
-
-	// --label is an alias for -include (schema collection also supports label filtering)
-	if *labelFilter != "" {
-		if *includeFilter != "" {
-			*includeFilter += "," + *labelFilter
-		} else {
-			*includeFilter = *labelFilter
+	// Pre-scan --version flag (removed from default collect path)
+	for _, a := range os.Args[1:] {
+		if a == "--version" {
+			fmt.Println("dbexplain", version.Version)
+			return
 		}
 	}
 
-	if *showVersion {
-		fmt.Println("dbexplain", version.Version)
-		return
-	}
-
-	var entries []config.DSNEntry
-	for _, raw := range dsnFlags {
-		entries = append(entries, config.DSNEntry{Raw: raw})
-	}
-
-	hasExplicitSource := len(dsnFlags) > 0 || *configFile != ""
-	if !hasExplicitSource {
-		configPath := config.FindConfigFile()
-		if configPath == "" {
-			config.PrintNoConfigFound()
-			os.Exit(1)
-		}
-		envEntries, err := config.LoadEnvFile(configPath)
-		if err != nil {
-			log.Printf("warning: load config %s: %v", configPath, config.SanitizeErr(err))
-		} else {
-			if len(envEntries) == 0 {
-				config.PrintEmptyConfigFound(configPath)
-				os.Exit(1)
-			}
-			entries = append(entries, envEntries...)
-		}
-	}
-	if *configFile != "" {
-		for _, raw := range config.LoadFromConfig(*configFile) {
-			entries = append(entries, config.DSNEntry{Raw: raw})
-		}
-	}
-
-	logDir := config.ResolveLogDir(*logDirFlag)
-
-	// Redirect standard library log output to log file
-	logFile, err := os.OpenFile(filepath.Join(logDir, "dbexplain.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-	if err == nil {
-		log.SetOutput(logFile)
-		defer logFile.Close()
-	}
-
-	// Filter DSNs
-	entries = config.FilterDSNs(entries, *includeFilter, *excludeFilter, logDir)
-	if len(entries) == 0 {
-		log.Fatal("no DSNs provided (or all filtered out). Use -dsn or -config")
-	}
-
-	// Print DSN mapping summary
-	if len(entries) > 0 && !*jsonOut {
-		config.PrintDSNMapping(entries)
-	}
-
-	var dsns []string
-	for _, e := range entries {
-		dsns = append(dsns, e.Raw)
-	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	var instances []*schema.Instance
-	var mu sync.Mutex
-	var wg sync.WaitGroup
-
-	startAll := time.Now()
-
-	// All goroutines write to the shared dbexplain.log with [label=X] [kind=Y] prefix
-	// log.Writer() returns the io.Writer that standard log output is configured to use,
-	// which is dbexplain.log (set above via log.SetOutput(logFile)).
-	// No per-label files or collect.log are created — consolidation goal achieved.
-
-	metricsCollector := metrics.NewCollector()
-
-	// Metrics channel — goroutines send metrics instead of calling metricsCollector.Record
-	// (which blocks with sync.Mutex in goroutine scheduling contexts when lib/pq is hung).
-	metricCh := make(chan metricSnapshot, len(dsns))
-
-	// Semaphore to limit concurrent connections
-	sem := make(chan struct{}, *maxConcurrent)
-
-	for i, rawDSN := range dsns {
-		p := collectParams{
-			metricCh:      metricCh,
-			mu:            &mu,
-			instances:     &instances,
-			sample:        *sample,
-			skipOpstats:   *skipOpstats,
-			tableFilter:   *tableName,
-			perDSNTimeout: *perDSNTimeout,
-			ctx:           ctx,
-			wg:            &wg,
-			sem:           sem,
-		}
-		wg.Add(1)
-		sem <- struct{}{}
-		go collectInstance(rawDSN, i, p)
-	}
-
-	wg.Wait()
-	// Drain metrics channel into collector (goroutines send via channel to avoid mutex blocking).
-	close(metricCh)
-	for snap := range metricCh {
-		metricsCollector.Record(snap.label, snap.kind, snap.success, snap.duration, snap.numDBs, snap.numTables, snap.errMsg)
-	}
-	if len(instances) == 0 {
-		log.Printf("[collect-summary] 所有 DSN 采集均失败，报告为空。请检查日志: %s", logDir)
-	} else {
-		log.Printf("[collect-summary] 全部采集完成，总耗时 %v", time.Since(startAll))
-	}
-
-	kindCaps := buildKindCaps(instances)
-
-	universe := &schema.Universe{Instances: instances}
-	result := analyze.Analyze(universe, kindCaps)
-	result.Metrics = metricsCollector.Snapshots()
-
-	// Delta scan with fingerprint cache
-	if *cacheFile != "" {
-		store, err := cache.LoadStore(*cacheFile)
-		if err != nil {
-			log.Printf("load cache: %v (starting fresh)", err)
-		}
-		delta := store.Diff(universe)
-		if len(delta.Added)+len(delta.Removed)+len(delta.Changed) > 0 {
-			data, err := json.MarshalIndent(delta, "", "  ")
-			if err != nil {
-				log.Printf("[delta] marshal: %v", err)
-			} else {
-				fmt.Fprintf(os.Stderr, "[delta] %d added, %d removed, %d changed\n",
-					len(delta.Added), len(delta.Removed), len(delta.Changed))
-				deltaFile := strings.TrimSuffix(*cacheFile, ".json") + "_delta.json"
-				if err := os.WriteFile(deltaFile, data, 0644); err != nil {
-					log.Printf("[delta] write %s: %v", deltaFile, err)
-				}
-			}
-
-			// Output field-level detailed diff
-			detail := store.DiffDetailed(universe)
-			if len(detail.Tables) > 0 {
-				detailData, err := json.MarshalIndent(detail, "", "  ")
-				if err != nil {
-					log.Printf("[diff] marshal: %v", err)
-				} else {
-					diffFile := strings.TrimSuffix(*cacheFile, ".json") + "_diff.json"
-					if err := os.WriteFile(diffFile, detailData, 0644); err != nil {
-						log.Printf("[diff] write %s: %v", diffFile, err)
-					}
-					fmt.Fprintf(os.Stderr, "[diff] %d tables with field-level changes → %s\n",
-						len(detail.Tables), diffFile)
-				}
-			}
-		}
-		if err := store.Update(universe); err != nil {
-			log.Printf("save cache: %v", err)
-		}
-		// Save version snapshot if --version-label provided or auto-label
-		vl := *versionLabel
-		if vl == "" {
-			vl = "v" + time.Now().Format("20060102_150405")
-		}
-		if err := store.SaveVersion(vl); err != nil {
-			log.Printf("save version %s: %v", vl, err)
-		}
-	}
-
-	// Write AI context files
-	if *contextDir != "" {
-		output.WriteContext(*contextDir, result, *tableName)
-	}
-
-	// Output
-	if *outputFile != "" {
-		// File output: capture and write (no ANSI escape codes)
-		var out string
-		if *jsonOut {
-			out = output.CaptureJSON(result)
-			// JSON without BOM, standard compliant
-			if err := os.WriteFile(*outputFile, []byte(out), 0644); err != nil {
-				log.Fatal(err)
-			}
-		} else {
-			out = output.CaptureText(result, *humanOut, *tablesOnly)
-			data, err := encodeOutput(out)
-			if err != nil {
-				log.Fatalf("encode output: %v", err)
-			}
-			if err := os.WriteFile(*outputFile, data, 0644); err != nil {
-				log.Fatal(err)
-			}
-		}
-		fmt.Fprintln(os.Stderr, "Report written to", *outputFile)
-		if *metricsFlag {
-			fmt.Fprint(os.Stderr, metricsCollector.PrometheusText())
-		}
-	} else if *jsonOut {
-		render.PrintJSON(result)
-		if *metricsFlag {
-			fmt.Fprint(os.Stderr, metricsCollector.PrometheusText())
-		}
-	} else {
-		render.Print(result, *humanOut, *tablesOnly)
-		if *metricsFlag {
-			fmt.Fprint(os.Stderr, metricsCollector.PrometheusText())
-		}
-	}
+	// No subcommand matched — show help (use "dbexplain collect" for schema collection)
+	manual.PrintHelp()
 }
 
 // totalTables counts total tables across all databases in an instance.

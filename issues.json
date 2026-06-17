@@ -1075,6 +1075,17 @@
       "description": "彻底移除 -env CLI 参数（含 --env），不再接受该标志。所有子命令（collect/execute/repl/list/check）默认且唯一的行为是从配置文件自动加载 DSN。\n\n改动范围：\n1. 源码 7 文件：main.go、execute.go、repl.go、check/handler.go、list/handler.go、encrypt/handler.go、manual.go\n2. docs/ 目录 ~30 个文件：所有 -env flag 引用移除或替换\n3. dbexplain-skill/ 目录 ~4 个文件\n4. docs/test/ ~20 个文件\n5. issues.json 更新\n\nBREAKING: (1) `dbexplain -env` 报 flag not defined; (2) `dbexplain check --env=false` 不再可行; (3) 传 -env 给任意子命令报错。",
       "file": "src/cmd/dbexplain/main.go, execute.go, repl.go; src/internal/check/handler.go, list/handler.go, encrypt/handler.go, manual.go; docs/*, dbexplain-skill/*",
       "created": "2026-06-17"
+    },
+    {
+      "id": "ISSUE-099",
+      "title": "[v0.1.8] 禁止非显式 collect — 必须 dbexplain collect 子命令",
+      "status": "open",
+      "priority": "medium",
+      "category": "improvement",
+      "description": "当前 `dbexplain <flags>`（bare 带 -dsn/-include 等参数，无子命令）仍进入采集路径。改为仅 `dbexplain collect <flags>` 可采集。`dbexplain version` 注册为合法子命令（原落到 collect 路径）。",
+      "file": "src/cmd/dbexplain/main.go",
+      "created": "2026-06-17",
+      "labels": ["v0.1.8", "improvement"]
     }
   ]
 }
