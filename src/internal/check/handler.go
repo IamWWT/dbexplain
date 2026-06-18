@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/IamWWT/dbexplain/internal/connector"
@@ -50,7 +51,7 @@ func Handle(args []string) {
 		return nil
 	})
 	configFile := fs.String("config", "", "JSON config file path")
-	timeout := fs.Duration("timeout", 10*time.Second, "Per-DSN connection timeout")
+	timeout := fs.Duration("timeout", 20*time.Second, "Per-DSN connection timeout")
 	sample := fs.Bool("sample", false, "enable sample row fetching for comment inference (default: off)")
 	labelFilter := fs.String("label", "", "filter by label")
 	jsonOut := fs.Bool("json", false, "output JSON")
@@ -115,102 +116,161 @@ func Handle(args []string) {
 	if logErr == nil {
 		defer logFile.Close()
 	}
-	baseCheckLogger := log.New(logFile, "[check] ", log.LstdFlags)
 
 	// ── Check each DSN ──
 	results := make([]checkResult, 0, len(entries))
 	var syntaxFails, connFails, connOK int
 
+	// Pre-parse all DSNs synchronously; separate invalid entries.
+	type connTask struct {
+		entry  config.DSNEntry
+		parsed *dsn.DSN
+		index  int // 0-based
+	}
+	var tasks []connTask
 	for i, e := range entries {
-		r := checkResult{EnvKey: e.EnvKey}
-
-		// 1. Parse DSN syntax
 		parsed, err := dsn.ParseDSN(e.Raw)
 		if err != nil {
-			r.SyntaxOK = false
-			r.SyntaxErr = config.SanitizeErr(err).Error()
+			r := checkResult{EnvKey: e.EnvKey, SyntaxOK: false, SyntaxErr: config.SanitizeErr(err).Error()}
 			syntaxFails++
 			results = append(results, r)
-			baseCheckLogger.Printf("(#%d) SYNTAX ERROR: %s", i+1, r.SyntaxErr)
 			continue
 		}
-		r.SyntaxOK = true
-		r.Kind = parsed.Kind
-		r.Label = parsed.Label
+		r := checkResult{
+			EnvKey:  e.EnvKey,
+			SyntaxOK: true,
+			Kind:    parsed.Kind,
+			Label:   parsed.Label,
+			HostPort: parsed.Host,
+		}
 		if r.Label == "" {
 			r.Label = "(no label)"
 		}
-		r.HostPort = parsed.Host
 		if parsed.Port != "" {
 			r.HostPort += ":" + parsed.Port
 		}
-
-		// ── Log check progress to dbexplain.log ──
-		var checkLogger *log.Logger
-		if logErr == nil {
-			checkLogger = log.New(logFile, fmt.Sprintf("[label=%s] [kind=%s] [check] ", r.Label, r.Kind), log.LstdFlags)
-			checkLogger.Printf("(#%d) connecting ...", i+1)
-		}
-
-		// 2. Test connectivity via connector.Collect with timeout
-		// Suppress collection logs during connectivity check
-		collectCtx := connector.WithLogger(context.Background(),
-			log.New(io.Discard, "", 0))
-		if *sample {
-			collectCtx = connector.WithSample(collectCtx)
-		}
-		ctx, cancel := context.WithTimeout(collectCtx, *timeout)
-		oldLogOut := log.Writer()
-		log.SetOutput(io.Discard)
-		start := time.Now()
-
-		// Run collection in sub-goroutine with timeout guard.
-		// pgx/v5 context cancellation is reliable, but the
-		// select+channel pattern remains as a defense-in-depth timeout guard.
-		type chkResult struct {
-			err error
-		}
-		ch := make(chan chkResult, 1)
-		go func() {
-			_, subErr := connector.Collect(ctx, e.Raw)
-			ch <- chkResult{subErr}
-		}()
-		// Use time.NewTimer for reliable timeout (the runtime timer heap fires
-		// independently even when a driver is blocked in a syscall).
-		timeTimer := time.NewTimer(*timeout)
-		select {
-		case res := <-ch:
-			err = res.err
-			timeTimer.Stop()
-		case <-timeTimer.C:
-			err = context.DeadlineExceeded
-		}
-		cancel()
-
-		log.SetOutput(oldLogOut)
-		elapsed := time.Since(start)
-		r.Latency = fmt.Sprintf("%dms", elapsed.Milliseconds())
-
-		if err != nil {
-			r.ConnOK = false
-			r.ConnMsg = config.SanitizeErr(err).Error()
-			connFails++
-			if checkLogger != nil {
-				checkLogger.Printf("(#%d) FAIL after %s: %s", i+1, r.Latency, r.ConnMsg)
-			}
-		} else {
-			r.ConnOK = true
-			connOK++
-			if checkLogger != nil {
-				checkLogger.Printf("(#%d) OK (%s)", i+1, r.Latency)
-			}
-		}
-
 		results = append(results, r)
+		tasks = append(tasks, connTask{entry: e, parsed: parsed, index: i})
 	}
 
-	// ── JSON output ──
+	// ── Table header (non-JSON mode) ──
+	if !*jsonOut {
+		fmt.Println()
+		fmt.Printf("  Config file: %s\n", config.DescribeConfigSource(configPath))
+		fmt.Printf("  DSN count:   %d\n\n", len(entries))
+		fmt.Println("  No. EnvKey Label              Kind       Host:Port             Syntax  Connect")
+		fmt.Println("  " + strings.Repeat("─", 95))
+
+		// Print syntax-invalid rows immediately
+		for i, r := range results {
+			if r.SyntaxOK {
+				continue
+			}
+			idx := fmt.Sprintf("%-4d", i+1)
+			key := r.EnvKey
+			if key == "" {
+				key = "—"
+			}
+			errMsg := truncateErr(r.SyntaxErr, 55)
+			fmt.Printf("  %s %-6s %-18s %-10s %-20s %-7s ❌ %s\n",
+				idx, key, "", "", "", "❌ FAIL", errMsg)
+		}
+	}
+
+	// ── Concurrent connection checks ──
+	resultCh := make(chan struct {
+		index int
+		r     checkResult
+	}, len(tasks))
+	var wg sync.WaitGroup
+
+	for _, t := range tasks {
+		wg.Add(1)
+		go func(t connTask) {
+			defer wg.Done()
+			r := results[t.index] // partial result from pre-parse (missing conn fields)
+
+			// Log check progress to dbexplain.log
+			var checkLogger *log.Logger
+			if logErr == nil {
+				checkLogger = log.New(logFile, fmt.Sprintf("[label=%s] [kind=%s] [check] ", r.Label, r.Kind), log.LstdFlags)
+				checkLogger.Printf("(#%d) connecting ...", t.index+1)
+			}
+
+			// Test connectivity via connector.Collect with timeout
+			collectCtx := connector.WithLogger(context.Background(),
+				log.New(io.Discard, "", 0))
+			if *sample {
+				collectCtx = connector.WithSample(collectCtx)
+			}
+			ctx, cancel := context.WithTimeout(collectCtx, *timeout)
+			oldLogOut := log.Writer()
+			log.SetOutput(io.Discard)
+			start := time.Now()
+
+			// Run collection in sub-goroutine with timeout guard.
+			type chkResult struct {
+				err error
+			}
+			ch := make(chan chkResult, 1)
+			go func() {
+				_, subErr := connector.Collect(ctx, t.entry.Raw)
+				ch <- chkResult{subErr}
+			}()
+			timeTimer := time.NewTimer(*timeout)
+			select {
+			case res := <-ch:
+				r.ConnOK = res.err == nil
+				timeTimer.Stop()
+			case <-timeTimer.C:
+				r.ConnOK = false
+			}
+			cancel()
+			log.SetOutput(oldLogOut)
+			elapsed := time.Since(start)
+			r.Latency = fmt.Sprintf("%dms", elapsed.Milliseconds())
+
+			if r.ConnOK {
+				if checkLogger != nil {
+					checkLogger.Printf("(#%d) OK (%s)", t.index+1, r.Latency)
+				}
+			} else {
+				err := context.DeadlineExceeded
+				select {
+				case res := <-ch:
+					err = res.err
+				default:
+				}
+				r.ConnMsg = config.SanitizeErr(err).Error()
+				if checkLogger != nil {
+					checkLogger.Printf("(#%d) FAIL after %s: %s", t.index+1, r.Latency, r.ConnMsg)
+				}
+			}
+
+			resultCh <- struct {
+				index int
+				r     checkResult
+			}{t.index, r}
+		}(t)
+	}
+
+	// Close resultCh when all goroutines finish
+	go func() {
+		wg.Wait()
+		close(resultCh)
+	}()
+
+	// ── Collect and stream results ──
 	if *jsonOut {
+		// JSON mode: collect all then output at once
+		for res := range resultCh {
+			results[res.index] = res.r
+			if res.r.ConnOK {
+				connOK++
+			} else {
+				connFails++
+			}
+		}
 		summary := checkSummary{
 			Total:     len(entries),
 			Connected: connOK,
@@ -230,34 +290,27 @@ func Handle(args []string) {
 		return
 	}
 
-	// ── Table header ──
-	fmt.Println()
-	fmt.Printf("  Config file: %s\n", config.DescribeConfigSource(configPath))
-	fmt.Printf("  DSN count:   %d\n\n", len(entries))
-	fmt.Println("  No. EnvKey Label              Kind       Host:Port             Syntax  Connect")
-	fmt.Println("  " + strings.Repeat("─", 95))
+	// Table mode: stream each result as it arrives
+	for res := range resultCh {
+		results[res.index] = res.r
+		i := res.index
+		r := res.r
 
-	for i, r := range results {
+		if r.ConnOK {
+			connOK++
+		} else {
+			connFails++
+		}
+
 		idx := fmt.Sprintf("%-4d", i+1)
 		key := r.EnvKey
 		if key == "" {
 			key = "—"
 		}
-
-		if !r.SyntaxOK {
-			errMsg := truncateErr(r.SyntaxErr, 55)
-			fmt.Printf("  %s %-6s %-18s %-10s %-20s %-7s ❌ %s\n",
-				idx, key, "",
-				"", "",
-				"❌ FAIL", errMsg)
-			continue
-		}
-
 		label := r.Label
 		if len(label) > 18 {
 			label = label[:15] + "..."
 		}
-
 		syntaxCol := "✅ OK"
 
 		var connCol string
