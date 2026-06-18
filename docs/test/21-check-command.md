@@ -3,6 +3,7 @@
 > 验证配置文件格式、DSN 语法正确性、数据库连通性。
 
 > **v0.1.8 变更**: `-env` 参数已移除，始终自动加载配置文件。
+> **v0.1.9 变更**: 并发检测 + 流式输出（结果按完成先后逐行打印）；默认超时 10s → 20s。
 
 ---
 
@@ -31,10 +32,10 @@ $BIN check
 # 每行格式: No. EnvKey Label Kind Host:Port Syntax Connect
 ```
 
-## 21.2 检查全部 DSN（本地 env）
+## 21.2 检查默认超时（20s）
 
 ```bash
-$BIN check --timeout 10s
+$BIN check --timeout 20s
 # 预期: 全部 DSN 显示 ✅ OK 或 ❌ FAIL，含连接延迟 (ms)
 # 退出码: 0（全部成功）或 1（有失败）
 ```
@@ -122,6 +123,18 @@ cd /tmp && ../src/dbexplain check 2>&1 | grep -c "auto-env-test"
 rm -f /tmp/.env-check-test
 ```
 
+## 21.12 并发流式输出（v0.1.9+）
+
+验证结果按完成先后逐行打印，而非一次性输出。
+
+```bash
+$BIN check --dsn 'sqlite:///tmp/a.db?label=a' \
+           --dsn 'sqlite:///tmp/b.db?label=b' \
+           --dsn 'sqlite:///tmp/c.db?label=c'
+# 预期: 每行输出带序号（No.），各结果在各自检测完成后立即打印，
+#       而非等全部完成才统一输出。最终有 Summary 行。
+```
+
 ---
 
 ## 检查清单
@@ -130,7 +143,7 @@ rm -f /tmp/.env-check-test
 |---|--------|------|------|
 | 21.0 | 帮助信息 | check 出现在子命令列表中 | |
 | 21.1 | 自动 .env 发现 | 加载配置文件 | |
-| 21.2 | 全量 DSN 检查 | 每行显示语法/连接状态 | |
+| 21.2 | 默认超时 20s | 每行显示语法/连接状态 | |
 | 21.3 | 单个 DSN | SQLite 自动创建并连接 | |
 | 21.4 | 无效语法 | Syntax ❌ FAIL + 错误原因 | |
 | 21.5 | 无法连接 | Syntax ✅ OK + Connect ❌ FAIL + 错误详情 | |
@@ -139,3 +152,5 @@ rm -f /tmp/.env-check-test
 | 21.8 | 超时机制 | 超时后显示 ⏱ timeout | |
 | 21.9 | 凭证安全 | 密码脱敏显示 | |
 | 21.10 | 混合结果 | 退出码反映失败项 | |
+| 21.11 | 自动加载配置文件 | 无参数自动加载 .env | |
+| 21.12 | 并发流式输出 | 结果逐行打印，非一次性 | |

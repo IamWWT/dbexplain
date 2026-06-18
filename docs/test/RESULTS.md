@@ -1,10 +1,9 @@
-# 测试结果报告 v0.1.8
+# 测试结果报告 v0.1.9
 
-> 执行日期: 2026-06-17 (v0.1.8 闭环验证)
+> 执行日期: 2026-06-18 (v0.1.9 闭环验证)
 > 测试环境: Linux x86-64 (amd64), Go 1.26.1
 > 数据源: 16 个 (mysql, clickhouse, sqlite×2, qdrant, es, postgres, redis×2, mongodb, xlsx×2, csv×2, tsv, prometheus)
-> 二进制: dbexplain-linux-amd64-std (v0.1.8, full tags, CGO_ENABLED=0)
-> DuckDB 版（-duckdb, CGO_ENABLED=1）未在本轮测试（未安装 aarch64-linux-gnu-gcc 交叉工具链）
+> 二进制: dbexplain-linux-amd64-std (v0.1.9, full tags, CGO_ENABLED=0)
 
 ---
 
@@ -55,6 +54,18 @@
 **总计: 全部通过。**
 
 ---
+
+## 新增 v0.1.9 验证项
+
+| 特性 | 状态 | 验证方式 |
+|------|------|---------|
+| **check 默认超时 10s → 20s** | **PASS** | `handler.go` flag 定义 `20*time.Second`，`go build -tags full` + `go vet` 通过 |
+| **check 并发流式输出** | **PASS** | goroutine + channel 并发检测，结果逐行打印。`go build` + `go test` 全部通过 |
+| **GaussDB DSN 构建分离 buildGaussDBDSN()** | **PASS** | 新增独立 `buildGaussDBDSN()` 函数，`TestBuildGaussDBDSN` 单元测试通过（gaussdb scheme + defaults） |
+| **buildPGDSN 恢复纯 postgres 协议** | **PASS** | `TestBuildPGDSN` 所有用例通过，不再处理 gaussdb scheme |
+| **代码注释清理（lib/pq 引用）** | **PASS** | 4 处 Go 文件 + CLAUDE.md 移除 lib/pq 历史引用 |
+| **文档同步更新** | **PASS** | 7 处文档已同步：GAUSSDB.md / gaussdb.md / POSTGRESQL.md / PASSWORD_SPECIAL_CHARS.md / CODE_MAP.md / CHANGELOG 中英 / 测试文档 |
+| **构建验证** | **PASS** | `go build -tags full` / `go vet ./...` / `go test -tags full ./...` / `bash build.sh minimal postgres,gaussdb` 全部通过 |
 
 ## 新增 v0.1.8 验证项
 

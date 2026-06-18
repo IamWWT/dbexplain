@@ -1,20 +1,22 @@
 # Changelog
 
-## v0.1.9 (2026-06-18) — check/list --json Output
+## v0.1.9 (2026-06-18) — check Concurrent Streaming + GaussDB Dual-Driver Architecture
 
-### ✨ check/list --json Output Structure
+### ⚡ check Concurrent Streaming — Default Timeout 20s
 
-- **`dbexplain check --json` now outputs structured JSON**: Contains `summary` (total/connected/failed/invalid) and `results` array (per-DSN envKey/label/kind/hostPort/syntaxOK/connOK/latency/connMsg). Falls back to the original table format without `--json`.
-- **`dbexplain list --json` now outputs structured JSON**: DSN entries array (index/label/kind/hostPort/database) to stdout; `Log directory` info to stderr. Falls back to the original table format without `--json`.
-- **`dbexplain list` now supports `--log-dir` flag**: Defaults to `/var/log/dbexplain`. Displays the resolved log directory at the top of the listing (`ResolveLogDir` fallback chain: `/var/log/dbexplain` → `$XDG_STATE_HOME/dbexplain/logs` → `~/.local/state/dbexplain/logs` → `/tmp/dbexplain/logs`).
-- **ISSUE-101**: check/list --json output structure.
+- **`dbexplain check` concurrent detection**: All DSN connectivity checks run concurrently via goroutines instead of sequentially. Results stream line-by-line as each completes, no need to wait for all to finish.
+- **`dbexplain check --timeout` default 10s → 20s**: 10s can be insufficient for slow connections like GaussDB; 20s is more reliable.
+- **`--json` mode** collects all results then outputs once (JSON requires a complete document).
+- **ISSUE-103**: check concurrent streaming output.
 
 ### 🔧 GaussDB Dual-Driver Architecture — pgx/v5(PostgreSQL) + gaussdb-go(GaussDB)
 
 - **GaussDB connector switches to dedicated `gaussdb-go` driver**: `gaussdb.go` import changed from `pgx/v5/stdlib` to `github.com/HuaweiCloudDeveloper/gaussdb-go/stdlib`, `sql.Open("postgres", ...)` → `sql.Open("gaussdb", ...)`. gaussdb-go is Huawei's officially maintained pgx fork (v1.0.0-rc1) with native support for `password_encryption_type=1` (Huawei custom SHA256) and `password_encryption_type=2` (SM3), permanently resolving the 28P01 authentication failure for GaussDB users.
-- **PostgreSQL connector keeps pgx/v5/stdlib unchanged**: Dual-driver architecture — postgresConnector continues using `pgx/v5` (registered as `"postgres"` driver), gaussdbConnector uses `gaussdb-go/stdlib` (registered as `"gaussdb"` driver). Both drivers registered independently with no interference, sharing `buildPGDSN()` / `collectPGDB()` / `executeSQLQuery()` package-level functions with zero code duplication.
+- **PostgreSQL connector keeps pgx/v5/stdlib unchanged**: Dual-driver architecture — postgresConnector continues using `pgx/v5` (registered as `"postgres"` driver), gaussdbConnector uses `gaussdb-go/stdlib` (registered as `"gaussdb"` driver). Both drivers registered independently with no interference.
+- **DSN builder fully separated**: GaussDB has a new dedicated `buildGaussDBDSN()` (hardcoded `gaussdb://` scheme). PostgreSQL's `buildPGDSN()` reverts to hardcoded `"postgres"` scheme. Previously sharing `buildPGDSN()` caused gaussdb-go to receive `postgres://` URIs, falling back to Unix socket and failing all connections. `collectPGDB()` / `executeSQLQuery()` package-level functions remain shared.
+- **Code comment cleanup**: 4 Go source files + CLAUDE.md remove historical lib/pq references (pgx context cancellation is now stable and reliable).
 - **New dependencies**: `github.com/HuaweiCloudDeveloper/gaussdb-go v1.0.0-rc1` + `github.com/tjfoc/gmsm v1.4.1` (SM3 national crypto algorithm support). `github.com/jackc/pgx/v5 v5.10.0` retained for the PostgreSQL connector.
-- **Documentation updated**: 6 files (GAUSSDB.md / gaussdb.md / POSTGRESQL.md / PASSWORD_SPECIAL_CHARS.md / db_sections.go / issues.json ISSUE-102).
+- **Documentation updated**: 7 files (GAUSSDB.md / gaussdb.md / POSTGRESQL.md / PASSWORD_SPECIAL_CHARS.md / CODE_MAP.md / db_sections.go / issues.json ISSUE-102).
 - **Verification**: `go build -tags full` / `go vet` / `go test` / `bash build.sh minimal postgres,gaussdb` all pass.
 
 ## v0.1.8 (2026-06-17) — `-env` Flag Completely Removed (Breaking Change)

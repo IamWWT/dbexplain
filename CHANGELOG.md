@@ -1,20 +1,22 @@
 # 变更日志
 
-## v0.1.9 (2026-06-18) — check/list 增加 --json 输出
+## v0.1.9 (2026-06-18) — check 并发流式检测 + GaussDB 双驱动架构
 
-### ✨ check/list --json 输出结构
+### ⚡ check 并发流式检测 — 默认超时 20s
 
-- **`dbexplain check --json` 新增结构化 JSON 输出**：包含 `summary`（total/connected/failed/invalid）和 `results` 数组（per-DSN 的 envKey/label/kind/hostPort/syntaxOK/connOK/latency/connMsg）。无 `--json` 时保持原表格输出。
-- **`dbexplain list --json` 新增结构化 JSON 输出**：DSN 条目数组（index/label/kind/hostPort/database），输出到 stdout；`Log directory` 信息输出到 stderr。无 `--json` 时保持原表格输出。
-- **`dbexplain list` 新增 `--log-dir` 标志**：默认 `/var/log/dbexplain`，列表顶部显示实际解析后的日志目录路径（`ResolveLogDir` 降级链：`/var/log/dbexplain` → `$XDG_STATE_HOME/dbexplain/logs` → `~/.local/state/dbexplain/logs` → `/tmp/dbexplain/logs`）。
-- **ISSUE-101**: check/list --json 输出结构。
+- **`dbexplain check` 并发检测**：所有 DSN 连接检测通过 goroutine 并发执行，不再逐个串行检测。结果按完成先后顺序逐行流式打印，无需等待全部完成。
+- **`dbexplain check --timeout` 默认值 10s → 20s**：GaussDB 等慢连接场景下 10s 可能不足，20s 更稳妥。
+- **`--json` 模式保持完整收集后一次性输出**（JSON 格式要求完整文档）。
+- **ISSUE-103**: check 并发流式输出。
 
 ### 🔧 GaussDB 双驱动架构 — pgx/v5(PostgreSQL) + gaussdb-go(GaussDB)
 
 - **GaussDB 连接器切换为独立驱动 `gaussdb-go`**：`gaussdb.go` 导入从 `pgx/v5/stdlib` 改为 `github.com/HuaweiCloudDeveloper/gaussdb-go/stdlib`，`sql.Open("postgres", ...)` → `sql.Open("gaussdb", ...)`。gaussdb-go 是华为官方维护的 pgx 分支（v1.0.0-rc1），原生支持 `password_encryption_type=1`（华为定制 SHA256）和 `password_encryption_type=2`（SM3），彻底解决 GaussDB 用户 28P01 认证失败问题。
-- **PostgreSQL 连接器保持 pgx/v5/stdlib 不变**：双驱动架构设计，postgresConnector 继续使用 `pgx/v5`（注册为 `"postgres"` 驱动），gaussdbConnector 使用 `gaussdb-go/stdlib`（注册为 `"gaussdb"` 驱动）。两套驱动独立注册、互不干扰，共享 `buildPGDSN()` / `collectPGDB()` / `executeSQLQuery()` 包级函数，零代码重复。
+- **PostgreSQL 连接器保持 pgx/v5/stdlib 不变**：双驱动架构设计，postgresConnector 继续使用 `pgx/v5`（注册为 `"postgres"` 驱动），gaussdbConnector 使用 `gaussdb-go/stdlib`（注册为 `"gaussdb"` 驱动）。两套驱动独立注册、互不干扰。
+- **DSN 构建完全分离**：GaussDB 新增独立 `buildGaussDBDSN()`（固定 `gaussdb://` 协议头），PostgreSQL 的 `buildPGDSN()` 恢复硬编码 `"postgres"` scheme。gaussdb-go 不识别 `postgres://`，原来共用 `buildPGDSN()` 导致 GaussDB 接收 `postgres://` 协议回退到 Unix socket 连接失败。`collectPGDB()` / `executeSQLQuery()` 包级函数继续共享。
+- **代码注释清理**：4 处 Go 文件 + CLAUDE.md 移除 lib/pq 历史引用（pgx context 取消已稳定可靠）。
 - **新增依赖**：`github.com/HuaweiCloudDeveloper/gaussdb-go v1.0.0-rc1` + `github.com/tjfoc/gmsm v1.4.1`（SM3 国密算法支持）。`github.com/jackc/pgx/v5 v5.10.0` 保留为 PostgreSQL 连接器依赖。
-- **文档更新**：6 处文档同步更新（GAUSSDB.md / gaussdb.md / POSTGRESQL.md / PASSWORD_SPECIAL_CHARS.md / db_sections.go / issues.json ISSUE-102）。
+- **文档更新**：7 处文档同步更新（GAUSSDB.md / gaussdb.md / POSTGRESQL.md / PASSWORD_SPECIAL_CHARS.md / CODE_MAP.md / db_sections.go / issues.json ISSUE-102）。
 - **验证**：`go build -tags full` / `go vet` / `go test` / `bash build.sh minimal postgres,gaussdb` 全部通过。
 
 ## v0.1.8 (2026-06-17) — `-env` 参数彻底移除（Breaking Change）
