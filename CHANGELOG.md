@@ -19,6 +19,12 @@
 - **文档更新**：7 处文档同步更新（GAUSSDB.md / gaussdb.md / POSTGRESQL.md / PASSWORD_SPECIAL_CHARS.md / CODE_MAP.md / db_sections.go / issues.json ISSUE-102）。
 - **验证**：`go build -tags full` / `go vet` / `go test` / `bash build.sh minimal postgres,gaussdb` 全部通过。
 
+### 🐛 check 并发重构 Bug：错误被吞掉，显示为 context deadline exceeded
+
+- **check 并发重构引入错误吞掉 bug**（ISSUE-104）：goroutine 并发改造时，`handler.go` 中子 goroutine 的 Collector 结果在第一个 `select { case res := <-ch ... }` 已被消费，但下方错误展示代码再次通过 `select { case res := <-ch ... }` 尝试读取——channel 已空，fallback 到 `context.DeadlineExceeded`。导致 MySQL/TDSQL 等认证失败（`access denied` / `password expired`）被吞掉，显示为 `after 1ms context deadline exceeded`。
+- **修复**：引入 `connErr` 变量在第一个 select 中保存真实错误，展示直接复用，不再二次读 channel。
+- **影响**：所有 `dbexplain check` 用户，此前快速失败的连接（<1s）均可能被误报为 context deadline exceeded。
+
 ## v0.1.8 (2026-06-17) — `-env` 参数彻底移除（Breaking Change）
 
 ### 💥 Breaking: `-env` 参数彻底移除

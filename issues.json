@@ -1121,6 +1121,30 @@
       "file": "src/internal/connector/postgres.go, gaussdb.go",
       "created": "2026-06-18",
       "labels": ["v0.1.9", "bug", "gaussdb", "security"]
+    },
+    {
+      "id": "ISSUE-103",
+      "title": "[v0.1.9] check 并发流式检测 — 所有 DSN 通过 goroutine 并发执行，结果按完成先后逐行打印",
+      "status": "closed",
+      "closed": "2026-06-18",
+      "priority": "medium",
+      "category": "feature",
+      "description": "dbexplain check 改为 goroutine 并发执行 DSN 连接检测。结果通过 channel 回传，主 goroutine 逐行流式打印，不等全部完成。非 JSON 模式流式输出；JSON 模式保持收集后一次性输出。同时默认超时从 10s 改为 20s。",
+      "file": "src/internal/check/handler.go",
+      "created": "2026-06-18",
+      "labels": ["v0.1.9", "check", "concurrency", "improvement"]
+    },
+    {
+      "id": "ISSUE-104",
+      "title": "[v0.1.9] check handler 并发重构导致错误吞掉 — 二次 channel 读不到真实错误，显示 context deadline exceeded",
+      "status": "closed",
+      "closed": "2026-06-18",
+      "priority": "high",
+      "category": "bug",
+      "description": "check 并发重构中引入：子 goroutine 的 Collector 结果在第一个 select 已被消费，但错误展示代码 try 再次从同一个 channel 读，因 channel 已空 fallback 到 context.DeadlineExceeded。真实错误（如 MySQL access denied、password expired）被吞掉，用户看到的是「after 1ms context deadline exceeded」。修复：用 connErr 变量在第一个 select 中保存真实错误，直接复用，不二次读 channel。",
+      "file": "src/internal/check/handler.go",
+      "created": "2026-06-18",
+      "labels": ["v0.1.9", "bug", "check", "concurrency"]
     }
   ]
 }

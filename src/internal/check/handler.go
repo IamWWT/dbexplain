@@ -217,13 +217,16 @@ func Handle(args []string) {
 				_, subErr := connector.Collect(ctx, t.entry.Raw)
 				ch <- chkResult{subErr}
 			}()
+			var connErr error // actual error from collector (nil=connected)
 			timeTimer := time.NewTimer(*timeout)
 			select {
 			case res := <-ch:
 				r.ConnOK = res.err == nil
+				connErr = res.err
 				timeTimer.Stop()
 			case <-timeTimer.C:
 				r.ConnOK = false
+				connErr = context.DeadlineExceeded
 			}
 			cancel()
 			log.SetOutput(oldLogOut)
@@ -235,11 +238,9 @@ func Handle(args []string) {
 					checkLogger.Printf("(#%d) OK (%s)", t.index+1, r.Latency)
 				}
 			} else {
-				err := context.DeadlineExceeded
-				select {
-				case res := <-ch:
-					err = res.err
-				default:
+				err := connErr
+				if err == nil {
+					err = context.DeadlineExceeded
 				}
 				r.ConnMsg = config.SanitizeErr(err).Error()
 				if checkLogger != nil {

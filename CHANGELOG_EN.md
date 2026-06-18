@@ -19,6 +19,12 @@
 - **Documentation updated**: 7 files (GAUSSDB.md / gaussdb.md / POSTGRESQL.md / PASSWORD_SPECIAL_CHARS.md / CODE_MAP.md / db_sections.go / issues.json ISSUE-102).
 - **Verification**: `go build -tags full` / `go vet` / `go test` / `bash build.sh minimal postgres,gaussdb` all pass.
 
+### 🐛 check Concurrent Refactoring Bug: Real Errors Swallowed, Showing context deadline exceeded
+
+- **Concurrent refactoring introduced error swallowing** (ISSUE-104): In `handler.go`, the collector result from the sub-goroutine was consumed by the first `select { case res := <-ch ... }`, but the error display code below tried to read from the same channel again via `select { case res := <-ch ... }` — the channel was already empty, falling back to `context.DeadlineExceeded`. This caused MySQL/TDSQL auth failures (`access denied` / `password expired`) to be displayed as `after 1ms context deadline exceeded`.
+- **Fix**: Introduced `connErr` variable in the first select to save the actual error. Error display reuses `connErr` directly instead of re-reading the channel.
+- **Impact**: All `dbexplain check` users — fast-failing connections (<1s) were previously misreported as context deadline exceeded.
+
 ## v0.1.8 (2026-06-17) — `-env` Flag Completely Removed (Breaking Change)
 
 ### 💥 Breaking: `-env` Flag Removed
