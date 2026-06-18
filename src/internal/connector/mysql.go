@@ -516,10 +516,12 @@ func openMySQL(d *dsn.DSN) (*sql.DB, error) {
 	cfg.Net = "tcp"
 	cfg.Addr = host + ":" + port
 	cfg.DBName = d.DBName
-	cfg.Params = map[string]string{
-		"charset":   "utf8mb4",
-		"parseTime": "true",
-	}
+	cfg.ParseTime = true
+	// NOTE: Do NOT put charset in cfg.Params. go-sql-driver v1.10.0+ sends ALL
+	// Params to MySQL as "SET key = value" via handleParams(). "charset" is NOT
+	// a MySQL system variable (correct names: character_set_client, etc.),
+	// causing Error 1193 (HY000): Unknown system variable 'charset'.
+	// go-sql-driver already negotiates utf8mb4 via the handshake collation ID.
 	cfg.Timeout = 5 * time.Second
 
 	connector, err := mysql.NewConnector(cfg)

@@ -17,10 +17,8 @@ pingCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 if err := db.PingContext(pingCtx); err != nil { ... }
 ```
 
-- **驱动选择**：使用 `github.com/lib/pq` 纯 Go 实现 PostgreSQL 协议，无需 CGO。  
-- **DSN 构建**：将 DSN 参数转换为 `host=... port=... user=... password=... dbname=... sslmode=disable connect_timeout=5` 格式，硬编码关闭 SSL（`sslmode=disable`），适用于内网环境或未配置 TLS 的数据库。若需 SSL 需修改代码。  
-- **超时控制**：Ping 操作使用独立 5 秒超时，避免长时间阻塞。  
-- **错误包装**：所有 error 均通过 `schema.NewDBError` 返回，包含脱敏 DSN 和上下文（`open`、`ping`、`list databases` 等），便于定位。
+- **驱动选择**：使用 `github.com/jackc/pgx/v5` 纯 Go 实现 PostgreSQL 协议，无需 CGO。
+- **DSN 构建**：将 DSN 参数转换为 `postgres://user:pass@host:port/db?sslmode=...&connect_timeout=5` URI 格式，通过 `url.URL.UserPassword` 自动百分号编码密码特殊字符。默认 `sslmode=disable`，适用于内网环境或未配置 TLS 的数据库。
 
 ### 1.2 数据库列表获取
 
@@ -137,7 +135,7 @@ fkRows, err := db.QueryContext(ctx, `
 
 ### 执行方式
 
-使用 Go 标准库 `database/sql` 统一接口，底层驱动为 `lib/pq` 纯 Go 实现 PostgreSQL 协议。GaussDB 共用同一连接器，行为完全一致。
+使用 Go 标准库 `database/sql` 统一接口，底层驱动为 `pgx/v5` 纯 Go 实现 PostgreSQL 协议。注：GaussDB 使用独立的 `gaussdb-go` 驱动连接（华为维护的 pgx 分支），行为与 PostgreSQL 基本一致。
 
 ### 最大行数控制
 

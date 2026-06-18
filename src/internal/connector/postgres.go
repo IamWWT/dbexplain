@@ -7,18 +7,22 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"net"
+	"net/url"
 	"strings"
 	"time"
 
-	_ "github.com/lib/pq"
 	"github.com/IamWWT/dbexplain/internal/capabilities"
 	"github.com/IamWWT/dbexplain/internal/dsn"
 	"github.com/IamWWT/dbexplain/internal/query"
 	"github.com/IamWWT/dbexplain/internal/schema"
+	"github.com/jackc/pgx/v5/stdlib"
 )
 
 func init() {
 	Register("postgres", func() Connector { return postgresConnector{} })
+	// 注册 pgx 为 "postgres" 驱动名，使现有 sql.Open("postgres", ...) 无需改动。
+	sql.Register("postgres", stdlib.GetDefaultDriver())
 	// gaussdb 使用独立的 gaussdbConnector（见 gaussdb.go），
 	// 针对 Oracle 兼容模式 (DBCOMPATIBILITY='A'/'ORA') 做了适配。
 }
@@ -126,7 +130,8 @@ func collectPGDB(ctx context.Context, db *sql.DB, dbName, redactedDSN string) (*
 	}
 
 	// 设置 statement_timeout 作为服务端超时兜底
-	// GaussDB 的 lib/pq 兼容层可能不支持 Go context 取消传播，
+	// pgx 的 context 取消可靠，但 statement_timeout 仍作为防御兜底，
+	// 确保服务端主动取消长时间运行的查询。
 	// statement_timeout 确保服务端主动取消长时间运行的查询。
 	// 上限 30s 防止单个 statement 占满整个 --timeout 预算。
 	setPGStatementTimeout(ctx, db)
@@ -586,14 +591,21 @@ func buildPGDSN(d *dsn.DSN) string {
 	if sslmode == "" {
 		sslmode = "disable"
 	}
-	// Quote and escape password for lib/pq key=value format.
-	// Single-quoted values support \' and \\ escape sequences,
-	// protecting against special chars like spaces, quotes, and backslashes.
-	password := strings.ReplaceAll(d.Password, `\`, `\\`)
-	password = strings.ReplaceAll(password, `'`, `\'`)
-	password = `'` + password + `'`
-	return fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s connect_timeout=5",
-		host, port, d.User, password, dbname, sslmode)
+
+	// Build URI-style connection string for pgx/v5.
+	// net/url.UserPassword auto-percent-encodes special chars in user/password.
+	u := &url.URL{
+		Scheme: "postgres",
+		User:   url.UserPassword(d.User, d.Password),
+		Host:   net.JoinHostPort(host, port),
+		Path:   dbname,
+	}
+	q := u.Query()
+	q.Set("sslmode", sslmode)
+	q.Set("connect_timeout", "5")
+	u.RawQuery = q.Encode()
+
+	return u.String()
 }
 
 // ExecQuery implements query.Queryable for PostgreSQL and GaussDB.

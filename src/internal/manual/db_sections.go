@@ -153,7 +153,7 @@ func printManualGaussDB(p func(string, string) string) {
       oracleCompatible=true — Oracle 兼容模式优化，跳过 datistemplate 查询
 
     Oracle 兼容模式 (DBCOMPATIBILITY='A' / 'ORA'):
-      GaussDB 使用 PostgreSQL 协议通过 lib/pq 驱动连接。
+      GaussDB 使用 PostgreSQL 协议通过 gaussdb-go 驱动连接（华为 fork 的 pgx，原生支持 SHA256/SM3 认证）。
       采集机制与 PostgreSQL 基于相同的 pg_catalog 系统表。
       已实机验证（v0.1.7）在 Oracle 兼容模式下可用。
 
@@ -190,7 +190,7 @@ func printManualGaussDB(p func(string, string) string) {
       oracleCompatible=true — skip datistemplate query for Oracle-compatible mode
 
     Oracle-compatible mode (DBCOMPATIBILITY='A' / 'ORA'):
-      GaussDB connects via PostgreSQL wire protocol using lib/pq driver.
+      GaussDB connects via PostgreSQL wire protocol using gaussdb-go driver (Huawei fork of pgx with native SHA256/SM3 auth).
       Collection mechanism is based on pg_catalog, same as PostgreSQL.
       Verified (v0.1.7) working in Oracle-compatible mode.
 

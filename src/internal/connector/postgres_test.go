@@ -3,6 +3,7 @@
 package connector
 
 import (
+	"net/url"
 	"strings"
 	"testing"
 
@@ -81,10 +82,29 @@ func TestBuildPGDSN(t *testing.T) {
 			name: "full DSN",
 			raw:  "postgres://user1:pass1@myhost:5433/mydb?label=test&sslmode=require",
 			check: func(t *testing.T, s string) {
-				for _, want := range []string{"host=myhost", "port=5433", "user=user1", "dbname=mydb", "sslmode=require"} {
-					if !strings.Contains(s, want) {
-						t.Errorf("buildPGDSN missing %q in: %s", want, s)
-					}
+				u, err := url.Parse(s)
+				if err != nil {
+					t.Fatalf("buildPGDSN returned invalid URL: %s", s)
+				}
+				if u.Scheme != "postgres" {
+					t.Errorf("scheme = %q, want postgres", u.Scheme)
+				}
+				user := u.User.Username()
+				pass, _ := u.User.Password()
+				if user != "user1" || pass != "pass1" {
+					t.Errorf("userinfo = (%q, %q), want (user1, pass1)", user, pass)
+				}
+				if u.Host != "myhost:5433" {
+					t.Errorf("host = %q, want myhost:5433", u.Host)
+				}
+				if strings.TrimPrefix(u.Path, "/") != "mydb" {
+					t.Errorf("path = %q, want /mydb", u.Path)
+				}
+				if u.Query().Get("sslmode") != "require" {
+					t.Errorf("sslmode = %q, want require", u.Query().Get("sslmode"))
+				}
+				if u.Query().Get("connect_timeout") != "5" {
+					t.Errorf("connect_timeout = %q, want 5", u.Query().Get("connect_timeout"))
 				}
 			},
 		},
@@ -92,10 +112,21 @@ func TestBuildPGDSN(t *testing.T) {
 			name: "defaults",
 			raw:  "postgres://user1@/",
 			check: func(t *testing.T, s string) {
-				for _, want := range []string{"host=127.0.0.1", "port=5432", "user=user1", "sslmode=disable"} {
-					if !strings.Contains(s, want) {
-						t.Errorf("buildPGDSN missing default %q in: %s", want, s)
-					}
+				u, err := url.Parse(s)
+				if err != nil {
+					t.Fatalf("buildPGDSN returned invalid URL: %s", s)
+				}
+				if !strings.Contains(u.Host, "127.0.0.1") {
+					t.Errorf("host should contain 127.0.0.1: %s", u.Host)
+				}
+				if u.User.Username() != "user1" {
+					t.Errorf("username = %q, want user1", u.User.Username())
+				}
+				if u.Query().Get("sslmode") != "disable" {
+					t.Errorf("sslmode = %q, want disable", u.Query().Get("sslmode"))
+				}
+				if u.Query().Get("connect_timeout") != "5" {
+					t.Errorf("connect_timeout = %q, want 5", u.Query().Get("connect_timeout"))
 				}
 			},
 		},
@@ -103,8 +134,14 @@ func TestBuildPGDSN(t *testing.T) {
 			name: "password with special chars",
 			raw:  "postgres://user1:p@ss'word@host:5432/db",
 			check: func(t *testing.T, s string) {
-				if !strings.Contains(s, "password=") {
-					t.Errorf("buildPGDSN missing password field: %s", s)
+				u, err := url.Parse(s)
+				if err != nil {
+					t.Fatalf("buildPGDSN returned invalid URL: %s", s)
+				}
+				user := u.User.Username()
+				pass, _ := u.User.Password()
+				if user != "user1" || pass != "p@ss'word" {
+					t.Errorf("userinfo = (%q, %q), want (user1, p@ss'word)", user, pass)
 				}
 			},
 		},
@@ -112,8 +149,12 @@ func TestBuildPGDSN(t *testing.T) {
 			name: "connect_timeout present",
 			raw:  "postgres://user1:pass@host:5432/db",
 			check: func(t *testing.T, s string) {
-				if !strings.Contains(s, "connect_timeout=5") {
-					t.Errorf("buildPGDSN missing connect_timeout=5: %s", s)
+				u, err := url.Parse(s)
+				if err != nil {
+					t.Fatalf("buildPGDSN returned invalid URL: %s", s)
+				}
+				if u.Query().Get("connect_timeout") != "5" {
+					t.Errorf("connect_timeout = %q, want 5", u.Query().Get("connect_timeout"))
 				}
 			},
 		},
@@ -125,11 +166,74 @@ func TestBuildPGDSN(t *testing.T) {
 				t.Fatalf("ParseDSN(%q) error: %v", tt.raw, err)
 			}
 			connStr := buildPGDSN(d)
+			t.Logf("buildPGDSN output: %s", connStr)
 			tt.check(t, connStr)
 		})
 	}
 }
 
+func TestBuildGaussDBDSN(t *testing.T) {
+	tests := []struct {
+		name  string
+		raw   string
+		check func(*testing.T, string)
+	}{
+		{
+			name: "gaussdb scheme",
+			raw:  "gaussdb://user1:pass1@gauss-host:25308/mydb?label=test",
+			check: func(t *testing.T, s string) {
+				u, err := url.Parse(s)
+				if err != nil {
+					t.Fatalf("buildGaussDBDSN returned invalid URL: %s", s)
+				}
+				if u.Scheme != "gaussdb" {
+					t.Errorf("scheme = %q, want gaussdb", u.Scheme)
+				}
+				if u.Host != "gauss-host:25308" {
+					t.Errorf("host = %q, want gauss-host:25308", u.Host)
+				}
+				user := u.User.Username()
+				pass, _ := u.User.Password()
+				if user != "user1" || pass != "pass1" {
+					t.Errorf("userinfo = (%q, %q), want (user1, pass1)", user, pass)
+				}
+				if strings.TrimPrefix(u.Path, "/") != "mydb" {
+					t.Errorf("path = %q, want /mydb", u.Path)
+				}
+			},
+		},
+		{
+			name: "defaults",
+			raw:  "gaussdb://user1@/",
+			check: func(t *testing.T, s string) {
+				u, err := url.Parse(s)
+				if err != nil {
+					t.Fatalf("buildGaussDBDSN returned invalid URL: %s", s)
+				}
+				if u.Scheme != "gaussdb" {
+					t.Errorf("scheme = %q, want gaussdb", u.Scheme)
+				}
+				if u.User.Username() != "user1" {
+					t.Errorf("username = %q, want user1", u.User.Username())
+				}
+				if u.Query().Get("connect_timeout") != "5" {
+					t.Errorf("connect_timeout = %q, want 5", u.Query().Get("connect_timeout"))
+				}
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			d, err := dsn.ParseDSN(tt.raw)
+			if err != nil {
+				t.Fatalf("ParseDSN(%q) error: %v", tt.raw, err)
+			}
+			connStr := buildGaussDBDSN(d)
+			t.Logf("buildGaussDBDSN output: %s", connStr)
+			tt.check(t, connStr)
+		})
+	}
+}
 func TestFormatGaussDBType(t *testing.T) {
 	tests := []struct {
 		typname   string

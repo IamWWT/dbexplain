@@ -1064,7 +1064,7 @@
       "file": "src/internal/dsn/dsn.go, src/internal/dsn/passwd_test.go, src/internal/connector/mysql.go, src/internal/connector/postgres.go, docs/test/23-password-special-chars.md",
       "created": "2026-06-16",
       "labels": ["v0.1.8", "security", "dsn", "testing"]
-    }
+    },
     {
       "id": "ISSUE-098",
       "title": "[v0.1.8] 彻底移除 -env 参数 — 始终自动加载配置文件",
@@ -1086,6 +1086,41 @@
       "file": "src/cmd/dbexplain/main.go",
       "created": "2026-06-17",
       "labels": ["v0.1.8", "improvement"]
+    },
+    {
+      "id": "ISSUE-100",
+      "title": "[v0.1.8] MySQL charset 连接失败 — go-sql-driver v1.10.0 handleParams() 变更",
+      "status": "closed",
+      "closed": "2026-06-17",
+      "priority": "critical",
+      "category": "bug",
+      "description": "go-sql-driver/mysql v1.10.0 handleParams() 遍历 cfg.Params 发送 SET key=value 给 MySQL。charset 不是 MySQL 系统变量，报 Error 1193: Unknown system variable 'charset'。修复：移除 cfg.Params 中的 charset/parseTime，改用 cfg.ParseTime=true 字段 + handshake 默认 utf8mb4 协商。",
+      "file": "src/internal/connector/mysql.go",
+      "created": "2026-06-17",
+      "labels": ["v0.1.8", "bug", "mysql", "critical"]
+    },
+    {
+      "id": "ISSUE-101",
+      "title": "[v0.1.9] check/list 子命令增加 --json 输出结构",
+      "status": "open",
+      "priority": "medium",
+      "category": "improvement",
+      "description": "check 和 list 子命令缺少 --json 输出结构。check 应输出 summary + results JSON，list 应输出 entries 数组 JSON。",
+      "file": "src/internal/check/handler.go, src/internal/list/handler.go",
+      "created": "2026-06-18",
+      "labels": ["v0.1.9", "improvement"]
+    },
+    {
+      "id": "ISSUE-102",
+      "title": "lib/pq 不支持 GaussDB password_encryption_type=1 (SHA256) — 双驱动架构：pgx/v5(PostgreSQL) + gaussdb-go(GaussDB)",
+      "status": "closed",
+      "closed": "2026-06-18",
+      "priority": "critical",
+      "category": "bug",
+      "description": "Phase 1: lib/pq → pgx/v5/stdlib。Phase 2: 拆分 postgresConnector(pgx/v5) 与 gaussdbConnector(gaussdb-go/stdlib)。gaussdb-go 是华为维护的 pgx 分支，原生支持 password_encryption_type=1(SHA256) 和 password_encryption_type=2(SM3)，注册为 \"gaussdb\" 驱动名。同时 buildPGDSN() 从 key=value 改为 URI 格式(url.URL 自动百分号编码)。postgresConnector 保留 pgx/v5/stdlib(注册为\"postgres\"驱动)。",
+      "file": "src/internal/connector/postgres.go, gaussdb.go",
+      "created": "2026-06-18",
+      "labels": ["v0.1.9", "bug", "gaussdb", "security"]
     }
   ]
 }

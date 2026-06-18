@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.1.9 (2026-06-18) — check/list --json Output
+
+### ✨ check/list --json Output Structure
+
+- **`dbexplain check --json` now outputs structured JSON**: Contains `summary` (total/connected/failed/invalid) and `results` array (per-DSN envKey/label/kind/hostPort/syntaxOK/connOK/latency/connMsg). Falls back to the original table format without `--json`.
+- **`dbexplain list --json` now outputs structured JSON**: DSN entries array (index/label/kind/hostPort/database) to stdout; `Log directory` info to stderr. Falls back to the original table format without `--json`.
+- **`dbexplain list` now supports `--log-dir` flag**: Defaults to `/var/log/dbexplain`. Displays the resolved log directory at the top of the listing (`ResolveLogDir` fallback chain: `/var/log/dbexplain` → `$XDG_STATE_HOME/dbexplain/logs` → `~/.local/state/dbexplain/logs` → `/tmp/dbexplain/logs`).
+- **ISSUE-101**: check/list --json output structure.
+
+### 🔧 GaussDB Dual-Driver Architecture — pgx/v5(PostgreSQL) + gaussdb-go(GaussDB)
+
+- **GaussDB connector switches to dedicated `gaussdb-go` driver**: `gaussdb.go` import changed from `pgx/v5/stdlib` to `github.com/HuaweiCloudDeveloper/gaussdb-go/stdlib`, `sql.Open("postgres", ...)` → `sql.Open("gaussdb", ...)`. gaussdb-go is Huawei's officially maintained pgx fork (v1.0.0-rc1) with native support for `password_encryption_type=1` (Huawei custom SHA256) and `password_encryption_type=2` (SM3), permanently resolving the 28P01 authentication failure for GaussDB users.
+- **PostgreSQL connector keeps pgx/v5/stdlib unchanged**: Dual-driver architecture — postgresConnector continues using `pgx/v5` (registered as `"postgres"` driver), gaussdbConnector uses `gaussdb-go/stdlib` (registered as `"gaussdb"` driver). Both drivers registered independently with no interference, sharing `buildPGDSN()` / `collectPGDB()` / `executeSQLQuery()` package-level functions with zero code duplication.
+- **New dependencies**: `github.com/HuaweiCloudDeveloper/gaussdb-go v1.0.0-rc1` + `github.com/tjfoc/gmsm v1.4.1` (SM3 national crypto algorithm support). `github.com/jackc/pgx/v5 v5.10.0` retained for the PostgreSQL connector.
+- **Documentation updated**: 6 files (GAUSSDB.md / gaussdb.md / POSTGRESQL.md / PASSWORD_SPECIAL_CHARS.md / db_sections.go / issues.json ISSUE-102).
+- **Verification**: `go build -tags full` / `go vet` / `go test` / `bash build.sh minimal postgres,gaussdb` all pass.
+
 ## v0.1.8 (2026-06-17) — `-env` Flag Completely Removed (Breaking Change)
 
 ### 💥 Breaking: `-env` Flag Removed
@@ -22,6 +39,19 @@
 ### 🔧 Execute Logs Unified to `dbexplain.log`
 
 - **All execute sub-paths now write to `dbexplain.log`**: 5 locations (`handleExecute`, `dslExecSQL`, `dslExecPromQL`, `dslExecFederated` SQL materialization, `dslExecFederated` PromQL materialization) previously created separate `<label>.log` files. All now write to the shared `dbexplain.log`, reducing log file clutter in `/var/log/dbexplain/`.
+
+### 💥 Breaking: `dbexplain <flags>` No Longer Triggers Collection
+
+- **`dbexplain <flags>` (bare with args, no subcommand) now shows help instead of collecting**: Previously, running `dbexplain -dsn '...'` without a subcommand would fall through to schema collection. Now only `dbexplain collect -dsn '...'` triggers collection. This is the final step of the subcommand-only migration (ISSUE-072 continuation).
+- **`dbexplain version` registered as a proper subcommand**: `dbexplain version` prints the version string instead of falling through to the collect path.
+- **`dbexplain --version` preserved**: Pre-scan of `os.Args` handles `--version` before the help path, maintaining backward compatibility.
+- **~240 lines of dead code removed**: The default collect fallthrough path with its own flag declarations, DSN loading, filtering, collect loop, and analysis code has been deleted from `main.go`. The file shrunk from ~940 to ~680 lines.
+- **Migration**: Replace `dbexplain -dsn '...'` with `dbexplain collect -dsn '...'`. All other subcommands (`collect`, `check`, `execute`, `list`, `all`, `repl`, `diff`, `encrypt`, `<dbtype>`) are unaffected.
+
+### 🐛 MySQL Connection Fix — go-sql-driver v1.10.0 charset Regression
+
+- **Root cause**: go-sql-driver/mysql v1.10.0's `handleParams()` iterates over all entries in `cfg.Params` and sends `SET key = value` to MySQL. `charset=utf8mb4` was set as a Params entry, but `charset` is not a MySQL system variable, causing `Error 1193 (HY000): Unknown system variable 'charset'`.
+- **Fix**: Removed `charset` and `parseTime` from `cfg.Params`. `cfg.ParseTime = true` is now set via its dedicated struct field. Character set is negotiated via the driver's default handshake collation (`utf8mb4_general_ci`). All MySQL connections restored.
 
 ## v0.1.7 (2026-06-16) — Prometheus Meta Table Rows + CTE Write Detection Hardening + GaussDB Oracle-Compatible Mode Adaptation
 

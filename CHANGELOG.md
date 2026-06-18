@@ -1,5 +1,22 @@
 # 变更日志
 
+## v0.1.9 (2026-06-18) — check/list 增加 --json 输出
+
+### ✨ check/list --json 输出结构
+
+- **`dbexplain check --json` 新增结构化 JSON 输出**：包含 `summary`（total/connected/failed/invalid）和 `results` 数组（per-DSN 的 envKey/label/kind/hostPort/syntaxOK/connOK/latency/connMsg）。无 `--json` 时保持原表格输出。
+- **`dbexplain list --json` 新增结构化 JSON 输出**：DSN 条目数组（index/label/kind/hostPort/database），输出到 stdout；`Log directory` 信息输出到 stderr。无 `--json` 时保持原表格输出。
+- **`dbexplain list` 新增 `--log-dir` 标志**：默认 `/var/log/dbexplain`，列表顶部显示实际解析后的日志目录路径（`ResolveLogDir` 降级链：`/var/log/dbexplain` → `$XDG_STATE_HOME/dbexplain/logs` → `~/.local/state/dbexplain/logs` → `/tmp/dbexplain/logs`）。
+- **ISSUE-101**: check/list --json 输出结构。
+
+### 🔧 GaussDB 双驱动架构 — pgx/v5(PostgreSQL) + gaussdb-go(GaussDB)
+
+- **GaussDB 连接器切换为独立驱动 `gaussdb-go`**：`gaussdb.go` 导入从 `pgx/v5/stdlib` 改为 `github.com/HuaweiCloudDeveloper/gaussdb-go/stdlib`，`sql.Open("postgres", ...)` → `sql.Open("gaussdb", ...)`。gaussdb-go 是华为官方维护的 pgx 分支（v1.0.0-rc1），原生支持 `password_encryption_type=1`（华为定制 SHA256）和 `password_encryption_type=2`（SM3），彻底解决 GaussDB 用户 28P01 认证失败问题。
+- **PostgreSQL 连接器保持 pgx/v5/stdlib 不变**：双驱动架构设计，postgresConnector 继续使用 `pgx/v5`（注册为 `"postgres"` 驱动），gaussdbConnector 使用 `gaussdb-go/stdlib`（注册为 `"gaussdb"` 驱动）。两套驱动独立注册、互不干扰，共享 `buildPGDSN()` / `collectPGDB()` / `executeSQLQuery()` 包级函数，零代码重复。
+- **新增依赖**：`github.com/HuaweiCloudDeveloper/gaussdb-go v1.0.0-rc1` + `github.com/tjfoc/gmsm v1.4.1`（SM3 国密算法支持）。`github.com/jackc/pgx/v5 v5.10.0` 保留为 PostgreSQL 连接器依赖。
+- **文档更新**：6 处文档同步更新（GAUSSDB.md / gaussdb.md / POSTGRESQL.md / PASSWORD_SPECIAL_CHARS.md / db_sections.go / issues.json ISSUE-102）。
+- **验证**：`go build -tags full` / `go vet` / `go test` / `bash build.sh minimal postgres,gaussdb` 全部通过。
+
 ## v0.1.8 (2026-06-17) — `-env` 参数彻底移除（Breaking Change）
 
 ### 💥 Breaking: `-env` 参数彻底移除
@@ -22,6 +39,19 @@
 ### 🔧 execute 日志统一为 `dbexplain.log`
 
 - **`execute.go` 所有子路径统一写 `dbexplain.log`**：`handleExecute`、`dslExecSQL`、`dslExecPromQL`、`dslExecFederated`（SQL 物化 + PromQL 物化）5 处此前各自创建 `<label>.log` 独立文件，现全部统一写入 `dbexplain.log`。减少 `/var/log/dbexplain/` 目录下零散日志文件。
+
+### 💥 Breaking: `dbexplain <flags>` 不再触发采集
+
+- **`dbexplain <flags>`（带参数无子命令）改为显示帮助而非采集**：此前 `dbexplain -dsn '...'` 不带子命令时仍进入采集路径。现在仅 `dbexplain collect -dsn '...'` 可触发采集。这是子命令化迁移的最后一步（ISSUE-072 延续）。
+- **`dbexplain version` 注册为合法子命令**：`dbexplain version` 输出版本号而非落到采集路径。
+- **`dbexplain --version` 保留兼容性**：预扫描 `os.Args` 处理 `--version` 后再走帮助路径，保持向后兼容。
+- **~240 行死代码移除**：默认采集降级路径（含独立 flag 声明、DSN 加载过滤、采集循环、分析代码）已从 `main.go` 删除。文件从 ~940 行缩减至 ~680 行。
+- **迁移**：将 `dbexplain -dsn '...'` 改为 `dbexplain collect -dsn '...'`。其他子命令（`collect`、`check`、`execute`、`list`、`all`、`repl`、`diff`、`encrypt`、`<dbtype>`）不受影响。
+
+### 🐛 MySQL 连接修复 — go-sql-driver v1.10.0 charset 回归
+
+- **根因**：go-sql-driver/mysql v1.10.0 的 `handleParams()` 遍历 `cfg.Params` 发送 `SET key = value` 给 MySQL。`charset=utf8mb4` 被放在 Params 中，但 `charset` 不是 MySQL 系统变量，报 `Error 1193: Unknown system variable 'charset'`。
+- **修复**：从 `cfg.Params` 移除 `charset` 和 `parseTime`。改用 `cfg.ParseTime = true` 专有字段设置。字符集通过驱动默认 handshake collation（`utf8mb4_general_ci`）协商。所有 MySQL 连接恢复正常。
 
 ## v0.1.7 (2026-06-16) — Prometheus Meta 表行输出 + CTE 写检测加固 + GaussDB Oracle 兼容模式适配
 

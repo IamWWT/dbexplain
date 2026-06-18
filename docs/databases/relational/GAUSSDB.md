@@ -1,6 +1,6 @@
 # GaussDB 结构采集与排障手册
 
-本文档详细说明 `dbexplain` 工具中 GaussDB 连接器（`connector/gaussdb.go` + `connector/postgres.go`）的实现机制。GaussDB 使用独立的 `gaussdbConnector`（复用 `postgres` 包级函数如 `collectPGDB()`、`buildPGDSN()`），通过 `lib/pq` 驱动连接，帮助理解其如何安全地获取数据库列表、表结构、列信息、索引和外键，并对无注释字段进行语义推断，同时提供常见问题的排障方法。
+本文档详细说明 `dbexplain` 工具中 GaussDB 连接器（`connector/gaussdb.go` + `connector/postgres.go`）的实现机制。GaussDB 使用独立的 `gaussdbConnector`（复用 `postgres` 包级函数如 `collectPGDB()`，但**独立构建 DSN** 通过 `buildGaussDBDSN()`），使用 `gaussdb-go/stdlib` 驱动连接（华为维护的 pgx 分支，原生支持 SHA256/SM3 认证），帮助理解其如何安全地获取数据库列表、表结构、列信息、索引和外键，并对无注释字段进行语义推断，同时提供常见问题的排障方法。
 
 ---
 
@@ -9,21 +9,16 @@
 ### 1.1 连接建立与安全 Ping
 
 ```
-connStr := buildPGDSN(d)
-db, err := sql.Open("postgres", connStr)
+connStr := buildGaussDBDSN(d)
+db, err := sql.Open("gaussdb", connStr)
 defer db.Close()
 
 pingCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 if err := db.PingContext(pingCtx); err != nil { ... }
 ```
 
-- **驱动选择**：使用 `github.com/lib/pq`，与 PostgreSQL 共用同一驱动。GaussDB 兼容 PostgreSQL 有线协议，因此无需独立驱动。
-- **独立连接器**：GaussDB 使用 `gaussdb.go` 中独立的 `gaussdbConnector`，与 `postgresConnector` 分离。包级函数（`collectPGDB()`、`buildPGDSN()`、`executeSQLQuery()`）复用避免代码重复。
-- **Kind 标识**：Kind 字段从 DSN 的 scheme 中提取（`gaussdb://`），由 `gaussdbConnector.Collect()` 设置为 `"gaussdb"`，确保输出报告中正确标识。
-- **DSN 格式**：`gaussdb://user:password@host:25308/dbname?label=xxx&sslmode=disable`。GaussDB 默认端口为 25308（区别于 PostgreSQL 的 5432）。label 参数用于在 `.env` 文件中匹配配置项（`DBEXPLAIN_DSN_xxx`）。
-- **SSL 控制**：通过 DSN 查询参数 `sslmode` 控制，支持 `disable`、`require`、`verify-ca`、`verify-full` 等标准 lib/pq 模式。默认使用 `sslmode=disable` 适用于内网环境；若服务器要求 SSL，需在 DSN 中指定 `sslmode=require` 并提供 CA 证书路径。
-- **超时控制**：Ping 操作使用独立的 5 秒超时，避免长时间阻塞。
-- **错误包装**：所有 error 均通过 `schema.NewDBError` 返回，记录脱敏 DSN 和操作上下文（`open`、`ping`、`list databases` 等）。
+- **双驱动架构**：GaussDB 使用 `github.com/HuaweiCloudDeveloper/gaussdb-go`（华为维护的 pgx 分支，`gaussdb-go/stdlib` 驱动），DSN 协议为 `gaussdb://`。PostgreSQL 使用独立的 `pgx/v5/stdlib` 驱动，DSN 协议为 `postgres://`。两套驱动在 Go 的 `database/sql` 中各自注册，互不干扰。gaussdb-go 不会识别 `postgres://` scheme，若误用会退化为 Unix socket。
+- **独立 DSN 构建器**：`buildGaussDBDSN()` 与 PostgreSQL 的 `buildPGDSN()` 完全分离，固定输出 `gaussdb://` 协议头。`buildPGDSN()` 也不再处理 `gaussdb://` scheme。
 
 ### 1.2 数据库列表获取
 
@@ -185,7 +180,7 @@ skip gaussdb://...: gaussdb ping: dial tcp x.x.x.x:25308: connect: connection re
 
 ## 四、经验总结
 
-1. **与 PostgreSQL 的异同**：GaussDB 共用 PostgreSQL 连接器代码（`postgres.go`），但通过 DSN scheme（`gaussdb://`）区分 Kind 标识，确保报告中正确标注数据库类型。多 Schema 覆盖能力使其更适合大型企业级部署。
+1. **与 PostgreSQL 的异同**：GaussDB 共用 PostgreSQL 的 `collectPGDB()` 采集函数（表/列/索引/外键逻辑相同），但 DSN 构建完全独立：GaussDB 使用 `buildGaussDBDSN()`（`gaussdb://` 协议 + `"gaussdb"` 驱动），PostgreSQL 使用 `buildPGDSN()`（`postgres://` 协议 + `"postgres"` 驱动）。DSN scheme（`gaussdb://`）区分 Kind 标识，确保报告中正确标注数据库类型。多 Schema 覆盖能力使其更适合大型企业级部署。
 2. **权限最小化**：工具仅需 `CONNECT` 和对 `pg_catalog` 的 `SELECT` 权限。建议创建专用只读角色：`CREATE ROLE dbexplain_reader LOGIN PASSWORD 'xxx'; GRANT CONNECT ON DATABASE dbname TO dbexplain_reader; GRANT USAGE ON SCHEMA schema_name TO dbexplain_reader; GRANT SELECT ON ALL TABLES IN SCHEMA schema_name TO dbexplain_reader;`。
 3. **SSL 配置**：生产环境建议启用 SSL，在 DSN 中使用 `sslmode=require`。若使用自签名证书，需配合 `sslcert`、`sslkey`、`sslrootcert` 参数指定证书路径。
 4. **行数统计依赖**：`n_live_tup` 的准确性取决于统计信息的新鲜度，在频繁写入的场景下建议定期执行 `ANALYZE`。不应用于精确计数场景。

@@ -108,8 +108,8 @@ func ExecQuery(opts *ExecOptions) (*query.QueryResult, error) {
 	}
 
 	// Run query in sub-goroutine with timeout guard.
-	// lib/pq context cancellation is unreliable when the server is unresponsive,
-	// so a select+channel pattern ensures we don't hang forever.
+	// pgx/v5 context cancellation is reliable, but the
+	// select+channel pattern remains as a defense-in-depth timeout guard.
 	type execResult struct {
 		result *query.QueryResult
 		err    error

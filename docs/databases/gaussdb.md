@@ -1,12 +1,23 @@
 # GaussDB 兼容性指南
 
-> GaussDB（华为高斯数据库）在 `dbexplain` 中的兼容性说明。v0.1.7 实机验证。
+> GaussDB（华为高斯数据库）在 `dbexplain` 中的兼容性说明。v0.1.9 实机验证。
 
 ---
 
 ## GaussDB 概述
 
-GaussDB 兼容 PostgreSQL 协议，通过 `lib/pq` 驱动连接。Schema 采集基于 `pg_catalog` 系统表，与 PostgreSQL 共享采集逻辑。
+GaussDB 兼容 PostgreSQL 协议，通过 `gaussdb-go` 驱动连接（华为维护的 pgx 分支，原生支持 SHA256/SM3 认证）。Schema 采集基于 `pg_catalog` 系统表，与 PostgreSQL 共享 `collectPGDB()` 采集逻辑，但使用**独立的 DSN 构建器** `buildGaussDBDSN()`（`gaussdb://` 协议）。
+
+### 双驱动架构
+
+dbexplain 内部运行两套 PG 协议驱动，互不干扰：
+
+| 组件 | 驱动 | DSN 协议 | 构建函数 |
+|------|------|----------|----------|
+| PostgreSQL | `pgx/v5/stdlib`（`sql.Register("postgres", ...)`） | `postgres://` | `buildPGDSN()` |
+| GaussDB | `gaussdb-go/stdlib`（自注册 `"gaussdb"` 驱动） | `gaussdb://` | `buildGaussDBDSN()` |
+
+> GaussDB 使用 `gaussdb://` 协议头，驱动名固定为 `"gaussdb"`（对应 `gaussdb-go/stdlib` 的注册名）。即使 GaussDB 走的是 PG 协议，DSN 也**不能**写作 `postgres://`，因为 gaussdb-go 不识别 `postgres://` scheme，会退化为 Unix socket 导致连接失败。
 
 ### DSN 配置
 
@@ -102,7 +113,7 @@ GaussDB Oracle 兼容模式**不支持** `EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT
 
 ## 连接注意事项
 
-- **驱动**: `github.com/lib/pq`（PostgreSQL 原生驱动）
+- **驱动**: `github.com/HuaweiCloudDeveloper/gaussdb-go`（华为维护的 pgx 分支，纯 Go，原生支持华为 SHA256/SM3 认证）。与 PostgreSQL 的 `pgx/v5` 双驱动独立注册，互不干扰
 - **端口**: 默认 25308（PostgreSQL 为 5432）
 - **SSL**: 默认 `sslmode=disable`
 - **超时**: 连接超时 5 秒，查询超时由应用层控制
@@ -122,5 +133,5 @@ GaussDB Oracle 兼容模式**不支持** `EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT
 
 | 数据库 | 确认状态 | 最后更新 |
 |--------|---------|---------|
-| GaussDB 单节点 | ✅ 已验证 | 2026-06-16 |
-| GaussDB 分布式 | ⚠️ 部分待确认 | 2026-06-16 |
+| GaussDB 单节点 | ✅ 已验证 | 2026-06-18 |
+| GaussDB 分布式 | ⚠️ 部分待确认 | 2026-06-18 |

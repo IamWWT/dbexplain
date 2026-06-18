@@ -7,9 +7,11 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"net"
+	"net/url"
 	"time"
 
-	_ "github.com/lib/pq"
+	_ "github.com/HuaweiCloudDeveloper/gaussdb-go/stdlib"
 
 	"github.com/IamWWT/dbexplain/internal/capabilities"
 	"github.com/IamWWT/dbexplain/internal/dsn"
@@ -34,8 +36,8 @@ func (gaussdbConnector) Capabilities() []capabilities.Capability {
 }
 
 func (gaussdbConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instance, error) {
-	connStr := buildPGDSN(d)
-	db, err := sql.Open("postgres", connStr)
+	connStr := buildGaussDBDSN(d)
+	db, err := sql.Open("gaussdb", connStr)
 	if err != nil {
 		return nil, schema.NewDBError(d.Redacted(), "", "", "open", err)
 	}
@@ -118,10 +120,10 @@ func (gaussdbConnector) Collect(ctx context.Context, d *dsn.DSN) (*schema.Instan
 }
 
 // ExecQuery implements query.Queryable for GaussDB.
-// GaussDB Oracle-compatible mode uses PostgreSQL wire protocol via lib/pq.
+// GaussDB Oracle-compatible mode uses PostgreSQL wire protocol via gaussdb-go/stdlib.
 func (gaussdbConnector) ExecQuery(ctx context.Context, opts query.ExecuteOpts) (*query.QueryResult, error) {
-	connStr := buildPGDSN(opts.DSN)
-	db, err := sql.Open("postgres", connStr)
+	connStr := buildGaussDBDSN(opts.DSN)
+	db, err := sql.Open("gaussdb", connStr)
 	if err != nil {
 		return nil, fmt.Errorf("gaussdb open: %w", err)
 	}
@@ -150,4 +152,36 @@ func (gaussdbConnector) ExecQuery(ctx context.Context, opts query.ExecuteOpts) (
 		return nil, fmt.Errorf("gaussdb query: %w", err)
 	}
 	return result, nil
+}
+
+// buildGaussDBDSN builds a URI-style connection string for gaussdb-go driver.
+// Uses gaussdb:// scheme — gaussdb-go does not recognize postgres:// scheme.
+func buildGaussDBDSN(d *dsn.DSN) string {
+	host := d.Host
+	if host == "" {
+		host = "127.0.0.1"
+	}
+	port := d.Port
+	if port == "" {
+		port = "5432"
+	}
+	dbname := d.DBName
+	if dbname == "" {
+		dbname = d.User
+	}
+	sslmode := d.SSLMode
+	if sslmode == "" {
+		sslmode = "disable"
+	}
+	u := &url.URL{
+		Scheme: "gaussdb",
+		User:   url.UserPassword(d.User, d.Password),
+		Host:   net.JoinHostPort(host, port),
+		Path:   dbname,
+	}
+	q := u.Query()
+	q.Set("sslmode", sslmode)
+	q.Set("connect_timeout", "5")
+	u.RawQuery = q.Encode()
+	return u.String()
 }

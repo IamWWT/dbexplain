@@ -4,6 +4,7 @@ package check
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -18,6 +19,28 @@ import (
 	"github.com/IamWWT/dbexplain/internal/dsn"
 )
 
+// checkResult is the JSON-serializable structure for the check subcommand.
+type checkResult struct {
+	EnvKey    string `json:"envKey,omitempty"`
+	Label     string `json:"label,omitempty"`
+	Kind      string `json:"kind,omitempty"`
+	HostPort  string `json:"hostPort,omitempty"`
+	SyntaxOK  bool   `json:"syntaxOK"`
+	SyntaxErr string `json:"syntaxErr,omitempty"`
+	ConnOK    bool   `json:"connOK"`
+	ConnMsg   string `json:"connMsg,omitempty"`
+	Latency   string `json:"latency,omitempty"`
+}
+
+// checkSummary is the top-level JSON output structure.
+type checkSummary struct {
+	Total     int            `json:"total"`
+	Connected int            `json:"connected"`
+	Failed    int            `json:"failed"`
+	Invalid   int            `json:"invalid"`
+	Results   []checkResult  `json:"results"`
+}
+
 // Handle processes the check subcommand.
 func Handle(args []string) {
 	fs := flag.NewFlagSet("check", flag.ExitOnError)
@@ -30,6 +53,7 @@ func Handle(args []string) {
 	timeout := fs.Duration("timeout", 10*time.Second, "Per-DSN connection timeout")
 	sample := fs.Bool("sample", false, "enable sample row fetching for comment inference (default: off)")
 	labelFilter := fs.String("label", "", "filter by label")
+	jsonOut := fs.Bool("json", false, "output JSON")
 	logDirFlag := fs.String("log-dir", "/var/log/dbexplain", "directory for log files")
 	fs.Parse(args)
 
@@ -85,11 +109,6 @@ func Handle(args []string) {
 		os.Exit(1)
 	}
 
-	// ── Header ──
-	fmt.Println()
-	fmt.Printf("  Config file: %s\n", config.DescribeConfigSource(configPath))
-	fmt.Printf("  DSN count:   %d\n\n", len(entries))
-
 	// ── Open dbexplain.log for check progress logging ──
 	logDir := config.ResolveLogDir(*logDirFlag)
 	logFile, logErr := os.OpenFile(filepath.Join(logDir, "dbexplain.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
@@ -99,49 +118,37 @@ func Handle(args []string) {
 	baseCheckLogger := log.New(logFile, "[check] ", log.LstdFlags)
 
 	// ── Check each DSN ──
-	type result struct {
-		envKey    string
-		label     string
-		kind      string
-		hostPort  string
-		syntaxOK  bool
-		syntaxErr string
-		connOK    bool
-		connMsg   string
-		latency   string
-	}
-
-	results := make([]result, 0, len(entries))
+	results := make([]checkResult, 0, len(entries))
 	var syntaxFails, connFails, connOK int
 
 	for i, e := range entries {
-		r := result{envKey: e.EnvKey}
+		r := checkResult{EnvKey: e.EnvKey}
 
 		// 1. Parse DSN syntax
 		parsed, err := dsn.ParseDSN(e.Raw)
 		if err != nil {
-			r.syntaxOK = false
-			r.syntaxErr = config.SanitizeErr(err).Error()
+			r.SyntaxOK = false
+			r.SyntaxErr = config.SanitizeErr(err).Error()
 			syntaxFails++
 			results = append(results, r)
-			baseCheckLogger.Printf("(#%d) SYNTAX ERROR: %s", i+1, r.syntaxErr)
+			baseCheckLogger.Printf("(#%d) SYNTAX ERROR: %s", i+1, r.SyntaxErr)
 			continue
 		}
-		r.syntaxOK = true
-		r.kind = parsed.Kind
-		r.label = parsed.Label
-		if r.label == "" {
-			r.label = "(no label)"
+		r.SyntaxOK = true
+		r.Kind = parsed.Kind
+		r.Label = parsed.Label
+		if r.Label == "" {
+			r.Label = "(no label)"
 		}
-		r.hostPort = parsed.Host
+		r.HostPort = parsed.Host
 		if parsed.Port != "" {
-			r.hostPort += ":" + parsed.Port
+			r.HostPort += ":" + parsed.Port
 		}
 
 		// ── Log check progress to dbexplain.log ──
 		var checkLogger *log.Logger
 		if logErr == nil {
-			checkLogger = log.New(logFile, fmt.Sprintf("[label=%s] [kind=%s] [check] ", r.label, r.kind), log.LstdFlags)
+			checkLogger = log.New(logFile, fmt.Sprintf("[label=%s] [kind=%s] [check] ", r.Label, r.Kind), log.LstdFlags)
 			checkLogger.Printf("(#%d) connecting ...", i+1)
 		}
 
@@ -158,8 +165,8 @@ func Handle(args []string) {
 		start := time.Now()
 
 		// Run collection in sub-goroutine with timeout guard.
-		// lib/pq context cancellation is unreliable when the server is unresponsive,
-		// so a select+channel pattern ensures we don't hang forever.
+		// pgx/v5 context cancellation is reliable, but the
+		// select+channel pattern remains as a defense-in-depth timeout guard.
 		type chkResult struct {
 			err error
 		}
@@ -168,10 +175,8 @@ func Handle(args []string) {
 			_, subErr := connector.Collect(ctx, e.Raw)
 			ch <- chkResult{subErr}
 		}()
-		// Use time.NewTimer instead of ctx.Done() for reliable timeout.
-		// Go's context.WithTimeout timer may not fire when lib/pq is blocked
-		// in a syscall (the Go runtime cannot schedule the timer goroutine).
-		// time.NewTimer uses the runtime timer heap which fires independently.
+		// Use time.NewTimer for reliable timeout (the runtime timer heap fires
+		// independently even when a driver is blocked in a syscall).
 		timeTimer := time.NewTimer(*timeout)
 		select {
 		case res := <-ch:
@@ -184,40 +189,63 @@ func Handle(args []string) {
 
 		log.SetOutput(oldLogOut)
 		elapsed := time.Since(start)
-		r.latency = fmt.Sprintf("%dms", elapsed.Milliseconds())
+		r.Latency = fmt.Sprintf("%dms", elapsed.Milliseconds())
 
 		if err != nil {
-			r.connOK = false
-			r.connMsg = config.SanitizeErr(err).Error()
+			r.ConnOK = false
+			r.ConnMsg = config.SanitizeErr(err).Error()
 			connFails++
 			if checkLogger != nil {
-				checkLogger.Printf("(#%d) FAIL after %s: %s", i+1, r.latency, r.connMsg)
+				checkLogger.Printf("(#%d) FAIL after %s: %s", i+1, r.Latency, r.ConnMsg)
 			}
 		} else {
-			r.connOK = true
+			r.ConnOK = true
 			connOK++
 			if checkLogger != nil {
-				checkLogger.Printf("(#%d) OK (%s)", i+1, r.latency)
+				checkLogger.Printf("(#%d) OK (%s)", i+1, r.Latency)
 			}
 		}
 
 		results = append(results, r)
 	}
 
+	// ── JSON output ──
+	if *jsonOut {
+		summary := checkSummary{
+			Total:     len(entries),
+			Connected: connOK,
+			Failed:    connFails,
+			Invalid:   syntaxFails,
+			Results:   results,
+		}
+		data, err := json.MarshalIndent(summary, "", "  ")
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "ERROR: json encode: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println(string(data))
+		if syntaxFails > 0 || connFails > 0 {
+			os.Exit(1)
+		}
+		return
+	}
+
 	// ── Table header ──
+	fmt.Println()
+	fmt.Printf("  Config file: %s\n", config.DescribeConfigSource(configPath))
+	fmt.Printf("  DSN count:   %d\n\n", len(entries))
 	fmt.Println("  No. EnvKey Label              Kind       Host:Port             Syntax  Connect")
 	fmt.Println("  " + strings.Repeat("─", 95))
 
 	for i, r := range results {
 		idx := fmt.Sprintf("%-4d", i+1)
-		key := r.envKey
+		key := r.EnvKey
 		if key == "" {
 			key = "—"
 		}
 
-		if !r.syntaxOK {
-			// Syntax error row — show error as the label, blank out kind/host
-			errMsg := truncateErr(r.syntaxErr, 55)
+		if !r.SyntaxOK {
+			errMsg := truncateErr(r.SyntaxErr, 55)
 			fmt.Printf("  %s %-6s %-18s %-10s %-20s %-7s ❌ %s\n",
 				idx, key, "",
 				"", "",
@@ -225,8 +253,7 @@ func Handle(args []string) {
 			continue
 		}
 
-		// Syntax OK row — show connect status
-		label := r.label
+		label := r.Label
 		if len(label) > 18 {
 			label = label[:15] + "..."
 		}
@@ -234,20 +261,19 @@ func Handle(args []string) {
 		syntaxCol := "✅ OK"
 
 		var connCol string
-		if r.connOK {
-			connCol = fmt.Sprintf("✅ OK %s", r.latency)
-		} else if strings.Contains(r.connMsg, "context deadline exceeded") || strings.Contains(r.connMsg, "deadline") {
-			connCol = fmt.Sprintf("⏱ timeout (%s)", r.latency)
+		if r.ConnOK {
+			connCol = fmt.Sprintf("✅ OK %s", r.Latency)
+		} else if strings.Contains(r.ConnMsg, "context deadline exceeded") || strings.Contains(r.ConnMsg, "deadline") {
+			connCol = fmt.Sprintf("⏱ timeout (%s)", r.Latency)
 		} else {
-			connCol = fmt.Sprintf("❌ FAIL %s", r.latency)
+			connCol = fmt.Sprintf("❌ FAIL %s", r.Latency)
 		}
 
 		fmt.Printf("  %s %-6s %-18s %-10s %-20s %-7s %s\n",
-			idx, key, label, r.kind, r.hostPort, syntaxCol, connCol)
+			idx, key, label, r.Kind, r.HostPort, syntaxCol, connCol)
 
-		// Print connection error details on the next line
-		if !r.connOK && !strings.Contains(r.connMsg, "deadline") {
-			errLine := truncateErr(r.connMsg, 100)
+		if !r.ConnOK && !strings.Contains(r.ConnMsg, "deadline") {
+			errLine := truncateErr(r.ConnMsg, 100)
 			fmt.Printf("  %s%s\n", strings.Repeat(" ", 75), errLine)
 		}
 	}
@@ -258,7 +284,6 @@ func Handle(args []string) {
 		len(entries), connOK, connFails, syntaxFails)
 	fmt.Println()
 
-	// Exit with non-zero if any failure
 	if syntaxFails > 0 || connFails > 0 {
 		os.Exit(1)
 	}

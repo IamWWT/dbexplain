@@ -96,7 +96,7 @@
 | `QDRANT.md` | `connector/qdrant.go` | Qdrant 专项采集手册 |
 | `prometheus.md` | `connector/prometheus.go` | Prometheus 时序数据库连接器：targets/labels/metrics 采集 + PromQL 查询 |
 | `metrics.md` | `metrics/collect.go` | 采集指标收集与 Prometheus 文本格式输出 |
-| `GAUSSDB.md` | `connector/gaussdb.go` + `connector/postgres.go` | GaussDB（PG 协议兼容），独立 gaussdbConnector 复用 postgres 包级函数 |
+| `GAUSSDB.md` | `connector/gaussdb.go` + `connector/postgres.go` | GaussDB（PG 协议兼容），独立 gaussdbConnector，独立 DSN 构建器 buildGaussDBDSN()，复用 collectPGDB() 采集逻辑 |
 | `gaussdb.md` | `connector/gaussdb.go` | GaussDB 兼容性指南（Oracle 模式限制说明） |
 | `COMPATIBILITY_GAUSSDB_TDSQL.md` | 无代码变更 | TDSQL（MySQL 兼容）兼容性验证记录 |
 

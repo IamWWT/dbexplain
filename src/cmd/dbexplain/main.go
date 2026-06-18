@@ -122,10 +122,9 @@ func collectInstance(rawDSN string, idx int, p collectParams) {
 	start := time.Now()
 
 	// Run collection in sub-goroutine with timeout guard.
-	// lib/pq context cancellation is unreliable when the server is unresponsive
-	// (GaussDB Oracle compat mode is known to hang). A select+channel pattern
-	// ensures we don't hang forever — the sub-goroutine may leak but the
-	// process continues.
+	// pgx/v5 context cancellation is reliable, but the
+	// select+channel pattern remains as a defense-in-depth timeout guard.
+	// The sub-goroutine may leak but the process continues.
 	type collectOutcome struct {
 		inst *schema.Instance
 		err  error

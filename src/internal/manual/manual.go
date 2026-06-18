@@ -52,7 +52,7 @@ func PrintHelp() {
 		"\ndbexplain — Database Context Compiler  "+version.Version+"\n\n"+
 			"Commands:\n"+
 			"  Schema:\n"+
-			"    dbexplain [flags]              Collect & analyze database schemas\n"+
+			"    dbexplain                      Show help (use \"dbexplain collect\" to collect)\n"+
 			"    dbexplain collect [flags]      Explicit schema collection subcommand\n"+
 			"    dbexplain diff [flags]         Schema diff / delta detection\n"+
 			"  Query:\n"+
@@ -68,7 +68,7 @@ func PrintHelp() {
 		"\ndbexplain — Database Context Compiler  "+version.Version+"\n\n"+
 			"Commands:\n"+
 			"  Schema:\n"+
-			"    dbexplain [flags]              Collect & analyze database schemas\n"+
+			"    dbexplain                      Show help (use \"dbexplain collect\" to collect)\n"+
 			"    dbexplain collect [flags]      Explicit schema collection subcommand\n"+
 			"    dbexplain diff [flags]         Schema diff / delta detection\n"+
 			"  Query:\n"+
@@ -598,6 +598,12 @@ DESCRIPTION
     列出当前环境中所有已配置的数据库连接（从 .env / .env.dbexplain /
     .env.dbexplain.enc 加载）。支持加密配置文件自动解密。
 
+    参数:
+      --json                    输出 JSON 格式 (stdout: entries 数组, stderr: 日志目录)
+      --log-dir <dir>           日志输出目录 (默认 /var/log/dbexplain, 自动降级)
+      -config <file>            JSON 配置文件
+      -dsn <string>             直接指定连接串
+
     输出字段:
       INDEX    DB 索引（用于 --db N）
       LABEL    DSN 标签（用于 --label）
@@ -611,6 +617,7 @@ DESCRIPTION
 
     示例:
       dbexplain list                    # 列出 .env 中所有数据库
+      dbexplain list --json              # JSON 输出 (stdout: entries, stderr: log dir)
       dbexplain list --config db.json   # 从 JSON 配置文件列出
 
 ─── LIST CONFIGURED DATABASES ─────────────────────────────────
@@ -621,6 +628,12 @@ DESCRIPTION
 
     Lists all configured database connections from .env / .env.dbexplain /
     .env.dbexplain.enc. Supports automatic decryption of encrypted configs.
+
+    Flags:
+      --json                    Output JSON (stdout: entries array, stderr: log directory)
+      --log-dir <dir>           Log output directory (default /var/log/dbexplain, auto-fallback)
+      -config <file>            JSON config file
+      -dsn <string>             Direct DSN string
 
     Output fields:
       INDEX    DB index (for --db N)
@@ -636,6 +649,7 @@ DESCRIPTION
 
     Examples:
       dbexplain list                    # List all databases from .env
+      dbexplain list --json              # Output JSON (stdout: entries, stderr: log dir)
       dbexplain list --config db.json   # List from JSON config file
 
 ─── 显式 Schema 采集 ──────────────────────────────────────────

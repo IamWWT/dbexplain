@@ -76,9 +76,9 @@ for i := range items {
 
 > v0.1.7 血泪教训：`WITH x AS (...) INSERT ...` 的 CTE 写检测修复中，```break``` 未跳出外层 ```for``` 导致 ```lastParenEnd``` 被后续 ```VALUES(1)``` 的 ```)``` 覆盖，主查询体检测始终看到空字符串。
 
-### 数据库超时：lib/pq 上下文取消不可靠 — select+channel 兜底
+### 数据库超时：select+channel 兜底（pgx context 取消更可靠但仍保留防御兜底）
 
-PostgreSQL/GaussDB 的 `lib/pq` 驱动在数据库服务器无响应时，`context.WithTimeout` 取消不可靠（CancelRequest 走独立 TCP 连接也可能卡住）。
+PostgreSQL/GaussDB 的 `pgx/v5` 驱动 context 取消可靠，但 select+channel 模式仍作为防御兜底。
 
 ```go
 // ✅ 子 goroutine + select + channel 三层超时防护
@@ -98,13 +98,13 @@ case <-ctx.Done():
     return nil, fmt.Errorf("TIMEOUT: operation exceeded %v", timeout)
 }
 
-// ❌ 仅依赖 lib/pq 的 context 取消
+// ❌ 仅依赖驱动的 context 取消
 ctx, cancel := context.WithTimeout(parentCtx, timeout)
 defer cancel()
-result, err := someLongOp(ctx)  // 可能永远卡住
+result, err := someLongOp(ctx)  // 驱动阻塞时可能永远卡住
 ```
 
-> 子 goroutine 可能泄露（lib/pq 内部线程卡住），但不影响主流程。collect、check、execute 三处均已应用此模式。
+> 子 goroutine 可能泄露（驱动内部线程卡住），但不影响主流程。collect、check、execute 三处均已应用此模式。
 
 ## 安全红线
 

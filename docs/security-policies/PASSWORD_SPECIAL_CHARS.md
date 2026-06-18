@@ -143,7 +143,8 @@ mysql://user:pass%25word@host:3306/db  →  Password = "pass%word"
 | 数据源 | 风险 | 原因 |
 |--------|------|------|
 | **MySQL** | 高 | `buildMySQLDSN()` 用 `fmt.Sprintf("...password=%s...")` 裸拼接，密码中部分字符可能破坏 MySQL DSN 语法格式 |
-| **PostgreSQL/GaussDB** | 高 | `buildPGDSN()` 用 key=value 裸拼接，密码中空格/`'`/`\` 可能破坏 lib/pq 解析 |
+| **PostgreSQL** | 低 | `buildPGDSN()` 使用 URI 格式通过 `url.URL` 构建，驱动为 `pgx/v5/stdlib`，密码自动百分号编码 |
+| **GaussDB** | 低 | `buildGaussDBDSN()` 使用独立 URI 格式通过 `url.URL` 构建，驱动为 `gaussdb-go/stdlib`（华为 pgx 分支），密码自动百分号编码 |
 | **MongoDB** | 中 | `ApplyURI(d.Raw)` 将 Raw URL 直接传给驱动，仅 `#` 被预转义 |
 | **Redis/ClickHouse/ES/Oracle/Hive** | 低 | 密码通过 HTTP Header / 结构体字段 / Base64 / `url.QueryEscape` 传递 |
 
