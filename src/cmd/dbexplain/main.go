@@ -205,7 +205,8 @@ func main() {
 			"csv", "tsv", "xlsx",
 			"prometheus", "prom",
 			"duckdb",
-			"oracle", "hive":
+			"oracle", "hive",
+			"starrocks", "sr":
 			manual.PrintDBManual(os.Args[1], os.Args[2:])
 			return
 		case "all":

@@ -42,6 +42,7 @@
 | | [`databases/relational/ORACLE.md`](databases/relational/ORACLE.md) | Oracle（12c+ 需 FETCH FIRST 支持） |
 | **分析型** | [`databases/analytical/CLICKHOUSE.md`](databases/analytical/CLICKHOUSE.md) | ClickHouse |
 | | [`databases/analytical/HIVE.md`](databases/analytical/HIVE.md) | Hive（通过 HiveServer2 SQL, 端口 10000） |
+| | [`databases/analytical/STARROCKS.md`](databases/analytical/STARROCKS.md) | StarRocks（MySQL 协议 OLAP，FE 端口 9030） |
 | **键值型** | [`databases/nosql/REDIS.md`](databases/nosql/REDIS.md) | Redis |
 | **文档型** | [`databases/nosql/MONGO.md`](databases/nosql/MONGO.md) | MongoDB |
 | | [`databases/nosql/ELASTICSEARCH.md`](databases/nosql/ELASTICSEARCH.md) | Elasticsearch |

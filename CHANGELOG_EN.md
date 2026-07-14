@@ -1,5 +1,36 @@
 # Changelog
 
+## v0.1.10 (2026-07-14) — StarRocks Connector (MySQL-Protocol OLAP)
+
+### 🆕 StarRocks Connector — 17th Data Source
+
+- **New StarRocks connector**: StarRocks is a MySQL-protocol-compatible OLAP database (FE port 9030). dbexplain reuses the `go-sql-driver/mysql` driver (already in go.mod) and the MySQL connector's package-level functions `openMySQL()` / `collectMySQLDB()` / `executeSQLQuery()` — zero new dependencies.
+- **DSN scheme**: `starrocks://user:pass@host:9030/db?label=my-sr`, alias `sr://`. Default port 9030 (FE MySQL protocol port).
+- **Separate connector, reusing protocol-parent functions**: Follows the exact GaussDB ↔ PostgreSQL precedent — GaussDB compiles with the `postgres` tag and reuses `collectPGDB()`; StarRocks compiles with the `mysql` tag and reuses `openMySQL()` / `collectMySQLDB()`. No separate `starrocks` build tag — `//go:build mysql || full`.
+- **OLAP metadata collection**: Parses `PARTITION BY (...)` clause from `SHOW CREATE TABLE` to populate `schema.Table.PartitionKey`; parses `DISTRIBUTED BY HASH(...)` clause to populate `schema.Table.OrderByKey` (reuses existing fields, no schema additions).
+- **System DB filtering**: Automatically skips `information_schema`, `_statistics_`, `_sys`, `_independent_stats`, `starrocks`, `sys`, `mysql`, `performance_schema`.
+- **Capability declaration**: CapSQL / CapRowCount / CapIndex / CapPartition / CapSampling. **CapForeignKey NOT declared** (OLAP databases do not enforce foreign-key constraints).
+- **Security**: Shares sqlguard with the MySQL connector (read-only validation + multi-statement detection + AutoLimit). DENY_TABLES / DENY_COLUMNS / MASK_COLUMNS all apply. `SET SESSION max_execution_time` is attempted but errors ignored (StarRocks compatibility), with context timeout as fallback.
+- **EXPLAIN**: Uses standard `EXPLAIN <sql>` (same syntax as MySQL).
+- **ISSUE-105**: StarRocks connector implementation tracking.
+
+### 📄 Documentation & Help System
+
+- Added `docs/databases/analytical/STARROCKS.md` (in `analytical/` directory, same OLAP category as ClickHouse).
+- Added `docs/test/27-starrocks.md` (8 test sections: DSN parsing / Schema collection / OLAP metadata / read-only queries / EXPLAIN / security / CLI manual / system DB filtering).
+- `dbexplain starrocks` / `dbexplain sr` subcommands show the StarRocks manual.
+- `dbexplain --help` database overview table includes a StarRocks row.
+- `dbexplain manual` full manual includes the StarRocks section.
+- README bilingual sync (15→16 data sources; architecture diagram, capability matrix, and security pipeline tables all add StarRocks rows).
+- CODE_MAP.md three tables (module mapping / capability matrix / document mapping) include StarRocks.
+
+### ✅ Verification
+
+- `go build -tags full ./cmd/dbexplain/` — compiles.
+- `go vet -tags full ./...` — static analysis clean.
+- `go test -tags full ./... -count=1` — all unit tests pass.
+- `bash build.sh minimal mysql` — StarRocks selective compilation with `mysql` tag passes.
+
 ## v0.1.9 (2026-06-18) — check Concurrent Streaming + GaussDB Dual-Driver Architecture
 
 ### ⚡ check Concurrent Streaming — Default Timeout 20s

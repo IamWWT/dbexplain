@@ -1058,6 +1058,85 @@ func printManualHive(p func(string, string) string) {
 `))
 }
 
+func printManualStarRocks(p func(string, string) string) {
+	fmt.Print(p(`
+
+─── StarRocks ─────────────────────────────────────────────────
+
+    DSN 格式:
+      starrocks://用户:密码@主机:端口/库名?label=别名
+      sr://用户:密码@主机:端口/库名?label=别名  (简写)
+
+    端口: 默认 9030 (FE MySQL 协议)
+    别名: starrocks, sr
+
+    采集机制:
+      • MySQL 协议 — 复用 go-sql-driver/mysql 驱动 (与 MySQL 连接器相同)
+      • 库列表     — SHOW DATABASES (跳过 information_schema, _statistics_, _sys 等)
+      • 表元数据   — information_schema.TABLES: 名称、引擎(OLAP/MySQL)、行数、体积
+      • 列信息     — information_schema.COLUMNS: 名称、类型、默认值、注释
+      • 索引信息   — SHOW INDEX FROM table
+      • OLAP 元数据 — SHOW CREATE TABLE 解析 PARTITION BY / DISTRIBUTED BY 子句
+        分区键 → partition_key 字段, 分布键 → order_by_key 字段
+
+    能力标签: CapSQL, CapRowCount, CapIndex, CapPartition, CapSampling
+
+    安全机制:
+      • 与 MySQL 连接器共享只读安全管道 (sqlguard + policy)
+      • 密码在日志和输出中脱敏
+      • SET SESSION max_execution_time 尝试设置但忽略错误 (StarRocks 兼容性)
+
+    已知局限:
+      • 无传统外键约束 (OLAP 数据库不强制 FK)
+      • 分布键存储在 order_by_key 字段 (复用现有 schema 字段)
+      • max_execution_time 可能不被 StarRocks 支持 (忽略错误，依赖 context 超时)
+
+    示例:
+      dbexplain collect -dsn 'starrocks://root:@127.0.0.1:9030/test_db?label=my-sr' --human
+      dbexplain execute -dsn 'starrocks://root:@127.0.0.1:9030/test_db?label=my-sr' \
+        --sql 'SELECT * FROM test_table LIMIT 10' --human
+      dbexplain check -dsn 'starrocks://root:@127.0.0.1:9030/information_schema?label=my-sr'
+`,
+		`
+
+─── StarRocks ─────────────────────────────────────────────────
+
+    DSN format:
+      starrocks://user:password@host:port/dbname?label=alias
+      sr://user:password@host:port/dbname?label=alias  (shorthand)
+
+    Port: default 9030 (FE MySQL protocol)
+    Aliases: starrocks, sr
+
+    Collection mechanism:
+      • MySQL protocol — reuses go-sql-driver/mysql (same as MySQL connector)
+      • DB list        — SHOW DATABASES (skips information_schema, _statistics_, _sys, etc.)
+      • Table metadata — information_schema.TABLES: name, engine (OLAP/MySQL), rows, size
+      • Column info    — information_schema.COLUMNS: name, type, default, comment
+      • Index info     — SHOW INDEX FROM table
+      • OLAP metadata  — SHOW CREATE TABLE parses PARTITION BY / DISTRIBUTED BY clauses
+        partition key → partition_key field, distribution key → order_by_key field
+
+    Capabilities: CapSQL, CapRowCount, CapIndex, CapPartition, CapSampling
+
+    Safety:
+      • Shares read-only security pipeline with MySQL connector (sqlguard + policy)
+      • Passwords redacted in logs and output
+      • SET SESSION max_execution_time attempted but errors ignored (StarRocks compatibility)
+
+    Known limitations:
+      • No foreign key constraints (OLAP databases don't enforce FK)
+      • Distribution key stored in order_by_key field (reuses existing schema field)
+      • max_execution_time may not be supported by StarRocks (errors ignored, relies on context timeout)
+
+    Examples:
+      dbexplain collect -dsn 'starrocks://root:@127.0.0.1:9030/test_db?label=my-sr' --human
+      dbexplain execute -dsn 'starrocks://root:@127.0.0.1:9030/test_db?label=my-sr' \
+        --sql 'SELECT * FROM test_table LIMIT 10' --human
+      dbexplain check -dsn 'starrocks://root:@127.0.0.1:9030/information_schema?label=my-sr'
+`))
+}
+
 func printManualPrometheus(p func(string, string) string) {
 	fmt.Print(p(`
 

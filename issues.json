@@ -1145,6 +1145,18 @@
       "file": "src/internal/check/handler.go",
       "created": "2026-06-18",
       "labels": ["v0.1.9", "bug", "check", "concurrency"]
+    },
+    {
+      "id": "ISSUE-105",
+      "title": "[v0.1.10] StarRocks 连接器 — MySQL 协议 OLAP 数据库支持",
+      "status": "closed",
+      "closed": "2026-07-14",
+      "priority": "medium",
+      "category": "feature",
+      "description": "新增 StarRocks 连接器（第 17 种数据源）。StarRocks 是 MySQL 协议兼容的 OLAP 数据库，复用 go-sql-driver/mysql 驱动和 MySQL 连接器的 openMySQL()/collectMySQLDB()/executeSQLQuery() 包级函数。独立 starrocksConnector，Kind=\"starrocks\"。DSN scheme: starrocks:// 或 sr://，默认端口 9030。Build tag: //go:build mysql || full（随 MySQL tag 编译，同 GaussDB 随 postgres tag 的先例）。OLAP 元数据（分区键 PARTITION BY / 分布键 DISTRIBUTED BY HASH）通过 SHOW CREATE TABLE 解析，分别存入 schema.Table.PartitionKey / OrderByKey 字段。系统库过滤: information_schema, _statistics_, _sys, _independent_stats, starrocks, sys, mysql, performance_schema。能力: CapSQL/CapRowCount/CapIndex/CapPartition/CapSampling (无 CapForeignKey — OLAP 不强制 FK)。",
+      "file": "src/internal/connector/starrocks.go, src/internal/dsn/dsn.go, src/internal/manual/db_sections.go, src/internal/manual/manual.go, src/internal/executor/executor.go",
+      "created": "2026-07-14",
+      "labels": ["v0.1.10", "feature", "starrocks", "olap"]
     }
   ]
 }

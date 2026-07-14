@@ -164,6 +164,8 @@ func wrapExplain(sql string, kind string) string {
 		return "EXPLAIN PLAN FOR " + sql
 	case "hive":
 		return "EXPLAIN " + sql
+	case "starrocks":
+		return "EXPLAIN " + sql
 	default:
 		return "EXPLAIN " + sql
 	}

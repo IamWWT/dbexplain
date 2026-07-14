@@ -86,14 +86,14 @@ func PrintHelp() {
 	fmt.Fprint(out, p(
 		"Supported databases:\n"+
 			"  SQL:   mysql, postgres/pg, gaussdb, clickhouse/ch, sqlite/sqlite3,\n"+
-			"         oracle, hive\n"+
+			"         oracle, hive, starrocks/sr\n"+
 			"       "+duckdbHelp+
 			"  NoSQL: redis, mongodb, elasticsearch/es, qdrant\n"+
 			"  TSDB:  prometheus\n"+
 			"  File:  csv, tsv, xlsx\n\n",
 		"Supported databases:\n"+
 			"  SQL:   mysql, postgres/pg, gaussdb, clickhouse/ch, sqlite/sqlite3,\n"+
-			"         oracle, hive\n"+
+			"         oracle, hive, starrocks/sr\n"+
 			"       "+duckdbHelp+
 			"  NoSQL: redis, mongodb, elasticsearch/es, qdrant\n"+
 			"  TSDB:  prometheus\n"+
@@ -288,6 +288,8 @@ var DBSubcommands = map[string]func(func(string, string) string){
 	"duckdb":        printManualDuckDB,
 	"oracle":        printManualOracle,
 	"hive":          printManualHive,
+	"starrocks":     printManualStarRocks,
+	"sr":            printManualStarRocks,
 }
 
 // PrintDBManual prints the database-specific manual section for the given subcommand.
@@ -323,6 +325,8 @@ func PrintDBManual(sub string, _ []string) {
 		displayName = "oracle"
 	} else if displayName == "hives" {
 		displayName = "hive"
+	} else if displayName == "sr" {
+		displayName = "starrocks"
 	}
 
 	fmt.Fprint(os.Stdout, p(
@@ -496,8 +500,9 @@ DESCRIPTION
     tsv              -         文件首行/采样            列名+类型推断
     xlsx             -         excelize 库             多Sheet、列名+类型推断
     duckdb           -         duckdb_* 系统函数        嵌入式引擎，Parquet/JSON/CSV 文件分析
+    starrocks        9030      MySQL协议/information_schema  OLAP分区键/分布键，复用MySQL驱动
 `,
-		`
+`
 
 ─── SUPPORTED DATABASES ──────────────────────────────────────
 
@@ -517,6 +522,7 @@ DESCRIPTION
     tsv              -        File header/sampling    Column names + type inference
     xlsx             -        excelize library        Multi-sheet, column names + type inference
     duckdb           -        duckdb_* system funcs   Embedded engine, Parquet/JSON/CSV file analysis
+    starrocks        9030     MySQL proto/info_schema  OLAP partition/distribution keys, reuses MySQL driver
 `))
 
 	// Per-database sections
@@ -533,6 +539,7 @@ DESCRIPTION
 	printManualDuckDB(p)
 	printManualOracle(p)
 	printManualHive(p)
+	printManualStarRocks(p)
 
 	fmt.Print(p(`
 

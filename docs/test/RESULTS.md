@@ -78,6 +78,7 @@
 | **`-env` 参数彻底移除 (ISSUE-098)** | **PASS** | 源码 7 文件 + 38 文档文件全部删除 `-env` 引用。编译/vet/单元测试/选择性编译/CLI冒烟全部通过。`$BIN -env` → `flag provided but not defined`。69/69 test-runner.sh 通过。自动加载 `.env.dbexplain` 正常：14 instances 检测、execute/check 无参数验证全部通过。 |
 | **配置文件搜索 7 级优先级 (ISSUE-098)** | **PASS** | [24-config-search-priority.md](24-config-search-priority.md) 8/8：L1-DBPROBE_ENV_FILE、L2-.env.dbexplain(CWD)、L4-~/.config/dbexplain、L6-.env legacy 逐级独立通过；L2>L4、L1>L2、L4>L5 三级覆盖胜出验证通过；无配置友好兜底通过 |
 | **execute 日志统一 dbexplain.log** | **PASS** | [26-log-unification.md](26-log-unification.md) execute 5 子路径全部写入 `dbexplain.log`，无 `<label>.log`。collect/check/filter.log 回归正常。 |
+| **StarRocks 连接器 (ISSUE-105)** | **PASS** | [27-starrocks.md](27-starrocks.md) 真实 StarRocks 实例 (docker aiops-starrocks, 端口 9413→9030) 验证：DSN 解析 (starrocks:// + sr:// 别名)、Schema 采集 (3 表/列/注释/行数)、Kind="starrocks"、PARTITION BY RANGE(\`log_time\`) 解析含闭合括号、DISTRIBUTED BY HASH(\`trace_id\`) 存入 order_by_key、系统库过滤 (仅 opscrew)、聚合 COUNT(*)/GROUP BY、EXPLAIN PLAN FRAGMENT、INSERT 被 sqlguard 拦截 (READ_ONLY_VIOLATION)、`dbexplain starrocks`/`sr` 手册、`--help` 含 starrocks/sr。build/vet/test/minimal mysql 全通过。 |
 
 ---
 

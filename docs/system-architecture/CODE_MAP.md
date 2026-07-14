@@ -25,6 +25,7 @@
 | **Qdrant** | `connector` | `src/internal/connector/qdrant.go` | `docs/databases/nosql/QDRANT.md` |
 | **Oracle** | `connector` | `src/internal/connector/oracle.go` | `docs/databases/relational/ORACLE.md` |
 | **Hive** | `connector` | `src/internal/connector/hive.go` | `docs/databases/analytical/HIVE.md` |
+| **StarRocks** | `connector` | `src/internal/connector/starrocks.go` | `docs/databases/analytical/STARROCKS.md` |
 | **Prometheus** | `connector` | `src/internal/connector/prometheus.go` | `docs/databases/prometheus.md` |
 | **CSV/TSV** | `connector` | `src/internal/connector/csv.go`, `src/internal/connector/csv_test.go` | `docs/file-sources/FILE_PROCESSING.md` |
 | **XLSX** | `connector` | `src/internal/connector/xlsx.go` | `docs/file-sources/FILE_PROCESSING.md` |
@@ -58,6 +59,7 @@
 | SQLite | ✓ | — | ✓ | — | — | ✓ | — | — | — | — |
 | DuckDB | ✓ | — | ✓ | ✓ | ✓ | ✓ | — | — | — | — |
 | ClickHouse | ✓ | — | — | — | ✓ | ✓ | — | ✓ | — | — |
+| StarRocks | ✓ | — | — | ✓ | ✓ | ✓ | — | ✓ | — | — |
 | Redis | — | — | — | — | — | ✓ | ✓ | — | — | — |
 | ES | ✓ | — | — | ✓ | — | — | — | — | — | — |
 | MongoDB | — | — | — | — | ✓ | — | — | — | — | — |
@@ -97,6 +99,7 @@
 | `prometheus.md` | `connector/prometheus.go` | Prometheus 时序数据库连接器：targets/labels/metrics 采集 + PromQL 查询 |
 | `metrics.md` | `metrics/collect.go` | 采集指标收集与 Prometheus 文本格式输出 |
 | `GAUSSDB.md` | `connector/gaussdb.go` + `connector/postgres.go` | GaussDB（PG 协议兼容），独立 gaussdbConnector，独立 DSN 构建器 buildGaussDBDSN()，复用 collectPGDB() 采集逻辑 |
+| `STARROCKS.md` | `connector/starrocks.go` + `connector/mysql.go` | StarRocks（MySQL 协议兼容 OLAP），独立 starrocksConnector，复用 openMySQL()/collectMySQLDB()，SHOW CREATE TABLE 解析分区/分布键 |
 | `gaussdb.md` | `connector/gaussdb.go` | GaussDB 兼容性指南（Oracle 模式限制说明） |
 | `COMPATIBILITY_GAUSSDB_TDSQL.md` | 无代码变更 | TDSQL（MySQL 兼容）兼容性验证记录 |
 

@@ -1,5 +1,36 @@
 # 变更日志
 
+## v0.1.10 (2026-07-14) — StarRocks 连接器（MySQL 协议 OLAP）
+
+### 🆕 StarRocks 连接器 — 第 17 种数据源
+
+- **新增 StarRocks 连接器**：StarRocks 是 MySQL 协议兼容的 OLAP 数据库（FE 端口 9030）。dbexplain 复用 `go-sql-driver/mysql` 驱动（已在 go.mod 中）和 MySQL 连接器的 `openMySQL()` / `collectMySQLDB()` / `executeSQLQuery()` 包级函数，零新依赖。
+- **DSN scheme**：`starrocks://user:pass@host:9030/db?label=my-sr`，别名 `sr://`。默认端口 9030（FE MySQL 协议端口）。
+- **独立连接器，复用协议父连接器函数**：完全参照 GaussDB ↔ PostgreSQL 的先例 —— GaussDB 随 `postgres` tag 编译复用 `collectPGDB()`，StarRocks 随 `mysql` tag 编译复用 `openMySQL()` / `collectMySQLDB()`。无独立 `starrocks` build tag，`//go:build mysql || full`。
+- **OLAP 元数据采集**：通过 `SHOW CREATE TABLE` 解析 `PARTITION BY (...)` 子句填充 `schema.Table.PartitionKey`，解析 `DISTRIBUTED BY HASH(...)` 子句填充 `schema.Table.OrderByKey`（复用现有字段，避免新增）。
+- **系统库过滤**：自动跳过 `information_schema`、`_statistics_`、`_sys`、`_independent_stats`、`starrocks`、`sys`、`mysql`、`performance_schema`。
+- **能力声明**：CapSQL / CapRowCount / CapIndex / CapPartition / CapSampling。**不声明 CapForeignKey**（OLAP 数据库不强制外键约束）。
+- **安全机制**：与 MySQL 连接器共享 sqlguard（只读校验 + 多语句检测 + AutoLimit），DENY_TABLES / DENY_COLUMNS / MASK_COLUMNS 全部生效。`SET SESSION max_execution_time` 尝试设置但忽略错误（StarRocks 兼容性），依赖 context 超时兜底。
+- **EXPLAIN 适配**：使用标准 `EXPLAIN <sql>`（与 MySQL 语法相同）。
+- **ISSUE-105**: StarRocks 连接器实现任务追踪。
+
+### 📄 文档与帮助系统
+
+- 新增 `docs/databases/analytical/STARROCKS.md`（放在 `analytical/` 目录，与 ClickHouse 同类 OLAP 定位）。
+- 新增 `docs/test/27-starrocks.md`（8 个测试小节：DSN 解析 / Schema 采集 / OLAP 元数据 / 只读查询 / EXPLAIN / 安全 / CLI 手册 / 系统库过滤）。
+- `dbexplain starrocks` / `dbexplain sr` 子命令显示 StarRocks 专项手册。
+- `dbexplain --help` 数据库总览表新增 StarRocks 行。
+- `dbexplain manual` 全量手册包含 StarRocks 段落。
+- README 中英双语同步更新（15→16 种数据源，架构图、能力矩阵、安全流水线三表新增 StarRocks 行）。
+- CODE_MAP.md 三表（模块映射 / 能力矩阵 / 文档映射）新增 StarRocks。
+
+### ✅ 验证
+
+- `go build -tags full ./cmd/dbexplain/` — 编译通过。
+- `go vet -tags full ./...` — 静态分析通过。
+- `go test -tags full ./... -count=1` — 单元测试全部通过。
+- `bash build.sh minimal mysql` — StarRocks 随 `mysql` tag 选择性编译通过。
+
 ## v0.1.9 (2026-06-18) — check 并发流式检测 + GaussDB 双驱动架构
 
 ### ⚡ check 并发流式检测 — 默认超时 20s

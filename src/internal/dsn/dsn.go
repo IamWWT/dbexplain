@@ -82,6 +82,8 @@ func ParseDSN(raw string) (*DSN, error) {
 			d.TLS = true
 		}
 		d.Kind = "hive"
+	case "starrocks", "sr":
+		d.Kind = "starrocks"
 	default:
 		return nil, fmt.Errorf("unsupported scheme %q", scheme)
 	}
