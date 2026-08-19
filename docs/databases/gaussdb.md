@@ -99,6 +99,8 @@ GaussDB 的 `pg_stat_user_tables` 在**单节点模式**已验证兼容。**分�
 
 GaussDB Oracle 兼容模式**不支持** `EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT)` 中的 `BUFFERS` 选项。自动使用 `EXPLAIN (ANALYZE, FORMAT TEXT)`。
 
+> **只读校验（v0.1.11+）**：`EXPLAIN` 前缀与选项（含 `(ANALYZE, ...)`）剥离后，内部语句经 sqlguard 递归校验；`EXPLAIN ANALYZE INSERT ...` 等包裹写操作的语句被拒绝（GaussDB 的 `EXPLAIN ANALYZE` 会真实执行语句）。
+
 ### statement_timeout
 
 `statement_timeout` GUC 在 GaussDB Oracle 兼容模式可能不可用。SET 失败时仅记录日志，查询继续运行（应用层超时兜底）。

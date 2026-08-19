@@ -132,7 +132,7 @@ dbexplain execute --dsn "duckdb://:memory:?label=analysis&allowed_path=/data/" \
 
 ### 只读安全
 
-- DuckDB 连接器通过 sqlguard 管道执行查询，只允许 SELECT/EXPLAIN/DESCRIBE/SHOW 等只读操作
+- DuckDB 连接器通过 sqlguard 管道执行查询，只允许 SELECT/EXPLAIN/DESCRIBE/SHOW 等只读操作；`EXPLAIN ANALYZE INSERT ...` 等包裹写语句被递归校验拒绝（v0.1.11+，DuckDB 的 `EXPLAIN ANALYZE` 会真实执行）
 - 连接字符串使用 DuckDB 默认读写模式（`:memory:` 模式不支持 READ_ONLY）
 
 ## 六、限制说明

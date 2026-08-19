@@ -4,7 +4,7 @@
 
 > **数据库上下文编译器** — 为 AI Agent 与工程团队提供确定性、可证实的数据结构信息。
 
-`dbexplain` 是一个**单二进制、零运行时依赖**的命令行工具，支持 **16 种异构数据源**（含可选 DuckDB）的 Schema 采集与只读查询执行，所有操作在统一的安全沙箱下审计可追溯。
+`dbexplain` 是一个**单二进制、零运行时依赖**的命令行工具，支持 **17 种异构数据源**（含可选 DuckDB）的 Schema 采集与只读查询执行，所有操作在统一的安全沙箱下审计可追溯。
 
 核心理念：**只输出可证实的事实，LLM 在外部消费结构化输出来做推理。**
 
@@ -32,7 +32,7 @@
 │  │ 只读保障  │    │ MASK_COLUMNS/DENY_SQL │    │ 防全表导出  │    │
 │  └──────────┘    └────────────────────────┘    └────────────┘    │
 ├──────────────────────────────────────────────────────────────────┤
-│                  连接器层 (16 种数据源)                            │
+│                  连接器层 (17 种数据源)                            │
 │  关系型: MySQL PG GaussDB SQLite DuckDB Oracle                 │
 │  分析型: ClickHouse Hive StarRocks                              │
 │  键值型: Redis                                                    │
@@ -53,7 +53,7 @@
 | **CLI 命令层** | 用户交互入口，子命令分发 | `cmd/dbexplain/` — `main.go`、`execute.go`、`repl.go`、`encode.go` |
 | **查询执行层** | 三路径查询：直接/DSL/联邦 | `executor/`、`dsl/`（DSL 编译器）、`connector/filequery/`（文件 SQL 引擎） |
 | **安全防护层** | AST 只读校验 + LIMIT 注入 + 策略拒绝 | `sqlguard/`、`policy/`、`query/`（并发锁） |
-| **连接器层** | 16 种数据源统一接口 | `connector/` — 每数据源独立文件，`init()` 自注册到全局 registry |
+| **连接器层** | 17 种数据源统一接口 | `connector/` — 每数据源独立文件，`init()` 自注册到全局 registry |
 | **Schema/IR 层** | 采集 → 内部表示 → 输出渲染 | `schema/`、`ir/`、`render/`、`output/`、`graph/`、`diff/` |
 
 ![dbexplain Architecture](docs/assets/DBEXPLAIN-ARCH.png)
@@ -182,7 +182,7 @@ dbexplain diff --cache schema.json --since v1.0 --human
 
 | 层级 | 组件 | SQL 路径 | Native 路径 | 文件路径 |
 |:----:|------|:--------:|:-----------:|:--------:|
-| L1 | **sqlguard** — AST 只读校验（8 读/17 写动词） | ✅ | — | — |
+| L1 | **sqlguard** — AST 只读校验（8 读/17 写动词，EXPLAIN 内部语句递归校验） | ✅ | — | — |
 | L2 | **AutoLimit** — 自动注入 LIMIT 1000 | ✅ | — | — |
 | L3 | **策略引擎** — DENY_TABLES/COLUMNS/STATEMENTS | ✅ CheckSQL | ✅ CheckNative | ✅ DenyTables |
 | L4 | **并发锁** — 每标签 QueryLock | ✅ | ✅ | — ⁴ |

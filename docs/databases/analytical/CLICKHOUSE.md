@@ -117,7 +117,7 @@ if err == nil {
 
 ### 校验机制
 
-- **SQLGuard 动词白名单**：所有查询经过 `sqlguard` 模块校验，仅允许 `SELECT`、`EXPLAIN`、`WITH`、`SHOW`、`DESCRIBE`、`DESC`、`PRAGMA`、`CHECK` 八类只读动词通过。任何写操作语句将被拒绝。
+- **SQLGuard 动词白名单**：所有查询经过 `sqlguard` 模块校验，仅允许 `SELECT`、`EXPLAIN`、`WITH`、`SHOW`、`DESCRIBE`、`DESC`、`PRAGMA`、`CHECK` 八类只读动词通过。任何写操作语句将被拒绝。`EXPLAIN` 包裹的写语句同样被递归校验拒绝（v0.1.11+）。
 - **多语句检测**：禁止分号分隔的多条 SQL 语句，防止注入绕过。
 
 ### 自动 LIMIT 追加

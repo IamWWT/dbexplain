@@ -21,7 +21,7 @@ set -e
 #   bash install.sh --help              Show this help
 # ============================================================
 
-VERSION="v0.1.7"
+VERSION="v0.1.11"
 REPO="IamWWT/dbexplain"
 TOOL_NAME="dbexplain"
 

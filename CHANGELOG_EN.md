@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.1.11 (2026-08-19) — SQLGuard EXPLAIN inner-statement read-only hardening
+
+### 🔒 Security Fix
+
+- **Vulnerability**: Statements starting with `EXPLAIN` (`EXPLAIN INSERT ...`, `EXPLAIN (ANALYZE) INSERT ...`, `EXPLAIN ANALYZE UPDATE ...`) bypassed sqlguard's read-only validation — the AST parser does not recognize EXPLAIN, the fallback only checked the first word, and EXPLAIN was on the read-only whitelist, so the inner statement was never validated.
+- **Risk**: `EXPLAIN ANALYZE` actually executes the statement on PostgreSQL / GaussDB / MySQL 8.0.18+ / DuckDB (high severity — data writes); bare `EXPLAIN` + write leaks the query plan (low severity).
+- **Fix**: `Validate` gained a dedicated EXPLAIN branch — `stripExplainPrefix` removes the EXPLAIN keyword and dialect options (`(ANALYZE, BUFFERS, FORMAT TEXT)`, `FORMAT=JSON`, `ANALYZE`, `QUERY PLAN`, `PLAN [FOR]`, `VERBOSE`; paren-balance and quote aware, plus **SQL comment/hint skipping** so legal forms like `EXPLAIN /*+ hint */ SELECT ...` and `EXPLAIN -- note\nSELECT ...` are not false-positived) and then **recursively runs the full validation pipeline** on the inner statement (multi-statement / CTE write detection / SELECT INTO / first-word allow-deny). `EXPLAIN` was removed from `readOps` (dead code; fail-closed if the branch is ever removed).
+- **Blast radius**: single entry point `executor.ExecQuery` covers execute CLI / DSL / federated / REPL; the `--explain` flag wrapping path is unaffected (wrapping happens after validation).
+- **Tests**: 121 subtests across `TestStripExplainPrefix` / `TestValidate_AllowedReadOps` / `TestValidate_RejectedWriteOps` (allowed: every dialect EXPLAIN form incl. `EXPLAIN ANALYZE SELECT`, hint/comment forms, string-literal no-false-positive; rejected: EXPLAIN+write verbs, EXPLAIN+CTE write, EXPLAIN+SELECT INTO, EXPLAIN+multi-statement, bare EXPLAIN, unbalanced parens).
+- **ISSUE-106**: SQLGuard EXPLAIN inner-statement read-only bypass fix (see issues.json).
+
 ## v0.1.10 (2026-07-14) — StarRocks Connector (MySQL-Protocol OLAP)
 
 ### 🆕 StarRocks Connector — 17th Data Source

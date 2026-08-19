@@ -4,7 +4,7 @@
 
 > **Database Context Compiler** — Deterministic ground truth for AI agents and engineering teams.
 
-`dbexplain` is a **single-binary, zero-runtime-dependency** CLI tool that compiles database metadata and executes read-only queries across **16 heterogeneous data sources** (including optional DuckDB) — all under a unified, auditable security sandbox.
+`dbexplain` is a **single-binary, zero-runtime-dependency** CLI tool that compiles database metadata and executes read-only queries across **17 heterogeneous data sources** (including optional DuckDB) — all under a unified, auditable security sandbox.
 
 Core philosophy: **deterministic facts only — LLMs consume structured IR externally.**
 
@@ -53,7 +53,7 @@ Core philosophy: **deterministic facts only — LLMs consume structured IR exter
 | **CLI Command Layer** | User interaction, subcommand dispatch | `cmd/dbexplain/` — `main.go`, `execute.go`, `repl.go`, `encode.go` |
 | **Query Execution Layer** | Three-path: Direct / DSL / Federated | `executor/`, `dsl/` (DSL compiler), `connector/filequery/` (file SQL engine) |
 | **Security Layer** | AST read-only validation + LIMIT injection + policy deny | `sqlguard/`, `policy/`, `query/` (concurrency lock) |
-| **Connector Layer** | Unified interface for 16 data sources | `connector/` — one file per source, `init()` auto-registers to global registry |
+| **Connector Layer** | Unified interface for 17 data sources | `connector/` — one file per source, `init()` auto-registers to global registry |
 | **Schema/IR Layer** | Collect → Internal Representation → Output Rendering | `schema/`, `ir/`, `render/`, `output/`, `graph/`, `diff/` |
 
 ![dbexplain Architecture](docs/assets/DBEXPLAIN-ARCH.png)
@@ -187,7 +187,7 @@ All queries execute through a unified security pipeline, automatically routing t
 
 | Layer | Component | SQL Path | Native Path | File Path |
 |:-----:|-----------|:--------:|:-----------:|:---------:|
-| L1 | **sqlguard** — AST read-only (8 read / 17 write verbs) | ✅ | — | — |
+| L1 | **sqlguard** — AST read-only (8 read / 17 write verbs; recursive EXPLAIN inner-statement validation) | ✅ | — | — |
 | L2 | **AutoLimit** — auto-inject LIMIT 1000 | ✅ | — | — |
 | L3 | **Policy Engine** — DENY_TABLES/COLUMNS/STATEMENTS | ✅ CheckSQL | ✅ CheckNative | ✅ DenyTables |
 | L4 | **Concurrent Lock** — per-label QueryLock | ✅ | ✅ | — ⁴ |

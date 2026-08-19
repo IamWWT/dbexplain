@@ -74,7 +74,7 @@ StarRocks 连接器与 MySQL 连接器的函数共享关系，完全参照 Gauss
 
 ## 安全机制
 
-- **只读管道**: 与 MySQL 连接器共享 sqlguard (只读校验 + 多语句检测 + AutoLimit)
+- **只读管道**: 与 MySQL 连接器共享 sqlguard (只读校验 + 多语句检测 + AutoLimit；EXPLAIN 内部语句递归校验 v0.1.11+)
 - **策略引擎**: DENY_TABLES / DENY_COLUMNS / MASK_COLUMNS 全部生效
 - **密码脱敏**: DSN 在日志和输出中自动脱敏 (`{dbpassword}`)
 - **超时**: `SET SESSION max_execution_time` 尝试设置但忽略错误 (StarRocks 兼容性)，依赖 context 超时兜底

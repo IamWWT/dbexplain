@@ -853,7 +853,7 @@ DESCRIPTION
       dbexplain execute --label prom --dsl 'SELECT * FROM @prom.up'
 
     安全保护:
-      • SQL 三层校验 — 动词白名单 + 多语句检测 + 自动 LIMIT
+      • SQL 三层校验 — 动词白名单 + 多语句检测 + 自动 LIMIT（EXPLAIN 内部语句递归校验 v0.1.11+）
       • DSL 通道 AST 级校验 — 统一 AST 解析，覆盖所有数据源
       • 非 SQL 内部白名单 — Redis 30+ 命令，MongoDB find/aggregate，Prometheus PromQL
       • 并发互斥 — 同一 label 同时仅一个查询
@@ -978,7 +978,7 @@ DESCRIPTION
       dbexplain execute --label prom --dsl 'SELECT * FROM @prom.up'
 
     Security:
-      • SQL triple-layer check — verb whitelist + multi-statement detect + auto LIMIT
+      • SQL triple-layer check — verb whitelist + multi-statement detect + auto LIMIT (recursive EXPLAIN inner-statement validation v0.1.11+)
       • DSL AST-level validation — unified AST parsing, covers all datasources
       • Non-SQL internal whitelist — Redis 30+ commands, MongoDB find/aggregate, Prometheus PromQL
       • Concurrent mutex — only one query per label at a time

@@ -72,6 +72,7 @@
 - [ ] **引用标识符归一化** — `normalizeIdentifiers()` 剥离反引号/双引号/方括号引用后提取，防止引用标识符绕过策略匹配
 - [ ] **空白字符归一化** — `CheckSQL()`/`CheckNative()` 使用 `normalizeWhitespace()` 折叠所有空白后匹配，防止变体空白绕过语句级策略
 - [ ] **子查询 LIMIT 绕过** — `AutoLimit()` 使用 `hasOuterLimit()` 剥离括号内容后检测 LIMIT，防止子查询内部 LIMIT 绕过自动注入
+- [ ] **EXPLAIN 包裹写语句** — `sqlguard.Validate()` 对 `EXPLAIN` 前缀剥离方言选项（括号选项/`FORMAT=JSON`/`ANALYZE`/`QUERY PLAN`/`PLAN [FOR]`/注释）后递归校验内部语句（v0.1.11+）；`EXPLAIN ANALYZE INSERT/UPDATE/DELETE` 等必须在连接数据库之前返回 `READ_ONLY_VIOLATION`（PostgreSQL/GaussDB/MySQL 8.0.18+/DuckDB 的 `EXPLAIN ANALYZE` 会真实执行）
 - [ ] **Redis 通配符** — `globMatch()` 替代 `filepath.Match`，确保 `/` 不截断 `*` 通配符匹配
 - [ ] **文件路径** — `--log-dir`、`--context`、`--cache`、`-o` 等路径参数防止路径遍历
 - [ ] **DuckDB 文件访问控制** — `read_parquet`/`read_csv_auto`/`read_json` 等文件函数受 `allowed_path` DSN 参数限制；未配置时拒绝所有文件读取函数调用；已配置时路径必须在前缀范围内（`filepath.Clean` + `strings.HasPrefix`），多路径逗号分隔合法

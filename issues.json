@@ -1157,6 +1157,18 @@
       "file": "src/internal/connector/starrocks.go, src/internal/dsn/dsn.go, src/internal/manual/db_sections.go, src/internal/manual/manual.go, src/internal/executor/executor.go",
       "created": "2026-07-14",
       "labels": ["v0.1.10", "feature", "starrocks", "olap"]
+    },
+    {
+      "id": "ISSUE-106",
+      "title": "[v0.1.11] SQLGuard EXPLAIN 内部语句只读校验绕过 — EXPLAIN ANALYZE 包裹写语句可执行",
+      "status": "closed",
+      "closed": "2026-08-19",
+      "priority": "high",
+      "category": "security",
+      "description": "漏洞：EXPLAIN INSERT / EXPLAIN (ANALYZE) INSERT / EXPLAIN ANALYZE UPDATE 等以 EXPLAIN 开头的语句可绕过 sqlguard 只读校验（AST 不识别 EXPLAIN，回退仅查首词且 EXPLAIN 在 readOps 白名单，内部语句从未被校验）。PostgreSQL / GaussDB / MySQL 8.0.18+ / DuckDB 的 EXPLAIN ANALYZE 会真实执行写语句（高危）。修复：Validate 新增 EXPLAIN 专用分支，stripExplainPrefix 剥离方言选项（括号选项 / FORMAT=JSON / ANALYZE / QUERY PLAN / PLAN FOR / VERBOSE，括号平衡 + 引号 + 注释感知）后对内部语句递归执行完整校验管道；readOps 移除 EXPLAIN（死代码消除，fail-closed）。",
+      "file": "src/internal/sqlguard/sqlguard.go, src/internal/sqlguard/sqlguard_test.go, src/internal/manual/manual.go",
+      "created": "2026-08-19",
+      "labels": ["v0.1.11", "security", "sqlguard", "explain", "readonly-bypass"]
     }
   ]
 }

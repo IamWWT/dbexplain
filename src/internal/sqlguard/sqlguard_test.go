@@ -31,6 +31,29 @@ func TestValidate_AllowedReadOps(t *testing.T) {
 		{"SELECT /*+ hashjoin(t1 t2) */ * FROM t1 JOIN t2 ON t1.id = t2.id"},
 		{"SELECT /*+ leading(t1 t2) */ * FROM t1, t2 WHERE t1.id = t2.id"},
 		{"EXPLAIN SELECT /*+ hint */ * FROM t"},
+		// EXPLAIN dialect forms — all read-only, must keep passing
+		{"EXPLAIN (ANALYZE) SELECT 1"},
+		{"EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT) SELECT * FROM t"},
+		{"EXPLAIN (ANALYZE, FORMAT TEXT) SELECT * FROM t"},
+		{"EXPLAIN FORMAT=JSON SELECT * FROM t"},
+		{"EXPLAIN ANALYZE SELECT * FROM t"},
+		{"EXPLAIN QUERY PLAN SELECT * FROM t"},
+		{"EXPLAIN PLAN FOR SELECT * FROM t"},
+		{"EXPLAIN PLAN SELECT * FROM t"},
+		{"EXPLAIN VERBOSE SELECT * FROM t"},
+		{"EXPLAIN WITH cte AS (SELECT 1) SELECT * FROM cte"},
+		{"  EXPLAIN   SELECT * FROM t"},
+		{"EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT) WITH cte AS (SELECT 1) SELECT * FROM cte"},
+		// Comment / optimizer-hint forms between EXPLAIN and the inner statement
+		{"EXPLAIN /*+ hint */ SELECT 1"},
+		{"EXPLAIN /*+ qb_name(q1) */ SELECT * FROM t"},
+		{"EXPLAIN (ANALYZE) /* c */ SELECT 1"},
+		{"EXPLAIN -- comment\nSELECT 1"},
+		// String literal containing a write verb must NOT be treated as a write
+		{"EXPLAIN SELECT * FROM t WHERE note = 'INSERT'"},
+		{"EXPLAIN SELECT * FROM t WHERE note = '-- not a comment'"},
+		// ANALYZE + WITH inner
+		{"EXPLAIN ANALYZE WITH cte AS (SELECT 1) SELECT * FROM cte"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.sql, func(t *testing.T) {
@@ -87,6 +110,27 @@ func TestValidate_RejectedWriteOps(t *testing.T) {
 		// SELECT INTO (PostgreSQL DDL write)
 		{"SELECT * INTO backup_users FROM users", "SELECT INTO"},
 		{"SELECT id, name INTO new_table FROM old_table WHERE created > NOW()-7", "SELECT INTO"},
+		// EXPLAIN-wrapped write statements — must be rejected via recursive validation
+		{"EXPLAIN INSERT INTO t VALUES(1)", "INSERT"},
+		{"EXPLAIN (ANALYZE, BUFFERS) INSERT INTO t VALUES(1)", "INSERT"},
+		{"EXPLAIN (ANALYZE) INSERT INTO t VALUES (1)", "INSERT"},
+		{"EXPLAIN ANALYZE UPDATE t SET a=1", "UPDATE"},
+		{"explain analyze delete from t", "DELETE"},
+		{"EXPLAIN DROP TABLE t", "DROP"},
+		{"EXPLAIN TRUNCATE TABLE t", "TRUNCATE"},
+		{"EXPLAIN FORMAT=JSON INSERT INTO t VALUES(1)", "INSERT"},
+		{"EXPLAIN QUERY PLAN INSERT INTO t VALUES(1)", "INSERT"},
+		{"EXPLAIN PLAN FOR INSERT INTO t VALUES(1)", "INSERT"},
+		{"EXPLAIN WITH x AS (SELECT 1) INSERT INTO y VALUES (1)", "WITH CTE"},
+		{"EXPLAIN WITH ins AS (INSERT INTO t VALUES(1) RETURNING id) SELECT * FROM ins", "WITH CTE"},
+		{"EXPLAIN SELECT * INTO new_table FROM t", "SELECT INTO"},
+		{"EXPLAIN", "inner statement"},
+		// Comment / hint before the write verb still rejected
+		{"EXPLAIN /*+ hint */ INSERT INTO t VALUES(1)", "INSERT"},
+		{"EXPLAIN -- note\nDELETE FROM t", "DELETE"},
+		// EXPLAIN + multi-statement
+		{"EXPLAIN SELECT 1; DROP TABLE t", "multiple statements"},
+		{"EXPLAIN SELECT 1; INSERT INTO t VALUES(1)", "multiple statements"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.reason, func(t *testing.T) {
@@ -174,6 +218,68 @@ func TestValidate_CTEWithLeadingParen(t *testing.T) {
 	// SQL WITH clause wrapped in parentheses (common in some query generators)
 	if err := Validate("(WITH cte AS (SELECT 1) SELECT * FROM cte)"); err != nil {
 		t.Errorf("expected nil for parenthesized CTE, got %v", err)
+	}
+}
+
+// ─── stripExplainPrefix ────────────────────────────────────────────────────────
+
+func TestStripExplainPrefix(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		// Plain generic form
+		{"EXPLAIN SELECT * FROM t", "SELECT * FROM t"},
+		// Whitespace tolerance
+		{"  EXPLAIN   SELECT * FROM t", "SELECT * FROM t"},
+		// Postgres / GaussDB option list
+		{"EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT) SELECT * FROM t", "SELECT * FROM t"},
+		{"EXPLAIN (ANALYZE, FORMAT TEXT) SELECT * FROM t", "SELECT * FROM t"},
+		// MySQL
+		{"EXPLAIN FORMAT=JSON SELECT * FROM t", "SELECT * FROM t"},
+		{"EXPLAIN FORMAT JSON SELECT * FROM t", "SELECT * FROM t"},
+		// MySQL 8.0.18+ / DuckDB
+		{"EXPLAIN ANALYZE SELECT * FROM t", "SELECT * FROM t"},
+		// SQLite
+		{"EXPLAIN QUERY PLAN SELECT * FROM t", "SELECT * FROM t"},
+		// Oracle (two-step)
+		{"EXPLAIN PLAN FOR SELECT * FROM t", "SELECT * FROM t"},
+		// ClickHouse
+		{"EXPLAIN PLAN SELECT * FROM t", "SELECT * FROM t"},
+		// Postgres bare VERBOSE
+		{"EXPLAIN VERBOSE SELECT * FROM t", "SELECT * FROM t"},
+		// WITH inner
+		{"EXPLAIN WITH cte AS (SELECT 1) SELECT * FROM cte", "WITH cte AS (SELECT 1) SELECT * FROM cte"},
+		// Write inner — stripping must expose the write verb
+		{"EXPLAIN INSERT INTO t VALUES(1)", "INSERT INTO t VALUES(1)"},
+		{"EXPLAIN (ANALYZE, BUFFERS) INSERT INTO t VALUES(1)", "INSERT INTO t VALUES(1)"},
+		{"EXPLAIN ANALYZE UPDATE t SET a=1", "UPDATE t SET a=1"},
+		// Option list with a quoted string must not disturb the balance
+		{"EXPLAIN (ANALYZE, 'x) y') SELECT 1", "SELECT 1"},
+		// EXPLAIN alone — no inner statement
+		{"EXPLAIN", ""},
+		{"EXPLAIN   ", ""},
+		// Unbalanced parenthesis — fail-closed
+		{"EXPLAIN (ANALYZE SELECT 1", ""},
+		// Not EXPLAIN (word boundary)
+		{"EXPLAINABLE SELECT * FROM t", "EXPLAINABLE SELECT * FROM t"},
+		// Lowercase
+		{"explain analyze insert into t values(1)", "insert into t values(1)"},
+		// Comments / hints between EXPLAIN and the inner statement
+		{"EXPLAIN /*+ hint */ SELECT 1", "SELECT 1"},
+		{"EXPLAIN /*+ qb_name(q1) */ SELECT * FROM t", "SELECT * FROM t"},
+		{"EXPLAIN (ANALYZE) /* c */ SELECT 1", "SELECT 1"},
+		{"EXPLAIN -- note\nSELECT 1", "SELECT 1"},
+		{"EXPLAIN /* c */ ANALYZE /* c2 */ SELECT 1", "SELECT 1"},
+		{"EXPLAIN /*+ hint */ INSERT INTO t VALUES(1)", "INSERT INTO t VALUES(1)"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			got := stripExplainPrefix(tt.input)
+			if got != tt.want {
+				t.Errorf("stripExplainPrefix(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
 	}
 }
 
@@ -320,7 +426,7 @@ func TestSplitStatements(t *testing.T) {
 		{"SELECT 1; DROP TABLE x; SELECT 3", 3},
 		{"", 0},
 		{"  ", 0},
-		{";", 0}, // only empty parts
+		{";", 0},         // only empty parts
 		{"SELECT 1;", 1}, // trailing semicolon
 	}
 	for _, tt := range tests {

@@ -121,7 +121,7 @@ ORDER BY k.CONSTRAINT_NAME, k.ORDINAL_POSITION
 
 ### 校验机制
 
-- **SQLGuard 动词白名单**：所有查询在到达数据库之前，先经过 `sqlguard` 模块的语句动词白名单校验，仅允许 `SELECT`、`EXPLAIN`、`WITH`、`SHOW`、`DESCRIBE`、`DESC`、`PRAGMA`、`CHECK` 八类只读动词通过。任何包含 `INSERT`、`UPDATE`、`DELETE`、`DROP`、`ALTER` 等写操作的语句将被拒绝。
+- **SQLGuard 动词白名单**：所有查询在到达数据库之前，先经过 `sqlguard` 模块的语句动词白名单校验，仅允许 `SELECT`、`EXPLAIN`、`WITH`、`SHOW`、`DESCRIBE`、`DESC`、`PRAGMA`、`CHECK` 八类只读动词通过。任何包含 `INSERT`、`UPDATE`、`DELETE`、`DROP`、`ALTER` 等写操作的语句将被拒绝。`EXPLAIN` 包裹的写语句（含 `EXPLAIN ANALYZE`——MySQL 8.0.18+ 会真实执行）同样被递归校验拒绝（v0.1.11+）。
 - **多语句检测**：禁止分号分隔的多条 SQL 语句，防止通过 `SELECT 1; DROP TABLE ...` 等方式绕过白名单。
 
 ### 自动 LIMIT 追加

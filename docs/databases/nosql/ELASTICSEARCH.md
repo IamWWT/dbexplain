@@ -95,7 +95,7 @@ for field, props := range mapping {
 
 ### 校验机制
 
-- **SQLGuard 动词白名单**：所有查询经过 `sqlguard` 模块校验，按 SQL 语义进行只读动词白名单验证。
+- **SQLGuard 动词白名单**：所有查询经过 `sqlguard` 模块校验，按 SQL 语义进行只读动词白名单验证。`EXPLAIN` 包裹的写语句同样被递归校验拒绝（v0.1.11+）。
 - **多语句检测**：禁止分号分隔的多条 SQL 语句。
 
 ### 自动 LIMIT 追加

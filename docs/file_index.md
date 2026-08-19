@@ -73,7 +73,7 @@
 | [`test/03-execute-sql.md`](test/03-execute-sql.md) | SQL 执行测试 |
 | [`test/04-execute-nosql.md`](test/04-execute-nosql.md) | NoSQL 执行测试 |
 | [`test/05-file-processing.md`](test/05-file-processing.md) | 文件处理测试 |
-| [`test/06-security-sqlguard.md`](test/06-security-sqlguard.md) | SQL 安全防护测试（含 CTE 写检测 §6.8） |
+| [`test/06-security-sqlguard.md`](test/06-security-sqlguard.md) | SQL 安全防护测试（含 CTE 写检测 §6.8、EXPLAIN 写检测 §6.9） |
 | [`test/07-policy-engine.md`](test/07-policy-engine.md) | 策略引擎测试 |
 | [`test/08-concurrent-limit.md`](test/08-concurrent-limit.md) | 并发限制测试 |
 | [`test/09-cli-help.md`](test/09-cli-help.md) | CLI 帮助测试（含 encrypt/collect 功能测试） |

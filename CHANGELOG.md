@@ -1,5 +1,16 @@
 # 变更日志
 
+## v0.1.11 (2026-08-19) — SQLGuard EXPLAIN 内部语句只读加固
+
+### 🔒 安全修复
+
+- **漏洞**：`EXPLAIN INSERT ...`、`EXPLAIN (ANALYZE) INSERT ...`、`EXPLAIN ANALYZE UPDATE ...` 等以 EXPLAIN 开头的语句可绕过 sqlguard 只读校验——AST 解析器不识别 EXPLAIN，回退路径仅检查首词且 EXPLAIN 在只读白名单内，内部语句从未被校验。
+- **风险**：PostgreSQL / GaussDB / MySQL 8.0.18+ / DuckDB 的 `EXPLAIN ANALYZE` 会**真实执行**语句，可借此写入数据（高危）；裸 `EXPLAIN`+写语句暴露查询计划（低危）。
+- **修复**：`Validate` 新增 EXPLAIN 专用分支，`stripExplainPrefix` 剥离 EXPLAIN 关键字及方言选项（`(ANALYZE, BUFFERS, FORMAT TEXT)`、`FORMAT=JSON`、`ANALYZE`、`QUERY PLAN`、`PLAN [FOR]`、`VERBOSE`，括号平衡 + 引号感知 + **注释/hint 跳过**——`EXPLAIN /*+ hint */ SELECT ...`、`EXPLAIN -- 注释\nSELECT ...` 等合法形态不误杀）后，对内部语句**递归执行完整校验管道**（多语句 / CTE 写检测 / SELECT INTO / 首词黑白名单）；`readOps` 移除 `EXPLAIN`（消除死代码，分支被误删时 fail-closed 拒绝）。
+- **影响面**：单一入口 `executor.ExecQuery`，execute CLI / DSL / 联邦查询 / REPL 全部覆盖；`--explain` 标志包裹路径不受影响（包裹发生在校验之后）。
+- **测试**：`internal/sqlguard` 相关三个测试函数共 121 个子测试（允许：各方言 EXPLAIN 形态含 `EXPLAIN ANALYZE SELECT`、hint/注释形态、字符串字面量含写动词防误报；拒绝：EXPLAIN+写动词、EXPLAIN+CTE 写、EXPLAIN+SELECT INTO、EXPLAIN+多语句、EXPLAIN 单独、括号不平衡）；新增 `TestStripExplainPrefix` 单测。
+- **ISSUE-106**: SQLGuard EXPLAIN 内部语句只读校验绕过修复（见 issues.json）。
+
 ## v0.1.10 (2026-07-14) — StarRocks 连接器（MySQL 协议 OLAP）
 
 ### 🆕 StarRocks 连接器 — 第 17 种数据源

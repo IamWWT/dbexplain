@@ -7,6 +7,10 @@
 //     the statement type (SelectStmt / UnionStmt are read-only).
 //  2. If AST parsing fails (e.g. EXPLAIN, SHOW, dialect-specific SQL),
 //     fall back to string‑based first‑word detection.
+//  3. EXPLAIN statements get a dedicated recursive branch: the prefix and its
+//     dialect options are stripped, then the inner statement is validated
+//     (prevents EXPLAIN-wrapped write statements such as
+//     "EXPLAIN ANALYZE INSERT ...", which PostgreSQL/MySQL execute for real).
 package sqlguard
 
 import (
@@ -27,8 +31,13 @@ var writeOps = []string{
 }
 
 // readOps contains SQL verbs that are allowed.
+// NOTE: EXPLAIN is intentionally NOT listed here. It is handled by a
+// dedicated recursive branch in Validate (see stripExplainPrefix) so that the
+// inner statement is validated too. Leaving it here would be dead code (the
+// branch intercepts first) and would silently re-open the read-only bypass
+// if that branch is ever removed.
 var readOps = []string{
-	"SELECT", "EXPLAIN", "WITH", "SHOW", "DESCRIBE", "DESC",
+	"SELECT", "WITH", "SHOW", "DESCRIBE", "DESC",
 	"PRAGMA", "CHECK",
 }
 
@@ -48,6 +57,9 @@ func (e *ErrReadOnlyViolation) Error() string {
 //   - Any write operation verb (INSERT, UPDATE, DELETE, DROP, etc.)
 //   - SELECT INTO (PostgreSQL DDL write)
 //   - CTE bodies containing write operations
+//   - EXPLAIN statements whose inner statement is a write operation
+//     (the prefix and dialect options are stripped via stripExplainPrefix,
+//     then the inner statement is recursively validated)
 //
 // Returns nil if the SQL is safe to execute.
 func Validate(sql string) error {
@@ -73,6 +85,22 @@ func Validate(sql string) error {
 	firstToken := strings.ToUpper(firstWord(normalized))
 	if firstToken == "WITH" {
 		return validateCTE(normalized, sql)
+	}
+
+	// EXPLAIN cannot be parsed by sqlast, and a naive first-word check would
+	// accept EXPLAIN-wrapped write statements ("EXPLAIN ANALYZE INSERT ...",
+	// which PostgreSQL / GaussDB / MySQL 8.0.18+ / DuckDB execute for real).
+	// Strip the EXPLAIN prefix and its dialect options, then recursively
+	// validate the inner statement with the full pipeline below.
+	if firstToken == "EXPLAIN" {
+		inner := stripExplainPrefix(normalized)
+		if inner == "" {
+			return &ErrReadOnlyViolation{
+				SQL:    sql,
+				Reason: "EXPLAIN without an inner statement",
+			}
+		}
+		return Validate(inner)
 	}
 
 	// Try AST-level validation first — this handles standard SELECT / UNION.
@@ -161,7 +189,7 @@ func containsCTEWrite(normalized string) bool {
 	depth := 0
 	writeVerbs := []string{"INSERT ", "UPDATE ", "DELETE ", "DROP ", "ALTER ", "TRUNCATE "}
 	var lastParenEnd int
-	cteLoop:
+cteLoop:
 	for i := bodyStart; i < len(upper); i++ {
 		switch upper[i] {
 		case '(':
@@ -230,6 +258,173 @@ func validateCTE(normalized, originalSQL string) error {
 		}
 	}
 	return nil
+}
+
+// stripExplainPrefix removes the EXPLAIN keyword and its dialect-specific
+// option tokens from the head of an EXPLAIN statement, returning the inner
+// statement. Supported forms:
+//
+//	EXPLAIN <inner>                          (generic / duckdb / hive / starrocks)
+//	EXPLAIN (OPT, OPT, ...) <inner>          (postgres / gaussdb option list)
+//	EXPLAIN FORMAT=JSON <inner>              (mysql)
+//	EXPLAIN ANALYZE <inner>                  (mysql 8.0.18+, duckdb)
+//	EXPLAIN QUERY PLAN <inner>               (sqlite)
+//	EXPLAIN PLAN <inner>                     (clickhouse)
+//	EXPLAIN PLAN FOR <inner>                 (oracle)
+//	EXPLAIN VERBOSE <inner>                  (postgres)
+//
+// The returned string is strictly shorter than the input (at least the
+// EXPLAIN token is consumed), which bounds any recursive validation.
+// Malformed input (e.g. unbalanced parentheses) yields an empty string so
+// callers reject it (fail-closed).
+func stripExplainPrefix(sql string) string {
+	s := strings.TrimSpace(sql)
+	upper := strings.ToUpper(s)
+
+	// Consume the EXPLAIN keyword, requiring a word boundary so identifiers
+	// like "EXPLAINABLE" are not matched.
+	if !strings.HasPrefix(upper, "EXPLAIN") {
+		return s
+	}
+	i := len("EXPLAIN")
+	if i < len(upper) && !isSpace(upper[i]) {
+		return s
+	}
+	i = skipSpaces(upper, i)
+	// Skip comments between EXPLAIN and its options/inner statement
+	// ("EXPLAIN /*+ hint */ SELECT ...", "EXPLAIN -- note\nSELECT ...").
+	i = skipSQLComments(upper, i)
+
+	// Skip an optional parenthesized option list (postgres / gaussdb),
+	// tracking quotes so string literals inside options don't disturb the
+	// parenthesis balance.
+	if i < len(upper) && upper[i] == '(' {
+		depth := 0
+		j := i
+		var quote byte
+		balanced := false
+	scanParens:
+		for ; j < len(upper); j++ {
+			c := upper[j]
+			if quote != 0 {
+				if c == quote {
+					quote = 0
+				}
+				continue
+			}
+			if c == '/' && j+1 < len(upper) && upper[j+1] == '*' {
+				end := strings.Index(upper[j+2:], "*/")
+				if end < 0 {
+					return "" // unterminated block comment — fail-closed
+				}
+				j = j + 2 + end + 1 // +1 so the loop's j++ lands after "*/"
+				continue
+			}
+			switch c {
+			case '\'', '"':
+				quote = c
+			case '(':
+				depth++
+			case ')':
+				depth--
+				if depth == 0 {
+					j++
+					balanced = true
+					break scanParens
+				}
+			}
+		}
+		if !balanced {
+			return ""
+		}
+		i = j
+	}
+	i = skipSpaces(upper, i)
+	i = skipSQLComments(upper, i)
+
+	// Consume known EXPLAIN option tokens. The inner statement's first word
+	// (SELECT / WITH / SHOW / DESCRIBE / DESC / PRAGMA / CHECK) is never in
+	// this set, so the loop stops exactly at the inner statement.
+	modifiers := map[string]bool{
+		"ANALYZE": true, "VERBOSE": true, "FORMAT": true,
+		"QUERY": true, "PLAN": true, "FOR": true,
+	}
+	for {
+		i = skipSQLComments(upper, i)
+		tok, rest := nextToken(upper, i)
+		if tok == "" || !modifiers[tok] {
+			break
+		}
+		i = rest
+		if tok == "FORMAT" {
+			// Consume an optional "=" and the format value (JSON/TEXT/YAML/VERBOSE).
+			i = skipSpaces(upper, i)
+			if i < len(upper) && upper[i] == '=' {
+				i++
+				i = skipSpaces(upper, i)
+			}
+			if _, after := nextToken(upper, i); after > i {
+				i = after
+			}
+		}
+		i = skipSpaces(upper, i)
+	}
+	return strings.TrimSpace(s[i:])
+}
+
+// isSpace reports whether c is a whitespace byte.
+func isSpace(c byte) bool {
+	return c == ' ' || c == '\t' || c == '\n' || c == '\r'
+}
+
+// skipSpaces advances i past any whitespace bytes.
+func skipSpaces(s string, i int) int {
+	for i < len(s) && isSpace(s[i]) {
+		i++
+	}
+	return i
+}
+
+// skipSQLComments advances i past any leading SQL comments — block comments
+// (/* ... */, including optimizer hints /*+ ... */) and -- line comments.
+// Returns the index of the first non-comment character, or len(s) when the
+// rest of the input is comments (an unterminated block comment included).
+func skipSQLComments(s string, i int) int {
+	for i < len(s) {
+		if i+1 < len(s) && s[i] == '/' && s[i+1] == '*' {
+			end := strings.Index(s[i+2:], "*/")
+			if end < 0 {
+				return len(s)
+			}
+			i = i + 2 + end + 2
+			continue
+		}
+		if i+1 < len(s) && s[i] == '-' && s[i+1] == '-' {
+			nl := strings.IndexByte(s[i:], '\n')
+			if nl < 0 {
+				return len(s)
+			}
+			i = i + nl + 1
+			continue
+		}
+		return i
+	}
+	return i
+}
+
+// nextToken returns the next token starting at i, delimited by whitespace or
+// '=' (so FORMAT=JSON tokenizes as FORMAT + JSON, letting the caller consume
+// the '=' separately). Returns ("", i) when no token remains.
+func nextToken(s string, i int) (string, int) {
+	i = skipSpaces(s, i)
+	start := i
+	for i < len(s) && !isSpace(s[i]) && s[i] != '=' {
+		i++
+	}
+	if i == start {
+		return "", start
+	}
+	return s[start:i], i
 }
 
 // isSelectInto checks if a SELECT has an INTO clause targeting a table

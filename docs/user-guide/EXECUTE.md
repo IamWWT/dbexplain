@@ -33,6 +33,8 @@
 ```
 取 SQL 的第一个 token 与白名单/黑名单比对，不区分大小写。
 
+> `EXPLAIN`（v0.1.11+）：EXPLAIN 语句剥离前缀与方言选项（`(ANALYZE, BUFFERS)`、`FORMAT=JSON`、`QUERY PLAN`、`PLAN FOR` 等）后，**内部语句会被递归校验**——`EXPLAIN INSERT ...`、`EXPLAIN ANALYZE UPDATE ...` 等包裹写操作的语句一律拒绝（`READ_ONLY_VIOLATION`）。
+
 > `ANALYZE` 和 `REINDEX` 曾被错误列入允许列表，v0.1.0 已修正：`ANALYZE` 写入统计表，`REINDEX` 锁表重建索引，均为写操作。
 > `CHECK TABLE` 为只读诊断操作，保留在白名单中。
 
@@ -50,7 +52,8 @@
 
 跳过: SELECT ... LIMIT 10      → 已有 LIMIT，不追加
 跳过: SHOW DATABASES            → 非 SELECT，不追加
-跳过: EXPLAIN SELECT ...        → 查询计划分析，不追加
+注意: EXPLAIN SELECT ...（--explain 标志路径）→ 不追加（包裹发生在校验后）
+      用户手写 EXPLAIN ...（无 --explain 标志）→ 仍追加 LIMIT 1000
 ```
 
 ### 2. 并发控制 (`query` 包)

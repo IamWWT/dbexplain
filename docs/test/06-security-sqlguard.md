@@ -74,7 +74,9 @@ print(f'rows={d[\"row_count\"]}')  # 预期 rows=3（不重复追加 LIMIT）
 "
 ```
 
-## 6.5 EXPLAIN 不走自动 LIMIT
+## 6.5 --explain 标志路径不走自动 LIMIT
+
+> 仅 `--explain` 标志路径跳过 AutoLimit（EXPLAIN 包裹发生在校验之后）。用户手写 `EXPLAIN ...`（无 `--explain` 标志）仍会走 AutoLimit 追加 `LIMIT 1000`（v0.1.11 行为不变）。
 
 ```bash
 $BIN execute --db 1 --explain "SELECT * FROM testdb.iplist WHERE device_type = 'PHY'" 2>/dev/null | python3 -c "
@@ -170,4 +172,74 @@ cd src && go test -tags full ./internal/sqlguard/ -v -run TestValidate_RejectedW
 ```bash
 $BIN execute -dsn "sqlite:///:memory:?label=test" --human "WITH cte AS (SELECT 1 AS n) SELECT * FROM cte"
 # 预期: 正常返回，自动追加 LIMIT 1000
+```
+
+### 6.9 EXPLAIN 内部语句写检测加固 (v0.1.11+)
+
+> **背景**：EXPLAIN 在只读白名单内且 AST 解析器不识别，回退仅检查首词——`EXPLAIN ANALYZE INSERT ...` 等 EXPLAIN 包裹写语句可绕过只读校验（PostgreSQL/GaussDB/MySQL 8.0.18+/DuckDB 的 `EXPLAIN ANALYZE` 会真实执行）。v0.1.11 起剥离 EXPLAIN 前缀与方言选项后对内部语句递归校验。
+
+#### 6.9.1 EXPLAIN 包裹写语句拦截
+
+```bash
+# EXPLAIN + INSERT
+$BIN execute -dsn "sqlite:///:memory:?label=test" "EXPLAIN INSERT INTO t VALUES(1)"
+# 预期: READ_ONLY_VIOLATION: write operation "INSERT" is not allowed
+
+# EXPLAIN (ANALYZE) + INSERT —— 高危（pg/gaussdb/mysql8/duckdb 真实执行）
+$BIN execute -dsn "sqlite:///:memory:?label=test" "EXPLAIN (ANALYZE) INSERT INTO t VALUES(1)"
+# 预期: READ_ONLY_VIOLATION: write operation "INSERT" is not allowed
+
+# EXPLAIN ANALYZE + UPDATE
+$BIN execute -dsn "sqlite:///:memory:?label=test" "EXPLAIN ANALYZE UPDATE t SET a=1"
+# 预期: READ_ONLY_VIOLATION: write operation "UPDATE" is not allowed
+
+# 方言修饰符包裹（FORMAT=JSON / QUERY PLAN / PLAN FOR）
+$BIN execute -dsn "sqlite:///:memory:?label=test" "EXPLAIN FORMAT=JSON INSERT INTO t VALUES(1)"
+# 预期: READ_ONLY_VIOLATION: write operation "INSERT" is not allowed
+
+$BIN execute -dsn "sqlite:///:memory:?label=test" "EXPLAIN QUERY PLAN INSERT INTO t VALUES(1)"
+# 预期: READ_ONLY_VIOLATION: write operation "INSERT" is not allowed
+
+# EXPLAIN + CTE 写
+$BIN execute -dsn "sqlite:///:memory:?label=test" "EXPLAIN WITH x AS (SELECT 1) INSERT INTO y VALUES (1)"
+# 预期: READ_ONLY_VIOLATION: WITH CTE contains write operation
+
+# EXPLAIN + 多语句
+$BIN execute -dsn "sqlite:///:memory:?label=test" "EXPLAIN SELECT 1; DROP TABLE t"
+# 预期: READ_ONLY_VIOLATION: multiple statements detected (2)
+
+# hint/注释包裹写动词同样拒绝
+$BIN execute -dsn "sqlite:///:memory:?label=test" "EXPLAIN /*+ hint */ INSERT INTO t VALUES(1)"
+# 预期: READ_ONLY_VIOLATION: write operation "INSERT" is not allowed
+
+# EXPLAIN 单独（无内部语句）
+$BIN execute -dsn "sqlite:///:memory:?label=test" "EXPLAIN"
+# 预期: READ_ONLY_VIOLATION: EXPLAIN without an inner statement
+```
+
+#### 6.9.2 合法 EXPLAIN 不被拦截
+
+```bash
+$BIN execute -dsn "sqlite:///:memory:?label=test" "EXPLAIN QUERY PLAN SELECT 1"
+# 预期: 正常返回查询计划
+
+$BIN execute -dsn "sqlite:///:memory:?label=test" "EXPLAIN SELECT 1"
+# 预期: 正常返回查询计划
+
+# hint/注释形态（Oracle/MySQL hint 风格）
+$BIN execute -dsn "sqlite:///:memory:?label=test" "EXPLAIN /*+ hint */ SELECT 1"
+# 预期: 正常返回查询计划
+
+# 字符串字面量含写动词 — 防误报
+$BIN execute -dsn "sqlite:///:memory:?label=test" "EXPLAIN SELECT * FROM t WHERE note = 'INSERT'"
+# 预期: 正常返回（INSERT 在字符串字面量内，非写操作）
+```
+
+> **冒烟范围说明**：本小节 sqlite DSN 仅能冒烟 sqlite 兼容形态（`EXPLAIN QUERY PLAN`、`EXPLAIN`）。postgres `(ANALYZE, BUFFERS, FORMAT TEXT)`、mysql `FORMAT=JSON`、oracle `PLAN FOR`、clickhouse `PLAN` 等方言形态的校验行为由单测 `TestStripExplainPrefix` 覆盖（§6.9.3），无需真实 DB 也可验证 sqlguard 层。
+
+#### 6.9.3 单元测试验证
+
+```bash
+cd src && go test -tags full ./internal/sqlguard/ -v -run 'TestStripExplainPrefix|TestValidate_AllowedReadOps|TestValidate_RejectedWriteOps'
+# 预期: PASS — 121 个子测试全部通过（各方言 EXPLAIN 形态、EXPLAIN 包裹写语句拒绝、hint/注释形态、字符串字面量防误报、多语句）
 ```
